@@ -1,0 +1,62 @@
+{
+    "name": "tek2991/accounting",
+    "description": "A Filament 4 plugin for double-entry accrual accounting.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "laravel",
+        "filament",
+        "accounting",
+        "double-entry",
+        "chart-of-accounts",
+        "journal-entries"
+    ],
+    "autoload": {
+        "psr-4": {
+            "Tek2991\\Accounting\\": "src/",
+            "Tek2991\\Accounting\\Database\\Seeders\\": "database/seeders/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tek2991\\Accounting\\Tests\\": "tests/"
+        }
+    },
+    "require": {
+        "php": "^8.2",
+        "ext-bcmath": "*",
+        "ext-intl": "*",
+        "brick/money": "^0.10",
+        "dompdf/dompdf": "^3.1",
+        "filament/filament": "^4.0|^5.0",
+        "laravel/framework": "^11.28|^12.0|^13.0",
+        "spatie/browsershot": "^5.4",
+        "spatie/laravel-activitylog": "^4.8",
+        "spatie/laravel-data": "^4.0",
+        "spatie/laravel-package-tools": "^1.16",
+        "spatie/laravel-pdf": "^2.12",
+        "spatie/laravel-permission": "^8.0",
+        "spatie/laravel-query-builder": "^7.3",
+        "symfony/intl": "^7.0"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^10.0",
+        "pestphp/pest": "^3.0",
+        "pestphp/pest-plugin-laravel": "^3.0"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Tek2991\\Accounting\\AccountingServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

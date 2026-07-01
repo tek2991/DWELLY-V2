@@ -1,0 +1,24 @@
+@tailwind components;
+@tailwind utilities;
+
+/* Grouping Labels in Filament v5 Custom Select */
+.fi-select-input-option-group .fi-dropdown-header {
+    font-weight: 700 !important;
+    color: var(--primary-600) !important;
+    text-transform: uppercase !important;
+    font-size: 0.85rem !important;
+    letter-spacing: 0.05em !important;
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.25rem !important;
+    border-bottom: 1px solid var(--primary-100) !important;
+}
+
+.dark .fi-select-input-option-group .fi-dropdown-header {
+    color: var(--primary-400) !important;
+    border-bottom-color: var(--primary-900) !important;
+}
+
+/* Indent items within the group to make the hierarchy clearer */
+.fi-select-input-option-group .fi-dropdown-list .fi-dropdown-list-item {
+    padding-left: 1.5rem !important;
+}
