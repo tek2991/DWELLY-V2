@@ -113,17 +113,23 @@ class VendorLedger extends Page implements HasForms
         ];
 
         // Fetch transactions
-        $entries = JournalEntry::with(['transaction', 'transaction.voucherable'])
+        $entriesQuery = JournalEntry::with(['transaction', 'transaction.voucherable'])
             ->where(config('accounting.table_prefix', 'acc_') . 'journal_entries.account_id', $account->id)
             ->whereHas('transaction', function ($q) use ($startDate, $endDate) {
                 $q->whereNotNull('posted_at')
                   ->whereBetween('posted_at', [$startDate, $endDate]);
+                  
+                $branchId = app(\Tek2991\Accounting\Services\BranchContext::class)->getCurrent()?->id;
+                if ($branchId) {
+                    $q->where('branch_id', $branchId);
+                }
             })
             ->join(config('accounting.table_prefix', 'acc_') . 'transactions', 'transaction_id', '=', config('accounting.table_prefix', 'acc_') . 'transactions.id')
             ->orderBy(config('accounting.table_prefix', 'acc_') . 'transactions.posted_at')
             ->orderBy('transaction_id')
-            ->select(config('accounting.table_prefix', 'acc_') . 'journal_entries.*')
-            ->get();
+            ->select(config('accounting.table_prefix', 'acc_') . 'journal_entries.*');
+            
+        $entries = $entriesQuery->get();
 
         $isDebitNormal = $account->type->getDefaultBalanceType() === JournalEntryType::Debit;
 

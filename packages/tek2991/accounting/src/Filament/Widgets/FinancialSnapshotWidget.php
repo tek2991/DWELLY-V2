@@ -30,14 +30,13 @@ class FinancialSnapshotWidget extends BaseWidget
     protected function getStats(): array
     {
         $accountService = app(AccountService::class);
-        $companyId = app(\Tek2991\Accounting\Contracts\CompanyAccessor::class)->getCurrentCompanyId();
+        $companyId = app(\Tek2991\Accounting\Services\BranchContext::class)->getCurrentId();
         $currency = Accounting::getCurrency();
         $startDate = '1970-01-01';
         $endDate = now()->toDateString();
 
         // 1. Bank Balance
-        $bankAccountIds = BankAccount::where('company_id', $companyId)
-            ->pluck('account_id')
+        $bankAccountIds = BankAccount::pluck('account_id')
             ->toArray();
             
         $bankBalanceRaw = 0;
@@ -50,8 +49,7 @@ class FinancialSnapshotWidget extends BaseWidget
         $bankBalance = new Money($bankBalanceRaw, $currency);
 
         // 2. Cash Balance
-        $cashAccountIds = Account::where('company_id', $companyId)
-            ->where('reporting_class', ReportingClass::CurrentAsset)
+        $cashAccountIds = Account::where('reporting_class', ReportingClass::CurrentAsset)
             ->where('name', 'like', '%Cash%')
             ->whereNotIn('id', $bankAccountIds)
             ->pluck('id')
@@ -67,26 +65,22 @@ class FinancialSnapshotWidget extends BaseWidget
         $cashBalance = new Money($cashBalanceRaw, $currency);
 
         // 3. Accounts Receivable
-        $arRaw = Invoice::where('company_id', $companyId)
-            ->whereNotIn('status', [InvoiceStatus::Draft, InvoiceStatus::Cancelled])
+        $arRaw = Invoice::whereNotIn('status', [InvoiceStatus::Draft, InvoiceStatus::Cancelled])
             ->get()
             ->sum(fn ($invoice) => $invoice->getRawOriginal('balance_due'));
         $arBalance = new Money($arRaw, $currency);
 
         // 4. Accounts Payable
-        $apRaw = Bill::where('company_id', $companyId)
-            ->whereNotIn('status', [BillStatus::Draft, BillStatus::Cancelled])
+        $apRaw = Bill::whereNotIn('status', [BillStatus::Draft, BillStatus::Cancelled])
             ->get()
             ->sum(fn ($bill) => $bill->getRawOriginal('balance_due'));
         $apBalance = new Money($apRaw, $currency);
 
         // 5. GST Payable
-        $gstLiabilityIds = Account::where('company_id', $companyId)
-            ->where('reporting_class', ReportingClass::GSTLiability)
+        $gstLiabilityIds = Account::where('reporting_class', ReportingClass::GSTLiability)
             ->pluck('id')->toArray();
             
-        $gstAssetIds = Account::where('company_id', $companyId)
-            ->where('reporting_class', ReportingClass::GSTAsset)
+        $gstAssetIds = Account::where('reporting_class', ReportingClass::GSTAsset)
             ->pluck('id')->toArray();
             
         $outputGstRaw = 0;

@@ -13,13 +13,13 @@ class DefaultChartOfAccountsSeeder extends Seeder
     /**
      * Seed a standard Chart of Accounts for a given company.
      */
-    public function run(int $companyId, ?string $currencyCode = null): void
+    public function run(?string $currencyCode = null): void
     {
         $currencyCode = $currencyCode ?? \Tek2991\Accounting\Facades\Accounting::getCurrency();
-        $this->seedHierarchy($companyId, $currencyCode);
+        $this->seedHierarchy($currencyCode);
     }
 
-    protected function seedHierarchy(int $companyId, string $currencyCode): void
+    protected function seedHierarchy(string $currencyCode): void
     {
         // Define the entire hierarchy.
         // Each entry can have 'children' which are also accounts.
@@ -323,10 +323,10 @@ class DefaultChartOfAccountsSeeder extends Seeder
             ]
         ];
 
-        $this->createAccounts($companyId, $currencyCode, $hierarchy);
+        $this->createAccounts($currencyCode, $hierarchy);
     }
 
-    protected function createAccounts(int $companyId, string $currencyCode, array $accounts, ?int $parentId = null): void
+    protected function createAccounts(string $currencyCode, array $accounts, ?int $parentId = null): void
     {
         foreach ($accounts as $data) {
             $children = $data['children'] ?? [];
@@ -334,11 +334,9 @@ class DefaultChartOfAccountsSeeder extends Seeder
 
             $account = Account::firstOrCreate(
                 [
-                    'company_id' => $companyId,
                     'code' => $data['code'],
                 ],
                 array_merge($data, [
-                    'company_id' => $companyId,
                     'parent_id' => $parentId,
                     'currency_code' => $currencyCode,
                     'default' => $data['default'] ?? false,
@@ -347,7 +345,7 @@ class DefaultChartOfAccountsSeeder extends Seeder
             );
 
             if (!empty($children)) {
-                $this->createAccounts($companyId, $currencyCode, $children, $account->id);
+                $this->createAccounts($currencyCode, $children, $account->id);
             }
         }
     }

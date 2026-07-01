@@ -12,16 +12,18 @@ class CreateInvoice extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        $data['company_id'] = app(\Tek2991\Accounting\Contracts\CompanyAccessor::class)->getCurrentCompanyId() ?? throw new \Exception('No active company context.');
+        $branchId = app(\Tek2991\Accounting\Services\BranchContext::class)->getCurrent()?->id;
+        if (!$branchId) {
+            throw new \Exception('No active branch context.');
+        }
+        $data['branch_id'] = $branchId;
         return $data;
     }
 
     protected function handleRecordCreation(array $data): \Illuminate\Database\Eloquent\Model
     {
         $service = app(InvoiceService::class);
-        $companyId = $data['company_id'];
-        
-        $invoice = $service->create($companyId, $data);
+        $invoice = $service->create($data);
         
         // Items are created via the Filament relationship manager/repeater automatically,
         // but we need to recalculate totals after they are saved.

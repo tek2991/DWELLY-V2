@@ -5,14 +5,12 @@ namespace Tek2991\Accounting\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Tek2991\Accounting\Concerns\CompanyOwned;
 
 use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
 
 class Tax extends Model
 {
-    use CompanyOwned;
     use SoftDeletes;
     use LogsActivity;
 
@@ -27,7 +25,6 @@ class Tax extends Model
     }
 
     protected $fillable = [
-        'company_id',
         'name',
         'description',
         'is_active',

@@ -25,19 +25,17 @@ class CashPositionWidget extends BaseWidget
     protected function getStats(): array
     {
         $accountService = app(AccountService::class);
-        $companyId = app(\Tek2991\Accounting\Contracts\CompanyAccessor::class)->getCurrentCompanyId();
+        $companyId = app(\Tek2991\Accounting\Services\BranchContext::class)->getCurrentId();
         $currency = Accounting::getCurrency();
         
         $startOfMonth = now()->startOfMonth()->toDateString();
         $endOfMonth = now()->endOfMonth()->toDateString();
 
         // 1. Get all Bank and Cash Account IDs
-        $bankAccountIds = BankAccount::where('company_id', $companyId)
-            ->pluck('account_id')
+        $bankAccountIds = BankAccount::pluck('account_id')
             ->toArray();
             
-        $cashAccountIds = Account::where('company_id', $companyId)
-            ->where('reporting_class', ReportingClass::CurrentAsset)
+        $cashAccountIds = Account::where('reporting_class', ReportingClass::CurrentAsset)
             ->where('name', 'like', '%Cash%')
             ->pluck('id')
             ->toArray();

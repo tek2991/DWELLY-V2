@@ -115,6 +115,11 @@ class AccountService
             $query->whereBetween("{$transactionTable}.posted_at", [$start, $end]);
         }
 
+        $branchId = app(\Tek2991\Accounting\Services\BranchContext::class)->getCurrent()?->id;
+        if ($branchId) {
+            $query->where("{$transactionTable}.branch_id", $branchId);
+        }
+
         if ($accountIds !== null) {
             $query->whereIn("{$journalTable}.account_id", $accountIds);
         }

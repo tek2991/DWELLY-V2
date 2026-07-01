@@ -23,17 +23,15 @@ class GstOverviewWidget extends BaseWidget
     protected function getStats(): array
     {
         $accountService = app(AccountService::class);
-        $companyId = app(\Tek2991\Accounting\Contracts\CompanyAccessor::class)->getCurrentCompanyId();
+        $companyId = app(\Tek2991\Accounting\Services\BranchContext::class)->getCurrentId();
         $currency = Accounting::getCurrency();
         $startDate = '1970-01-01';
         $endDate = now()->toDateString();
 
-        $gstLiabilityIds = Account::where('company_id', $companyId)
-            ->where('reporting_class', ReportingClass::GSTLiability)
+        $gstLiabilityIds = Account::where('reporting_class', ReportingClass::GSTLiability)
             ->pluck('id')->toArray();
             
-        $gstAssetIds = Account::where('company_id', $companyId)
-            ->where('reporting_class', ReportingClass::GSTAsset)
+        $gstAssetIds = Account::where('reporting_class', ReportingClass::GSTAsset)
             ->pluck('id')->toArray();
             
         $outputGstRaw = 0;

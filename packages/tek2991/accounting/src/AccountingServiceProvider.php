@@ -4,13 +4,12 @@ namespace Tek2991\Accounting;
 
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
-use Tek2991\Accounting\Contracts\CompanyAccessor;
+use Tek2991\Accounting\Services\BranchContext;
 use Tek2991\Accounting\Services\AccountService;
 use Tek2991\Accounting\Services\TransactionService;
 use Tek2991\Accounting\Services\TaxService;
 use Tek2991\Accounting\Services\InvoiceService;
 use Tek2991\Accounting\Services\BillService;
-use Tek2991\Accounting\Services\CompanyContext;
 use Tek2991\Accounting\Services\TaxRegimeResolver;
 use Tek2991\Accounting\Services\PeriodLockService;
 use Tek2991\Accounting\Services\CreditNoteService;
@@ -28,8 +27,9 @@ class AccountingServiceProvider extends PackageServiceProvider
             ->hasConfigFile()
             ->hasMigrations([
                 'create_states_table',
-                'create_company_profiles_table',
-                'create_accounting_settings_table',
+                'create_organizations_table',
+                'create_gst_registrations_table',
+                'create_document_sequences_table',
                 'create_contacts_table',
                 'create_accounting_tables',
                 'create_bank_accounts_table',
@@ -41,6 +41,7 @@ class AccountingServiceProvider extends PackageServiceProvider
                 'create_bill_items_table',
                 'create_payments_table',
                 'create_fiscal_periods_table',
+                'create_fiscal_period_events_table',
                 'create_credit_notes_table',
                 'create_credit_note_items_table',
                 'create_debit_notes_table',
@@ -65,14 +66,10 @@ class AccountingServiceProvider extends PackageServiceProvider
             return new \Tek2991\Accounting\AccountingManager();
         });
 
-        $this->app->singleton(CompanyAccessor::class, function ($app) {
-            return new \Tek2991\Accounting\Support\DefaultCompanyAccessor();
-        });
-
         $this->app->singleton(AccountService::class);
         $this->app->singleton(TransactionService::class);
         $this->app->singleton(TaxRegimeResolver::class);
-        $this->app->singleton(CompanyContext::class);
+        $this->app->singleton(BranchContext::class);
         $this->app->singleton(TaxService::class);
         $this->app->singleton(DocumentNumberService::class);
         $this->app->singleton(InvoiceService::class);
@@ -85,5 +82,6 @@ class AccountingServiceProvider extends PackageServiceProvider
     public function packageBooted(): void
     {
         \Tek2991\Accounting\Models\Contact::observe(\Tek2991\Accounting\Observers\ContactObserver::class);
+        \Livewire\Livewire::component('branch-selector', \Tek2991\Accounting\Livewire\BranchSelector::class);
     }
 }

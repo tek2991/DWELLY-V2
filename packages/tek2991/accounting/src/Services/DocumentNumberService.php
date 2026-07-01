@@ -2,90 +2,67 @@
 
 namespace Tek2991\Accounting\Services;
 
+use App\Models\Branch;
+
 use Illuminate\Support\Facades\DB;
-use Tek2991\Accounting\Models\Setting;
+use App\Models\Branch;
+use Tek2991\Accounting\Models\DocumentSequence;
 
 class DocumentNumberService
 {
-    public function nextInvoiceNumber(int $companyId): string
+    public function nextInvoiceNumber(Branch $branch): string
     {
-        return DB::transaction(function () use ($companyId) {
-            $setting = Setting::where('company_id', $companyId)->lockForUpdate()->first();
-            
-            if (!$setting) {
-                $setting = Setting::create(['company_id' => $companyId]);
-            }
-
-            $prefix = $setting->invoice_prefix ?? 'INV-';
-            $nextNumber = $setting->invoice_next_number ?? 1;
-            
-            $setting->invoice_next_number = $nextNumber + 1;
-            $setting->save();
-            
-            return $prefix . str_pad((string)$nextNumber, 4, '0', STR_PAD_LEFT);
-        });
+        return $this->generateNextNumber($branch, 'invoice', 'INV');
     }
 
-    public function nextBillNumber(int $companyId): string
+    public function nextBillNumber(Branch $branch): string
     {
-        return DB::transaction(function () use ($companyId) {
-            $setting = Setting::where('company_id', $companyId)->lockForUpdate()->first();
-            
-            if (!$setting) {
-                $setting = Setting::create(['company_id' => $companyId]);
-            }
-
-            $prefix = $setting->bill_prefix ?? 'BILL-';
-            $nextNumber = $setting->bill_next_number ?? 1;
-
-            $number = $prefix . str_pad((string)$nextNumber, 4, '0', STR_PAD_LEFT);
-
-            $setting->bill_next_number = $nextNumber + 1;
-            $setting->save();
-
-            return $number;
-        });
+        return $this->generateNextNumber($branch, 'bill', 'BILL');
     }
 
-    public function nextCreditNoteNumber(int $companyId): string
+    public function nextCreditNoteNumber(Branch $branch): string
     {
-        return DB::transaction(function () use ($companyId) {
-            $setting = Setting::where('company_id', $companyId)->lockForUpdate()->first();
-            
-            if (!$setting) {
-                $setting = Setting::create(['company_id' => $companyId]);
-            }
-
-            $prefix = $setting->credit_note_prefix ?? 'CN-';
-            $nextNumber = $setting->credit_note_next_number ?? 1;
-
-            $number = $prefix . str_pad((string)$nextNumber, 4, '0', STR_PAD_LEFT);
-
-            $setting->credit_note_next_number = $nextNumber + 1;
-            $setting->save();
-
-            return $number;
-        });
+        return $this->generateNextNumber($branch, 'credit_note', 'CN');
     }
 
-    public function nextDebitNoteNumber(int $companyId): string
+    public function nextDebitNoteNumber(Branch $branch): string
     {
-        return DB::transaction(function () use ($companyId) {
-            $setting = Setting::where('company_id', $companyId)->lockForUpdate()->first();
+        return $this->generateNextNumber($branch, 'debit_note', 'DN');
+    }
+    
+    public function nextPaymentNumber(Branch $branch): string
+    {
+        return $this->generateNextNumber($branch, 'payment', 'PAY');
+    }
+
+    protected function generateNextNumber(Branch $branch, string $type, string $defaultPrefix): string
+    {
+        return DB::transaction(function () use ($branch, $type, $defaultPrefix) {
+            $sequence = DocumentSequence::where('branch_id', $branch->id)
+                ->where('document_type', $type)
+                ->lockForUpdate()
+                ->first();
             
-            if (!$setting) {
-                $setting = Setting::create(['company_id' => $companyId]);
+            if (!$sequence) {
+                // Determine prefix (e.g. GHY-INV-2026-)
+                $year = date('Y'); // For simplicity, using calendar year. Can be extended to fiscal year.
+                $prefix = "{$branch->code}-{$defaultPrefix}-{$year}-";
+                
+                $sequence = DocumentSequence::create([
+                    'branch_id' => $branch->id,
+                    'document_type' => $type,
+                    'prefix' => $prefix,
+                    'next_number' => 1
+                ]);
             }
 
-            $prefix = $setting->debit_note_prefix ?? 'DN-';
-            $nextNumber = $setting->debit_note_next_number ?? 1;
-
-            $number = $prefix . str_pad((string)$nextNumber, 4, '0', STR_PAD_LEFT);
-
-            $setting->debit_note_next_number = $nextNumber + 1;
-            $setting->save();
-
-            return $number;
+            $prefix = $sequence->prefix;
+            $nextNumber = $sequence->next_number;
+            
+            $sequence->next_number = $nextNumber + 1;
+            $sequence->save();
+            
+            return $prefix . str_pad((string)$nextNumber, 6, '0', STR_PAD_LEFT);
         });
     }
 }

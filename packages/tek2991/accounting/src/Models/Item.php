@@ -6,14 +6,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Casts\Attribute;
-use Tek2991\Accounting\Concerns\CompanyOwned;
 use Tek2991\Accounting\Enums\ItemType;
 use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
 
 class Item extends Model
 {
-    use CompanyOwned;
     use SoftDeletes;
     use LogsActivity;
 
@@ -28,7 +26,6 @@ class Item extends Model
     }
 
     protected $fillable = [
-        'company_id',
         'type',
         'name',
         'sku',

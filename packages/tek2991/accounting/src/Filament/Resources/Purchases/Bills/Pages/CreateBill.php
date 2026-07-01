@@ -12,16 +12,18 @@ class CreateBill extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        $data['company_id'] = app(\Tek2991\Accounting\Contracts\CompanyAccessor::class)->getCurrentCompanyId() ?? throw new \Exception('No active company context.');
+        $branchId = app(\Tek2991\Accounting\Services\BranchContext::class)->getCurrent()?->id;
+        if (!$branchId) {
+            throw new \Exception('No active branch context.');
+        }
+        $data['branch_id'] = $branchId;
         return $data;
     }
 
     protected function handleRecordCreation(array $data): \Illuminate\Database\Eloquent\Model
     {
         $service = app(BillService::class);
-        $companyId = $data['company_id'];
-        
-        $bill = $service->create($companyId, $data);
+        $bill = $service->create($data);
         return $bill;
     }
     

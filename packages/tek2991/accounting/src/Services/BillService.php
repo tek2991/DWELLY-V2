@@ -2,6 +2,8 @@
 
 namespace Tek2991\Accounting\Services;
 
+use App\Models\Branch;
+
 use Illuminate\Support\Facades\DB;
 use Tek2991\Accounting\Models\Bill;
 use Tek2991\Accounting\Models\Payment;
@@ -17,12 +19,12 @@ class BillService
         private PostingGuard $postingGuard,
     ) {}
 
-    public function create(int $companyId, array $data): Bill
+    public function create(\App\Models\Branch $branch, array $data): Bill
     {
-        return DB::transaction(function () use ($companyId, $data) {
+        return DB::transaction(function () use ($branch, $data) {
             $bill = new Bill($data);
-            $bill->company_id = $companyId;
-            $bill->bill_number = $this->docNumberService->nextBillNumber($companyId);
+            $bill->branch_id = $branch->id;
+            $bill->bill_number = $this->docNumberService->nextBillNumber($branch);
             $bill->status = BillStatus::Draft;
             $bill->save();
 
@@ -115,17 +117,14 @@ class BillService
                         $isInclusive = $docMode === 'inclusive';
 
                         $bill->loadMissing('contact');
-                        $companyProfile = \Tek2991\Accounting\Models\CompanyProfile::firstOrCreate(
-                            ['company_id' => $bill->company_id],
-                            ['tax_regime' => \Tek2991\Accounting\Enums\TaxRegimeType::Generic]
-                        );
+                        $branch = \App\Models\Branch::find($bill->branch_id);
 
                         $taxContext = new \Tek2991\Accounting\ValueObjects\TaxCalculationContext(
                             amount: $taxableValue,
                             document: $bill,
                             tax: $tax,
                             modeOverride: $docMode,
-                            companyProfile: $companyProfile,
+                            branch: $branch,
                             contact: $bill->contact
                         );
 
@@ -169,8 +168,7 @@ class BillService
             
             $this->postingGuard->assertBillPostable($bill);
 
-            $payableAccountId = $bill->contact->payableAccount?->id ?? \Tek2991\Accounting\Models\Account::where('company_id', $bill->company_id)
-                ->where('system_role', \Tek2991\Accounting\Enums\SystemRole::TradePayable)
+            $payableAccountId = $bill->contact->payableAccount?->id ?? \Tek2991\Accounting\Models\Account::where('system_role', \Tek2991\Accounting\Enums\SystemRole::TradePayable)
                 ->value('id');
                 
             if (!$payableAccountId) {
@@ -243,7 +241,7 @@ class BillService
             }
 
             $transaction = $this->txnService->createTransaction([
-                'company_id' => $bill->company_id,
+                'branch_id' => $bill->branch_id,
                 'posted_at' => $bill->issue_date,
                 'description' => "Posted Bill {$bill->bill_number}",
                 'type' => \Tek2991\Accounting\Enums\TransactionType::BillPosting,
@@ -279,8 +277,7 @@ class BillService
             
             $paymentAmount = $paymentData['amount'];
 
-            $payableAccountId = $bill->contact->payableAccount?->id ?? \Tek2991\Accounting\Models\Account::where('company_id', $bill->company_id)
-                ->where('system_role', \Tek2991\Accounting\Enums\SystemRole::TradePayable)
+            $payableAccountId = $bill->contact->payableAccount?->id ?? \Tek2991\Accounting\Models\Account::where('system_role', \Tek2991\Accounting\Enums\SystemRole::TradePayable)
                 ->value('id');
 
             if (!$payableAccountId) {
@@ -305,7 +302,7 @@ class BillService
             ];
 
             $transaction = $this->txnService->createTransaction([
-                'company_id' => $bill->company_id,
+                'branch_id' => $bill->branch_id,
                 'posted_at' => $paymentData['payment_date'],
                 'description' => "Payment against Bill {$bill->bill_number}",
                 'type' => \Tek2991\Accounting\Enums\TransactionType::PaymentOut,
@@ -315,7 +312,7 @@ class BillService
             ], $entries);
 
             $payment = new Payment($paymentData);
-            $payment->company_id = $bill->company_id;
+            $payment->branch_id = $bill->branch_id;
             $payment->transaction_id = $transaction->id;
             $bill->payments()->save($payment);
 

@@ -43,4 +43,11 @@ class InvoiceResource extends Resource
             'edit' => Pages\EditInvoice::route('/{record}/edit'),
         ];
     }
+
+    public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
+    {
+        $query = parent::getEloquentQuery();
+        app(\Tek2991\Accounting\Services\BranchContext::class)->applyQueryScope($query);
+        return $query;
+    }
 }

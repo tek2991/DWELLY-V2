@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Casts\Attribute;
-use Tek2991\Accounting\Concerns\CompanyOwned;
 use Tek2991\Accounting\Enums\ContactType;
 use Tek2991\Accounting\Enums\GstRegistrationType;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -16,7 +15,6 @@ use Spatie\Activitylog\LogOptions;
 
 class Contact extends Model
 {
-    use CompanyOwned;
     use SoftDeletes;
     use LogsActivity;
 
@@ -31,7 +29,6 @@ class Contact extends Model
     }
 
     protected $fillable = [
-        'company_id',
         'type',
         'name',
         'email',

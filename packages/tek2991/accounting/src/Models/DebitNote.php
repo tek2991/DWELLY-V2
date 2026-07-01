@@ -8,12 +8,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
-use Tek2991\Accounting\Concerns\CompanyOwned;
 use Tek2991\Accounting\Enums\DebitNoteStatus;
 
 class DebitNote extends Model
 {
-    use CompanyOwned;
     use LogsActivity;
 
     public function getActivitylogOptions(): LogOptions
@@ -27,7 +25,7 @@ class DebitNote extends Model
     }
 
     protected $fillable = [
-        'company_id',
+        'branch_id',
         'contact_id',
         'bill_id',
         'transaction_id',

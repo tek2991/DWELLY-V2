@@ -9,13 +9,11 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
-use Tek2991\Accounting\Concerns\CompanyOwned;
 use Tek2991\Accounting\Enums\InvoiceStatus;
 use Tek2991\Accounting\Enums\DiscountType;
 
 class Invoice extends Model
 {
-    use CompanyOwned;
     use LogsActivity;
 
     public function getActivitylogOptions(): LogOptions
@@ -29,7 +27,7 @@ class Invoice extends Model
     }
 
     protected $fillable = [
-        'company_id',
+        'branch_id',
         'contact_id',
         'transaction_id',
         'invoice_number',

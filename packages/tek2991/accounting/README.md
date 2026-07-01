@@ -57,6 +57,19 @@ public function panel(Panel $panel): Panel
 }
 ```
 
+### ⚠️ Important: Branch Management
+
+The accounting package **does not** manage or migrate branches itself, as this is typically handled by the main application's tenancy/location logic. You **must** create a branches migration in your main app. 
+
+Your branches table must include the following fields to be compatible:
+- `organization_id` (foreign key)
+- `gst_registration_id` (foreign key, nullable)
+- `name` (string)
+- `code` (string, unique)
+- `address`, `city`, `district`, `state_id`, `postal_code`, `phone`, `email` (nullable)
+- `is_active` (boolean, default true)
+
+
 ## 🎮 How to Use (Without Breaking the Law)
 
 ### 1. Set Up Your Chart of Accounts

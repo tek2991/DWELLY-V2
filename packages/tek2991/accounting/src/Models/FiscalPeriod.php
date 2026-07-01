@@ -5,15 +5,11 @@ namespace Tek2991\Accounting\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Tek2991\Accounting\Concerns\CompanyOwned;
 use Tek2991\Accounting\Enums\FiscalPeriodStatus;
 
 class FiscalPeriod extends Model
 {
-    use CompanyOwned;
-
     protected $fillable = [
-        'company_id',
         'name',
         'start_date',
         'end_date',

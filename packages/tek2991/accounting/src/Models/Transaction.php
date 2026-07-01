@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Tek2991\Accounting\Concerns\Blamable;
-use Tek2991\Accounting\Concerns\CompanyOwned;
 use Tek2991\Accounting\Enums\AccountType;
 use Tek2991\Accounting\Enums\JournalEntryType;
 use Tek2991\Accounting\Enums\TransactionType;
@@ -19,7 +18,6 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 class Transaction extends Model
 {
     use Blamable;
-    use CompanyOwned;
     use LogsActivity;
 
     protected static $recordEvents = ['created'];
@@ -32,7 +30,7 @@ class Transaction extends Model
     }
 
     protected $fillable = [
-        'company_id',
+        'branch_id',
         'account_id',
         'bank_account_id',
         'type',

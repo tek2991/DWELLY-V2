@@ -13,7 +13,7 @@ class TaxService
 
     public function calculateTax(TaxCalculationContext $context): Collection
     {
-        $regime = $this->resolver->resolve($context->companyProfile);
+        $regime = $this->resolver->resolve($context->branch->organization);
         return $regime->calculate($context);
     }
 }

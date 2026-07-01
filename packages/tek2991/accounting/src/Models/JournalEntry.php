@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Tek2991\Accounting\Concerns\Blamable;
-use Tek2991\Accounting\Concerns\CompanyOwned;
 use Tek2991\Accounting\Enums\JournalEntryType;
 use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
@@ -14,7 +13,6 @@ use Spatie\Activitylog\LogOptions;
 class JournalEntry extends Model
 {
     use Blamable;
-    use CompanyOwned;
     use LogsActivity;
 
     protected static $recordEvents = ['created'];
@@ -27,7 +25,8 @@ class JournalEntry extends Model
     }
 
     protected $fillable = [
-        'company_id',
+        'cost_centre_id',
+        'project_id',
         'transaction_id',
         'account_id',
         'type',

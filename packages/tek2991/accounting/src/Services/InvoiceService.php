@@ -2,6 +2,8 @@
 
 namespace Tek2991\Accounting\Services;
 
+use App\Models\Branch;
+
 use Illuminate\Support\Facades\DB;
 use Tek2991\Accounting\Models\Invoice;
 use Tek2991\Accounting\Models\Payment;
@@ -19,12 +21,12 @@ class InvoiceService
         private PdfService $pdfService,
     ) {}
 
-    public function create(int $companyId, array $data): Invoice
+    public function create(\App\Models\Branch $branch, array $data): Invoice
     {
-        return DB::transaction(function () use ($companyId, $data) {
+        return DB::transaction(function () use ($branch, $data) {
             $invoice = new Invoice($data);
-            $invoice->company_id = $companyId;
-            $invoice->invoice_number = $this->docNumberService->nextInvoiceNumber($companyId);
+            $invoice->branch_id = $branch->id;
+            $invoice->invoice_number = $this->docNumberService->nextInvoiceNumber($branch);
             $invoice->status = InvoiceStatus::Draft;
             $invoice->save();
 
@@ -110,17 +112,14 @@ class InvoiceService
                     $docMode = $isInclusive ? 'inclusive' : 'exclusive';
                     
                     $invoice->loadMissing('contact');
-                    $companyProfile = \Tek2991\Accounting\Models\CompanyProfile::firstOrCreate(
-                        ['company_id' => $invoice->company_id],
-                        ['tax_regime' => \Tek2991\Accounting\Enums\TaxRegimeType::Generic]
-                    );
+                    $branch = \App\Models\Branch::find($invoice->branch_id);
 
                     $taxContext = new \Tek2991\Accounting\ValueObjects\TaxCalculationContext(
                         amount: $taxableValue,
                         document: $invoice,
                         tax: $tax,
                         modeOverride: $docMode,
-                        companyProfile: $companyProfile,
+                        branch: $branch,
                         contact: $invoice->contact
                     );
 
@@ -164,8 +163,7 @@ class InvoiceService
             $this->postingGuard->assertInvoicePostable($invoice);
 
             // 1. Create Journal Entries
-            $receivableAccountId = $invoice->contact->receivableAccount?->id ?? \Tek2991\Accounting\Models\Account::where('company_id', $invoice->company_id)
-                ->where('system_role', \Tek2991\Accounting\Enums\SystemRole::TradeReceivable)
+            $receivableAccountId = $invoice->contact->receivableAccount?->id ?? \Tek2991\Accounting\Models\Account::where('system_role', \Tek2991\Accounting\Enums\SystemRole::TradeReceivable)
                 ->value('id');
 
             if (!$receivableAccountId) {
@@ -238,7 +236,7 @@ class InvoiceService
             }
 
             $transaction = $this->txnService->createTransaction([
-                'company_id' => $invoice->company_id,
+                'branch_id' => $invoice->branch_id,
                 'posted_at' => $invoice->issue_date,
                 'description' => "Posted Invoice {$invoice->invoice_number}",
                 'type' => \Tek2991\Accounting\Enums\TransactionType::InvoicePosting,
@@ -274,8 +272,7 @@ class InvoiceService
             
             $paymentAmount = $paymentData['amount'];
 
-            $receivableAccountId = $invoice->contact->receivableAccount?->id ?? \Tek2991\Accounting\Models\Account::where('company_id', $invoice->company_id)
-                ->where('system_role', \Tek2991\Accounting\Enums\SystemRole::TradeReceivable)
+            $receivableAccountId = $invoice->contact->receivableAccount?->id ?? \Tek2991\Accounting\Models\Account::where('system_role', \Tek2991\Accounting\Enums\SystemRole::TradeReceivable)
                 ->value('id');
 
             if (!$receivableAccountId) {
@@ -300,7 +297,7 @@ class InvoiceService
             ];
 
             $transaction = $this->txnService->createTransaction([
-                'company_id' => $invoice->company_id,
+                'branch_id' => $invoice->branch_id,
                 'posted_at' => $paymentData['payment_date'],
                 'description' => "Payment against Invoice {$invoice->invoice_number}",
                 'type' => \Tek2991\Accounting\Enums\TransactionType::PaymentIn,
@@ -310,7 +307,7 @@ class InvoiceService
             ], $entries);
 
             $payment = new Payment($paymentData);
-            $payment->company_id = $invoice->company_id;
+            $payment->branch_id = $invoice->branch_id;
             $payment->transaction_id = $transaction->id;
             $invoice->payments()->save($payment);
 

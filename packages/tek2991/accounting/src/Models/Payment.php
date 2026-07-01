@@ -6,13 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\Casts\Attribute;
-use Tek2991\Accounting\Concerns\CompanyOwned;
 use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
 
 class Payment extends Model
 {
-    use CompanyOwned;
     use LogsActivity;
 
     public function getActivitylogOptions(): LogOptions
@@ -26,7 +24,7 @@ class Payment extends Model
     }
 
     protected $fillable = [
-        'company_id',
+        'branch_id',
         'paymentable_type',
         'paymentable_id',
         'transaction_id',

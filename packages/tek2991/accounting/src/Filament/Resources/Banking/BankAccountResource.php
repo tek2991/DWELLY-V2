@@ -57,4 +57,11 @@ class BankAccountResource extends Resource
             'edit'   => Pages\EditBankAccount::route('/{record}/edit'),
         ];
     }
+
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+        app(\Tek2991\Accounting\Services\BranchContext::class)->applyQueryScope($query);
+        return $query;
+    }
 }

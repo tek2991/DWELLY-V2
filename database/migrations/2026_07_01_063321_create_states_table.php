@@ -15,17 +15,13 @@ return new class extends Migration
     {
         $prefix = $this->prefix();
 
-        Schema::create("{$prefix}company_profiles", function (Blueprint $table) use ($prefix) {
+        Schema::create("{$prefix}states", function (Blueprint $table) {
             $table->id();
-            $table->foreignId('company_id')->unique()->constrained()->cascadeOnDelete();
-            
-            $table->foreignId('state_id')
-                  ->nullable()
-                  ->constrained("{$prefix}states")
-                  ->nullOnDelete();
-                  
-            $table->string('tax_regime')->default('generic');
-            
+            $table->string('country_id');
+            $table->string('name');
+            $table->string('code')->nullable();
+            $table->string('gst_state_code', 2)->nullable();
+            $table->boolean('is_union_territory')->default(false);
             $table->timestamps();
         });
     }
@@ -33,6 +29,6 @@ return new class extends Migration
     public function down(): void
     {
         $prefix = $this->prefix();
-        Schema::dropIfExists("{$prefix}company_profiles");
+        Schema::dropIfExists("{$prefix}states");
     }
 };

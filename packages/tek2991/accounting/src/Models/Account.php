@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Tek2991\Accounting\Concerns\Blamable;
-use Tek2991\Accounting\Concerns\CompanyOwned;
 use Tek2991\Accounting\Enums\AccountType;
 use Tek2991\Accounting\Enums\ReportingClass;
 use Tek2991\Accounting\Enums\SystemRole;
@@ -18,7 +17,6 @@ use Spatie\Activitylog\LogOptions;
 class Account extends Model
 {
     use Blamable;
-    use CompanyOwned;
     use LogsActivity;
 
     public function getActivitylogOptions(): LogOptions
@@ -31,7 +29,6 @@ class Account extends Model
     }
 
     protected $fillable = [
-        'company_id',
         'parent_id',
         'contact_id',
         'type',

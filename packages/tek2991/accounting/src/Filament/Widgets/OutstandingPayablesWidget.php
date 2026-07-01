@@ -18,13 +18,13 @@ class OutstandingPayablesWidget extends BaseWidget
 
     public function table(Table $table): Table
     {
-        $companyId = app(\Tek2991\Accounting\Contracts\CompanyAccessor::class)->getCurrentCompanyId();
+        $branchId = app(\Tek2991\Accounting\Services\BranchContext::class)->getCurrentId();
         
         return $table
             ->query(
                 Bill::query()
                     ->with('contact')
-                    ->where('company_id', $companyId)
+                    ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
                     ->where('balance_due', '>', 0)
                     ->whereNotIn('status', [BillStatus::Draft, BillStatus::Cancelled])
             )

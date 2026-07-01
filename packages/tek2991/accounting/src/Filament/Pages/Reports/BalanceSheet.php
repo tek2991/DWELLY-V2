@@ -49,7 +49,7 @@ class BalanceSheet extends Page implements HasForms
     public function getReportDataProperty(): array
     {
         $endDate = $this->data['end_date'] ?? Carbon::now()->format('Y-m-d');
-        $companyId = app(\Tek2991\Accounting\Contracts\CompanyAccessor::class)->getCurrentCompanyId();
+        $companyId = app(\Tek2991\Accounting\Services\BranchContext::class)->getCurrentId();
         
         $lastClosedPeriod = \Tek2991\Accounting\Models\FiscalPeriod::query()
             ->where('company_id', $companyId)

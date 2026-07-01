@@ -16,11 +16,11 @@ class IndiaGstTaxRegime implements TaxRegimeInterface
         
         $tax = $context->tax;
         $taxableAmount = $context->amount;
-        $companyStateId = $context->companyProfile->state_id;
+        $branchStateId = $context->branch->state_id;
         
         $posStateId = $context->document->place_of_supply_state_id ?? $context->contact?->state_id;
 
-        $isIntrastate = $companyStateId && $posStateId && ($companyStateId === $posStateId);
+        $isIntrastate = $branchStateId && $posStateId && ($branchStateId === $posStateId);
 
         $components = $tax->components->filter(function ($component) use ($isIntrastate) {
             if ($isIntrastate) {

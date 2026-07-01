@@ -2,6 +2,8 @@
 
 namespace Tek2991\Accounting\Filament\Resources\Purchases\Bills\Schemas;
 
+use App\Models\Branch;
+
 use Filament\Forms;
 use Filament\Schemas\Schema;
 use Filament\Schemas\Components\Section;
@@ -150,12 +152,13 @@ class BillForm
         };
 
         $updateTaxesForPlaceOfSupply = function (callable $set, \Filament\Schemas\Components\Utilities\Get $get) {
-            $companyContext = app(\Tek2991\Accounting\Services\CompanyContext::class);
-            if (!$companyContext->isIndiaGst()) return;
+            $branchContext = app(\Tek2991\Accounting\Services\BranchContext::class);
+            $organization = $branchContext->getCurrent()?->organization ?? \Tek2991\Accounting\Models\Organization::current();
+            if ($organization->tax_regime !== \Tek2991\Accounting\Enums\TaxRegimeType::IndiaGst) return;
             
-            $companyStateId = $companyContext->getProfile()?->state_id;
+            $branchStateId = $branchContext->getCurrent()?->state_id;
             $posStateId = $get('place_of_supply_state_id');
-            $isIntrastate = $companyStateId && $posStateId && ((string)$companyStateId === (string)$posStateId);
+            $isIntrastate = $branchStateId && $posStateId && ((string)$branchStateId === (string)$posStateId);
             
             $items = $get('items') ?? [];
             $updated = false;
@@ -220,7 +223,7 @@ class BillForm
                             ->afterStateUpdated(function (callable $set, \Filament\Schemas\Components\Utilities\Get $get) use ($updateTaxesForPlaceOfSupply) {
                                 $updateTaxesForPlaceOfSupply($set, $get);
                             })
-                            ->visible(fn () => app(\Tek2991\Accounting\Services\CompanyContext::class)->isIndiaGst()),
+                            ->visible(fn () => (\Tek2991\Accounting\Models\Organization::current()->tax_regime === \Tek2991\Accounting\Enums\TaxRegimeType::IndiaGst)),
                             
 
                         Forms\Components\TextInput::make('vendor_reference')
@@ -357,27 +360,28 @@ class BillForm
                         Forms\Components\Placeholder::make('tax_determination')
                             ->label('Tax Determination')
                             ->content(function (\Filament\Schemas\Components\Utilities\Get $get) {
-                                $companyContext = app(\Tek2991\Accounting\Services\CompanyContext::class);
-                                if (!$companyContext->isIndiaGst()) return 'N/A';
+                                $branchContext = app(\Tek2991\Accounting\Services\BranchContext::class);
+                                $organization = $branchContext->getCurrent()?->organization ?? \Tek2991\Accounting\Models\Organization::current();
+                                if ($organization->tax_regime !== \Tek2991\Accounting\Enums\TaxRegimeType::IndiaGst) return 'N/A';
                                 
-                                $companyStateId = $companyContext->getProfile()?->state_id;
-                                $companyState = $companyStateId ? \Tek2991\Accounting\Models\State::find($companyStateId)?->name : 'Unknown';
+                                $branchStateId = $branchContext->getCurrent()?->state_id;
+                                $branchState = $branchStateId ? \Tek2991\Accounting\Models\State::find($branchStateId)?->name : 'Unknown';
                                 
                                 $posStateId = $get('place_of_supply_state_id');
                                 $posState = $posStateId ? \Tek2991\Accounting\Models\State::find($posStateId)?->name : 'Unknown';
                                 
-                                $type = ($companyStateId && $posStateId && (string)$companyStateId === (string)$posStateId) ? 'Intrastate' : 'Interstate';
+                                $type = ($branchStateId && $posStateId && (string)$branchStateId === (string)$posStateId) ? 'Intrastate' : 'Interstate';
                                 
                                 return new \Illuminate\Support\HtmlString(
                                     "<div class='text-sm space-y-1'>" .
                                     "<div>Tax Regime: <strong>India GST</strong></div>" .
-                                    "<div>Company State: <strong>{$companyState}</strong></div>" .
+                                    "<div>Branch State: <strong>{$branchState}</strong></div>" .
                                     "<div>Place of Supply: <strong>{$posState}</strong></div>" .
                                     "<div>Supply Type: <strong>{$type}</strong></div>" .
                                     "</div>"
                                 );
                             })
-                            ->visible(fn () => app(\Tek2991\Accounting\Services\CompanyContext::class)->isIndiaGst()),
+                            ->visible(fn () => (\Tek2991\Accounting\Models\Organization::current()->tax_regime === \Tek2991\Accounting\Enums\TaxRegimeType::IndiaGst)),
                     ]),
                     
                 Section::make('Line Items')
@@ -469,13 +473,14 @@ class BillForm
                                         if ($state) {
                                             $tax = Tax::with('components')->find($state);
                                             if ($tax) {
-                                                $companyContext = app(\Tek2991\Accounting\Services\CompanyContext::class);
+                                                $branchContext = app(\Tek2991\Accounting\Services\BranchContext::class);
+                                                $organization = $branchContext->getCurrent()?->organization ?? \Tek2991\Accounting\Models\Organization::current();
                                                 $components = $tax->components;
                                                 
-                                                if ($companyContext->isIndiaGst()) {
-                                                    $companyStateId = $companyContext->getProfile()?->state_id;
+                                                if ($organization->tax_regime === \Tek2991\Accounting\Enums\TaxRegimeType::IndiaGst) {
+                                                    $branchStateId = $branchContext->getCurrent()?->state_id;
                                                     $posStateId = $get('../../place_of_supply_state_id');
-                                                    $isIntrastate = $companyStateId && $posStateId && ((string)$companyStateId === (string)$posStateId);
+                                                    $isIntrastate = $branchStateId && $posStateId && ((string)$branchStateId === (string)$posStateId);
                                                     
                                                     $components = $components->filter(function ($c) use ($isIntrastate) {
                                                         return $isIntrastate 

@@ -11,10 +11,21 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        $user = \App\Models\User::firstOrCreate(
+            ['email' => 'admin@dwelly.in'],
+            [
+                'name' => 'Dwelly Admin',
+                'password' => bcrypt('password'),
+            ]
+        );
+
         $this->call([
             RolesAndPermissionsSeeder::class,
             ReferenceDataSeeder::class,
             RegionsSeeder::class,
+            \Tek2991\Accounting\Database\Seeders\IndianStatesSeeder::class,
+            \Tek2991\Accounting\Database\Seeders\DefaultChartOfAccountsSeeder::class,
+            \Tek2991\Accounting\Database\Seeders\DemoDataSeeder::class,
         ]);
     }
 }

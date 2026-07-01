@@ -16,7 +16,7 @@ class TransactionService
      * Create a transaction with balanced journal entries.
      *
      * @param array{
-     *     company_id: int,
+     *     branch_id?: int,
      *     type: TransactionType,
      *     description: string,
      *     notes?: string,
@@ -41,7 +41,6 @@ class TransactionService
     {
         if (isset($transactionData['posted_at']) && $transactionData['posted_at']) {
             app(PeriodLockService::class)->assertNotClosed(
-                $transactionData['company_id'],
                 $transactionData['posted_at']
             );
         }
@@ -71,7 +70,6 @@ class TransactionService
 
             foreach ($entries as $entry) {
                 $transaction->journalEntries()->create([
-                    'company_id' => $transaction->company_id,
                     'account_id' => $entry['account_id'],
                     'type' => $entry['type'],
                     'amount' => $entry['amount'],
@@ -89,7 +87,7 @@ class TransactionService
      * Debits the first account, credits the second.
      */
     public function createSimpleTransaction(
-        int $companyId,
+        ?int $branchId,
         int $debitAccountId,
         int $creditAccountId,
         int $amount,
@@ -100,7 +98,7 @@ class TransactionService
     ): Transaction {
         return $this->createTransaction(
             [
-                'company_id' => $companyId,
+                'branch_id' => $branchId,
                 'type' => $type,
                 'description' => $description,
                 'amount' => $amount,
@@ -142,7 +140,7 @@ class TransactionService
 
         $reversal = $this->createTransaction(
             [
-                'company_id' => $transaction->company_id,
+                'branch_id' => $transaction->branch_id,
                 'type' => $transaction->type,
                 'description' => $description ?? "Reversal of: {$transaction->description}",
                 'amount' => $transaction->amount,

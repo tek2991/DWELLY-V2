@@ -19,7 +19,7 @@ class AccountBalanceOverview extends BaseWidget
         $startDate = '1970-01-01'; // from beginning of time
         $endDate = now()->toDateString();
 
-        $companyId = app(\Tek2991\Accounting\Contracts\CompanyAccessor::class)->getCurrentCompanyId();
+        $companyId = app(\Tek2991\Accounting\Services\BranchContext::class)->getCurrentId();
         $assets = $accountService->getTypeTotal(AccountType::Asset, $startDate, $endDate);
         $liabilities = $accountService->getTypeTotal(AccountType::Liability, $startDate, $endDate);
         $equity = $accountService->getTypeTotal(AccountType::Equity, $startDate, $endDate);

@@ -8,16 +8,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Tek2991\Accounting\Concerns\Blamable;
-use Tek2991\Accounting\Concerns\CompanyOwned;
 use Tek2991\Accounting\Enums\BankAccountType;
 
 class BankAccount extends Model
 {
     use Blamable;
-    use CompanyOwned;
-
     protected $fillable = [
-        'company_id',
+        'branch_id',
         'type',
         'account_id',
         'nickname',
@@ -40,10 +37,10 @@ class BankAccount extends Model
     protected static function booted(): void
     {
         static::saving(function (BankAccount $bankAccount) {
-            // If this account is being set as enabled, disable all others of the same type for this company
+            // If this account is being set as enabled, disable all others of the same type for this branch
             if ($bankAccount->enabled && $bankAccount->isDirty('enabled')) {
                 BankAccount::query()
-                    ->where('company_id', $bankAccount->company_id)
+                    ->where('branch_id', $bankAccount->branch_id)
                     ->where('type', $bankAccount->type)
                     ->where('id', '!=', $bankAccount->id)
                     ->update(['enabled' => false]);

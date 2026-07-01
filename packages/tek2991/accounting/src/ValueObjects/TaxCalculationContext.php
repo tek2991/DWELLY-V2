@@ -2,8 +2,10 @@
 
 namespace Tek2991\Accounting\ValueObjects;
 
+use App\Models\Branch;
+
 use Illuminate\Database\Eloquent\Model;
-use Tek2991\Accounting\Models\CompanyProfile;
+use App\Models\Branch;
 use Tek2991\Accounting\Models\Contact;
 use Tek2991\Accounting\Models\Tax;
 
@@ -14,7 +16,7 @@ class TaxCalculationContext
         public Model $document, // Invoice|Bill
         public Tax $tax,
         public ?string $modeOverride,
-        public CompanyProfile $companyProfile,
+        public Branch $branch,
         public ?Contact $contact
     ) {}
 }

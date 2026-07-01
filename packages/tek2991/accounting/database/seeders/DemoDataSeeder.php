@@ -22,24 +22,38 @@ use Tek2991\Accounting\Services\BillService;
 
 class DemoDataSeeder extends Seeder
 {
-    public function run(int $companyId): void
+    public function run(): void
     {
-        DB::transaction(function () use ($companyId) {
+        DB::transaction(function () {
             $faker = Faker::create('en_IN');
 
-            // Set Company Profile to Assam and India GST
+            // 1. Organization & Branches
+            $org = \Tek2991\Accounting\Models\Organization::current();
+
             $assam = \Tek2991\Accounting\Models\State::where('name', 'Assam')->first();
             $maharashtra = \Tek2991\Accounting\Models\State::where('name', 'Maharashtra')->first();
             $delhi = \Tek2991\Accounting\Models\State::where('name', 'Delhi')->first();
             $statesForSupply = collect([$assam, $assam, $assam, $maharashtra, $delhi])->filter()->values();
 
-            \Tek2991\Accounting\Models\CompanyProfile::updateOrCreate(
-                ['company_id' => $companyId],
-                [
-                    'state_id' => $assam?->id,
-                    'tax_regime' => \Tek2991\Accounting\Enums\TaxRegimeType::IndiaGst,
-                ]
-            );
+            $gstRegistration = \Tek2991\Accounting\Models\GstRegistration::create([
+                'gstin' => '18AAAAA0000A1Z5',
+                'legal_name' => 'Dwelly India Pvt Ltd',
+                'state_id' => $assam?->id,
+                'is_default' => true,
+            ]);
+
+            $branch = \Tek2991\Accounting\Models\Branch::create([
+                'organization_id' => $org->id,
+                'gst_registration_id' => $gstRegistration->id,
+                'name' => 'Guwahati Head Office',
+                'code' => 'GHY',
+                'city' => 'Guwahati',
+                'state_id' => $assam?->id,
+                'is_active' => true,
+            ]);
+            
+            $branchContext = app(\Tek2991\Accounting\Services\BranchContext::class);
+            $branchContext->set($branch);
 
             // 1. Fiscal Periods (Previous, Current)
             $startMonth = \Tek2991\Accounting\Facades\Accounting::getFiscalYearStart();
@@ -51,7 +65,6 @@ class DemoDataSeeder extends Seeder
 
             // Current FY
             FiscalPeriod::firstOrCreate([
-                'company_id' => $companyId,
                 'name' => "FY {$startYear}-" . substr($startYear + 1, 2),
             ], [
                 'start_date' => $startDate,
@@ -62,7 +75,6 @@ class DemoDataSeeder extends Seeder
             $prevStartDate = $startDate->copy()->subYear();
             $prevEndDate = $endDate->copy()->subYear();
             FiscalPeriod::firstOrCreate([
-                'company_id' => $companyId,
                 'name' => "FY " . ($startYear - 1) . "-" . substr($startYear, 2),
             ], [
                 'start_date' => $prevStartDate,
@@ -71,7 +83,6 @@ class DemoDataSeeder extends Seeder
 
             // 2. Chart of Accounts for Bank Accounts
             $hdfcCurrentAccount = Account::firstOrCreate([
-                'company_id' => $companyId,
                 'name' => 'HDFC Current Account',
             ], [
                 'type' => AccountType::Asset,
@@ -80,7 +91,6 @@ class DemoDataSeeder extends Seeder
             ]);
 
             $sbiCurrentAccount = Account::firstOrCreate([
-                'company_id' => $companyId,
                 'name' => 'SBI Current Account',
             ], [
                 'type' => AccountType::Asset,
@@ -89,7 +99,6 @@ class DemoDataSeeder extends Seeder
             ]);
 
             $iciciSavingsAccount = Account::firstOrCreate([
-                'company_id' => $companyId,
                 'name' => 'ICICI Savings Account',
             ], [
                 'type' => AccountType::Asset,
@@ -100,7 +109,7 @@ class DemoDataSeeder extends Seeder
             // 3. Respective Bank Accounts
             $bankAccounts = [];
             $bankAccounts[] = BankAccount::firstOrCreate([
-                'company_id' => $companyId,
+                'branch_id' => $branch->id,
                 'account_id' => $hdfcCurrentAccount->id,
             ], [
                 'type' => BankAccountType::Depository,
@@ -110,7 +119,7 @@ class DemoDataSeeder extends Seeder
             ]);
 
             $bankAccounts[] = BankAccount::firstOrCreate([
-                'company_id' => $companyId,
+                'branch_id' => $branch->id,
                 'account_id' => $sbiCurrentAccount->id,
             ], [
                 'type' => BankAccountType::Depository,
@@ -120,7 +129,7 @@ class DemoDataSeeder extends Seeder
             ]);
 
             $bankAccounts[] = BankAccount::firstOrCreate([
-                'company_id' => $companyId,
+                'branch_id' => $branch->id,
                 'account_id' => $iciciSavingsAccount->id,
             ], [
                 'type' => BankAccountType::Depository,
@@ -134,7 +143,6 @@ class DemoDataSeeder extends Seeder
             for ($i = 0; $i < 25; $i++) {
                 $type = $faker->randomElement([ContactType::Customer, ContactType::Vendor, ContactType::Both]);
                 $contacts[] = Contact::firstOrCreate([
-                    'company_id' => $companyId,
                     'name' => $faker->company,
                 ], [
                     'type' => $type,
@@ -150,7 +158,6 @@ class DemoDataSeeder extends Seeder
 
             // 5. Taxes (GST 9% & 18%)
             $outputCgstAccount = Account::firstOrCreate([
-                'company_id' => $companyId,
                 'name' => 'Output CGST',
             ], [
                 'type' => AccountType::Liability,
@@ -159,7 +166,6 @@ class DemoDataSeeder extends Seeder
             ]);
 
             $outputSgstAccount = Account::firstOrCreate([
-                'company_id' => $companyId,
                 'name' => 'Output SGST',
             ], [
                 'type' => AccountType::Liability,
@@ -168,7 +174,6 @@ class DemoDataSeeder extends Seeder
             ]);
 
             $outputIgstAccount = Account::firstOrCreate([
-                'company_id' => $companyId,
                 'name' => 'Output IGST',
             ], [
                 'type' => AccountType::Liability,
@@ -177,7 +182,6 @@ class DemoDataSeeder extends Seeder
             ]);
 
             $inputCgstAccount = Account::firstOrCreate([
-                'company_id' => $companyId,
                 'name' => 'Input CGST',
             ], [
                 'type' => AccountType::Asset,
@@ -186,7 +190,6 @@ class DemoDataSeeder extends Seeder
             ]);
 
             $inputSgstAccount = Account::firstOrCreate([
-                'company_id' => $companyId,
                 'name' => 'Input SGST',
             ], [
                 'type' => AccountType::Asset,
@@ -195,7 +198,6 @@ class DemoDataSeeder extends Seeder
             ]);
 
             $inputIgstAccount = Account::firstOrCreate([
-                'company_id' => $companyId,
                 'name' => 'Input IGST',
             ], [
                 'type' => AccountType::Asset,
@@ -205,7 +207,6 @@ class DemoDataSeeder extends Seeder
 
             // GST 18%
             $gst18 = Tax::firstOrCreate([
-                'company_id' => $companyId,
                 'name' => 'GST 18%',
             ], [
                 'description' => '9% CGST + 9% SGST | 18% IGST',
@@ -240,7 +241,6 @@ class DemoDataSeeder extends Seeder
 
             // 6. Items
             $salesAccount = Account::firstOrCreate([
-                'company_id' => $companyId,
                 'name' => 'Sales Revenue',
             ], [
                 'type' => AccountType::Revenue,
@@ -249,7 +249,6 @@ class DemoDataSeeder extends Seeder
             ]);
 
             $cogsAccount = Account::firstOrCreate([
-                'company_id' => $companyId,
                 'name' => 'Cost of Goods Sold',
             ], [
                 'type' => AccountType::Expense,
@@ -261,7 +260,6 @@ class DemoDataSeeder extends Seeder
             $items = [];
             foreach ($itemNames as $i => $name) {
                 $items[] = Item::firstOrCreate([
-                    'company_id' => $companyId,
                     'name' => $name,
                 ], [
                     'type' => \Tek2991\Accounting\Enums\ItemType::Services,
@@ -281,93 +279,93 @@ class DemoDataSeeder extends Seeder
             $invoiceService = app(InvoiceService::class);
             $billService = app(BillService::class);
 
-            // 7. Generate 100 Invoices and 100 Bills within the current fiscal year (up to today)
+            // 7. Generate Invoices and Bills within the current fiscal year (up to today)
             $maxDaysDiff = max(1, $startDate->diffInDays(now()));
-            // for ($i = 0; $i < 100; $i++) {
-            //     $date = now()->subDays(rand(0, $maxDaysDiff - 1));
+            for ($i = 0; $i < 30; $i++) {
+                $date = now()->subDays(rand(0, $maxDaysDiff - 1));
                 
-            //     // INVOICES
-            //     if ($customers->isNotEmpty()) {
-            //         $customer = $faker->randomElement($customers);
-            //         $invoice = $invoiceService->create($companyId, [
-            //             'contact_id' => $customer->id,
-            //             'issue_date' => $date->format('Y-m-d'),
-            //             'due_date' => $date->copy()->addDays(30)->format('Y-m-d'),
-            //             'place_of_supply_state_id' => $statesForSupply->isNotEmpty() ? $faker->randomElement($statesForSupply)->id : null,
-            //             'notes' => 'Generated by Comprehensive Demo Seeder',
-            //         ]);
+                // INVOICES
+                if ($customers->isNotEmpty()) {
+                    $customer = $faker->randomElement($customers);
+                    $invoice = $invoiceService->create($branch, [
+                        'contact_id' => $customer->id,
+                        'issue_date' => $date->format('Y-m-d'),
+                        'due_date' => $date->copy()->addDays(30)->format('Y-m-d'),
+                        'place_of_supply_state_id' => $statesForSupply->isNotEmpty() ? $faker->randomElement($statesForSupply)->id : null,
+                        'notes' => 'Generated by Comprehensive Demo Seeder',
+                    ]);
 
-            //         $numItems = rand(1, 4);
-            //         for ($j = 0; $j < $numItems; $j++) {
-            //             $item = $faker->randomElement($items);
-            //             $invoice->items()->create([
-            //                 'line_type' => DocumentLineType::Item,
-            //                 'item_id' => $item->id,
-            //                 'description' => $item->name,
-            //                 'quantity' => rand(1, 10),
-            //                 'unit_price' => $item->sale_price,
-            //                 'tax_id' => $gst18->id,
-            //             ]);
-            //         }
+                    $numItems = rand(1, 4);
+                    for ($j = 0; $j < $numItems; $j++) {
+                        $item = $faker->randomElement($items);
+                        $invoice->items()->create([
+                            'line_type' => DocumentLineType::Item,
+                            'item_id' => $item->id,
+                            'description' => $item->name,
+                            'quantity' => rand(1, 10),
+                            'unit_price' => $item->sale_price,
+                            'tax_id' => $gst18->id,
+                        ]);
+                    }
 
-            //         $invoiceService->recalculateTotals($invoice);
-            //         $invoiceService->post($invoice);
+                    $invoiceService->recalculateTotals($invoice);
+                    $invoiceService->post($invoice);
 
-            //         // 75% chance of payment
-            //         if (rand(1, 100) <= 75) {
-            //             $paymentDate = $date->copy()->addDays(rand(1, 30));
-            //             if ($paymentDate->isPast()) {
-            //                 $invoiceService->recordPayment($invoice, [
-            //                     'payment_account_id' => $faker->randomElement($bankAccounts)->account_id,
-            //                     'payment_date' => $paymentDate->format('Y-m-d'),
-            //                     'amount' => $invoice->grand_total,
-            //                     'reference' => 'PAY-' . $faker->bothify('####????'),
-            //                 ]);
-            //             }
-            //         }
-            //     }
+                    // 75% chance of payment
+                    if (rand(1, 100) <= 75) {
+                        $paymentDate = $date->copy()->addDays(rand(1, 30));
+                        if ($paymentDate->isPast()) {
+                            $invoiceService->recordPayment($invoice, [
+                                'payment_account_id' => $faker->randomElement($bankAccounts)->account_id,
+                                'payment_date' => $paymentDate->format('Y-m-d'),
+                                'amount' => $invoice->grand_total,
+                                'reference' => 'PAY-' . $faker->bothify('####????'),
+                            ]);
+                        }
+                    }
+                }
 
-            //     // BILLS
-            //     if ($vendors->isNotEmpty()) {
-            //         $vendor = $faker->randomElement($vendors);
-            //         $bill = $billService->create($companyId, [
-            //             'contact_id' => $vendor->id,
-            //             'issue_date' => $date->format('Y-m-d'),
-            //             'due_date' => $date->copy()->addDays(30)->format('Y-m-d'),
-            //             'place_of_supply_state_id' => $statesForSupply->isNotEmpty() ? $faker->randomElement($statesForSupply)->id : null,
-            //             'notes' => 'Generated by Comprehensive Demo Seeder',
-            //         ]);
+                // BILLS
+                if ($vendors->isNotEmpty()) {
+                    $vendor = $faker->randomElement($vendors);
+                    $bill = $billService->create($branch, [
+                        'contact_id' => $vendor->id,
+                        'issue_date' => $date->format('Y-m-d'),
+                        'due_date' => $date->copy()->addDays(30)->format('Y-m-d'),
+                        'place_of_supply_state_id' => $statesForSupply->isNotEmpty() ? $faker->randomElement($statesForSupply)->id : null,
+                        'notes' => 'Generated by Comprehensive Demo Seeder',
+                    ]);
 
-            //         $numItems = rand(1, 4);
-            //         for ($j = 0; $j < $numItems; $j++) {
-            //             $item = $faker->randomElement($items);
-            //             $bill->items()->create([
-            //                 'line_type' => DocumentLineType::Item,
-            //                 'item_id' => $item->id,
-            //                 'description' => $item->name,
-            //                 'quantity' => rand(1, 5),
-            //                 'unit_price' => $item->purchase_price,
-            //                 'tax_id' => $gst18->id,
-            //             ]);
-            //         }
+                    $numItems = rand(1, 4);
+                    for ($j = 0; $j < $numItems; $j++) {
+                        $item = $faker->randomElement($items);
+                        $bill->items()->create([
+                            'line_type' => DocumentLineType::Item,
+                            'item_id' => $item->id,
+                            'description' => $item->name,
+                            'quantity' => rand(1, 5),
+                            'unit_price' => $item->purchase_price,
+                            'tax_id' => $gst18->id,
+                        ]);
+                    }
 
-            //         $billService->recalculateTotals($bill);
-            //         $billService->post($bill);
+                    $billService->recalculateTotals($bill);
+                    $billService->post($bill);
 
-            //         // 80% chance of payment
-            //         if (rand(1, 100) <= 80) {
-            //             $paymentDate = $date->copy()->addDays(rand(1, 30));
-            //             if ($paymentDate->isPast()) {
-            //                 $billService->recordPayment($bill, [
-            //                     'payment_account_id' => $faker->randomElement($bankAccounts)->account_id,
-            //                     'payment_date' => $paymentDate->format('Y-m-d'),
-            //                     'amount' => $bill->grand_total,
-            //                     'reference' => 'BILL-PAY-' . $faker->bothify('####????'),
-            //                 ]);
-            //             }
-            //         }
-            //     }
-            // }
+                    // 80% chance of payment
+                    if (rand(1, 100) <= 80) {
+                        $paymentDate = $date->copy()->addDays(rand(1, 30));
+                        if ($paymentDate->isPast()) {
+                            $billService->recordPayment($bill, [
+                                'payment_account_id' => $faker->randomElement($bankAccounts)->account_id,
+                                'payment_date' => $paymentDate->format('Y-m-d'),
+                                'amount' => $bill->grand_total,
+                                'reference' => 'BILL-PAY-' . $faker->bothify('####????'),
+                            ]);
+                        }
+                    }
+                }
+            }
 
         });
     }

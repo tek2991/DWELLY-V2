@@ -14,10 +14,9 @@ use Tek2991\Accounting\Exceptions\FiscalPeriodLockedException;
 
 class PeriodLockService
 {
-    public function assertNotClosed(int $companyId, string $date): void
+    public function assertNotClosed(string $date): void
     {
         $closedPeriod = FiscalPeriod::query()
-            ->where('company_id', $companyId)
             ->where('status', '!=', FiscalPeriodStatus::Open)
             ->where('start_date', '<=', $date)
             ->where('end_date', '>=', $date)

@@ -90,9 +90,6 @@ class AccountChart extends Page
             ->form(fn (Schema $schema) => AccountForm::configure($schema))
             ->fillForm(fn (array $arguments) => $this->getAccountFormDefaults($arguments))
             ->mutateDataUsing(function (array $data) {
-                $companyId = app(CompanyAccessor::class)->getCurrentCompanyId();
-                $data['company_id'] = $companyId;
-
                 return $data;
             })
             ->successNotificationTitle('Account created successfully');
@@ -147,9 +144,6 @@ class AccountChart extends Page
             ->form(fn (Schema $schema) => AccountForm::configure($schema))
             ->fillForm(fn (array $arguments) => $this->getAccountFormDefaultsForClass($arguments['className'] ?? null))
             ->mutateDataUsing(function (array $data) {
-                $companyId = app(CompanyAccessor::class)->getCurrentCompanyId();
-                $data['company_id'] = $companyId;
-
                 return $data;
             })
             ->successNotificationTitle('Account created successfully');
