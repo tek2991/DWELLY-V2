@@ -25,3 +25,8 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+/public/css/filament
+/public/js/filament
+/public/fonts/filament
+/public/css/tek2991
