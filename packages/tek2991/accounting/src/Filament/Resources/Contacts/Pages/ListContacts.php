@@ -12,8 +12,18 @@ class ListContacts extends ListRecords
 
     protected function getHeaderActions(): array
     {
-        return [
-            Actions\CreateAction::make(),
+        $actions = [
+            Actions\CreateAction::make()
+                ->hidden(fn () => !config('accounting.contacts.allow_create', true)),
         ];
+
+        if (config('accounting.contacts.external_create_route')) {
+            $actions[] = Actions\Action::make('create_external')
+                ->label('New Contact')
+                ->url(fn () => route(config('accounting.contacts.external_create_route')))
+                ->hidden(fn () => config('accounting.contacts.allow_create', true));
+        }
+
+        return $actions;
     }
 }

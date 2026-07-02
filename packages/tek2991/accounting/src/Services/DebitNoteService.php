@@ -2,6 +2,7 @@
 
 namespace Tek2991\Accounting\Services;
 
+use App\Models\Branch;
 use Illuminate\Support\Facades\DB;
 use Tek2991\Accounting\Models\DebitNote;
 use Tek2991\Accounting\Enums\DebitNoteStatus;
@@ -15,12 +16,12 @@ class DebitNoteService
         private PostingGuard $postingGuard,
     ) {}
 
-    public function create(int $companyId, array $data): DebitNote
+    public function create(?Branch $branch, array $data): DebitNote
     {
-        return DB::transaction(function () use ($companyId, $data) {
+        return DB::transaction(function () use ($branch, $data) {
             $dn = new DebitNote($data);
-            $dn->company_id = $companyId;
-            $dn->debit_note_number = $this->docNumberService->nextDebitNoteNumber($companyId);
+            $dn->branch_id = $branch?->id;
+            $dn->debit_note_number = $this->docNumberService->nextDebitNoteNumber($branch);
             $dn->status = DebitNoteStatus::Draft;
             $dn->save();
 
@@ -36,8 +37,8 @@ class DebitNoteService
                 'bill_id' => $bill->id,
                 'issue_date' => now(),
             ]);
-            $dn->company_id = $bill->company_id;
-            $dn->debit_note_number = $this->docNumberService->nextDebitNoteNumber($bill->company_id);
+            $dn->branch_id = $bill->branch_id;
+            $dn->debit_note_number = $this->docNumberService->nextDebitNoteNumber($bill->branch);
             $dn->status = DebitNoteStatus::Draft;
             $dn->save();
 
@@ -127,17 +128,14 @@ class DebitNoteService
                         $isInclusive = $tax->type === \Tek2991\Accounting\Enums\TaxType::Inclusive;
                         
                         $dn->loadMissing('contact');
-                        $companyProfile = \Tek2991\Accounting\Models\CompanyProfile::firstOrCreate(
-                            ['company_id' => $dn->company_id],
-                            ['tax_regime' => \Tek2991\Accounting\Enums\TaxRegimeType::Generic]
-                        );
+                        $branch = \App\Models\Branch::find($dn->branch_id);
 
                         $taxContext = new \Tek2991\Accounting\ValueObjects\TaxCalculationContext(
                             amount: $baseLineTotal,
                             document: $dn,
                             tax: $tax,
                             modeOverride: $isInclusive ? 'inclusive' : 'exclusive',
-                            companyProfile: $companyProfile,
+                            branch: $branch,
                             contact: $dn->contact
                         );
 
@@ -189,8 +187,7 @@ class DebitNoteService
                 throw new Exception("Only draft debit notes can be posted.");
             }
 
-            $payableAccountId = $dn->contact->payableAccount?->id ?? \Tek2991\Accounting\Models\Account::where('company_id', $dn->company_id)
-                ->where('system_role', \Tek2991\Accounting\Enums\SystemRole::TradePayable)
+            $payableAccountId = $dn->contact->payableAccount?->id ?? \Tek2991\Accounting\Models\Account::where('system_role', \Tek2991\Accounting\Enums\SystemRole::TradePayable)
                 ->value('id');
 
             if (!$payableAccountId) {
@@ -256,7 +253,7 @@ class DebitNoteService
             }
 
             $transaction = $this->txnService->createTransaction([
-                'company_id' => $dn->company_id,
+                'branch_id' => $dn->branch_id,
                 'type' => \Tek2991\Accounting\Enums\TransactionType::DebitNote,
                 'description' => "Posted Debit Note {$dn->debit_note_number}",
                 'posted_at' => $dn->issue_date?->toDateString() ?? now()->toDateString(),

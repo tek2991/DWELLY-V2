@@ -39,11 +39,13 @@ class ContactsTable
             ])
             ->recordActions([
                 Actions\EditAction::make(),
-                Actions\DeleteAction::make(),
+                Actions\DeleteAction::make()
+                    ->hidden(fn () => !config('accounting.contacts.allow_delete', true)),
                 Actions\RestoreAction::make(),
             ])
             ->groupedBulkActions([
-                Actions\DeleteBulkAction::make(),
+                Actions\DeleteBulkAction::make()
+                    ->hidden(fn () => !config('accounting.contacts.allow_delete', true)),
                 Actions\RestoreBulkAction::make(),
             ]);
     }

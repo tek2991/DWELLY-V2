@@ -10,7 +10,6 @@ use Carbon\Carbon;
 class GenerateFiscalPeriodsCommand extends Command
 {
     protected $signature = 'accounting:generate-periods 
-                            {company_id : The ID of the company} 
                             {year : The year to generate periods for (e.g., 2024)}
                             {--start_month=1 : The month the fiscal year starts (1-12)}
                             {--frequency=monthly : The frequency of periods (monthly, quarterly, yearly)}';
@@ -19,7 +18,6 @@ class GenerateFiscalPeriodsCommand extends Command
 
     public function handle()
     {
-        $companyId = $this->argument('company_id');
         $year = (int) $this->argument('year');
         $startMonth = (int) $this->option('start_month');
         $frequency = $this->option('frequency');
@@ -59,7 +57,6 @@ class GenerateFiscalPeriodsCommand extends Command
             }
 
             FiscalPeriod::firstOrCreate([
-                'company_id' => $companyId,
                 'start_date' => $currentStart->toDateString(),
                 'end_date' => $currentEnd->toDateString(),
             ], [

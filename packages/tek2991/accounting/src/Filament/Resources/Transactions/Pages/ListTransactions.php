@@ -40,7 +40,7 @@ class ListTransactions extends ListRecords
                     }
 
                     $transaction = $service->createSimpleTransaction(
-                        companyId: Filament::getTenant()->id,
+                        branchId: Filament::getTenant()->id,
                         debitAccountId: $bankAccount->account_id,   // Debit the cash/bank account
                         creditAccountId: $data['account_id'],        // Credit the revenue/equity account
                         amount: (float) $data['amount'],  // Model handles minor unit conversion
@@ -74,7 +74,7 @@ class ListTransactions extends ListRecords
                     }
 
                     $transaction = $service->createSimpleTransaction(
-                        companyId: Filament::getTenant()->id,
+                        branchId: Filament::getTenant()->id,
                         debitAccountId: $data['account_id'],         // Debit the expense/asset account
                         creditAccountId: $bankAccount->account_id,   // Credit the cash/bank account
                         amount: (float) $data['amount'],  // Model handles minor unit conversion
@@ -102,7 +102,7 @@ class ListTransactions extends ListRecords
                         $entries = $data['journalEntries'];
                         unset($data['journalEntries']);
 
-                        $data['company_id'] = Filament::getTenant()->id;
+                        $data['branch_id'] = Filament::getTenant()->id;
                         $data['type']       = TransactionType::Journal;
 
                         $formattedEntries = [];

@@ -15,16 +15,12 @@ class TransactionServiceTest extends TestCase
     public function test_can_create_balanced_transaction()
     {
         $service = app(TransactionService::class);
-        $companyId = 1;
-
         $debitAccount = Account::create([
-            'company_id' => $companyId, 
             'type' => AccountType::Asset, 
             'name' => 'Cash',
             'code' => '1000'
         ]);
         $creditAccount = Account::create([
-            'company_id' => $companyId, 
             'type' => AccountType::Revenue, 
             'name' => 'Sales',
             'code' => '4000'
@@ -46,7 +42,6 @@ class TransactionServiceTest extends TestCase
         ];
 
         $transaction = $service->createTransaction([
-            'company_id' => $companyId,
             'description' => 'Test Transaction',
             'type' => TransactionType::JournalEntry,
             'posted_at' => now(),
@@ -68,16 +63,13 @@ class TransactionServiceTest extends TestCase
     public function test_rejects_unbalanced_transaction()
     {
         $service = app(TransactionService::class);
-        $companyId = 1;
 
         $debitAccount = Account::create([
-            'company_id' => $companyId, 
             'type' => AccountType::Asset, 
             'name' => 'Cash',
             'code' => '1001'
         ]);
         $creditAccount = Account::create([
-            'company_id' => $companyId, 
             'type' => AccountType::Revenue, 
             'name' => 'Sales',
             'code' => '4001'
@@ -102,7 +94,6 @@ class TransactionServiceTest extends TestCase
         $this->expectExceptionMessage('Transaction is not balanced.');
 
         $service->createTransaction([
-            'company_id' => $companyId,
             'description' => 'Test Transaction',
             'type' => TransactionType::JournalEntry,
             'posted_at' => now(),

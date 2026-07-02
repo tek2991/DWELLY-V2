@@ -45,4 +45,19 @@ class ContactResource extends Resource
             'edit' => Pages\EditContact::route('/{record}/edit'),
         ];
     }
+    
+    public static function canCreate(): bool
+    {
+        return config('accounting.contacts.allow_create', true);
+    }
+    
+    public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return config('accounting.contacts.allow_delete', true);
+    }
+    
+    public static function canDeleteAny(): bool
+    {
+        return config('accounting.contacts.allow_delete', true);
+    }
 }

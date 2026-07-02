@@ -42,6 +42,13 @@ return new class extends Migration
             $table->bigInteger('receivable_balance')->default(0); // what they owe us
             $table->bigInteger('payable_balance')->default(0); // what we owe them
             
+            // Bank Details
+            $table->string('bank_beneficiary_name')->nullable();
+            $table->string('bank_name')->nullable();
+            $table->text('bank_address')->nullable();
+            $table->string('bank_account_no')->nullable();
+            $table->string('bank_ifsc_code')->nullable();
+            
             $table->timestamps();
             $table->softDeletes();
         });

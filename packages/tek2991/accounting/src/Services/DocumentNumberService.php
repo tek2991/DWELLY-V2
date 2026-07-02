@@ -10,35 +10,38 @@ use Tek2991\Accounting\Models\DocumentSequence;
 
 class DocumentNumberService
 {
-    public function nextInvoiceNumber(Branch $branch): string
+    public function nextInvoiceNumber(?Branch $branch = null): string
     {
         return $this->generateNextNumber($branch, 'invoice', 'INV');
     }
 
-    public function nextBillNumber(Branch $branch): string
+    public function nextBillNumber(?Branch $branch = null): string
     {
         return $this->generateNextNumber($branch, 'bill', 'BILL');
     }
 
-    public function nextCreditNoteNumber(Branch $branch): string
+    public function nextCreditNoteNumber(?Branch $branch = null): string
     {
         return $this->generateNextNumber($branch, 'credit_note', 'CN');
     }
 
-    public function nextDebitNoteNumber(Branch $branch): string
+    public function nextDebitNoteNumber(?Branch $branch = null): string
     {
         return $this->generateNextNumber($branch, 'debit_note', 'DN');
     }
     
-    public function nextPaymentNumber(Branch $branch): string
+    public function nextPaymentNumber(?Branch $branch = null): string
     {
         return $this->generateNextNumber($branch, 'payment', 'PAY');
     }
 
-    protected function generateNextNumber(Branch $branch, string $type, string $defaultPrefix): string
+    protected function generateNextNumber(?Branch $branch, string $type, string $defaultPrefix): string
     {
         return DB::transaction(function () use ($branch, $type, $defaultPrefix) {
-            $sequence = DocumentSequence::where('branch_id', $branch->id)
+            $branchId = $branch ? $branch->id : null;
+            $branchCode = $branch ? $branch->code : 'ORG';
+
+            $sequence = DocumentSequence::where('branch_id', $branchId)
                 ->where('document_type', $type)
                 ->lockForUpdate()
                 ->first();
@@ -46,10 +49,10 @@ class DocumentNumberService
             if (!$sequence) {
                 // Determine prefix (e.g. GHY-INV-2026-)
                 $year = date('Y'); // For simplicity, using calendar year. Can be extended to fiscal year.
-                $prefix = "{$branch->code}-{$defaultPrefix}-{$year}-";
+                $prefix = "{$branchCode}-{$defaultPrefix}-{$year}-";
                 
                 $sequence = DocumentSequence::create([
-                    'branch_id' => $branch->id,
+                    'branch_id' => $branchId,
                     'document_type' => $type,
                     'prefix' => $prefix,
                     'next_number' => 1

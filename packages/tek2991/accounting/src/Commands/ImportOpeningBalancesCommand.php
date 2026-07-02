@@ -12,7 +12,6 @@ use Exception;
 class ImportOpeningBalancesCommand extends Command
 {
     protected $signature = 'accounting:opening-balances 
-                            {company_id : The ID of the company} 
                             {file : Path to CSV file (account_code,debit,credit)}
                             {--date=1970-01-01 : The date for the opening balances transaction}';
 
@@ -20,7 +19,6 @@ class ImportOpeningBalancesCommand extends Command
 
     public function handle(TransactionService $txnService)
     {
-        $companyId = $this->argument('company_id');
         $file = $this->argument('file');
         $date = $this->option('date');
 
@@ -47,7 +45,7 @@ class ImportOpeningBalancesCommand extends Command
             return 1;
         }
 
-        $accounts = Account::where('company_id', $companyId)->get()->keyBy('code');
+        $accounts = Account::all()->keyBy('code');
 
         $entries = [];
         $totalDebit = 0;
@@ -97,7 +95,6 @@ class ImportOpeningBalancesCommand extends Command
 
         try {
             $transaction = $txnService->createTransaction([
-                'company_id' => $companyId,
                 'type' => TransactionType::Journal,
                 'description' => 'Opening Balances',
                 'posted_at' => $date,

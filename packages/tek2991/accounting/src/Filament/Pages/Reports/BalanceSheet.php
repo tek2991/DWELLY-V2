@@ -49,10 +49,7 @@ class BalanceSheet extends Page implements HasForms
     public function getReportDataProperty(): array
     {
         $endDate = $this->data['end_date'] ?? Carbon::now()->format('Y-m-d');
-        $companyId = app(\Tek2991\Accounting\Services\BranchContext::class)->getCurrentId();
-        
         $lastClosedPeriod = \Tek2991\Accounting\Models\FiscalPeriod::query()
-            ->where('company_id', $companyId)
             ->where('status', '!=', \Tek2991\Accounting\Enums\FiscalPeriodStatus::Open)
             ->where('end_date', '<', $endDate)
             ->orderBy('end_date', 'desc')
@@ -71,7 +68,6 @@ class BalanceSheet extends Page implements HasForms
         $totalEquityBase = $service->getTypeTotal(AccountType::Equity, '1970-01-01', $endDate);
 
         $retainedEarningsSnapshots = \Tek2991\Accounting\Models\FiscalPeriod::query()
-            ->where('company_id', $companyId)
             ->where('status', '!=', \Tek2991\Accounting\Enums\FiscalPeriodStatus::Open)
             ->where('end_date', '<', $endDate)
             ->sum('closing_profit_loss');

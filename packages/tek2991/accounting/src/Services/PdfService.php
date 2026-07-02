@@ -48,6 +48,19 @@ class PdfService
             if ($primaryDriver === 'browsershot') {
                 $builder->withBrowsershot(function (\Spatie\Browsershot\Browsershot $browsershot) {
                     $browsershot->noSandbox();
+                    $nodeBinary = config('accounting.pdf.node_binary') ?: env('BROWSERSHOT_NODE_BINARY');
+                    $npmBinary = config('accounting.pdf.npm_binary') ?: env('BROWSERSHOT_NPM_BINARY');
+                    $chromeBinary = config('accounting.pdf.chrome_binary') ?: env('BROWSERSHOT_CHROME_BINARY');
+                    
+                    if ($nodeBinary) {
+                        $browsershot->setNodeBinary($nodeBinary);
+                    }
+                    if ($npmBinary) {
+                        $browsershot->setNpmBinary($npmBinary);
+                    }
+                    if ($chromeBinary) {
+                        $browsershot->setChromePath($chromeBinary);
+                    }
                 });
                 $builder->footerView('accounting::pdf.footer', $data)
                         ->margins(5, 8, 15, 8);
@@ -72,6 +85,19 @@ class PdfService
             if ($fallbackDriver === 'browsershot') {
                 $builder->withBrowsershot(function (\Spatie\Browsershot\Browsershot $browsershot) {
                     $browsershot->noSandbox();
+                    $nodeBinary = config('accounting.pdf.node_binary') ?: env('BROWSERSHOT_NODE_BINARY');
+                    $npmBinary = config('accounting.pdf.npm_binary') ?: env('BROWSERSHOT_NPM_BINARY');
+                    $chromeBinary = config('accounting.pdf.chrome_binary') ?: env('BROWSERSHOT_CHROME_BINARY');
+                    
+                    if ($nodeBinary) {
+                        $browsershot->setNodeBinary($nodeBinary);
+                    }
+                    if ($npmBinary) {
+                        $browsershot->setNpmBinary($npmBinary);
+                    }
+                    if ($chromeBinary) {
+                        $browsershot->setChromePath($chromeBinary);
+                    }
                 });
                 $builder->footerView('accounting::pdf.footer', $data)
                         ->margins(5, 8, 15, 8);

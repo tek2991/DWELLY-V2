@@ -11,8 +11,7 @@ class VerifyNoFutureEntries implements ClosingCheck
 {
     public function validate(FiscalPeriod $period, ClosingValidationResult $result): void
     {
-        $futureCount = Transaction::where('company_id', $period->company_id)
-            ->whereBetween('posted_at', [$period->start_date, $period->end_date])
+        $futureCount = Transaction::whereBetween('posted_at', [$period->start_date, $period->end_date])
             ->where('posted_at', '>', now())
             ->count();
 

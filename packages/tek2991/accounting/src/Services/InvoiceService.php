@@ -21,11 +21,11 @@ class InvoiceService
         private PdfService $pdfService,
     ) {}
 
-    public function create(\App\Models\Branch $branch, array $data): Invoice
+    public function create(?\App\Models\Branch $branch, array $data): Invoice
     {
         return DB::transaction(function () use ($branch, $data) {
             $invoice = new Invoice($data);
-            $invoice->branch_id = $branch->id;
+            $invoice->branch_id = $branch?->id;
             $invoice->invoice_number = $this->docNumberService->nextInvoiceNumber($branch);
             $invoice->status = InvoiceStatus::Draft;
             $invoice->save();

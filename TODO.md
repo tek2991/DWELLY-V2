@@ -1,0 +1,1 @@
+proceed with building the central Filament PartyResource UI to manage all of these relationships and to start working on the subsequent modules (Opportunity Management, Properties, CRM, etc.).

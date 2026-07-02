@@ -16,13 +16,11 @@ class ContactObserver
     public function created(Contact $contact): void
     {
         if ($contact->isCustomer()) {
-            $receivablesControl = Account::where('company_id', $contact->company_id)
-                ->where('system_role', SystemRole::TradeReceivable)
+            $receivablesControl = Account::where('system_role', SystemRole::TradeReceivable)
                 ->first();
 
             if ($receivablesControl) {
                 $contact->receivableAccount()->create([
-                    'company_id' => $contact->company_id,
                     'parent_id' => $receivablesControl->id,
                     'type' => AccountType::Asset,
                     'reporting_class' => ReportingClass::CurrentAsset,
@@ -35,13 +33,11 @@ class ContactObserver
         }
 
         if ($contact->isVendor()) {
-            $payablesControl = Account::where('company_id', $contact->company_id)
-                ->where('system_role', SystemRole::TradePayable)
+            $payablesControl = Account::where('system_role', SystemRole::TradePayable)
                 ->first();
 
             if ($payablesControl) {
                 $contact->payableAccount()->create([
-                    'company_id' => $contact->company_id,
                     'parent_id' => $payablesControl->id,
                     'type' => AccountType::Liability,
                     'reporting_class' => ReportingClass::CurrentLiability,

@@ -19,11 +19,11 @@ class BillService
         private PostingGuard $postingGuard,
     ) {}
 
-    public function create(\App\Models\Branch $branch, array $data): Bill
+    public function create(?\App\Models\Branch $branch, array $data): Bill
     {
         return DB::transaction(function () use ($branch, $data) {
             $bill = new Bill($data);
-            $bill->branch_id = $branch->id;
+            $bill->branch_id = $branch?->id;
             $bill->bill_number = $this->docNumberService->nextBillNumber($branch);
             $bill->status = BillStatus::Draft;
             $bill->save();

@@ -17,11 +17,10 @@ class YearEndCloseService
         private TransactionService $txnService
     ) {}
 
-    public function closeYear(int $companyId, string $yearEndDate, string $description = 'Year End Closing Entry'): \Tek2991\Accounting\Models\Transaction
+    public function closeYear(string $yearEndDate, string $description = 'Year End Closing Entry'): \Tek2991\Accounting\Models\Transaction
     {
-        return DB::transaction(function () use ($companyId, $yearEndDate, $description) {
-            $retainedEarningsAccount = Account::where('company_id', $companyId)
-                ->where('system_role', SystemRole::RetainedEarnings)
+        return DB::transaction(function () use ($yearEndDate, $description) {
+            $retainedEarningsAccount = Account::where('system_role', SystemRole::RetainedEarnings)
                 ->first();
 
             if (!$retainedEarningsAccount) {
@@ -29,13 +28,11 @@ class YearEndCloseService
             }
 
             // Get all revenue and expense accounts
-            $revenueAccounts = Account::where('company_id', $companyId)
-                ->ofType(AccountType::Revenue)
+            $revenueAccounts = Account::ofType(AccountType::Revenue)
                 ->active()
                 ->get();
                 
-            $expenseAccounts = Account::where('company_id', $companyId)
-                ->ofType(AccountType::Expense)
+            $expenseAccounts = Account::ofType(AccountType::Expense)
                 ->active()
                 ->get();
 
@@ -99,7 +96,6 @@ class YearEndCloseService
             }
 
             return $this->txnService->createTransaction([
-                'company_id' => $companyId,
                 'posted_at' => $yearEndDate,
                 'description' => $description,
                 'type' => \Tek2991\Accounting\Enums\TransactionType::Journal,

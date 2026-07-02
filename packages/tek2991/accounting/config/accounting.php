@@ -15,19 +15,6 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Company Model
-    |--------------------------------------------------------------------------
-    |
-    | The fully qualified class name of the Company (tenant) model used by
-    | the host application. The plugin uses this to resolve the current
-    | company context for all accounting data.
-    |
-    */
-
-    'company_model' => env('ACCOUNTING_COMPANY_MODEL', 'App\\Models\\Company'),
-
-    /*
-    |--------------------------------------------------------------------------
     | Table Prefix
     |--------------------------------------------------------------------------
     |
@@ -37,18 +24,6 @@ return [
     */
 
     'table_prefix' => env('ACCOUNTING_TABLE_PREFIX', 'acc_'),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Company Foreign Key
-    |--------------------------------------------------------------------------
-    |
-    | The foreign key column name used to associate accounting records with
-    | a company. Must match the primary key column of the company model.
-    |
-    */
-
-    'company_foreign_key' => 'company_id',
 
     /*
     |--------------------------------------------------------------------------
@@ -117,6 +92,30 @@ return [
         'show_watermark' => env('ACCOUNTING_PDF_WATERMARK', false),
         'paper_size' => 'A4',
         'orientation' => 'portrait',
+        'node_binary' => env('BROWSERSHOT_NODE_BINARY'),
+        'npm_binary' => env('BROWSERSHOT_NPM_BINARY'),
+        'chrome_binary' => env('BROWSERSHOT_CHROME_BINARY'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Contact Management
+    |--------------------------------------------------------------------------
+    */
+    'contacts' => [
+        'allow_create' => false,
+        'allow_update' => false,
+        'allow_delete' => false,
+
+        /*
+        |--------------------------------------------------------------------------
+        | External Contact Management
+        |--------------------------------------------------------------------------
+        | Used when another module owns the master contact records (e.g. Dwelly Core).
+        */
+        'external_create_route' => null,
+        'external_view_route' => null,
+        'external_edit_route' => null,
     ],
 
 ];

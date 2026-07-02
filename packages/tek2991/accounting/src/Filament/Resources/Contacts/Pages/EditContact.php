@@ -13,8 +13,15 @@ class EditContact extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\DeleteAction::make(),
+            Actions\DeleteAction::make()
+                ->hidden(fn () => !config('accounting.contacts.allow_delete', true)),
             Actions\RestoreAction::make(),
         ];
+    }
+    
+    protected function getSaveFormAction(): \Filament\Actions\Action
+    {
+        return parent::getSaveFormAction()
+            ->hidden(fn () => !config('accounting.contacts.allow_update', true));
     }
 }

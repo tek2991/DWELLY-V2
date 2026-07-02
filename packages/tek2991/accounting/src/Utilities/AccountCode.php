@@ -10,11 +10,10 @@ class AccountCode
     /**
      * Suggest a code within the parent's account type range.
      */
-    public static function generateForParent(Account $parent, ?int $companyId = null): string
+    public static function generateForParent(Account $parent): string
     {
         $maxCode = Account::query()
             ->where('parent_id', $parent->id)
-            ->when($companyId !== null, fn($query) => $query->where('company_id', $companyId))
             ->orderByRaw('CAST(code AS UNSIGNED) DESC')
             ->value('code');
 
@@ -28,7 +27,7 @@ class AccountCode
     /**
      * Suggest a code within the account type range.
      */
-    public static function generateForType(AccountType $type, ?int $companyId = null): string
+    public static function generateForType(AccountType $type): string
     {
         $start = $type->getCodeRangeStart();
         $end   = $type->getCodeRangeEnd();
@@ -36,10 +35,6 @@ class AccountCode
         $query = Account::query()
             ->where('type', $type)
             ->whereBetween('code', [(string) $start, (string) $end]);
-
-        if ($companyId !== null) {
-            $query->where('company_id', $companyId);
-        }
 
         $maxCode = $query
             ->orderByRaw('CAST(code AS UNSIGNED) DESC')

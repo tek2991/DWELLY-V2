@@ -28,6 +28,21 @@ This package relies on `spatie/laravel-pdf` and defaults to generating PDFs via 
 npm install -g puppeteer
 ```
 
+For the system to locate the required binaries, especially in environments where `$PATH` may not resolve correctly, you must specify their absolute paths in your `.env` file:
+
+```env
+BROWSERSHOT_NODE_BINARY=/path/to/your/node
+BROWSERSHOT_NPM_BINARY=/path/to/your/npm
+BROWSERSHOT_CHROME_BINARY=/path/to/your/google-chrome
+```
+
+> [!TIP]
+> **How to find these paths:**
+> Open your terminal and run the following commands to find the absolute paths on your system:
+> - For Node: `which node` (e.g., `/usr/bin/node` or `~/.nvm/versions/node/.../bin/node`)
+> - For NPM: `which npm` (e.g., `/usr/bin/npm`)
+> - For Chrome: `which google-chrome` or `which chromium-browser`
+
 If Puppeteer is unavailable or fails, the plugin will automatically fallback to **DOMPDF** (pure PHP) to ensure your PDFs still generate.
 
 ### Publish & Migrate

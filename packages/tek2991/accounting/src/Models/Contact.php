@@ -42,6 +42,11 @@ class Contact extends Model
         'shipping_address',
         'receivable_balance',
         'payable_balance',
+        'bank_beneficiary_name',
+        'bank_name',
+        'bank_address',
+        'bank_account_no',
+        'bank_ifsc_code',
     ];
 
     protected $casts = [

@@ -27,40 +27,48 @@ class ContactForm
                             ->label('Contact Type')
                             ->options(ContactType::class)
                             ->default(ContactType::Customer)
+                            ->disabled(fn () => !config('accounting.contacts.allow_update', true))
                             ->required(),
                             
                         Forms\Components\TextInput::make('name')
                             ->label('Name / Company')
                             ->required()
+                            ->disabled(fn () => !config('accounting.contacts.allow_update', true))
                             ->maxLength(255),
                             
                         Forms\Components\TextInput::make('email')
                             ->label('Email Address')
                             ->email()
+                            ->disabled(fn () => !config('accounting.contacts.allow_update', true))
                             ->maxLength(255),
                             
                         Forms\Components\TextInput::make('phone')
                             ->label('Phone Number')
+                            ->disabled(fn () => !config('accounting.contacts.allow_update', true))
                             ->maxLength(255),
                             
                         Forms\Components\TextInput::make('tax_id')
                             ->label(fn () => Organization::current()->tax_regime === TaxRegimeType::IndiaGst ? 'Tax ID / PAN' : 'Tax ID')
+                            ->disabled(fn () => !config('accounting.contacts.allow_update', true))
                             ->maxLength(255),
                             
                         Forms\Components\Toggle::make('is_tax_registered')
                             ->label('Is Tax Registered')
                             ->visible(fn () => Organization::current()->tax_regime === TaxRegimeType::IndiaGst)
+                            ->disabled(fn () => !config('accounting.contacts.allow_update', true))
                             ->live()
                             ->default(false),
                             
                         Forms\Components\Select::make('gst_registration_type')
                             ->label('GST Registration Type')
                             ->options(GstRegistrationType::class)
+                            ->disabled(fn () => !config('accounting.contacts.allow_update', true))
                             ->visible(fn (Get $get) => Organization::current()->tax_regime === TaxRegimeType::IndiaGst && $get('is_tax_registered')),
                             
                         Forms\Components\TextInput::make('gstin')
                             ->label('GSTIN')
                             ->maxLength(15)
+                            ->disabled(fn () => !config('accounting.contacts.allow_update', true))
                             ->visible(fn (Get $get) => Organization::current()->tax_regime === TaxRegimeType::IndiaGst && $get('is_tax_registered'))
                             ->live(debounce: 500)
                             ->afterStateUpdated(function (?string $state, Set $set, Get $get) {
@@ -93,19 +101,52 @@ class ContactForm
                         Forms\Components\Select::make('state_id')
                             ->label('State')
                             ->options(State::all()->pluck('name', 'id'))
+                            ->disabled(fn () => !config('accounting.contacts.allow_update', true))
                             ->searchable()
                             ->visible(fn () => Organization::current()->tax_regime === TaxRegimeType::IndiaGst),
                     ]),
                     
+                Section::make('Bank Details')
+                    ->columns(2)
+                    ->schema([
+                        Forms\Components\TextInput::make('bank_beneficiary_name')
+                            ->label('Beneficiary Name')
+                            ->disabled(fn () => !config('accounting.contacts.allow_update', true))
+                            ->maxLength(255),
+                            
+                        Forms\Components\TextInput::make('bank_name')
+                            ->label('Name of the Bank')
+                            ->disabled(fn () => !config('accounting.contacts.allow_update', true))
+                            ->maxLength(255),
+                            
+                        Forms\Components\Textarea::make('bank_address')
+                            ->label('Address of the Bank')
+                            ->columnSpanFull()
+                            ->disabled(fn () => !config('accounting.contacts.allow_update', true))
+                            ->rows(2),
+                            
+                        Forms\Components\TextInput::make('bank_account_no')
+                            ->label('Bank Account No.')
+                            ->disabled(fn () => !config('accounting.contacts.allow_update', true))
+                            ->maxLength(255),
+                            
+                        Forms\Components\TextInput::make('bank_ifsc_code')
+                            ->label('IFSC Code')
+                            ->disabled(fn () => !config('accounting.contacts.allow_update', true))
+                            ->maxLength(255),
+                    ]),
+
                 Section::make('Addresses')
                     ->columns(2)
-                    ->components([
+                    ->schema([
                         Forms\Components\Textarea::make('billing_address')
                             ->label('Billing Address')
+                            ->disabled(fn () => !config('accounting.contacts.allow_update', true))
                             ->rows(3),
                             
                         Forms\Components\Textarea::make('shipping_address')
                             ->label('Shipping Address')
+                            ->disabled(fn () => !config('accounting.contacts.allow_update', true))
                             ->rows(3),
                     ]),
             ]);

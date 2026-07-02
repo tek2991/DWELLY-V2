@@ -2,6 +2,7 @@
 
 namespace Tek2991\Accounting\Services;
 
+use App\Models\Branch;
 use Illuminate\Support\Facades\DB;
 use Tek2991\Accounting\Models\CreditNote;
 use Tek2991\Accounting\Enums\CreditNoteStatus;
@@ -15,12 +16,12 @@ class CreditNoteService
         private PostingGuard $postingGuard,
     ) {}
 
-    public function create(int $companyId, array $data): CreditNote
+    public function create(?Branch $branch, array $data): CreditNote
     {
-        return DB::transaction(function () use ($companyId, $data) {
+        return DB::transaction(function () use ($branch, $data) {
             $cn = new CreditNote($data);
-            $cn->company_id = $companyId;
-            $cn->credit_note_number = $this->docNumberService->nextCreditNoteNumber($companyId);
+            $cn->branch_id = $branch?->id;
+            $cn->credit_note_number = $this->docNumberService->nextCreditNoteNumber($branch);
             $cn->status = CreditNoteStatus::Draft;
             $cn->save();
 
@@ -36,8 +37,8 @@ class CreditNoteService
                 'invoice_id' => $invoice->id,
                 'issue_date' => now(),
             ]);
-            $cn->company_id = $invoice->company_id;
-            $cn->credit_note_number = $this->docNumberService->nextCreditNoteNumber($invoice->company_id);
+            $cn->branch_id = $invoice->branch_id;
+            $cn->credit_note_number = $this->docNumberService->nextCreditNoteNumber($invoice->branch);
             $cn->status = CreditNoteStatus::Draft;
             $cn->save();
 
@@ -127,17 +128,14 @@ class CreditNoteService
                         $isInclusive = $tax->type === \Tek2991\Accounting\Enums\TaxType::Inclusive;
                         
                         $cn->loadMissing('contact');
-                        $companyProfile = \Tek2991\Accounting\Models\CompanyProfile::firstOrCreate(
-                            ['company_id' => $cn->company_id],
-                            ['tax_regime' => \Tek2991\Accounting\Enums\TaxRegimeType::Generic]
-                        );
+                        $branch = \App\Models\Branch::find($cn->branch_id);
 
                         $taxContext = new \Tek2991\Accounting\ValueObjects\TaxCalculationContext(
                             amount: $baseLineTotal,
                             document: $cn,
                             tax: $tax,
                             modeOverride: $isInclusive ? 'inclusive' : 'exclusive',
-                            companyProfile: $companyProfile,
+                            branch: $branch,
                             contact: $cn->contact
                         );
 
@@ -189,8 +187,7 @@ class CreditNoteService
                 throw new Exception("Only draft credit notes can be posted.");
             }
 
-            $receivableAccountId = $cn->contact->receivableAccount?->id ?? \Tek2991\Accounting\Models\Account::where('company_id', $cn->company_id)
-                ->where('system_role', \Tek2991\Accounting\Enums\SystemRole::TradeReceivable)
+            $receivableAccountId = $cn->contact->receivableAccount?->id ?? \Tek2991\Accounting\Models\Account::where('system_role', \Tek2991\Accounting\Enums\SystemRole::TradeReceivable)
                 ->value('id');
 
             if (!$receivableAccountId) {
@@ -262,7 +259,7 @@ class CreditNoteService
             }
 
             $transaction = $this->txnService->createTransaction([
-                'company_id' => $cn->company_id,
+                'branch_id' => $cn->branch_id,
                 'type' => \Tek2991\Accounting\Enums\TransactionType::CreditNote,
                 'description' => "Posted Credit Note {$cn->credit_note_number}",
                 'posted_at' => $cn->issue_date?->toDateString() ?? now()->toDateString(),

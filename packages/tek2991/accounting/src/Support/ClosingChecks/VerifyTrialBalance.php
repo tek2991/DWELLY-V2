@@ -13,14 +13,12 @@ class VerifyTrialBalance implements ClosingCheck
     public function validate(FiscalPeriod $period, ClosingValidationResult $result): void
     {
         $totalDebit = JournalEntry::whereHas('transaction', function($q) use($period) {
-            $q->where('company_id', $period->company_id)
-              ->whereNotNull('posted_at')
+            $q->whereNotNull('posted_at')
               ->whereBetween('posted_at', [$period->start_date, $period->end_date]);
         })->where('type', JournalEntryType::Debit)->sum('amount');
 
         $totalCredit = JournalEntry::whereHas('transaction', function($q) use($period) {
-            $q->where('company_id', $period->company_id)
-              ->whereNotNull('posted_at')
+            $q->whereNotNull('posted_at')
               ->whereBetween('posted_at', [$period->start_date, $period->end_date]);
         })->where('type', JournalEntryType::Credit)->sum('amount');
 

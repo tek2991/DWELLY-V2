@@ -11,8 +11,7 @@ class VerifyNoDraftJournals implements ClosingCheck
 {
     public function validate(FiscalPeriod $period, ClosingValidationResult $result): void
     {
-        $draftCount = Transaction::where('company_id', $period->company_id)
-            ->whereBetween('posted_at', [$period->start_date, $period->end_date])
+        $draftCount = Transaction::whereBetween('posted_at', [$period->start_date, $period->end_date])
             ->pending()
             ->count();
 

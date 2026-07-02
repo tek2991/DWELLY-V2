@@ -148,7 +148,6 @@ class TransactionsTable
                                     $record->journalEntries()->delete();
                                     foreach ($entries as $entry) {
                                         $record->journalEntries()->create([
-                                            'company_id'  => $record->company_id,
                                             'account_id'  => $entry['account_id'],
                                             'type'        => $entry['type'],
                                             'amount'      => $entry['amount'],
@@ -175,7 +174,6 @@ class TransactionsTable
                         ->after(function (Transaction $replica, Transaction $record) {
                             foreach ($record->journalEntries as $entry) {
                                 $replica->journalEntries()->create([
-                                    'company_id'  => $replica->company_id,
                                     'account_id'  => $entry->account_id,
                                     'type'        => $entry->type,
                                     'amount'      => $entry->amount,
