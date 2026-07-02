@@ -40,9 +40,30 @@ trait HasReportExports
         ];
     }
 
+    protected function enrichReportData(array $data): array
+    {
+        $branchContext = app(\Tek2991\Accounting\Services\BranchContext::class);
+        $organization = $branchContext->getOrganization();
+        $branch = $branchContext->getCurrent();
+        $user = auth()->user();
+
+        $data['company_name'] = $organization->name ?? config('app.name');
+        $data['company_email'] = $organization->email ?? '';
+        $data['company_phone'] = $organization->phone ?? '';
+        
+        if ($branch) {
+            $data['branch_name'] = $branch->name;
+        }
+
+        $data['generated_at'] = now()->format('F j, Y, g:i a');
+        $data['generated_by'] = $user ? $user->name : 'System';
+
+        return $data;
+    }
+
     public function downloadPdf()
     {
-        $data = $this->reportData;
+        $data = $this->enrichReportData($this->reportData);
         $reportType = class_basename(static::class);
         $viewName = 'accounting::pdf.reports.' . Str::kebab($reportType);
         
@@ -67,7 +88,7 @@ trait HasReportExports
 
     public function downloadCsv()
     {
-        $data = $this->reportData;
+        $data = $this->enrichReportData($this->reportData);
         $reportType = class_basename(static::class);
         $filename = Str::slug($data['title']) . '_' . now()->format('Ymd_His') . '.csv';
 
@@ -75,11 +96,23 @@ trait HasReportExports
             $handle = fopen('php://output', 'w');
             
             // Write Header info
+            fputcsv($handle, [$data['company_name']]);
+            if (!empty($data['branch_name'])) {
+                fputcsv($handle, ['Branch: ' . $data['branch_name']]);
+            }
+            fputcsv($handle, []);
+            
             fputcsv($handle, [$data['title']]);
             if (isset($data['subtitle'])) {
                 fputcsv($handle, [$data['subtitle']]);
             }
-            fputcsv($handle, ["Period: {$data['startDate']} to {$data['endDate']}"]);
+            if (isset($data['startDate'])) {
+                fputcsv($handle, ["Period: {$data['startDate']} to {$data['endDate']}"]);
+            } else {
+                fputcsv($handle, ["As of: {$data['endDate']}"]);
+            }
+            
+            fputcsv($handle, ['Generated on: ' . $data['generated_at'], 'By: ' . $data['generated_by']]);
             fputcsv($handle, []); // blank line
 
             // Delegate to the specific report for rows formatting

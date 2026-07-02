@@ -78,6 +78,7 @@ class Invoice extends Model
     protected function balanceDue(): Attribute { return Attribute::make(get: fn ($v) => $v !== null ? $v / 100 : 0, set: fn ($v) => (int) round($v * 100)); }
 
     // Relationships
+    public function branch(): BelongsTo { return $this->belongsTo(\App\Models\Branch::class, 'branch_id'); }
     public function contact(): BelongsTo { return $this->belongsTo(Contact::class, 'contact_id'); }
     public function transaction(): BelongsTo { return $this->belongsTo(Transaction::class, 'transaction_id'); }
     public function items(): HasMany { return $this->hasMany(InvoiceItem::class, 'invoice_id')->orderBy('sort_order'); }

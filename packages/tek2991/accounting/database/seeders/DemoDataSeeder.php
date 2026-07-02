@@ -155,16 +155,33 @@ class DemoDataSeeder extends Seeder
 
             // 4. Contacts (25 mixed)
             $contacts = [];
+            $allStates = \Tek2991\Accounting\Models\State::all();
+            
             for ($i = 0; $i < 25; $i++) {
                 $type = $faker->randomElement([ContactType::Customer, ContactType::Vendor, ContactType::Both]);
-                $contacts[] = Contact::firstOrCreate([
-                    'name' => $faker->company,
-                ], [
+                $state = $allStates->isNotEmpty() ? $allStates->random() : null;
+                $isTaxRegistered = $i < 2; // 1 or 2 tax registered contacts
+                
+                $contactData = [
                     'type' => $type,
                     'email' => $faker->companyEmail,
                     'phone' => $faker->phoneNumber,
-                    'tax_id' => '27' . strtoupper($faker->bothify('?????####?1Z?')), // Fake GSTIN
-                ]);
+                    'tax_id' => strtoupper($faker->bothify('?????####?')), // Fake PAN
+                    'state_id' => $state?->id,
+                    'billing_address' => $faker->address,
+                    'shipping_address' => $faker->address,
+                ];
+                
+                if ($isTaxRegistered && $state) {
+                    $contactData['is_tax_registered'] = true;
+                    $contactData['gst_registration_type'] = \Tek2991\Accounting\Enums\GstRegistrationType::Regular;
+                    $gstStateCode = str_pad($state->gst_state_code ?? '27', 2, '0', STR_PAD_LEFT);
+                    $contactData['gstin'] = $gstStateCode . $contactData['tax_id'] . '1Z' . $faker->randomLetter;
+                }
+                
+                $contacts[] = Contact::firstOrCreate([
+                    'name' => $faker->company,
+                ], $contactData);
             }
 
             // Group contacts for easy access

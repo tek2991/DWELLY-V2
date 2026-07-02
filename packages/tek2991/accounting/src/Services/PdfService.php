@@ -46,8 +46,11 @@ class PdfService
                 ->{$orientation}();
 
             if ($primaryDriver === 'browsershot') {
+                $builder->withBrowsershot(function (\Spatie\Browsershot\Browsershot $browsershot) {
+                    $browsershot->noSandbox();
+                });
                 $builder->footerView('accounting::pdf.footer', $data)
-                        ->margins(10, 10, 20, 10);
+                        ->margins(5, 8, 15, 8);
             }
             
             $pdfContent = $builder->base64();
@@ -67,8 +70,11 @@ class PdfService
                 ->{$orientation}();
 
             if ($fallbackDriver === 'browsershot') {
+                $builder->withBrowsershot(function (\Spatie\Browsershot\Browsershot $browsershot) {
+                    $browsershot->noSandbox();
+                });
                 $builder->footerView('accounting::pdf.footer', $data)
-                        ->margins(10, 10, 20, 10);
+                        ->margins(5, 8, 15, 8);
             }
             
             $pdfContent = $builder->base64();

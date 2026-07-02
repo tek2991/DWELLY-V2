@@ -100,7 +100,19 @@
     @endif
 
     <div class="header">
-        <div class="report-title">{{ $data['title'] ?? 'Report' }}</div>
+        <h2 style="margin: 0; color: #2d3748; font-size: 20px;">{{ $data['company_name'] ?? 'Report' }}</h2>
+        @if(!empty($data['company_email']) || !empty($data['company_phone']))
+            <div style="font-size: 11px; color: #718096; margin-bottom: 5px;">
+                {{ $data['company_email'] ?? '' }} @if(!empty($data['company_email']) && !empty($data['company_phone'])) | @endif {{ $data['company_phone'] ?? '' }}
+            </div>
+        @endif
+        @if(!empty($data['branch_name']))
+            <div style="font-size: 12px; font-weight: bold; color: #4a5568; margin-bottom: 15px;">
+                Branch: {{ $data['branch_name'] }}
+            </div>
+        @endif
+
+        <div class="report-title" style="margin-top: 10px;">{{ $data['title'] ?? 'Report' }}</div>
         @if(isset($data['subtitle']))
             <div class="report-subtitle">{{ $data['subtitle'] }}</div>
         @endif
@@ -110,6 +122,9 @@
             @else
                 As of {{ $data['endDate'] ?? '' }}
             @endif
+        </div>
+        <div style="font-size: 10px; color: #a0aec0; margin-top: 10px;">
+            Generated on {{ $data['generated_at'] ?? now()->format('F j, Y, g:i a') }} by {{ $data['generated_by'] ?? 'System' }}
         </div>
     </div>
 
