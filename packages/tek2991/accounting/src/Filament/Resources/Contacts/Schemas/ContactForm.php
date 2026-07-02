@@ -10,7 +10,8 @@ use Filament\Schemas\Components\Utilities\Set;
 use Tek2991\Accounting\Enums\ContactType;
 use Tek2991\Accounting\Enums\GstRegistrationType;
 use Tek2991\Accounting\Models\State;
-use Tek2991\Accounting\Services\CompanyContext;
+use Tek2991\Accounting\Models\Organization;
+use Tek2991\Accounting\Enums\TaxRegimeType;
 use Tek2991\Accounting\Utilities\GstinValidator;
 
 class ContactForm
@@ -43,24 +44,24 @@ class ContactForm
                             ->maxLength(255),
                             
                         Forms\Components\TextInput::make('tax_id')
-                            ->label(fn () => app(CompanyContext::class)->isIndiaGst() ? 'Tax ID / PAN' : 'Tax ID')
+                            ->label(fn () => Organization::current()->tax_regime === TaxRegimeType::IndiaGst ? 'Tax ID / PAN' : 'Tax ID')
                             ->maxLength(255),
                             
                         Forms\Components\Toggle::make('is_tax_registered')
                             ->label('Is Tax Registered')
-                            ->visible(fn () => app(CompanyContext::class)->isIndiaGst())
+                            ->visible(fn () => Organization::current()->tax_regime === TaxRegimeType::IndiaGst)
                             ->live()
                             ->default(false),
                             
                         Forms\Components\Select::make('gst_registration_type')
                             ->label('GST Registration Type')
                             ->options(GstRegistrationType::class)
-                            ->visible(fn (Get $get) => app(CompanyContext::class)->isIndiaGst() && $get('is_tax_registered')),
+                            ->visible(fn (Get $get) => Organization::current()->tax_regime === TaxRegimeType::IndiaGst && $get('is_tax_registered')),
                             
                         Forms\Components\TextInput::make('gstin')
                             ->label('GSTIN')
                             ->maxLength(15)
-                            ->visible(fn (Get $get) => app(CompanyContext::class)->isIndiaGst() && $get('is_tax_registered'))
+                            ->visible(fn (Get $get) => Organization::current()->tax_regime === TaxRegimeType::IndiaGst && $get('is_tax_registered'))
                             ->live(debounce: 500)
                             ->afterStateUpdated(function (?string $state, Set $set, Get $get) {
                                 if (empty($state)) return;
@@ -93,7 +94,7 @@ class ContactForm
                             ->label('State')
                             ->options(State::all()->pluck('name', 'id'))
                             ->searchable()
-                            ->visible(fn () => app(CompanyContext::class)->isIndiaGst()),
+                            ->visible(fn () => Organization::current()->tax_regime === TaxRegimeType::IndiaGst),
                     ]),
                     
                 Section::make('Addresses')

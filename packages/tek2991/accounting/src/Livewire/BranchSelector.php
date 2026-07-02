@@ -14,7 +14,7 @@ class BranchSelector extends Component
     public function mount(BranchContext $branchContext)
     {
         $user = auth()->user();
-        if ($user && method_exists($user, 'hasRole') && $user->hasRole('admin')) {
+        if ($user && method_exists($user, 'hasRole') && ($user->hasRole('admin') || $user->hasRole('Business Owner'))) {
             $this->branches = Branch::where('is_active', true)->get();
         } elseif ($user) {
             $this->branches = $user->branches()->where('is_active', true)->get();

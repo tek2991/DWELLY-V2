@@ -2,7 +2,6 @@
 
 namespace Tek2991\Accounting\ValueObjects;
 
-use App\Models\Branch;
 
 use Illuminate\Database\Eloquent\Model;
 use App\Models\Branch;

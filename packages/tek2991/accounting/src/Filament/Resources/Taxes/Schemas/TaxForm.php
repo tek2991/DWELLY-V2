@@ -7,9 +7,10 @@ use Filament\Schemas\Schema;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\Utilities\Set;
+use Tek2991\Accounting\Models\Organization;
+use Tek2991\Accounting\Enums\TaxRegimeType;
 use Tek2991\Accounting\Enums\AccountType;
 use Tek2991\Accounting\Enums\TaxComponentType;
-use Tek2991\Accounting\Services\CompanyContext;
 
 class TaxForm
 {
@@ -43,7 +44,7 @@ class TaxForm
                             \Filament\Actions\Action::make('generate_gst')
                                 ->label('Generate GST Components')
                                 ->icon('heroicon-m-sparkles')
-                                ->visible(fn () => app(CompanyContext::class)->isIndiaGst())
+                                ->visible(fn () => Organization::current()->tax_regime === TaxRegimeType::IndiaGst)
                                 ->form([
                                     Forms\Components\TextInput::make('total_rate')
                                         ->label('Total GST Rate (%)')
@@ -113,7 +114,7 @@ class TaxForm
                                     ->label('Component Type')
                                     ->options(TaxComponentType::class)
                                     ->default(TaxComponentType::Generic->value)
-                                    ->visible(fn () => app(CompanyContext::class)->isIndiaGst())
+                                    ->visible(fn () => Organization::current()->tax_regime === TaxRegimeType::IndiaGst)
                                     ->required(),
                                     
                                 Forms\Components\Select::make('sales_account_id')

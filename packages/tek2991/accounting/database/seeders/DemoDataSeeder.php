@@ -29,6 +29,7 @@ class DemoDataSeeder extends Seeder
 
             // 1. Organization & Branches
             $org = \Tek2991\Accounting\Models\Organization::current();
+            $org->update(['tax_regime' => \Tek2991\Accounting\Enums\TaxRegimeType::IndiaGst]);
 
             $assam = \Tek2991\Accounting\Models\State::where('name', 'Assam')->first();
             $maharashtra = \Tek2991\Accounting\Models\State::where('name', 'Maharashtra')->first();
@@ -42,7 +43,9 @@ class DemoDataSeeder extends Seeder
                 'is_default' => true,
             ]);
 
-            $branch = \Tek2991\Accounting\Models\Branch::create([
+            $karnataka = \Tek2991\Accounting\Models\State::where('name', 'Karnataka')->first();
+
+            $branch = \App\Models\Branch::create([
                 'organization_id' => $org->id,
                 'gst_registration_id' => $gstRegistration->id,
                 'name' => 'Guwahati Head Office',
@@ -51,6 +54,18 @@ class DemoDataSeeder extends Seeder
                 'state_id' => $assam?->id,
                 'is_active' => true,
             ]);
+
+            $bangaloreBranch = \App\Models\Branch::create([
+                'organization_id' => $org->id,
+                'gst_registration_id' => $gstRegistration->id,
+                'name' => 'Bangalore Branch',
+                'code' => 'BLR',
+                'city' => 'Bangalore',
+                'state_id' => $karnataka?->id ?? $maharashtra?->id,
+                'is_active' => true,
+            ]);
+            
+            $branches = [$branch, $bangaloreBranch];
             
             $branchContext = app(\Tek2991\Accounting\Services\BranchContext::class);
             $branchContext->set($branch);
@@ -281,13 +296,15 @@ class DemoDataSeeder extends Seeder
 
             // 7. Generate Invoices and Bills within the current fiscal year (up to today)
             $maxDaysDiff = max(1, $startDate->diffInDays(now()));
-            for ($i = 0; $i < 30; $i++) {
-                $date = now()->subDays(rand(0, $maxDaysDiff - 1));
-                
-                // INVOICES
+            foreach ($branches as $currentBranch) {
+                $branchContext->set($currentBranch);
+                for ($i = 0; $i < 5; $i++) {
+                    $date = now()->subDays(rand(0, $maxDaysDiff - 1));
+                    
+                    // INVOICES
                 if ($customers->isNotEmpty()) {
                     $customer = $faker->randomElement($customers);
-                    $invoice = $invoiceService->create($branch, [
+                    $invoice = $invoiceService->create($currentBranch, [
                         'contact_id' => $customer->id,
                         'issue_date' => $date->format('Y-m-d'),
                         'due_date' => $date->copy()->addDays(30)->format('Y-m-d'),
@@ -328,7 +345,7 @@ class DemoDataSeeder extends Seeder
                 // BILLS
                 if ($vendors->isNotEmpty()) {
                     $vendor = $faker->randomElement($vendors);
-                    $bill = $billService->create($branch, [
+                    $bill = $billService->create($currentBranch, [
                         'contact_id' => $vendor->id,
                         'issue_date' => $date->format('Y-m-d'),
                         'due_date' => $date->copy()->addDays(30)->format('Y-m-d'),
@@ -364,6 +381,7 @@ class DemoDataSeeder extends Seeder
                             ]);
                         }
                     }
+                }
                 }
             }
 

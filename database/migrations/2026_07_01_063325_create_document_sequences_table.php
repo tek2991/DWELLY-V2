@@ -17,7 +17,7 @@ return new class extends Migration
 
         Schema::create("{$prefix}document_sequences", function (Blueprint $table) use ($prefix) {
             $table->id();
-            $table->foreignId('branch_id')->nullable()->constrained("{$prefix}branches")->restrictOnDelete();
+            $table->foreignId('branch_id')->nullable()->constrained("branches")->restrictOnDelete();
             
             $table->string('document_type', 50); // invoice, bill, credit_note, debit_note, payment, journal
             $table->string('prefix', 20)->default('');

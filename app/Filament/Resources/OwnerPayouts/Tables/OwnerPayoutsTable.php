@@ -34,7 +34,7 @@ class OwnerPayoutsTable
                 //
             ])
             ->headerActions([
-                \Filament\Tables\Actions\Action::make('generate_payout')
+                \Filament\Actions\Action::make('generate_payout')
                     ->label('Generate Payout')
                     ->form([
                         \Filament\Forms\Components\Select::make('property_id')

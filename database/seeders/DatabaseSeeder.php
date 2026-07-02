@@ -27,5 +27,7 @@ class DatabaseSeeder extends Seeder
             \Tek2991\Accounting\Database\Seeders\DefaultChartOfAccountsSeeder::class,
             \Tek2991\Accounting\Database\Seeders\DemoDataSeeder::class,
         ]);
+
+        $user->assignRole('Business Owner');
     }
 }

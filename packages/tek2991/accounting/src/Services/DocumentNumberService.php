@@ -5,7 +5,7 @@ namespace Tek2991\Accounting\Services;
 use App\Models\Branch;
 
 use Illuminate\Support\Facades\DB;
-use App\Models\Branch;
+
 use Tek2991\Accounting\Models\DocumentSequence;
 
 class DocumentNumberService

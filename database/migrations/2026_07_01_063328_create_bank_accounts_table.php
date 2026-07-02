@@ -21,7 +21,7 @@ return new class extends Migration
         // ──────────────────────────────────────────────────────────────
         Schema::create("{$prefix}bank_accounts", function (Blueprint $table) use ($prefix) {
             $table->id();
-            $table->foreignId('branch_id')->nullable()->constrained("{$prefix}branches")->restrictOnDelete();
+            $table->foreignId('branch_id')->nullable()->constrained("branches")->restrictOnDelete();
             $table->foreignId('account_id')
                 ->unique()  // one-to-one: each chart account can only be one bank account
                 ->constrained("{$prefix}accounts")

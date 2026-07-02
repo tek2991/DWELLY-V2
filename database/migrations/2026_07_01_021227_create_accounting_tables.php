@@ -58,7 +58,7 @@ return new class extends Migration
         // ──────────────────────────────────────────────────────────
         Schema::create("{$prefix}transactions", function (Blueprint $table) use ($prefix) {
             $table->id();
-            $table->foreignId('branch_id')->nullable()->constrained("{$prefix}branches")->restrictOnDelete();
+            $table->foreignId('branch_id')->nullable()->constrained("branches")->restrictOnDelete();
             $table->foreignId('account_id')
                 ->nullable()
                 ->constrained("{$prefix}accounts")
