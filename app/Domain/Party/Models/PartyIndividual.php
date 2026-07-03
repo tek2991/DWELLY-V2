@@ -7,4 +7,6 @@ use App\Domain\Shared\Models\DomainModel;
 class PartyIndividual extends DomainModel
 {
     protected $table = 'party_individuals';
+
+    public $timestamps = false;
 }

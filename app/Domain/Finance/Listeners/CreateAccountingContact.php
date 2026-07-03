@@ -11,7 +11,7 @@ class CreateAccountingContact implements ShouldQueue
     /**
      * The name of the connection the job should be sent to.
      */
-    public $connection = 'redis';
+    // public $connection = 'redis';
 
     /**
      * The name of the queue the job should be sent to.

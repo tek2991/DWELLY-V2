@@ -7,4 +7,6 @@ use App\Domain\Shared\Models\DomainModel;
 class OwnerProfile extends DomainModel
 {
     protected $table = 'owner_profiles';
+
+    public $timestamps = false;
 }

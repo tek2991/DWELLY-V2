@@ -16,13 +16,18 @@ class CreatePartyAction
     public function execute(array $partyData, string $profileType, array $profileData = []): Party
     {
         return DB::transaction(function () use ($partyData, $profileType, $profileData) {
+            $individualData = $partyData['individual_data'] ?? [];
+            $organizationData = $partyData['organization_data'] ?? [];
+            
+            unset($partyData['individual_data'], $partyData['organization_data']);
+            
             $party = Party::create($partyData);
 
             // Create individual or organization record depending on party_type
             if ($party->party_type === 'individual') {
-                $party->individual()->create($partyData['individual_data'] ?? []);
+                $party->individual()->create($individualData);
             } else {
-                $party->organization()->create($partyData['organization_data'] ?? []);
+                $party->organization()->create($organizationData);
             }
 
             // Create specific profile

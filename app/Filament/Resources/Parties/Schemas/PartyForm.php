@@ -5,7 +5,7 @@ namespace App\Filament\Resources\Parties\Schemas;
 use Filament\Schemas\Schema;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Section;
+use Filament\Schemas\Components\Section;
 
 class PartyForm
 {
@@ -33,7 +33,8 @@ class PartyForm
                             ->maxLength(255),
                         Select::make('region_id')
                             ->relationship('region', 'name')
-                            ->searchable(),
+                            ->searchable()
+                            ->preload(),
                     ])->columns(2),
 
                 Section::make('Individual Details')
@@ -44,7 +45,7 @@ class PartyForm
                         TextInput::make('individual_data.pan_number'),
                     ])
                     ->columns(2)
-                    ->visible(fn (\Filament\Forms\Get $get) => $get('party_type') === 'individual'),
+                    ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('party_type') === 'individual'),
 
                 Section::make('Organization Details')
                     ->schema([
@@ -54,7 +55,7 @@ class PartyForm
                         TextInput::make('organization_data.contact_person_name'),
                     ])
                     ->columns(2)
-                    ->visible(fn (\Filament\Forms\Get $get) => $get('party_type') === 'organization'),
+                    ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('party_type') === 'organization'),
                 
                 Section::make('Profile Options')
                     ->schema([

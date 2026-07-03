@@ -13,7 +13,21 @@ class PartiesTable
     {
         return $table
             ->columns([
-                //
+                \Filament\Tables\Columns\TextColumn::make('display_name')
+                    ->searchable()
+                    ->sortable(),
+                \Filament\Tables\Columns\TextColumn::make('party_type')
+                    ->badge()
+                    ->sortable(),
+                \Filament\Tables\Columns\TextColumn::make('email')
+                    ->searchable()
+                    ->sortable(),
+                \Filament\Tables\Columns\TextColumn::make('phone')
+                    ->searchable(),
+                \Filament\Tables\Columns\TextColumn::make('created_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 //
