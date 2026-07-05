@@ -47,6 +47,7 @@ class Contact extends Model
         'bank_address',
         'bank_account_no',
         'bank_ifsc_code',
+        'party_id',
     ];
 
     protected $casts = [

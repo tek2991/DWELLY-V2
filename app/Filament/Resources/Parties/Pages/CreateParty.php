@@ -14,11 +14,11 @@ class CreateParty extends CreateRecord
 
     protected function handleRecordCreation(array $data): Model
     {
-        // Extract profile type from form data
-        $profileType = $data['profile_type'] ?? 'owner';
-        unset($data['profile_type']);
+        // Extract roles from form data
+        $roles = $data['roles'] ?? ['owner'];
+        unset($data['roles']);
 
         $action = app(CreatePartyAction::class);
-        return $action->execute($data, $profileType, []);
+        return $action->execute($data, $roles, []);
     }
 }

@@ -1,0 +1,46 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('mous', function (Blueprint $table) {
+            $table->ulid('id')->primary();
+            $table->string('number')->unique(); // E.g., MOU-2026-0001
+            $table->foreignUlid('opportunity_id')->constrained('opportunities')->cascadeOnDelete();
+            
+            // The resolved Party after Party Resolution
+            $table->foreignUlid('party_id')->nullable()->constrained('parties');
+            
+            $table->string('status'); // Draft, Generated, Signed, Verified, Cancelled
+            
+            // Core legal & commercial data required for the MOU
+            $table->json('legal_terms')->nullable(); // Rent, deposit, lock-in, notice period
+            $table->json('bank_details')->nullable(); // Account number, IFSC, Bank Name
+            
+            // Document Tracking (Using Spatie Media Library is better, but we can store paths if needed)
+            // But we already have MediaLibrary in DomainModel, so we might just use that.
+            
+            $table->timestamp('verified_at')->nullable();
+            $table->foreignUlid('verified_by')->nullable()->constrained('users');
+            
+            $table->timestamps();
+            $table->softDeletes();
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('mous');
+    }
+};

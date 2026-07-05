@@ -3,7 +3,7 @@
 namespace App\Domain\Party\Models;
 
 use App\Domain\Shared\Models\DomainModel;
-use App\Domain\Geographic\Models\Region;
+use App\Domain\Geographic\Models\Locality;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -16,9 +16,13 @@ class Party extends DomainModel implements HasMedia
 
     protected $table = 'parties';
 
-    public function region(): BelongsTo
+    protected $casts = [
+        'is_tax_registered' => 'boolean',
+    ];
+
+    public function locality(): BelongsTo
     {
-        return $this->belongsTo(Region::class);
+        return $this->belongsTo(Locality::class);
     }
 
     public function individual(): HasOne
@@ -85,7 +89,7 @@ class Party extends DomainModel implements HasMedia
         };
         
         // Synchronous provisioning
-        app(\App\Domain\Finance\Services\AccountingProvisioningService::class)->provisionForRole($this, $role);
+        app(\App\Domain\Finance\Services\AccountingProvisioningService::class)->ensurePartyAccountingReady($this);
         
         event(new \App\Domain\Party\Events\PartyRoleEnabled($this, $role));
     }

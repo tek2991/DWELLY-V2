@@ -22,8 +22,10 @@ class DatabaseSeeder extends Seeder
         $this->call([
             RolesAndPermissionsSeeder::class,
             ReferenceDataSeeder::class,
-            RegionsSeeder::class,
+            OpportunitySourceSeeder::class,
+            FinancialModelSeeder::class,
             \Tek2991\Accounting\Database\Seeders\IndianStatesSeeder::class,
+            RegionsSeeder::class,
             \Tek2991\Accounting\Database\Seeders\DefaultChartOfAccountsSeeder::class,
             \Tek2991\Accounting\Database\Seeders\DemoDataSeeder::class,
         ]);

@@ -5,38 +5,42 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use App\Domain\Geographic\Models\Region;
 
 class RegionsSeeder extends Seeder
 {
     public function run(): void
     {
-        // Level 1: State
-        $assam = Region::create([
-            'name' => 'Assam',
-            'slug' => Str::slug('Assam'),
-            'level' => 1,
+        $assamState = \Tek2991\Accounting\Models\State::where('name', 'Assam')->first();
+
+        if (! $assamState) {
+            return;
+        }
+
+        // District
+        $kamrup = \App\Domain\Geographic\Models\District::create([
+            'state_id' => $assamState->id,
+            'name' => 'Kamrup Metropolitan',
+            'slug' => Str::slug('Kamrup Metropolitan'),
             'is_active' => true,
         ]);
 
-        // Level 2: District/City
-        $guwahati = Region::create([
+        // City
+        $guwahati = \App\Domain\Geographic\Models\City::create([
+            'district_id' => $kamrup->id,
             'name' => 'Guwahati',
             'slug' => Str::slug('Guwahati'),
-            'parent_id' => $assam->id,
-            'level' => 2,
             'is_active' => true,
         ]);
 
-        // Level 3: Localities
+        // Localities
         $localities = ['Azara', 'Beltola', 'Bhangagarh', 'Christian Basti', 'Dispur', 'Ganeshguri', 'Hatigaon', 'Khanapara', 'Six Mile', 'Ulubari', 'Zoo Road'];
         
         foreach ($localities as $locality) {
-            Region::create([
+            \App\Domain\Geographic\Models\Locality::create([
+                'city_id' => $guwahati->id,
                 'name' => $locality,
                 'slug' => Str::slug($locality),
-                'parent_id' => $guwahati->id,
-                'level' => 3,
+                'pincode' => '781001',
                 'is_active' => true,
             ]);
         }

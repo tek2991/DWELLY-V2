@@ -26,12 +26,36 @@ class EditParty extends EditRecord
             $data['organization_data'] = $this->record->organization->toArray();
         }
         
+        $roles = [];
         if ($this->record->ownerProfile()->exists()) {
-            $data['profile_type'] = 'owner';
-        } elseif ($this->record->tenantProfile()->exists()) {
-            $data['profile_type'] = 'tenant';
-        } elseif ($this->record->vendorProfile()->exists()) {
-            $data['profile_type'] = 'vendor';
+            $roles[] = 'owner';
+        }
+        if ($this->record->tenantProfile()->exists()) {
+            $roles[] = 'tenant';
+        }
+        if ($this->record->vendorProfile()->exists()) {
+            $roles[] = 'vendor';
+        }
+        $data['roles'] = $roles;
+
+        $bank = $this->record->bankAccounts()->where('is_primary', true)->first();
+        if ($bank) {
+            $data['bank_details'] = [
+                'bank_beneficiary_name' => $bank->account_name,
+                'bank_name' => $bank->bank_name,
+                'bank_address' => $bank->bank_address,
+                'bank_account_no' => $bank->account_number,
+                'bank_ifsc_code' => $bank->ifsc_code,
+            ];
+        }
+
+        $billing = $this->record->addresses()->where('type', 'billing')->first();
+        $shipping = $this->record->addresses()->where('type', 'shipping')->first();
+        if ($billing || $shipping) {
+            $data['address_details'] = [
+                'billing_address' => $billing?->address_line_1,
+                'shipping_address' => $shipping?->address_line_1,
+            ];
         }
 
         return $data;
@@ -39,19 +63,6 @@ class EditParty extends EditRecord
 
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
-        $individualData = $data['individual_data'] ?? null;
-        $organizationData = $data['organization_data'] ?? null;
-        
-        unset($data['individual_data'], $data['organization_data'], $data['profile_type']);
-        
-        $record->update($data);
-
-        if ($record->party_type === 'individual' && $individualData) {
-            $record->individual()->updateOrCreate(['party_id' => $record->id], $individualData);
-        } elseif ($record->party_type === 'organization' && $organizationData) {
-            $record->organization()->updateOrCreate(['party_id' => $record->id], $organizationData);
-        }
-
-        return $record;
+        return app(\App\Domain\Party\Services\PartyService::class)->updateParty($record, $data);
     }
 }

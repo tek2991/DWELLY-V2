@@ -3,16 +3,16 @@
 namespace App\Domain\Property\Models;
 
 use App\Domain\Shared\Models\DomainModel;
-use App\Domain\Geographic\Models\Region;
+use App\Domain\Geographic\Models\Locality;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Property extends DomainModel
 {
     protected $table = 'properties';
 
-    public function region(): BelongsTo
+    public function locality(): BelongsTo
     {
-        return $this->belongsTo(Region::class);
+        return $this->belongsTo(Locality::class);
     }
 
     public function agreements(): \Illuminate\Database\Eloquent\Relations\HasMany
