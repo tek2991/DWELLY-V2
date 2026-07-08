@@ -27,7 +27,7 @@ class OpportunityConversionService
             \App\Domain\Opportunity\Enums\OpportunityActivityType::STATUS_CHANGE,
             'Opportunity Converted to Property',
             [
-                'old_status' => \App\Domain\Opportunity\Enums\OpportunityStatus::MOU_SIGNED->value,
+                'old_status' => \App\Domain\Opportunity\Enums\OpportunityStatus::READY_FOR_MOU->value,
                 'new_status' => \App\Domain\Opportunity\Enums\OpportunityStatus::CONVERTED->value,
             ]
         );

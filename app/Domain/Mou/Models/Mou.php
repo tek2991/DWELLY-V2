@@ -21,6 +21,7 @@ class Mou extends DomainModel implements HasMedia
 
     protected $fillable = [
         'number',
+        'version',
         'opportunity_id',
         'party_id',
         'status',
@@ -28,6 +29,10 @@ class Mou extends DomainModel implements HasMedia
         'bank_details',
         'verified_at',
         'verified_by',
+        'prepared_by',
+        'generated_by',
+        'cancelled_at',
+        'expires_at',
     ];
 
     protected $casts = [
@@ -35,13 +40,17 @@ class Mou extends DomainModel implements HasMedia
         'legal_terms' => 'array',
         'bank_details' => 'array',
         'verified_at' => 'datetime',
+        'cancelled_at' => 'datetime',
+        'expires_at' => 'datetime',
     ];
 
     public function registerMediaCollections(): void
     {
-        $this->addMediaCollection('draft_mou')->singleFile();
-        $this->addMediaCollection('signed_mou')->singleFile();
-        $this->addMediaCollection('supporting_documents');
+        $this->addMediaCollection('draft_pdf')->singleFile();
+        $this->addMediaCollection('signed_pdf')->singleFile();
+        $this->addMediaCollection('annexures');
+        $this->addMediaCollection('owner_documents');
+        $this->addMediaCollection('property_documents');
     }
 
     public function opportunity(): BelongsTo
@@ -57,5 +66,15 @@ class Mou extends DomainModel implements HasMedia
     public function verifiedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'verified_by');
+    }
+
+    public function preparedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'prepared_by');
+    }
+
+    public function generatedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'generated_by');
     }
 }

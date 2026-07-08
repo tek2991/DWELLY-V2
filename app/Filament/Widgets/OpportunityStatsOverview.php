@@ -34,7 +34,7 @@ class OpportunityStatsOverview extends BaseWidget
                 ->descriptionIcon('heroicon-m-chat-bubble-left-right')
                 ->color('purple'),
                 
-            Stat::make('Ready for MOU', Opportunity::whereIn('status', [OpportunityStatus::MOU_PENDING])->count())
+            Stat::make('Ready for MOU', Opportunity::where('status', OpportunityStatus::READY_FOR_MOU)->count())
                 ->description('Pending legal')
                 ->descriptionIcon('heroicon-m-document-text')
                 ->color('success'),

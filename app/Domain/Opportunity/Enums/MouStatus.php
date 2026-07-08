@@ -8,20 +8,30 @@ use Filament\Support\Contracts\HasColor;
 enum MouStatus: string implements HasLabel, HasColor
 {
     case DRAFT = 'draft';
-    case PENDING_SIGNATURE = 'pending_signature';
-    case SIGNED = 'signed';
+    case PARTY_PENDING = 'party_pending';
+    case READY_TO_GENERATE = 'ready_to_generate';
+    case PDF_GENERATED = 'pdf_generated';
+    case DOWNLOADED = 'downloaded';
+    case SIGNED_COPY_UPLOADED = 'signed_copy_uploaded';
     case VERIFIED = 'verified';
-    case ARCHIVED = 'archived';
+    case COMPLETED = 'completed';
+    case CONVERTED = 'converted';
+    case EXPIRED = 'expired';
     case CANCELLED = 'cancelled';
 
     public function getLabel(): ?string
     {
         return match ($this) {
             self::DRAFT => 'Draft',
-            self::PENDING_SIGNATURE => 'Pending Signature',
-            self::SIGNED => 'Signed',
+            self::PARTY_PENDING => 'Party Pending',
+            self::READY_TO_GENERATE => 'Ready To Generate',
+            self::PDF_GENERATED => 'PDF Generated',
+            self::DOWNLOADED => 'Downloaded',
+            self::SIGNED_COPY_UPLOADED => 'Signed Copy Uploaded',
             self::VERIFIED => 'Verified',
-            self::ARCHIVED => 'Archived',
+            self::COMPLETED => 'Completed',
+            self::CONVERTED => 'Converted',
+            self::EXPIRED => 'Expired',
             self::CANCELLED => 'Cancelled',
         };
     }
@@ -30,11 +40,10 @@ enum MouStatus: string implements HasLabel, HasColor
     {
         return match ($this) {
             self::DRAFT => 'gray',
-            self::PENDING_SIGNATURE => 'warning',
-            self::SIGNED => 'info',
-            self::VERIFIED => 'success',
-            self::ARCHIVED => 'danger',
-            self::CANCELLED => 'danger',
+            self::PARTY_PENDING, self::READY_TO_GENERATE => 'warning',
+            self::PDF_GENERATED, self::DOWNLOADED, self::SIGNED_COPY_UPLOADED => 'info',
+            self::VERIFIED, self::COMPLETED, self::CONVERTED => 'success',
+            self::EXPIRED, self::CANCELLED => 'danger',
         };
     }
 }

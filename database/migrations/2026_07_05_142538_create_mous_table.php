@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::create('mous', function (Blueprint $table) {
             $table->ulid('id')->primary();
             $table->string('number')->unique(); // E.g., MOU-2026-0001
+            $table->integer('version')->default(1);
             $table->foreignUlid('opportunity_id')->constrained('opportunities')->cascadeOnDelete();
             
             // The resolved Party after Party Resolution
@@ -30,6 +31,11 @@ return new class extends Migration
             
             $table->timestamp('verified_at')->nullable();
             $table->foreignUlid('verified_by')->nullable()->constrained('users');
+            
+            $table->foreignUlid('prepared_by')->nullable()->constrained('users');
+            $table->foreignUlid('generated_by')->nullable()->constrained('users');
+            $table->timestamp('cancelled_at')->nullable();
+            $table->timestamp('expires_at')->nullable();
             
             $table->timestamps();
             $table->softDeletes();

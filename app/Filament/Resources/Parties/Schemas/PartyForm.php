@@ -55,8 +55,7 @@ class PartyForm
 
                 Section::make('Individual Details')
                     ->schema([
-                        TextInput::make('individual_data.first_name')->required(),
-                        TextInput::make('individual_data.last_name'),
+                        TextInput::make('individual_data.name')->label('Full Name')->required(),
                         TextInput::make('individual_data.aadhaar_number'),
                         TextInput::make('individual_data.pan_number'),
                         TextInput::make('individual_data.gstin')

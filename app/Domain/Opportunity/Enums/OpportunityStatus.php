@@ -12,8 +12,7 @@ enum OpportunityStatus: string implements HasLabel, HasColor
     case SITE_VISIT_SCHEDULED = 'site_visit_scheduled';
     case SITE_VISIT_COMPLETED = 'site_visit_completed';
     case NEGOTIATION = 'negotiation';
-    case MOU_PENDING = 'mou_pending';
-    case MOU_SIGNED = 'mou_signed';
+    case READY_FOR_MOU = 'ready_for_mou';
     case CONVERTED = 'converted';
     case CLOSED_LOST = 'closed_lost';
     case CANCELLED = 'cancelled';
@@ -26,8 +25,7 @@ enum OpportunityStatus: string implements HasLabel, HasColor
             self::SITE_VISIT_SCHEDULED => 'Site Visit Scheduled',
             self::SITE_VISIT_COMPLETED => 'Site Visit Completed',
             self::NEGOTIATION => 'Negotiation',
-            self::MOU_PENDING => 'MOU Pending',
-            self::MOU_SIGNED => 'MOU Signed',
+            self::READY_FOR_MOU => 'Ready For MOU',
             self::CONVERTED => 'Converted',
             self::CLOSED_LOST => 'Closed Lost',
             self::CANCELLED => 'Cancelled',
@@ -40,8 +38,9 @@ enum OpportunityStatus: string implements HasLabel, HasColor
             self::NEW => 'info',
             self::CONTACTED => 'primary',
             self::SITE_VISIT_SCHEDULED, self::SITE_VISIT_COMPLETED => 'warning',
-            self::NEGOTIATION, self::MOU_PENDING => 'purple',
-            self::MOU_SIGNED, self::CONVERTED => 'success',
+            self::NEGOTIATION => 'purple',
+            self::READY_FOR_MOU => 'success',
+            self::CONVERTED => 'success',
             self::CLOSED_LOST, self::CANCELLED => 'danger',
         };
     }

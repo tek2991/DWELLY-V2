@@ -2,7 +2,6 @@
 
 namespace App\Domain\Opportunity\Models;
 
-use App\Domain\Opportunity\Enums\MouStatus;
 use App\Domain\Opportunity\Enums\OpportunityStatus;
 use App\Domain\Party\Models\Party;
 use App\Domain\Property\Models\PropertyType;
@@ -25,9 +24,10 @@ class Opportunity extends DomainModel implements HasMedia
         'number',
         'title',
         'status',
-        'mou_status',
         'opportunity_source_id',
+        'lead_origin_id',
         'assigned_user_id',
+        'owner_party_id',
         'owner_name',
         'owner_phone',
         'owner_email',
@@ -44,7 +44,6 @@ class Opportunity extends DomainModel implements HasMedia
 
     protected $casts = [
         'status' => OpportunityStatus::class,
-        'mou_status' => MouStatus::class,
         'estimated_is_furnished' => 'boolean',
         'expected_rent' => 'decimal:2',
         'expected_onboarding_date' => 'date',
@@ -87,5 +86,10 @@ class Opportunity extends DomainModel implements HasMedia
     public function snapshots(): HasMany
     {
         return $this->hasMany(OpportunitySnapshot::class)->orderBy('created_at', 'desc');
+    }
+
+    public function ownerParty(): BelongsTo
+    {
+        return $this->belongsTo(Party::class, 'owner_party_id');
     }
 }
