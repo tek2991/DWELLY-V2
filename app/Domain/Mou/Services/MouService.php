@@ -9,10 +9,14 @@ use App\Domain\Mou\Actions\GenerateMouNumberAction;
 use Exception;
 use Illuminate\Support\Facades\DB;
 
+use App\Domain\Finance\Services\AccountingProvisioningService;
+use App\Domain\Party\Events\PartyCreated;
+
 class MouService
 {
     public function __construct(
-        protected GenerateMouNumberAction $generateMouNumberAction
+        protected GenerateMouNumberAction $generateMouNumberAction,
+        protected AccountingProvisioningService $accountingProvisioning
     ) {}
 
     public function createDraftFromOpportunity(Opportunity $opportunity): Mou
@@ -126,6 +130,14 @@ class MouService
                 if ($profile && !$profile->default_bank_account_id) {
                     $profile->update(['default_bank_account_id' => $bankAccount->id]);
                 }
+            }
+
+            // Reload and provision accounting entity
+            $party->loadMissing(['individual', 'organization', 'bankAccounts', 'addresses', 'ownerProfile', 'tenantProfile', 'vendorProfile']);
+            $this->accountingProvisioning->ensurePartyAccountingReady($party);
+
+            if ($partyData['action_type'] === 'create_new') {
+                PartyCreated::dispatch($party, 'owner');
             }
         });
     }

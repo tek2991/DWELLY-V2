@@ -8,6 +8,10 @@ use Exception;
 
 class PropertyOnboardingService
 {
+    public function __construct(
+        protected \App\Domain\Implementation\Services\ImplementationProjectFactory $projectFactory
+    ) {}
+
     /**
      * Create an initial Property record from a verified MOU.
      * This acts as the handoff from Legal to Operations.
@@ -18,22 +22,29 @@ class PropertyOnboardingService
             throw new Exception("Cannot convert to property. MOU is not verified.");
         }
 
-        // Logic to extract data from MOU and create Property
-        $property = Property::create([
-            // Normally we'd copy address, rent, etc. Since Property is currently lightweight,
-            // we will populate what's available or set defaults for onboarding.
-            // e.g. 'title' => "Property for " . $mou->opportunity->title,
-        ]);
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($mou) {
+            // Logic to extract data from MOU and create Property
+            $property = Property::create([
+                'code' => 'PRP-' . strtoupper(\Illuminate\Support\Str::random(6)),
+                'mou_id' => $mou->id,
+                'status' => 'draft',
+                'address_line_1' => $mou->opportunity->address,
+                'building_name' => $mou->opportunity->title,
+                // ...
+            ]);
 
-        // If Property model had links to MOU or Party we would set them here.
-        // e.g.
-        // $property->mou_id = $mou->id;
-        // $property->owner_party_id = $mou->party_id;
-        // $property->save();
+            // Attempt to find an active template for Property Onboarding
+            $template = \App\Domain\Implementation\Models\WorkflowTemplate::where('type', 'Property Onboarding')
+                ->where('is_active', true)
+                ->orderByDesc('version')
+                ->first();
 
-        // Note: The UI/Controller that calls this should subsequently
-        // redirect the user to the "Onboarding Workspace" for this new Property.
+            if ($template) {
+                $project = $this->projectFactory->createFromTemplate($property, $template);
+                event(new \App\Domain\Implementation\Events\ImplementationProjectCreated($project));
+            }
 
-        return $property;
+            return $property;
+        });
     }
 }

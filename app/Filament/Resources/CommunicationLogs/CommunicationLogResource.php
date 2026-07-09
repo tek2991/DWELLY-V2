@@ -18,10 +18,8 @@ class CommunicationLogResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
-    public static function getNavigationGroup(): ?string
-    {
-        return 'Communications';
-    }
+    protected static \UnitEnum|string|null $navigationGroup = 'Sales & CRM';
+
 
     public static function canCreate(): bool
     {

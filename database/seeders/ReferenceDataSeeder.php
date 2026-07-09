@@ -16,6 +16,8 @@ class ReferenceDataSeeder extends Seeder
         $this->seedFlooringTypes();
         $this->seedRoomTypes();
         $this->seedAmenityTypes();
+        $this->seedInventoryTypes();
+        $this->seedEstablishmentTypes();
     }
 
     private function insertReferenceData(string $table, array $items)
@@ -32,7 +34,7 @@ class ReferenceDataSeeder extends Seeder
             ];
         }, $items);
 
-        DB::table($table)->insert($data);
+        DB::table($table)->upsert($data, ['slug'], ['name', 'updated_at']);
     }
 
     private function seedPropertyTypes()
@@ -74,6 +76,24 @@ class ReferenceDataSeeder extends Seeder
     {
         $this->insertReferenceData('amenity_types', [
             'Lift', 'Power Backup', 'Security', 'Parking', 'Gym', 'Swimming Pool', 'Club House'
+        ]);
+    }
+
+    private function seedInventoryTypes()
+    {
+        $this->insertReferenceData('inventory_types', [
+            'Fan', 'Light', 'Kitchen Cabinet', 'Wardrobe', 'Sofa', 'Dining Set',
+            'Bed', 'Gas Stove', 'Induction Stove', 'Microwave', 'Gas Cylinder',
+            'Exhaust Fan', 'Kitchen Chimney', 'Water Purifier', 'Geyser',
+            'Air Conditioner', 'Television', 'Fridge', 'Washing Machine',
+            'Inverter', 'Study Table', 'Chair'
+        ]);
+    }
+
+    private function seedEstablishmentTypes()
+    {
+        $this->insertReferenceData('establishment_types', [
+            'Hospital', 'School', 'IT Park', 'Metro Station', 'Shopping Mall', 'Airport', 'Railway Station', 'Park'
         ]);
     }
 }

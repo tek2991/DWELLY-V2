@@ -20,5 +20,32 @@ class Property extends DomainModel
         return $this->hasMany(\App\Domain\Agreement\Models\TenancyAgreement::class);
     }
 
-    // PropertyType, BhkType, etc. would be added here linking to reference data models.
+    public function rooms(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(PropertyRoom::class);
+    }
+
+    public function inventories(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(PropertyInventory::class);
+    }
+
+    public function amenities(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(PropertyAmenity::class);
+    }
+
+    public function establishments(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(PropertyEstablishment::class);
+    }
+    public function implementationProjects(): \Illuminate\Database\Eloquent\Relations\MorphMany
+    {
+        return $this->morphMany(\App\Domain\Implementation\Models\ImplementationProject::class, 'entity');
+    }
+
+    public function mou(): BelongsTo
+    {
+        return $this->belongsTo(\App\Domain\Mou\Models\Mou::class, 'mou_id');
+    }
 }

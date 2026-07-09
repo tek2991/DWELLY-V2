@@ -14,7 +14,7 @@ return new class extends Migration
         'bhk_types',
         'flooring_types',
         'furnishing_types',
-        'appliance_types',
+        'inventory_types',
         'room_types',
         'amenity_types',
         'establishment_types',

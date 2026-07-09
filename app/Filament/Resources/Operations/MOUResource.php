@@ -20,7 +20,7 @@ class MOUResource extends Resource
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-document-check';
     
-    protected static \UnitEnum|string|null $navigationGroup = 'Legal';
+    protected static \UnitEnum|string|null $navigationGroup = 'Sales & CRM';
     
     protected static ?int $navigationSort = 1;
 

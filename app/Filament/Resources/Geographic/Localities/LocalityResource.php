@@ -26,7 +26,7 @@ class LocalityResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Settings';
+    protected static string|\UnitEnum|null $navigationGroup = 'Geographic';
 
     protected static ?string $recordTitleAttribute = 'name';
 

@@ -20,6 +20,8 @@ class PropertyResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
+    protected static \UnitEnum|string|null $navigationGroup = 'Portfolio & Operations';
+
     public static function form(Schema $schema): Schema
     {
         return PropertyForm::configure($schema);
@@ -33,7 +35,10 @@ class PropertyResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            \App\Filament\Resources\Properties\RelationManagers\RoomsRelationManager::class,
+            \App\Filament\Resources\Properties\RelationManagers\InventoriesRelationManager::class,
+            \App\Filament\Resources\Properties\RelationManagers\AmenitiesRelationManager::class,
+            \App\Filament\Resources\Properties\RelationManagers\EstablishmentsRelationManager::class,
         ];
     }
 

@@ -115,15 +115,15 @@ return new class extends Migration
             $table->foreign('room_type_id')->references('id')->on('room_types')->cascadeOnDelete();
         });
 
-        Schema::create('property_furniture', function (Blueprint $table) {
+        Schema::create('property_inventories', function (Blueprint $table) {
             $table->ulid('id')->primary();
             $table->char('property_id', 26);
-            $table->char('appliance_type_id', 26);
+            $table->char('inventory_type_id', 26);
             $table->integer('count')->default(1);
             $table->timestamps();
 
             $table->foreign('property_id')->references('id')->on('properties')->cascadeOnDelete();
-            $table->foreign('appliance_type_id')->references('id')->on('appliance_types')->cascadeOnDelete();
+            $table->foreign('inventory_type_id')->references('id')->on('inventory_types')->cascadeOnDelete();
         });
 
         Schema::create('property_assignments', function (Blueprint $table) {
@@ -158,7 +158,7 @@ return new class extends Migration
     {
         Schema::dropIfExists('property_establishments');
         Schema::dropIfExists('property_assignments');
-        Schema::dropIfExists('property_furniture');
+        Schema::dropIfExists('property_inventories');
         Schema::dropIfExists('property_rooms');
         Schema::dropIfExists('property_amenities');
         Schema::dropIfExists('property_utility_config');

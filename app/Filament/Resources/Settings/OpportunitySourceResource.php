@@ -15,7 +15,7 @@ class OpportunitySourceResource extends Resource
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-funnel';
     
-    protected static \UnitEnum|string|null $navigationGroup = 'Settings';
+    protected static \UnitEnum|string|null $navigationGroup = 'System Settings';
     
     protected static ?int $navigationSort = 10;
 

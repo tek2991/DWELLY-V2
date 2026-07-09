@@ -20,6 +20,8 @@ class PartyResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
+    protected static \UnitEnum|string|null $navigationGroup = 'Sales & CRM';
+
     public static function form(Schema $schema): Schema
     {
         return PartyForm::configure($schema);

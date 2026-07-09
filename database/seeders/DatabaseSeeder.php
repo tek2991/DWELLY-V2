@@ -27,6 +27,7 @@ class DatabaseSeeder extends Seeder
             \Tek2991\Accounting\Database\Seeders\IndianStatesSeeder::class,
             RegionsSeeder::class,
             \Tek2991\Accounting\Database\Seeders\DefaultChartOfAccountsSeeder::class,
+            PropertyOnboardingTemplateSeeder::class,
             \Tek2991\Accounting\Database\Seeders\DemoDataSeeder::class,
         ]);
 

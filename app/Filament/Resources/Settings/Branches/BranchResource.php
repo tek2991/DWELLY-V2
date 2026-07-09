@@ -17,7 +17,7 @@ class BranchResource extends Resource
     protected static ?string $model = Branch::class;
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-building-storefront';
-    protected static \UnitEnum|string|null $navigationGroup = 'Settings';
+    protected static \UnitEnum|string|null $navigationGroup = 'System Settings';
     protected static ?int $navigationSort = 2;
 
     public static function form(Schema $schema): Schema

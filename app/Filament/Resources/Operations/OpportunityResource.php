@@ -22,7 +22,7 @@ class OpportunityResource extends Resource
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-briefcase';
     
-    protected static \UnitEnum|string|null $navigationGroup = 'Operations';
+    protected static \UnitEnum|string|null $navigationGroup = 'Sales & CRM';
     
     protected static ?int $navigationSort = 1;
 
