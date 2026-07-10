@@ -39,6 +39,8 @@ class PropertyResource extends Resource
             \App\Filament\Resources\Properties\RelationManagers\InventoriesRelationManager::class,
             \App\Filament\Resources\Properties\RelationManagers\AmenitiesRelationManager::class,
             \App\Filament\Resources\Properties\RelationManagers\EstablishmentsRelationManager::class,
+            \App\Filament\Resources\Properties\RelationManagers\PhotosRelationManager::class,
+            \App\Filament\Resources\Properties\RelationManagers\PricingVersionsRelationManager::class,
         ];
     }
 

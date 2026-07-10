@@ -130,6 +130,10 @@
                                                                 <x-filament::button tag="a" href="{{ App\Filament\Resources\Properties\PropertyResource::getUrl('edit', ['record' => $project->entity_id]) }}?activeRelationManager=3" target="_blank" size="sm" color="gray" icon="heroicon-o-map-pin">
                                                                     Manage Establishments
                                                                 </x-filament::button>
+                                                            @elseif($task->title === 'Set Base Rent and Security Deposit')
+                                                                <x-filament::button tag="a" href="{{ App\Filament\Resources\Properties\PropertyResource::getUrl('edit', ['record' => $project->entity_id]) }}?activeRelationManager=4" target="_blank" size="sm" color="gray" icon="heroicon-o-currency-rupee">
+                                                                    Manage Pricing
+                                                                </x-filament::button>
                                                             @endif
                                                         @endif
 

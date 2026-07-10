@@ -39,6 +39,17 @@ class Property extends DomainModel
     {
         return $this->hasMany(PropertyEstablishment::class);
     }
+
+    public function pricingVersions(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(PropertyPricingVersion::class);
+    }
+
+    public function photos(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(PropertyPhoto::class);
+    }
+
     public function implementationProjects(): \Illuminate\Database\Eloquent\Relations\MorphMany
     {
         return $this->morphMany(\App\Domain\Implementation\Models\ImplementationProject::class, 'entity');
