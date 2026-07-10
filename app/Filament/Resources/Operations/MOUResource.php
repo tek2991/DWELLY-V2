@@ -50,6 +50,16 @@ class MOUResource extends Resource
                                 ->searchable()
                                 ->preload()
                                 ->disabled(),
+                            Forms\Components\Placeholder::make('property')
+                                ->label('Associated Property')
+                                ->content(function (?Mou $record): ?\Illuminate\Support\HtmlString {
+                                    if ($record?->property) {
+                                        $url = \App\Filament\Resources\Properties\PropertyResource::getUrl('edit', ['record' => $record->property]);
+                                        return new \Illuminate\Support\HtmlString("<a href=\"{$url}\" class=\"text-primary-600 underline\">{$record->property->code}</a>");
+                                    }
+                                    return null;
+                                })
+                                ->visible(fn (?Mou $record) => $record?->property !== null),
                         ])->columns(2),
 
                     \Filament\Schemas\Components\Section::make('Legal Details')
@@ -283,7 +293,7 @@ class MOUResource extends Resource
                     \Filament\Actions\Action::make('viewSignedPdf')
                         ->label('View Signed PDF')
                         ->icon('heroicon-o-document-check')
-                        ->color('success')
+                        ->color('info')
                         ->visible(fn (Mou $record) => $record->hasMedia('signed_pdf'))
                         ->modalHeading('Signed MOU PDF')
                         ->modalWidth('7xl')
@@ -299,7 +309,7 @@ class MOUResource extends Resource
                     \Filament\Actions\Action::make('uploadSignedCopy')
                         ->label('Upload Signed PDF')
                         ->icon('heroicon-o-document-arrow-up')
-                        ->color('success')
+                        ->color('info')
                         ->visible(fn (Mou $record) => in_array($record->status, [MouStatus::PDF_GENERATED, MouStatus::DOWNLOADED, MouStatus::SIGNED_COPY_UPLOADED]))
                         ->form([
                             Forms\Components\FileUpload::make('signed_pdf')
@@ -327,7 +337,7 @@ class MOUResource extends Resource
                     \Filament\Actions\Action::make('convertToProperty')
                         ->label('Convert to Property')
                         ->icon('heroicon-o-building-office')
-                        ->color('primary')
+                        ->color('success')
                         ->visible(fn (Mou $record) => $record->status === MouStatus::VERIFIED)
                         ->requiresConfirmation()
                         ->action(function (Mou $record) {

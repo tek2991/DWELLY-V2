@@ -195,7 +195,7 @@ class OpportunityResource extends Resource
                         ->label('Close Lost')
                         ->icon('heroicon-o-x-circle')
                         ->color('danger')
-                        ->visible(fn (Opportunity $record) => !in_array($record->status, [OpportunityStatus::CONVERTED, OpportunityStatus::CLOSED_LOST, OpportunityStatus::CANCELLED]))
+                        ->visible(fn (Opportunity $record) => !in_array($record->status, [OpportunityStatus::CONVERTED, OpportunityStatus::CLOSED_LOST, OpportunityStatus::CANCELLED, OpportunityStatus::MOU_SIGNED]))
                         ->form([
                             Forms\Components\Textarea::make('notes')->label('Reason for losing'),
                         ])
@@ -229,6 +229,10 @@ class OpportunityResource extends Resource
                             \Filament\Infolists\Components\TextEntry::make('status')
                                 ->badge(),
                             \Filament\Infolists\Components\TextEntry::make('assignedUser.name')->label('Assigned To'),
+                            \Filament\Infolists\Components\TextEntry::make('mou.property.code')
+                                ->label('Associated Property')
+                                ->url(fn (Opportunity $record) => $record->mou?->property ? \App\Filament\Resources\Properties\PropertyResource::getUrl('edit', ['record' => $record->mou->property]) : null)
+                                ->visible(fn (Opportunity $record) => $record->mou?->property !== null),
                         ])->columns(3),
                         
                     \Filament\Schemas\Components\Section::make('Owner Information')

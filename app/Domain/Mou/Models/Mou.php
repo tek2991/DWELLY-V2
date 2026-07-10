@@ -77,4 +77,9 @@ class Mou extends DomainModel implements HasMedia
     {
         return $this->belongsTo(User::class, 'generated_by');
     }
+
+    public function property(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(\App\Domain\Property\Models\Property::class, 'mou_id');
+    }
 }

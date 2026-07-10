@@ -36,4 +36,19 @@ class CreateMOU extends CreateRecord
         $data['prepared_by'] = auth()->id();
         return $data;
     }
+
+    public function canCreateAnother(): bool
+    {
+        return false;
+    }
+
+    protected function afterCreate(): void
+    {
+        $mou = $this->record;
+        if ($mou->opportunity) {
+            $mou->opportunity->update([
+                'status' => \App\Domain\Opportunity\Enums\OpportunityStatus::MOU_CREATED
+            ]);
+        }
+    }
 }

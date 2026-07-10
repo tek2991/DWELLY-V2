@@ -51,6 +51,12 @@ class MouWorkflowService
         
         $mou->addMedia($fullPath)->toMediaCollection('signed_pdf');
         $mou->update(['status' => MouStatus::SIGNED_COPY_UPLOADED]);
+
+        if ($mou->opportunity) {
+            $mou->opportunity->update([
+                'status' => \App\Domain\Opportunity\Enums\OpportunityStatus::MOU_SIGNED
+            ]);
+        }
     }
 
     public function verify(Mou $mou): void
@@ -73,5 +79,11 @@ class MouWorkflowService
         }
 
         $mou->update(['status' => MouStatus::CONVERTED]);
+
+        if ($mou->opportunity) {
+            $mou->opportunity->update([
+                'status' => \App\Domain\Opportunity\Enums\OpportunityStatus::CONVERTED
+            ]);
+        }
     }
 }

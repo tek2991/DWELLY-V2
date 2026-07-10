@@ -59,6 +59,29 @@ class AmenitiesRelationManager extends RelationManager
             ->headerActions([
                 CreateAction::make(),
                 AssociateAction::make(),
+                \Filament\Actions\Action::make('bulkCreate')
+                    ->label('Bulk Create')
+                    ->icon('heroicon-o-squares-plus')
+                    ->form(function () {
+                        $types = \App\Domain\Property\Models\AmenityType::where('is_active', true)->get();
+                        return [
+                            \Filament\Forms\Components\CheckboxList::make('amenities')
+                                ->options($types->pluck('name', 'id'))
+                                ->columns(3)
+                        ];
+                    })
+                    ->action(function (array $data, \Filament\Resources\RelationManagers\RelationManager $livewire) {
+                        $property = $livewire->getOwnerRecord();
+                        foreach ($data['amenities'] as $typeId) {
+                            $existing = $property->amenities()->where('amenity_type_id', $typeId)->first();
+                            if (!$existing) {
+                                $property->amenities()->create([
+                                    'amenity_type_id' => $typeId,
+                                ]);
+                            }
+                        }
+                        \Filament\Notifications\Notification::make()->title('Amenities added successfully')->success()->send();
+                    }),
             ])
             ->recordActions([
                 EditAction::make(),

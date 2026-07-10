@@ -216,7 +216,7 @@ class ViewMOU extends ViewRecord
             Actions\Action::make('viewSignedPdf')
                 ->label('View Signed PDF')
                 ->icon('heroicon-o-document-check')
-                ->color('success')
+                ->color('info')
                 ->visible(fn (Mou $record) => $record->hasMedia('signed_pdf'))
                 ->modalHeading('Signed MOU PDF')
                 ->modalWidth('7xl')
@@ -232,7 +232,7 @@ class ViewMOU extends ViewRecord
             Actions\Action::make('uploadSignedCopy')
                 ->label('Upload Signed PDF')
                 ->icon('heroicon-o-document-arrow-up')
-                ->color('success')
+                ->color('info')
                 ->visible(fn (Mou $record) => in_array($record->status, [MouStatus::PDF_GENERATED, MouStatus::DOWNLOADED, MouStatus::SIGNED_COPY_UPLOADED]))
                 ->form([
                     Forms\Components\FileUpload::make('signed_pdf')
@@ -260,7 +260,7 @@ class ViewMOU extends ViewRecord
             Actions\Action::make('convertToProperty')
                 ->label('Convert to Property')
                 ->icon('heroicon-o-building-office')
-                ->color('primary')
+                ->color('success')
                 ->visible(fn (Mou $record) => $record->status === MouStatus::VERIFIED)
                 ->requiresConfirmation()
                 ->action(function (Mou $record) {

@@ -61,6 +61,41 @@ class RoomsRelationManager extends RelationManager
             ->headerActions([
                 CreateAction::make(),
                 AssociateAction::make(),
+                \Filament\Actions\Action::make('bulkCreate')
+                    ->label('Bulk Create')
+                    ->icon('heroicon-o-squares-plus')
+                    ->form(function () {
+                        $types = \App\Domain\Property\Models\RoomType::where('is_active', true)->get();
+                        $schema = [];
+                        foreach ($types as $type) {
+                            $schema[] = \Filament\Forms\Components\TextInput::make("type_{$type->id}")
+                                ->label($type->name)
+                                ->numeric()
+                                ->default(0)
+                                ->minValue(0);
+                        }
+                        return [
+                            \Filament\Schemas\Components\Grid::make(3)->schema($schema)
+                        ];
+                    })
+                    ->action(function (array $data, \Filament\Resources\RelationManagers\RelationManager $livewire) {
+                        $property = $livewire->getOwnerRecord();
+                        foreach ($data as $key => $count) {
+                            if (str_starts_with($key, 'type_') && $count > 0) {
+                                $typeId = substr($key, 5);
+                                $existing = $property->rooms()->where('room_type_id', $typeId)->first();
+                                if ($existing) {
+                                    $existing->increment('count', $count);
+                                } else {
+                                    $property->rooms()->create([
+                                        'room_type_id' => $typeId,
+                                        'count' => $count,
+                                    ]);
+                                }
+                            }
+                        }
+                        \Filament\Notifications\Notification::make()->title('Rooms created successfully')->success()->send();
+                    }),
             ])
             ->recordActions([
                 EditAction::make(),

@@ -23,7 +23,8 @@ class CreateBill extends CreateRecord
     protected function handleRecordCreation(array $data): \Illuminate\Database\Eloquent\Model
     {
         $service = app(BillService::class);
-        $bill = $service->create($data);
+        $branch = \App\Models\Branch::find($data['branch_id']);
+        $bill = $service->create($branch, $data);
         return $bill;
     }
     

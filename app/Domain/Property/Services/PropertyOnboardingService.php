@@ -30,6 +30,8 @@ class PropertyOnboardingService
                 'status' => 'draft',
                 'address_line_1' => $mou->opportunity->address,
                 'building_name' => $mou->opportunity->title,
+                'property_type_id' => $mou->opportunity->estimated_property_type_id,
+                'bhk_type_id' => \Illuminate\Support\Facades\DB::table('bhk_types')->where('name', $mou->opportunity->estimated_bhk)->value('id'),
                 // ...
             ]);
 

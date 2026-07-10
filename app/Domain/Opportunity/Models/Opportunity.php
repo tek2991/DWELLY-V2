@@ -92,4 +92,9 @@ class Opportunity extends DomainModel implements HasMedia
     {
         return $this->belongsTo(Party::class, 'owner_party_id');
     }
+
+    public function mou(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(\App\Domain\Mou\Models\Mou::class);
+    }
 }
