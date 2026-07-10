@@ -8,4 +8,9 @@ use Filament\Resources\Pages\CreateRecord;
 class CreateCommunicationLog extends CreateRecord
 {
     protected static string $resource = CommunicationLogResource::class;
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
 }

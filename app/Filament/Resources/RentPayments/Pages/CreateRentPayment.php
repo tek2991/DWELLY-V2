@@ -8,4 +8,9 @@ use Filament\Resources\Pages\CreateRecord;
 class CreateRentPayment extends CreateRecord
 {
     protected static string $resource = RentPaymentResource::class;
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
 }

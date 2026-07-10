@@ -49,4 +49,9 @@ class EditProperty extends EditRecord
     {
         return 'heroicon-o-information-circle';
     }
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
 }

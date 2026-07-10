@@ -17,4 +17,9 @@ class CreateProperty extends CreateRecord
         $action = app(OnboardPropertyAction::class);
         return $action->execute($data, auth()->user());
     }
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
 }

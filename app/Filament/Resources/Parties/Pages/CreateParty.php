@@ -21,4 +21,9 @@ class CreateParty extends CreateRecord
         $action = app(CreatePartyAction::class);
         return $action->execute($data, $roles, []);
     }
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
 }

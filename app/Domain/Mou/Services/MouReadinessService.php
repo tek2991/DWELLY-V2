@@ -37,10 +37,6 @@ class MouReadinessService
             $errors[] = 'Bank details are required.';
         }
 
-        if (!$this->hasLegalTerms($mou)) {
-            $errors[] = 'Legal terms are required.';
-        }
-
         return [
             'is_ready' => empty($errors),
             'errors' => $errors,

@@ -14,7 +14,7 @@ class DemoDataSeeder extends Seeder
             $this->call([
                 DemoOrganizationSeeder::class,
                 DemoAccountsSeeder::class,
-                // DemoContactsSeeder::class,
+                DemoContactsSeeder::class,
                 DemoTaxesSeeder::class,
                 // DemoItemsSeeder::class,
                 // DemoTransactionsSeeder::class,

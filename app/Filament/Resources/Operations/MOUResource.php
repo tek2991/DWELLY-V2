@@ -62,25 +62,13 @@ class MOUResource extends Resource
                                 ->visible(fn (?Mou $record) => $record?->property !== null),
                         ])->columns(2),
 
-                    \Filament\Schemas\Components\Section::make('Legal Details')
+                    \Filament\Schemas\Components\Section::make('Legal Terms')
                         ->schema([
-                            Forms\Components\TextInput::make('legal_terms.rent_amount')
-                                ->label('Rent Amount')
-                                ->numeric()
-                                ->prefix('₹'),
-                            Forms\Components\TextInput::make('legal_terms.security_deposit')
-                                ->label('Security Deposit')
-                                ->numeric()
-                                ->prefix('₹'),
-                            Forms\Components\TextInput::make('legal_terms.lock_in_months')
-                                ->label('Lock-in (Months)')
-                                ->numeric(),
-                            Forms\Components\TextInput::make('legal_terms.notice_period_months')
-                                ->label('Notice Period (Months)')
-                                ->numeric(),
                             Forms\Components\TextInput::make('legal_terms.apdcl_consumer_id')
-                                ->label('APDCL Consumer ID'),
-                        ])->columns(2),
+                                ->label('APDCL Consumer ID')
+                                ->maxLength(255),
+                        ])->columns(1)
+                        ->collapsible(),
 
                     \Filament\Schemas\Components\Section::make('Bank Details')
                         ->schema([

@@ -31,4 +31,9 @@ class CreateOpportunity extends CreateRecord
             ['initial_status' => OpportunityStatus::NEW->value]
         );
     }
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
 }

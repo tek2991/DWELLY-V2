@@ -3,6 +3,7 @@
 namespace App\Domain\Property\Models;
 
 use App\Domain\Shared\Models\DomainModel;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PropertyInventory extends DomainModel
 {
@@ -14,8 +15,13 @@ class PropertyInventory extends DomainModel
         'count',
     ];
 
-    public function inventoryType(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    public function inventoryType(): BelongsTo
     {
         return $this->belongsTo(InventoryType::class);
+    }
+
+    public function property(): BelongsTo
+    {
+        return $this->belongsTo(Property::class);
     }
 }

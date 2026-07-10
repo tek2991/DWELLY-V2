@@ -29,6 +29,9 @@ class AmenitiesRelationManager extends RelationManager
                     ->searchable()
                     ->preload()
                     ->required()
+                    ->unique(modifyRuleUsing: function (\Illuminate\Validation\Rules\Unique $rule, \Filament\Resources\RelationManagers\RelationManager $livewire) {
+                        return $rule->where('property_id', $livewire->getOwnerRecord()->id);
+                    }, ignoreRecord: true)
                     ->createOptionForm([
                         \Filament\Forms\Components\TextInput::make('name')
                             ->required()
@@ -58,7 +61,6 @@ class AmenitiesRelationManager extends RelationManager
             ])
             ->headerActions([
                 CreateAction::make(),
-                AssociateAction::make(),
                 \Filament\Actions\Action::make('bulkCreate')
                     ->label('Bulk Create')
                     ->icon('heroicon-o-squares-plus')
@@ -85,12 +87,10 @@ class AmenitiesRelationManager extends RelationManager
             ])
             ->recordActions([
                 EditAction::make(),
-                DissociateAction::make(),
                 DeleteAction::make(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DissociateBulkAction::make(),
                     DeleteBulkAction::make(),
                 ]),
             ]);

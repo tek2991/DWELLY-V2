@@ -119,6 +119,16 @@ class OpportunityResource extends Resource
                                 ->content(fn (?Opportunity $record): string => $record?->number ?? 'Auto-generated'),
                             Forms\Components\Placeholder::make('status')
                                 ->content(fn (?Opportunity $record): string => $record?->status?->getLabel() ?? 'New'),
+                            Forms\Components\Placeholder::make('property')
+                                ->label('Associated Property')
+                                ->content(function (?Opportunity $record): ?\Illuminate\Support\HtmlString {
+                                    if ($record?->mou?->property) {
+                                        $url = \App\Filament\Resources\Properties\PropertyResource::getUrl('edit', ['record' => $record->mou->property]);
+                                        return new \Illuminate\Support\HtmlString("<a href=\"{$url}\" class=\"text-primary-600 underline\">{$record->mou->property->code}</a>");
+                                    }
+                                    return null;
+                                })
+                                ->visible(fn (?Opportunity $record) => $record?->mou?->property !== null),
                         ])->hiddenOn('create'),
                 ])->columnSpan(['lg' => 1]),
             ])

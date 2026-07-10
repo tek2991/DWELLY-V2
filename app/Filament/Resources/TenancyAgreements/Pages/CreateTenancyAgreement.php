@@ -32,4 +32,9 @@ class CreateTenancyAgreement extends CreateRecord
         $action = app(DraftTenancyAgreementAction::class);
         return $action->execute($property, $data, $roles, auth()->user());
     }
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
 }

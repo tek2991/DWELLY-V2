@@ -65,4 +65,9 @@ class EditParty extends EditRecord
     {
         return app(\App\Domain\Party\Services\PartyService::class)->updateParty($record, $data);
     }
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
 }
