@@ -23,6 +23,8 @@ class CreateMOU extends CreateRecord
                     'opportunity_id' => $opportunity->id,
                     'legal_terms' => [
                         'rent_amount' => $opportunity->expected_rent,
+                        'address' => $opportunity->address,
+                        'financial_model_id' => $opportunity->expected_financial_model_id,
                     ],
                 ]);
             }
@@ -54,6 +56,6 @@ class CreateMOU extends CreateRecord
 
     protected function getRedirectUrl(): string
     {
-        return $this->getResource()::getUrl('index');
+        return $this->getResource()::getUrl('edit', ['record' => $this->record]);
     }
 }

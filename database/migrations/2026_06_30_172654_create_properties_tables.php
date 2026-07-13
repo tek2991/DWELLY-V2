@@ -24,7 +24,7 @@ return new class extends Migration
 
         Schema::create('properties', function (Blueprint $table) {
             $table->ulid('id')->primary();
-            $table->string('code')->unique(); // e.g. GAU-0042
+            $table->string('code')->nullable()->unique(); // e.g. GAU-0042
             $table->char('region_id', 26);
             $table->string('status'); // PropertyStatus state machine
             $table->string('building_name')->nullable();

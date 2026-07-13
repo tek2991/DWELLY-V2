@@ -47,11 +47,19 @@ class PartyService
                 ]);
             }
 
+            if (!empty($addressDetails['primary_address'])) {
+                $party->addresses()->create([
+                    'type' => $party->party_type === 'individual' ? 'residential' : 'registered_office',
+                    'address_line_1' => $addressDetails['primary_address'],
+                    'is_primary' => true,
+                ]);
+            }
+
             if (!empty($addressDetails['billing_address'])) {
                 $party->addresses()->create([
                     'type' => 'billing',
                     'address_line_1' => $addressDetails['billing_address'],
-                    'is_primary' => true,
+                    'is_primary' => false,
                 ]);
             }
 
@@ -59,6 +67,7 @@ class PartyService
                 $party->addresses()->create([
                     'type' => 'shipping',
                     'address_line_1' => $addressDetails['shipping_address'],
+                    'is_primary' => false,
                 ]);
             }
 
@@ -119,17 +128,36 @@ class PartyService
             }
 
             if ($addressDetails) {
-                if (!empty($addressDetails['billing_address'])) {
-                    $party->addresses()->updateOrCreate(
-                        ['party_id' => $party->id, 'type' => 'billing'],
-                        ['address_line_1' => $addressDetails['billing_address'], 'is_primary' => true]
-                    );
+                if (isset($addressDetails['primary_address'])) {
+                    $primaryType = $party->party_type === 'individual' ? 'residential' : 'registered_office';
+                    if (!empty($addressDetails['primary_address'])) {
+                        $party->addresses()->updateOrCreate(
+                            ['party_id' => $party->id, 'type' => $primaryType],
+                            ['address_line_1' => $addressDetails['primary_address'], 'is_primary' => true]
+                        );
+                    } else {
+                        $party->addresses()->where('type', $primaryType)->delete();
+                    }
                 }
-                if (!empty($addressDetails['shipping_address'])) {
-                    $party->addresses()->updateOrCreate(
-                        ['party_id' => $party->id, 'type' => 'shipping'],
-                        ['address_line_1' => $addressDetails['shipping_address']]
-                    );
+                if (isset($addressDetails['billing_address'])) {
+                    if (!empty($addressDetails['billing_address'])) {
+                        $party->addresses()->updateOrCreate(
+                            ['party_id' => $party->id, 'type' => 'billing'],
+                            ['address_line_1' => $addressDetails['billing_address'], 'is_primary' => false]
+                        );
+                    } else {
+                        $party->addresses()->where('type', 'billing')->delete();
+                    }
+                }
+                if (isset($addressDetails['shipping_address'])) {
+                    if (!empty($addressDetails['shipping_address'])) {
+                        $party->addresses()->updateOrCreate(
+                            ['party_id' => $party->id, 'type' => 'shipping'],
+                            ['address_line_1' => $addressDetails['shipping_address'], 'is_primary' => false]
+                        );
+                    } else {
+                        $party->addresses()->where('type', 'shipping')->delete();
+                    }
                 }
             }
 

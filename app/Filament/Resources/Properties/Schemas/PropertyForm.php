@@ -18,6 +18,10 @@ class PropertyForm
                         TextInput::make('building_name')
                             ->required()
                             ->maxLength(255),
+                        TextInput::make('code')
+                            ->label('Property Code')
+                            ->unique(ignoreRecord: true)
+                            ->maxLength(255),
                         Select::make('property_type_id')
                             ->options(fn() => \Illuminate\Support\Facades\DB::table('property_types')->pluck('name', 'id'))
                             ->searchable(),

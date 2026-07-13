@@ -26,6 +26,11 @@ class OpportunityResource extends Resource
     
     protected static ?int $navigationSort = 1;
 
+    public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return !$record->mou()->exists();
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema
@@ -119,6 +124,21 @@ class OpportunityResource extends Resource
                                 ->content(fn (?Opportunity $record): string => $record?->number ?? 'Auto-generated'),
                             Forms\Components\Placeholder::make('status')
                                 ->content(fn (?Opportunity $record): string => $record?->status?->getLabel() ?? 'New'),
+                            Forms\Components\Placeholder::make('mou')
+                                ->label('Associated MOU')
+                                ->content(function (?Opportunity $record): ?\Illuminate\Support\HtmlString {
+                                    if ($record?->mou) {
+                                        return new \Illuminate\Support\HtmlString("<span class=\"font-medium text-gray-900 dark:text-white\">{$record->mou->number}</span>");
+                                    }
+                                    return null;
+                                })
+                                ->hintAction(
+                                    \Filament\Actions\Action::make('viewMou')
+                                        ->icon('heroicon-m-arrow-top-right-on-square')
+                                        ->tooltip('View MOU')
+                                        ->url(fn (?Opportunity $record) => $record?->mou ? \App\Filament\Resources\Operations\MOUResource::getUrl('view', ['record' => $record->mou]) : null)
+                                )
+                                ->visible(fn (?Opportunity $record) => $record?->mou !== null),
                             Forms\Components\Placeholder::make('property')
                                 ->label('Associated Property')
                                 ->content(function (?Opportunity $record): ?\Illuminate\Support\HtmlString {
@@ -166,7 +186,8 @@ class OpportunityResource extends Resource
             ])
             ->actions([
                 \Filament\Actions\ViewAction::make(),
-                \Filament\Actions\EditAction::make(),
+                \Filament\Actions\EditAction::make()
+                    ->visible(fn ($record) => static::canEdit($record)),
                 // Workflow Actions
                 \Filament\Actions\ActionGroup::make([
                     \Filament\Actions\Action::make('markReadyForMou')
@@ -239,6 +260,10 @@ class OpportunityResource extends Resource
                             \Filament\Infolists\Components\TextEntry::make('status')
                                 ->badge(),
                             \Filament\Infolists\Components\TextEntry::make('assignedUser.name')->label('Assigned To'),
+                            \Filament\Infolists\Components\TextEntry::make('mou.number')
+                                ->label('Associated MOU')
+                                ->url(fn (Opportunity $record) => $record->mou ? \App\Filament\Resources\Operations\MOUResource::getUrl('view', ['record' => $record->mou]) : null)
+                                ->visible(fn (Opportunity $record) => $record->mou !== null),
                             \Filament\Infolists\Components\TextEntry::make('mou.property.code')
                                 ->label('Associated Property')
                                 ->url(fn (Opportunity $record) => $record->mou?->property ? \App\Filament\Resources\Properties\PropertyResource::getUrl('edit', ['record' => $record->mou->property]) : null)

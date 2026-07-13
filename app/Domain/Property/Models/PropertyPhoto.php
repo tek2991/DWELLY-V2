@@ -11,6 +11,7 @@ class PropertyPhoto extends DomainModel
 
     protected $fillable = [
         'property_id',
+        'property_room_id',
         'file_path',
         'title',
         'is_featured',
@@ -22,6 +23,11 @@ class PropertyPhoto extends DomainModel
         'is_featured' => 'boolean',
         'is_visible' => 'boolean',
     ];
+
+    public function room(): BelongsTo
+    {
+        return $this->belongsTo(PropertyRoom::class, 'property_room_id');
+    }
 
     public function property(): BelongsTo
     {

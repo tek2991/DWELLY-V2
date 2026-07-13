@@ -10,12 +10,26 @@ class PropertyRoom extends DomainModel
 
     protected $fillable = [
         'property_id',
-        'room_type_id',
-        'count',
+        'room_definition_id',
+        'custom_name',
+        'floor',
+        'area',
+        'description',
+        'display_order',
+        'is_active',
     ];
 
-    public function roomType(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    protected $casts = [
+        'is_active' => 'boolean',
+    ];
+
+    public function property(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
-        return $this->belongsTo(RoomType::class);
+        return $this->belongsTo(Property::class);
+    }
+
+    public function roomDefinition(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(RoomDefinition::class);
     }
 }

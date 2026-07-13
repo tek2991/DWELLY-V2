@@ -15,7 +15,7 @@ class FinancialModelResource extends Resource
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-banknotes';
     
-    protected static \UnitEnum|string|null $navigationGroup = 'System Settings';
+    protected static \UnitEnum|string|null $navigationGroup = 'Reference Data';
     
     protected static ?int $navigationSort = 12;
 
@@ -30,6 +30,10 @@ class FinancialModelResource extends Resource
                 Forms\Components\TextInput::make('name')
                     ->required()
                     ->maxLength(255),
+                Forms\Components\TextInput::make('fee_collection')
+                    ->label('Fee Collection')
+                    ->maxLength(255)
+                    ->columnSpanFull(),
                 Forms\Components\Textarea::make('description')
                     ->maxLength(65535)
                     ->columnSpanFull(),
@@ -47,6 +51,13 @@ class FinancialModelResource extends Resource
                     ->searchable(),
                 Tables\Columns\TextColumn::make('name')
                     ->searchable(),
+                Tables\Columns\TextColumn::make('fee_collection')
+                    ->searchable()
+                    ->wrap(),
+                Tables\Columns\TextColumn::make('description')
+                    ->searchable()
+                    ->wrap()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\IconColumn::make('is_active')
                     ->boolean(),
                 Tables\Columns\TextColumn::make('created_at')

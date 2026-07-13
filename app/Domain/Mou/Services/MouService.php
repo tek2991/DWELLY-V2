@@ -60,6 +60,7 @@ class MouService
                     'display_name' => $partyData['party_type'] === 'individual' ? trim($partyData['name'] ?? '') : $partyData['legal_name'],
                     'phone' => $partyData['phone'] ?? $mou->opportunity->owner_phone,
                     'email' => $partyData['email'] ?? $mou->opportunity->owner_email,
+                    'state_id' => $partyData['state_id'] ?? null,
                 ]);
 
                 if ($partyData['party_type'] === 'individual') {
@@ -119,7 +120,7 @@ class MouService
                     ],
                     [
                         'bank_name' => $mou->bank_details['bank_name'] ?? 'Unknown',
-                        'branch_address' => $mou->bank_details['branch_address'] ?? null,
+                        'bank_address' => $mou->bank_details['bank_address'] ?? null,
                         'account_name' => $mou->bank_details['account_holder_name'] ?? 'Unknown',
                         'ifsc_code' => $mou->bank_details['ifsc_code'] ?? 'Unknown',
                         'is_primary' => true,
@@ -152,7 +153,7 @@ class MouService
             $bankAccount = \App\Domain\Party\Models\PartyBankAccount::create([
                 'party_id' => $mou->party_id,
                 'bank_name' => $bankDetails['bank_name'],
-                'branch_address' => $bankDetails['branch_address'] ?? null,
+                'bank_address' => $bankDetails['bank_address'] ?? null,
                 'account_name' => $bankDetails['account_holder_name'],
                 'account_number' => $bankDetails['account_number'],
                 'ifsc_code' => $bankDetails['ifsc_code'],

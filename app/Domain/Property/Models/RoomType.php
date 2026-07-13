@@ -8,9 +8,14 @@ class RoomType extends DomainModel
 {
     protected $table = 'room_types';
 
-    protected $fillable = ['name'];
+    protected $fillable = ['name', 'slug', 'description', 'is_active'];
 
     protected $casts = [
         'is_active' => 'boolean',
     ];
+
+    public function roomDefinitions(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(RoomDefinition::class);
+    }
 }

@@ -50,13 +50,30 @@ class Property extends DomainModel
         return $this->hasMany(PropertyPhoto::class);
     }
 
-    public function implementationProjects(): \Illuminate\Database\Eloquent\Relations\MorphMany
+    public function documents(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
-        return $this->morphMany(\App\Domain\Implementation\Models\ImplementationProject::class, 'entity');
+        return $this->hasMany(PropertyDocument::class);
     }
+
+    public function utilities(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(PropertyUtility::class);
+    }
+
+
 
     public function mou(): BelongsTo
     {
         return $this->belongsTo(\App\Domain\Mou\Models\Mou::class, 'mou_id');
+    }
+
+    public function furnishingType(): BelongsTo
+    {
+        return $this->belongsTo(FurnishingType::class, 'furnishing_type_id');
+    }
+
+    public function onboardingProject(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(OnboardingProject::class, 'property_id');
     }
 }

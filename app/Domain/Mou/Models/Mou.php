@@ -46,7 +46,7 @@ class Mou extends DomainModel implements HasMedia
 
     public function registerMediaCollections(): void
     {
-        $this->addMediaCollection('draft_pdf')->singleFile();
+        $this->addMediaCollection('draft_pdf');
         $this->addMediaCollection('signed_pdf')->singleFile();
         $this->addMediaCollection('annexures');
         $this->addMediaCollection('owner_documents');

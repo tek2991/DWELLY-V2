@@ -159,6 +159,11 @@ class PartyForm
                 Section::make('Addresses')
                     ->columns(2)
                     ->schema([
+                        Textarea::make('address_details.primary_address')
+                            ->label(fn (Get $get) => $get('party_type') === 'organization' ? 'Registered Office Address' : 'Residential Address')
+                            ->helperText('Note: This address is used for MOUs and legal agreements. It is NOT synced with the Accounting module.')
+                            ->rows(3)
+                            ->columnSpanFull(),
                         Textarea::make('address_details.billing_address')
                             ->label('Billing Address')
                             ->rows(3),

@@ -11,6 +11,7 @@ class PropertyInventory extends DomainModel
 
     protected $fillable = [
         'property_id',
+        'property_room_id',
         'inventory_type_id',
         'count',
     ];
@@ -23,5 +24,10 @@ class PropertyInventory extends DomainModel
     public function property(): BelongsTo
     {
         return $this->belongsTo(Property::class);
+    }
+    
+    public function room(): BelongsTo
+    {
+        return $this->belongsTo(PropertyRoom::class, 'property_room_id');
     }
 }

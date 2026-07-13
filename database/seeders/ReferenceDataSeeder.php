@@ -67,9 +67,52 @@ class ReferenceDataSeeder extends Seeder
 
     private function seedRoomTypes()
     {
-        $this->insertReferenceData('room_types', [
-            'Bedroom', 'Living Room', 'Kitchen', 'Bathroom', 'Balcony', 'Pooja Room', 'Store Room'
-        ]);
+        // 1. Seed the broad categories as RoomTypes
+        $roomTypes = [
+            'Bedroom',
+            'Bathroom',
+            'Kitchen & Utility',
+            'Living Space',
+            'Balcony & Outdoors',
+            'Additional Rooms',
+        ];
+        $this->insertReferenceData('room_types', $roomTypes);
+
+        // 2. Fetch the created RoomTypes to get their IDs
+        $typesMap = DB::table('room_types')->whereIn('name', $roomTypes)->pluck('id', 'name');
+
+        // 3. Define the definitions mapping
+        $definitionsData = [
+            'Bedroom' => ['Master Bedroom', 'Second Bedroom', 'Third Bedroom', 'Guest Bedroom', 'Kids Bedroom'],
+            'Bathroom' => ['Attached Bathroom', 'Common Bathroom', 'Master Bathroom', 'Powder Room', 'Guest Bathroom'],
+            'Kitchen & Utility' => ['Kitchen', 'Modular Kitchen', 'Open Kitchen', 'Closed Kitchen', 'Pantry'],
+            'Living Space' => ['Living Room', 'Family Lounge', 'Drawing Room', 'Dining Room', 'Home Theater'],
+            'Balcony & Outdoors' => ['Front Balcony', 'Rear Balcony', 'Utility Balcony', 'Master Balcony', 'Terrace', 'Private Garden'],
+            'Additional Rooms' => ['Office Room', 'Pooja Room', 'Store Room', 'Servant Room', 'Foyer', 'Gym Room', 'Garage'],
+        ];
+
+        // 4. Prepare and insert RoomDefinitions
+        $now = now();
+        $definitionsToInsert = [];
+        foreach ($definitionsData as $typeName => $definitions) {
+            $typeId = $typesMap[$typeName] ?? null;
+            if (!$typeId) continue;
+            
+            foreach ($definitions as $index => $defName) {
+                $definitionsToInsert[] = [
+                    'id' => (string) Str::ulid(),
+                    'room_type_id' => $typeId,
+                    'name' => $defName,
+                    'slug' => Str::slug($defName),
+                    'display_order' => $index,
+                    'is_active' => true,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+            }
+        }
+
+        DB::table('room_definitions')->upsert($definitionsToInsert, ['slug'], ['name', 'display_order', 'updated_at']);
     }
 
     private function seedAmenityTypes()

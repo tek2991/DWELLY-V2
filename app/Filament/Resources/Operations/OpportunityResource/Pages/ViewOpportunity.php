@@ -21,7 +21,8 @@ class ViewOpportunity extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\EditAction::make(),
+            Actions\EditAction::make()
+                ->visible(fn (Opportunity $record) => OpportunityResource::canEdit($record)),
             
             Actions\Action::make('markReadyForMou')
                 ->label('Ready For MOU')

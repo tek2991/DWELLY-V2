@@ -25,78 +25,103 @@ class RoomsRelationManager extends RelationManager
     {
         return $schema
             ->components([
-                \Filament\Forms\Components\Select::make('room_type_id')
-                    ->relationship('roomType', 'name')
+                \Filament\Forms\Components\Select::make('room_definition_id')
+                    ->relationship('roomDefinition', 'name')
                     ->searchable()
                     ->preload()
                     ->required()
                     ->unique(modifyRuleUsing: function (\Illuminate\Validation\Rules\Unique $rule, \Filament\Resources\RelationManagers\RelationManager $livewire) {
                         return $rule->where('property_id', $livewire->getOwnerRecord()->id);
-                    }, ignoreRecord: true)
-                    ->createOptionForm([
-                        \Filament\Forms\Components\TextInput::make('name')
-                            ->required()
-                            ->maxLength(255),
-                    ]),
-                \Filament\Forms\Components\TextInput::make('count')
-                    ->required()
-                    ->numeric()
-                    ->default(1)
-                    ->minValue(1),
+                    }, ignoreRecord: true),
+                \Filament\Forms\Components\TextInput::make('custom_name')
+                    ->maxLength(255),
+                \Filament\Forms\Components\TextInput::make('floor')
+                    ->numeric(),
+                \Filament\Forms\Components\TextInput::make('area')
+                    ->numeric(),
+                \Filament\Forms\Components\Textarea::make('description'),
             ]);
     }
 
     public function table(Table $table): Table
     {
         return $table
-            ->recordTitleAttribute('room_type_id')
+            ->recordTitleAttribute('id')
             ->columns([
-                Tables\Columns\TextColumn::make('roomType.name')
-                    ->label('Room Type')
-                    ->searchable()
-                    ->sortable(),
-                Tables\Columns\TextColumn::make('count')
+                Tables\Columns\TextColumn::make('roomDefinition.roomType.name')
+                    ->label('Type')
+                    ->sortable()
+                    ->searchable(),
+                Tables\Columns\TextColumn::make('roomDefinition.name')
+                    ->label('Definition')
+                    ->sortable()
+                    ->searchable(),
+                Tables\Columns\TextColumn::make('custom_name')
+                    ->label('Custom Name')
+                    ->searchable(),
+                Tables\Columns\TextColumn::make('floor')
                     ->sortable(),
             ])
             ->filters([
                 //
             ])
             ->headerActions([
-                CreateAction::make(),
-                \Filament\Actions\Action::make('bulkCreate')
-                    ->label('Bulk Create')
-                    ->icon('heroicon-o-squares-plus')
-                    ->form(function () {
-                        $types = \App\Domain\Property\Models\RoomType::where('is_active', true)->get();
-                        $schema = [];
-                        foreach ($types as $type) {
-                            $schema[] = \Filament\Forms\Components\TextInput::make("type_{$type->id}")
-                                ->label($type->name)
-                                ->numeric()
-                                ->default(0)
-                                ->minValue(0);
-                        }
-                        return [
-                            \Filament\Schemas\Components\Grid::make(3)->schema($schema)
-                        ];
-                    })
+                \Filament\Actions\Action::make('addRooms')
+                    ->label('Add Rooms')
+                    ->icon('heroicon-o-plus')
+                    ->form([
+                        \Filament\Forms\Components\Select::make('room_type_id')
+                            ->label('Room Type')
+                            ->options(\App\Domain\Property\Models\RoomType::query()->pluck('name', 'id'))
+                            ->live()
+                            ->afterStateUpdated(fn ($set) => $set('room_definition_ids', [])),
+                        
+                        \Filament\Forms\Components\CheckboxList::make('room_definition_ids')
+                            ->label('Room Definitions')
+                            ->options(fn ($get) => \App\Domain\Property\Models\RoomDefinition::query()
+                                ->where('room_type_id', $get('room_type_id'))
+                                ->pluck('name', 'id')
+                            )
+                            ->disableOptionWhen(fn (string $value, \Filament\Resources\RelationManagers\RelationManager $livewire) => 
+                                $livewire->getOwnerRecord()->rooms()->where('room_definition_id', $value)->exists()
+                            )
+                            ->visible(fn ($get) => filled($get('room_type_id')))
+                            ->columns(2)
+                            ->bulkToggleable()
+                            ->hintAction(
+                                \Filament\Actions\Action::make('createDefinition')
+                                    ->label('Add New Definition')
+                                    ->icon('heroicon-m-plus')
+                                    ->form([
+                                        \Filament\Forms\Components\TextInput::make('name')
+                                            ->required()
+                                            ->maxLength(255),
+                                    ])
+                                    ->action(function (array $data, $get, $set) {
+                                        $def = \App\Domain\Property\Models\RoomDefinition::create([
+                                            'room_type_id' => $get('room_type_id'),
+                                            'name' => $data['name'],
+                                            'slug' => \Illuminate\Support\Str::slug($data['name'] . '-' . uniqid()),
+                                        ]);
+                                        
+                                        $current = $get('room_definition_ids') ?? [];
+                                        $current[] = (string) $def->id;
+                                        $set('room_definition_ids', $current);
+                                    })
+                            ),
+                    ])
                     ->action(function (array $data, \Filament\Resources\RelationManagers\RelationManager $livewire) {
                         $property = $livewire->getOwnerRecord();
-                        foreach ($data as $key => $count) {
-                            if (str_starts_with($key, 'type_') && $count > 0) {
-                                $typeId = substr($key, 5);
-                                $existing = $property->rooms()->where('room_type_id', $typeId)->first();
-                                if ($existing) {
-                                    $existing->increment('count', $count);
-                                } else {
-                                    $property->rooms()->create([
-                                        'room_type_id' => $typeId,
-                                        'count' => $count,
-                                    ]);
-                                }
-                            }
+                        $definitionIds = $data['room_definition_ids'] ?? [];
+                        foreach ($definitionIds as $defId) {
+                            $property->rooms()->firstOrCreate([
+                                'room_definition_id' => $defId,
+                            ]);
                         }
-                        \Filament\Notifications\Notification::make()->title('Rooms created successfully')->success()->send();
+                        \Filament\Notifications\Notification::make()
+                            ->title('Rooms added successfully')
+                            ->success()
+                            ->send();
                     }),
             ])
             ->recordActions([

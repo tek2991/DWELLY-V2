@@ -4,14 +4,12 @@ namespace App\Domain\Agreement\Actions;
 
 use App\Domain\Agreement\Models\TenancyAgreement;
 use App\Domain\Finance\Services\AccountingBridgeService;
-use App\Domain\Workflow\Services\WorkflowEngine;
 use Illuminate\Support\Facades\DB;
 use App\Models\User;
 
 class ActivateTenancyAction
 {
     public function __construct(
-        private WorkflowEngine $workflowEngine,
         private AccountingBridgeService $accounting
     ) {}
 
@@ -24,14 +22,7 @@ class ActivateTenancyAction
             $agreement->save();
 
             // 2. Transition Workflow to Active
-            // In a real app we'd find the WorkflowInstance and transition it
-            $instance = \App\Domain\Workflow\Models\WorkflowInstance::where('subject_type', get_class($agreement))
-                ->where('subject_id', $agreement->id)
-                ->first();
-                
-            if ($instance) {
-                $this->workflowEngine->transition($instance, 'active', $actor, 'Tenancy activated.');
-            }
+            // Legacy workflow engine removed
 
             // 3. Mark property as occupied
             $property = $agreement->property;

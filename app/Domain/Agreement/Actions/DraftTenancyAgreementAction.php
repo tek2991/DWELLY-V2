@@ -4,8 +4,6 @@ namespace App\Domain\Agreement\Actions;
 
 use App\Domain\Agreement\Models\TenancyAgreement;
 use App\Domain\Property\Models\Property;
-use App\Domain\Workflow\Services\WorkflowEngine;
-use App\Domain\Workflow\Models\WorkflowDefinition;
 use Illuminate\Support\Facades\DB;
 use App\Models\User;
 use App\Domain\Shared\Services\NumberingService;
@@ -14,7 +12,6 @@ use App\Domain\Finance\Services\CalculationService;
 class DraftTenancyAgreementAction
 {
     public function __construct(
-        private WorkflowEngine $workflowEngine,
         private CalculationService $calculationService
     ) {}
 
@@ -49,13 +46,7 @@ class DraftTenancyAgreementAction
             }
 
             // 6. Start the Workflow
-            $definition = WorkflowDefinition::where('entity_type', 'TenancyAgreement')
-                                            ->where('is_active', true)
-                                            ->first();
-                                            
-            if ($definition) {
-                $this->workflowEngine->start($definition, $agreement, 'draft');
-            }
+            // Legacy workflow engine removed
 
             return $agreement;
         });

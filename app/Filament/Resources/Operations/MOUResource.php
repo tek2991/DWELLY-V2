@@ -19,14 +19,20 @@ class MOUResource extends Resource
     protected static ?string $model = Mou::class;
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-document-check';
-    
     protected static \UnitEnum|string|null $navigationGroup = 'Sales & CRM';
-    
     protected static ?int $navigationSort = 1;
 
     public static function canViewAny(): bool
     {
         return auth()->user()->hasAnyRole(['Business Owner', 'Operations Manager', 'Legal']);
+    }
+
+    public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return !in_array($record->status, [
+            \App\Domain\Opportunity\Enums\MouStatus::VERIFIED,
+            \App\Domain\Opportunity\Enums\MouStatus::CONVERTED
+        ]);
     }
 
     public static function form(Schema $schema): Schema
@@ -44,22 +50,163 @@ class MOUResource extends Resource
                                 ->searchable()
                                 ->preload()
                                 ->required()
-                                ->disabled(fn (string $operation): bool => $operation !== 'create'),
-                            Forms\Components\Select::make('party_id')
-                                ->relationship('party', 'display_name')
-                                ->searchable()
-                                ->preload()
-                                ->disabled(),
+                                ->disabled(fn (string $operation): bool => $operation !== 'create')
+                                ->hintAction(
+                                    \Filament\Actions\Action::make('viewOpportunity')
+                                        ->icon('heroicon-m-eye')
+                                        ->tooltip('View Opportunity Details')
+                                        ->modalHeading(fn (?Mou $record) => new \Illuminate\Support\HtmlString(
+                                            '<div class="flex items-center gap-3">
+                                                <span>Opportunity Details</span>
+                                                ' . ($record?->opportunity ? '<a href="' . \App\Filament\Resources\Operations\OpportunityResource::getUrl('view', ['record' => $record->opportunity]) . '" class="text-sm font-medium text-primary-600 hover:underline dark:text-primary-400">Open Full Page &rarr;</a>' : '') . '
+                                            </div>'
+                                        ))
+                                        ->modalSubmitAction(false)
+                                        ->modalCancelActionLabel('Close')
+                                        ->infolist([
+                                            \Filament\Schemas\Components\Section::make('General Information')
+                                                ->schema([
+                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.title')->label('Title'),
+                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.status')->label('Status')->badge(),
+                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.opportunitySource.name')->label('Source'),
+                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.assignedUser.name')->label('Assigned To'),
+                                                ])->columns(2),
+                                                
+                                            \Filament\Schemas\Components\Section::make('Owner Information')
+                                                ->schema([
+                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.owner_name')->label('Owner Name'),
+                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.owner_phone')->label('Owner Phone'),
+                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.owner_email')->label('Owner Email'),
+                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.address')->label('Address')->columnSpanFull(),
+                                                ])->columns(2),
+                                                
+                                            \Filament\Schemas\Components\Section::make('Property & Commercial Estimates')
+                                                ->schema([
+                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.estimatedPropertyType.name')->label('Property Type'),
+                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.estimated_bhk')->label('BHK'),
+                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.estimated_size')->label('Size (Sq.Ft)'),
+                                                    \Filament\Infolists\Components\IconEntry::make('opportunity.estimated_is_furnished')->label('Furnished')->boolean(),
+                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.expected_rent')->label('Expected Rent')->money('INR'),
+                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.expectedFinancialModel.name')->label('Financial Model'),
+                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.expected_onboarding_date')->label('Expected Onboarding')->date(),
+                                                ])->columns(3),
+                                                
+                                            \Filament\Schemas\Components\Section::make('Internal Summary')
+                                                ->schema([
+                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.internal_summary')
+                                                        ->label('')
+                                                        ->columnSpanFull()
+                                                        ->default('No summary provided.'),
+                                                ]),
+                                        ])
+                                        ->visible(fn (?Mou $record) => $record?->opportunity !== null)
+                                ),
+                            Forms\Components\Placeholder::make('party')
+                                ->label('Associated Party')
+                                ->content(function (?Mou $record): ?\Illuminate\Support\HtmlString {
+                                    if ($record?->party) {
+                                        return new \Illuminate\Support\HtmlString("<span class=\"font-medium text-gray-900 dark:text-white\">{$record->party->display_name}</span>");
+                                    }
+                                    return new \Illuminate\Support\HtmlString("<span class=\"text-gray-500\">Unresolved</span>");
+                                })
+                                ->hintAction(
+                                    \Filament\Actions\Action::make('viewParty')
+                                        ->icon('heroicon-m-eye')
+                                        ->tooltip('View Party Details')
+                                        ->modalHeading(fn (?Mou $record) => new \Illuminate\Support\HtmlString(
+                                            '<div class="flex items-center gap-3">
+                                                <span>Party Details</span>
+                                                ' . ($record?->party ? '<a href="' . \App\Filament\Resources\Parties\PartyResource::getUrl('edit', ['record' => $record->party]) . '" class="text-sm font-medium text-primary-600 hover:underline dark:text-primary-400">Open Full Page &rarr;</a>' : '') . '
+                                            </div>'
+                                        ))
+                                        ->modalSubmitAction(false)
+                                        ->modalCancelActionLabel('Close')
+                                        ->infolist([
+                                            \Filament\Schemas\Components\Section::make('General Information')
+                                                ->schema([
+                                                    \Filament\Infolists\Components\TextEntry::make('party.party_type')
+                                                        ->label('Type')
+                                                        ->formatStateUsing(fn ($state) => ucfirst($state))
+                                                        ->badge(),
+                                                    \Filament\Infolists\Components\TextEntry::make('party.display_name')->label('Name'),
+                                                    \Filament\Infolists\Components\TextEntry::make('party.phone')->label('Phone')->default('-'),
+                                                    \Filament\Infolists\Components\TextEntry::make('party.email')->label('Email')->default('-'),
+                                                ])->columns(2),
+                                            
+                                            \Filament\Schemas\Components\Section::make('Individual Details')
+                                                ->schema([
+                                                    \Filament\Infolists\Components\TextEntry::make('party.individual.pan_number')->label('PAN Number')->default('-'),
+                                                    \Filament\Infolists\Components\TextEntry::make('party.individual.aadhaar_number')->label('Aadhar Number')->default('-'),
+                                                    \Filament\Infolists\Components\TextEntry::make('party.individual.address_line_1')->label('Address')->columnSpanFull()->default('-'),
+                                                ])->columns(2)
+                                                ->visible(fn (?Mou $record) => $record?->party?->party_type === 'individual'),
+                                                
+                                            \Filament\Schemas\Components\Section::make('Organization Details')
+                                                ->schema([
+                                                    \Filament\Infolists\Components\TextEntry::make('party.organization.pan')->label('PAN Number')->default('-'),
+                                                    \Filament\Infolists\Components\TextEntry::make('party.organization.gstin')->label('GSTIN')->default('-'),
+                                                    \Filament\Infolists\Components\TextEntry::make('party.organization.contact_person_name')->label('Contact Person')->default('-'),
+                                                    \Filament\Infolists\Components\TextEntry::make('party.organization.contact_person_phone')->label('Contact Phone')->default('-'),
+                                                    \Filament\Infolists\Components\TextEntry::make('party.organization.registered_address')->label('Address')->columnSpanFull()->default('-'),
+                                                ])->columns(2)
+                                                ->visible(fn (?Mou $record) => $record?->party?->party_type === 'organization'),
+                                        ])
+                                        ->visible(fn (?Mou $record) => $record?->party !== null)
+                                ),
                             Forms\Components\Placeholder::make('property')
                                 ->label('Associated Property')
                                 ->content(function (?Mou $record): ?\Illuminate\Support\HtmlString {
                                     if ($record?->property) {
-                                        $url = \App\Filament\Resources\Properties\PropertyResource::getUrl('edit', ['record' => $record->property]);
-                                        return new \Illuminate\Support\HtmlString("<a href=\"{$url}\" class=\"text-primary-600 underline\">{$record->property->code}</a>");
+                                        $code = $record->property->code ?? 'No_Property_Code_Assigned';
+                                        return new \Illuminate\Support\HtmlString("<span class=\"font-medium text-gray-900 dark:text-white\">{$code}</span>");
                                     }
-                                    return null;
+                                    return new \Illuminate\Support\HtmlString("<span class=\"text-gray-500\">No_Property_Code_Assigned</span>");
                                 })
-                                ->visible(fn (?Mou $record) => $record?->property !== null),
+                                ->hintAction(
+                                    \Filament\Actions\Action::make('viewProperty')
+                                        ->icon('heroicon-m-eye')
+                                        ->tooltip('View Property Details')
+                                        ->modalHeading(fn (?Mou $record) => new \Illuminate\Support\HtmlString(
+                                            '<div class="flex items-center gap-3">
+                                                <span>Property Details</span>
+                                                ' . ($record?->property ? '<a href="' . \App\Filament\Resources\Properties\PropertyResource::getUrl('edit', ['record' => $record->property]) . '" class="text-sm font-medium text-primary-600 hover:underline dark:text-primary-400">Open Full Page &rarr;</a>' : '') . '
+                                            </div>'
+                                        ))
+                                        ->modalSubmitAction(false)
+                                        ->modalCancelActionLabel('Close')
+                                        ->infolist([
+                                            \Filament\Schemas\Components\Section::make('General Information')
+                                                ->schema([
+                                                    \Filament\Infolists\Components\TextEntry::make('property.code')->label('Code')->default('-'),
+                                                    \Filament\Infolists\Components\TextEntry::make('property.status')->label('Status')->formatStateUsing(fn ($state) => ucfirst($state))->badge(),
+                                                    \Filament\Infolists\Components\TextEntry::make('property.building_name')->label('Building Name')->default('-'),
+                                                ])->columns(3),
+                                            \Filament\Schemas\Components\Section::make('Location Details')
+                                                ->schema([
+                                                    \Filament\Infolists\Components\TextEntry::make('property.address_line_1')->label('Address Line 1')->columnSpanFull()->default('-'),
+                                                    \Filament\Infolists\Components\TextEntry::make('property.locality.name')->label('Locality')->default('-'),
+                                                    \Filament\Infolists\Components\TextEntry::make('property.city')->label('City')->default('-'),
+                                                ])->columns(2),
+                                        ])
+                                        ->visible(fn (?Mou $record) => $record?->property !== null)
+                                ),
+                        ])->columns(2),
+
+                    \Filament\Schemas\Components\Section::make('Property & Commercial Details')
+                        ->description('These details are mapped to the MOU Document and can be modified here without affecting the original Opportunity.')
+                        ->schema([
+                            Forms\Components\Textarea::make('legal_terms.address')
+                                ->label('Property Address')
+                                ->required()
+                                ->columnSpanFull(),
+                            Forms\Components\TextInput::make('legal_terms.rent_amount')
+                                ->label('Rent Amount')
+                                ->numeric()
+                                ->required(),
+                            Forms\Components\Select::make('legal_terms.financial_model_id')
+                                ->label('Financial Model')
+                                ->options(fn () => \App\Domain\Opportunity\Models\FinancialModel::pluck('name', 'id'))
+                                ->required(),
                         ])->columns(2),
 
                     \Filament\Schemas\Components\Section::make('Legal Terms')
@@ -80,19 +227,20 @@ class MOUResource extends Resource
                                 ->label('Account Number'),
                             Forms\Components\TextInput::make('bank_details.ifsc_code')
                                 ->label('IFSC Code'),
-                            Forms\Components\Textarea::make('bank_details.branch_address')
+                            Forms\Components\Textarea::make('bank_details.bank_address')
                                 ->label('Address of the Bank')
                                 ->columnSpanFull(),
                         ])->columns(2),
                 ])->columnSpan(['lg' => 2]),
 
                 \Filament\Schemas\Components\Group::make()->schema([
-                    \Filament\Schemas\Components\Section::make('Status')
+                    \Filament\Schemas\Components\Section::make('Status & Documents')
                         ->schema([
                             Forms\Components\Placeholder::make('status')
                                 ->content(fn (?Mou $record): string => $record?->status?->getLabel() ?? 'Draft'),
-                            Forms\Components\Placeholder::make('version')
-                                ->content(fn (?Mou $record): string => (string) ($record?->version ?? 1)),
+                            Forms\Components\Placeholder::make('versions')
+                                ->label('Document History')
+                                ->content(fn (?Mou $record): \Illuminate\Contracts\View\View => view('mou.version-history', ['record' => $record])),
                         ]),
                 ])->columnSpan(['lg' => 1]),
             ])
@@ -126,7 +274,8 @@ class MOUResource extends Resource
             ])
             ->actions([
                 \Filament\Actions\ViewAction::make(),
-                \Filament\Actions\EditAction::make(),
+                \Filament\Actions\EditAction::make()
+                    ->visible(fn ($record) => static::canEdit($record)),
                 \Filament\Actions\ActionGroup::make([
                     \Filament\Actions\Action::make('resolveParty')
                         ->label('Resolve Party')
@@ -218,6 +367,12 @@ class MOUResource extends Resource
                                 ->label('Email Address')
                                 ->default(fn (Mou $record) => $record->opportunity->owner_email)
                                 ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new'),
+                            Forms\Components\Select::make('state_id')
+                                ->label('State (Accounting)')
+                                ->options(fn() => \Tek2991\Accounting\Models\State::pluck('name', 'id'))
+                                ->searchable()
+                                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new')
+                                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new'),
                             Forms\Components\Textarea::make('address')
                                 ->label(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('party_type') === 'organization' ? 'Registered Address' : 'Personal Address')
                                 ->default(fn (Mou $record) => $record->opportunity?->address)
@@ -227,6 +382,7 @@ class MOUResource extends Resource
                         ])
                         ->action(function (Mou $record, array $data) {
                             app(\App\Domain\Mou\Services\MouService::class)->resolveParty($record, $data);
+                            $record->refresh();
                             \Filament\Notifications\Notification::make()->title('Party Resolved')->success()->send();
                         }),
 
@@ -240,58 +396,39 @@ class MOUResource extends Resource
                             Forms\Components\TextInput::make('account_holder_name')->required(),
                             Forms\Components\TextInput::make('account_number')->required(),
                             Forms\Components\TextInput::make('ifsc_code')->required(),
-                            Forms\Components\Textarea::make('branch_address')->label('Address of the Bank')->required()->columnSpanFull(),
+                            Forms\Components\Textarea::make('bank_address')->label('Address of the Bank')->required()->columnSpanFull(),
                         ])
                         ->action(function (Mou $record, array $data) {
                             app(\App\Domain\Mou\Services\MouService::class)->provisionAccounting($record, $data);
+                            $record->refresh();
                             \Filament\Notifications\Notification::make()->title('Accounting Provisioned')->success()->send();
                         }),
 
                     \Filament\Actions\Action::make('generatePdf')
-                        ->label('Generate PDF')
+                        ->label(fn (Mou $record) => $record->hasMedia('draft_pdf') ? 'Regenerate PDF' : 'Generate PDF')
                         ->icon('heroicon-o-document-arrow-down')
                         ->color('warning')
-                        ->visible(fn (Mou $record) => in_array($record->status, [MouStatus::DRAFT, MouStatus::PARTY_PENDING]))
+                        ->visible(fn (Mou $record) => in_array($record->status, [
+                            MouStatus::DRAFT, 
+                            MouStatus::PARTY_PENDING, 
+                            MouStatus::READY_TO_GENERATE, 
+                            MouStatus::PDF_GENERATED, 
+                            MouStatus::DOWNLOADED,
+                            MouStatus::SIGNED_COPY_UPLOADED
+                        ]))
+                        ->requiresConfirmation(fn (Mou $record) => $record->hasMedia('draft_pdf'))
+                        ->modalHeading(fn (Mou $record) => $record->hasMedia('draft_pdf') ? 'Regenerate Draft PDF' : 'Generate Draft PDF')
+                        ->modalDescription(fn (Mou $record) => $record->hasMedia('signed_pdf') 
+                            ? 'Are you sure you want to regenerate the draft PDF? The currently uploaded signed PDF will be archived, and the MOU status will revert to "PDF Generated".' 
+                            : 'Are you sure you want to generate a new draft PDF? This will increment the document version.')
                         ->action(function (Mou $record) {
                             try {
                                 app(MouWorkflowService::class)->generatePdf($record);
+                                $record->refresh();
                                 \Filament\Notifications\Notification::make()->title('PDF Generated')->success()->send();
                             } catch (\Exception $e) {
                                 \Filament\Notifications\Notification::make()->title('Cannot Generate PDF')->body($e->getMessage())->danger()->send();
                             }
-                        }),
-                        
-                    \Filament\Actions\Action::make('viewDraftPdf')
-                        ->label('View Draft PDF')
-                        ->icon('heroicon-o-document-magnifying-glass')
-                        ->color('gray')
-                        ->visible(fn (Mou $record) => $record->hasMedia('draft_pdf') && !in_array($record->status, [MouStatus::VERIFIED, MouStatus::CONVERTED]))
-                        ->modalHeading('Draft MOU PDF')
-                        ->modalWidth('7xl')
-                        ->modalContent(fn (Mou $record) => view('components.pdf-viewer', [
-                            'record' => $record,
-                            'mediaCollection' => 'draft_pdf'
-                        ]))
-                        ->modalSubmitActionLabel('Download PDF')
-                        ->action(function (Mou $record) {
-                            app(MouWorkflowService::class)->markAsDownloaded($record);
-                            return response()->download($record->getFirstMedia('draft_pdf')->getPath(), $record->number . '-draft.pdf');
-                        }),
-                        
-                    \Filament\Actions\Action::make('viewSignedPdf')
-                        ->label('View Signed PDF')
-                        ->icon('heroicon-o-document-check')
-                        ->color('info')
-                        ->visible(fn (Mou $record) => $record->hasMedia('signed_pdf'))
-                        ->modalHeading('Signed MOU PDF')
-                        ->modalWidth('7xl')
-                        ->modalContent(fn (Mou $record) => view('components.pdf-viewer', [
-                            'record' => $record,
-                            'mediaCollection' => 'signed_pdf'
-                        ]))
-                        ->modalSubmitActionLabel('Download PDF')
-                        ->action(function (Mou $record) {
-                            return response()->download($record->getFirstMedia('signed_pdf')->getPath(), $record->number . '-signed.pdf');
                         }),
                         
                     \Filament\Actions\Action::make('uploadSignedCopy')
@@ -308,6 +445,7 @@ class MOUResource extends Resource
                         ])
                         ->action(function (Mou $record, array $data) {
                             app(MouWorkflowService::class)->uploadSignedCopy($record, $data['signed_pdf']);
+                            $record->refresh();
                             \Filament\Notifications\Notification::make()->title('Signed Copy Uploaded')->success()->send();
                         }),
                         
@@ -319,6 +457,7 @@ class MOUResource extends Resource
                         ->requiresConfirmation()
                         ->action(function (Mou $record) {
                             app(MouWorkflowService::class)->verify($record);
+                            $record->refresh();
                             \Filament\Notifications\Notification::make()->title('Agreement Verified')->success()->send();
                         }),
                         
@@ -331,8 +470,10 @@ class MOUResource extends Resource
                         ->action(function (Mou $record) {
                             $property = app(\App\Domain\Property\Services\PropertyOnboardingService::class)->createPropertyFromMou($record);
                             app(MouWorkflowService::class)->convert($record);
+                            
                             \Filament\Notifications\Notification::make()->title('Property Created')->success()->send();
-                            // In real scenario, redirect to Property Resource View
+                            
+                            return redirect(MOUResource::getUrl('view', ['record' => $record]));
                         }),
                 ])->label('Workflow Actions'),
             ])

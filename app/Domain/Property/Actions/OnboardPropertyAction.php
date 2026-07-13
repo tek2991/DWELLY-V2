@@ -3,15 +3,13 @@
 namespace App\Domain\Property\Actions;
 
 use App\Domain\Property\Models\Property;
-use App\Domain\Workflow\Services\WorkflowEngine;
-use App\Domain\Workflow\Models\WorkflowDefinition;
 use Illuminate\Support\Facades\DB;
 use App\Models\User;
 use App\Domain\Shared\Services\NumberingService;
 
 class OnboardPropertyAction
 {
-    public function __construct(private WorkflowEngine $workflowEngine) {}
+    public function __construct() {}
 
     public function execute(array $propertyData, User $initiator): Property
     {
@@ -36,13 +34,7 @@ class OnboardPropertyAction
             ]);
 
             // 5. Start the Workflow
-            $definition = WorkflowDefinition::where('entity_type', 'Property')
-                                            ->where('is_active', true)
-                                            ->first();
-                                            
-            if ($definition) {
-                $this->workflowEngine->start($definition, $property, 'draft');
-            }
+            // Legacy workflow engine removed
 
             return $property;
         });

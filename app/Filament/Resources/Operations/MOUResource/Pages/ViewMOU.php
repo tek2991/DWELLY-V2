@@ -17,52 +17,44 @@ class ViewMOU extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\EditAction::make(),
-            
-            Actions\Action::make('viewOpportunity')
-                ->label('View Opportunity')
-                ->icon('heroicon-o-eye')
-                ->color('gray')
-                ->modalHeading('Opportunity Details')
-                ->modalSubmitAction(false)
+            Actions\Action::make('viewHistoryPdf')
+                ->extraAttributes(['style' => 'display: none !important;']) // Hide from header visually, but keep mountable
+                ->modalHeading(fn (array $arguments) => $arguments['title'] ?? 'View Document')
+                ->modalWidth('7xl')
+                ->modalSubmitActionLabel('Download Document')
                 ->modalCancelActionLabel('Close')
-                ->infolist([
-                    \Filament\Schemas\Components\Section::make('General Information')
-                        ->schema([
-                            \Filament\Infolists\Components\TextEntry::make('opportunity.title')->label('Title'),
-                            \Filament\Infolists\Components\TextEntry::make('opportunity.status')->label('Status')->badge(),
-                            \Filament\Infolists\Components\TextEntry::make('opportunity.opportunitySource.name')->label('Source'),
-                            \Filament\Infolists\Components\TextEntry::make('opportunity.assignedUser.name')->label('Assigned To'),
-                        ])->columns(2),
-                        
-                    \Filament\Schemas\Components\Section::make('Owner Information')
-                        ->schema([
-                            \Filament\Infolists\Components\TextEntry::make('opportunity.owner_name')->label('Owner Name'),
-                            \Filament\Infolists\Components\TextEntry::make('opportunity.owner_phone')->label('Owner Phone'),
-                            \Filament\Infolists\Components\TextEntry::make('opportunity.owner_email')->label('Owner Email'),
-                            \Filament\Infolists\Components\TextEntry::make('opportunity.address')->label('Address')->columnSpanFull(),
-                        ])->columns(2),
-                        
-                    \Filament\Schemas\Components\Section::make('Property & Commercial Estimates')
-                        ->schema([
-                            \Filament\Infolists\Components\TextEntry::make('opportunity.estimatedPropertyType.name')->label('Property Type'),
-                            \Filament\Infolists\Components\TextEntry::make('opportunity.estimated_bhk')->label('BHK'),
-                            \Filament\Infolists\Components\TextEntry::make('opportunity.estimated_size')->label('Size (Sq.Ft)'),
-                            \Filament\Infolists\Components\IconEntry::make('opportunity.estimated_is_furnished')->label('Furnished')->boolean(),
-                            \Filament\Infolists\Components\TextEntry::make('opportunity.expected_rent')->label('Expected Rent')->money('INR'),
-                            \Filament\Infolists\Components\TextEntry::make('opportunity.expectedFinancialModel.name')->label('Financial Model'),
-                            \Filament\Infolists\Components\TextEntry::make('opportunity.expected_onboarding_date')->label('Expected Onboarding')->date(),
-                        ])->columns(3),
-                        
-                    \Filament\Schemas\Components\Section::make('Internal Summary')
-                        ->schema([
-                            \Filament\Infolists\Components\TextEntry::make('opportunity.internal_summary')
-                                ->label('')
-                                ->columnSpanFull()
-                                ->default('No summary provided.'),
-                        ]),
-                ]),
+                ->modalContent(function (array $arguments) {
+                    $mediaId = $arguments['mediaId'] ?? null;
+                    if (!$mediaId) return null;
+                    
+                    $media = \Spatie\MediaLibrary\MediaCollections\Models\Media::find($mediaId);
+                    if (!$media) return null;
+                    
+                    return view('components.pdf-viewer-raw', [
+                        'path' => $media->getPath()
+                    ]);
+                })
+                ->action(function (array $arguments, Mou $record) {
+                    $mediaId = $arguments['mediaId'] ?? null;
+                    if (!$mediaId) return;
+                    
+                    $media = \Spatie\MediaLibrary\MediaCollections\Models\Media::find($mediaId);
+                    if (!$media) return;
+                    
+                    if ($media->collection_name === 'draft_pdf' && $record->status === MouStatus::PDF_GENERATED) {
+                        app(MouWorkflowService::class)->markAsDownloaded($record);
+                        $record->refresh();
+                    }
+                    
+                    // Use a clean filename for the download
+                    $filename = $record->number . '-' . $media->file_name;
+                    return response()->download($media->getPath(), $filename);
+                }),
+                
+            Actions\EditAction::make()
+                ->visible(fn ($record) => MOUResource::canEdit($record)),
             
+
             Actions\Action::make('resolveParty')
                 ->label('Resolve Party')
                 ->icon('heroicon-o-users')
@@ -162,6 +154,7 @@ class ViewMOU extends ViewRecord
                 ])
                 ->action(function (Mou $record, array $data) {
                     app(\App\Domain\Mou\Services\MouService::class)->resolveParty($record, $data);
+                    $record->refresh();
                     \Filament\Notifications\Notification::make()->title('Party Resolved')->success()->send();
                 }),
 
@@ -179,54 +172,35 @@ class ViewMOU extends ViewRecord
                 ])
                 ->action(function (Mou $record, array $data) {
                     app(\App\Domain\Mou\Services\MouService::class)->provisionAccounting($record, $data);
+                    $record->refresh();
                     \Filament\Notifications\Notification::make()->title('Accounting Provisioned')->success()->send();
                 }),
 
             Actions\Action::make('generatePdf')
-                ->label('Generate PDF')
+                ->label(fn (Mou $record) => $record->hasMedia('draft_pdf') ? 'Regenerate PDF' : 'Generate PDF')
                 ->icon('heroicon-o-document-arrow-down')
                 ->color('warning')
-                ->visible(fn (Mou $record) => in_array($record->status, [MouStatus::DRAFT, MouStatus::PARTY_PENDING]))
+                ->visible(fn (Mou $record) => in_array($record->status, [
+                    MouStatus::DRAFT, 
+                    MouStatus::PARTY_PENDING, 
+                    MouStatus::READY_TO_GENERATE, 
+                    MouStatus::PDF_GENERATED, 
+                    MouStatus::DOWNLOADED,
+                    MouStatus::SIGNED_COPY_UPLOADED
+                ]))
+                ->requiresConfirmation(fn (Mou $record) => $record->hasMedia('draft_pdf'))
+                ->modalHeading(fn (Mou $record) => $record->hasMedia('draft_pdf') ? 'Regenerate Draft PDF' : 'Generate Draft PDF')
+                ->modalDescription(fn (Mou $record) => $record->hasMedia('signed_pdf') 
+                    ? 'Are you sure you want to regenerate the draft PDF? The currently uploaded signed PDF will be archived, and the MOU status will revert to "PDF Generated".' 
+                    : 'Are you sure you want to generate a new draft PDF? This will increment the document version.')
                 ->action(function (Mou $record) {
                     try {
                         app(MouWorkflowService::class)->generatePdf($record);
+                        $record->refresh();
                         \Filament\Notifications\Notification::make()->title('PDF Generated')->success()->send();
                     } catch (\Exception $e) {
                         \Filament\Notifications\Notification::make()->title('Cannot Generate PDF')->body($e->getMessage())->danger()->send();
                     }
-                }),
-                
-            Actions\Action::make('viewDraftPdf')
-                ->label('View Draft PDF')
-                ->icon('heroicon-o-document-magnifying-glass')
-                ->color('gray')
-                ->visible(fn (Mou $record) => $record->hasMedia('draft_pdf') && !in_array($record->status, [MouStatus::VERIFIED, MouStatus::CONVERTED]))
-                ->modalHeading('Draft MOU PDF')
-                ->modalWidth('7xl')
-                ->modalContent(fn (Mou $record) => view('components.pdf-viewer', [
-                    'record' => $record,
-                    'mediaCollection' => 'draft_pdf'
-                ]))
-                ->modalSubmitActionLabel('Download PDF')
-                ->action(function (Mou $record) {
-                    app(MouWorkflowService::class)->markAsDownloaded($record);
-                    return response()->download($record->getFirstMedia('draft_pdf')->getPath(), $record->number . '-draft.pdf');
-                }),
-                
-            Actions\Action::make('viewSignedPdf')
-                ->label('View Signed PDF')
-                ->icon('heroicon-o-document-check')
-                ->color('info')
-                ->visible(fn (Mou $record) => $record->hasMedia('signed_pdf'))
-                ->modalHeading('Signed MOU PDF')
-                ->modalWidth('7xl')
-                ->modalContent(fn (Mou $record) => view('components.pdf-viewer', [
-                    'record' => $record,
-                    'mediaCollection' => 'signed_pdf'
-                ]))
-                ->modalSubmitActionLabel('Download PDF')
-                ->action(function (Mou $record) {
-                    return response()->download($record->getFirstMedia('signed_pdf')->getPath(), $record->number . '-signed.pdf');
                 }),
                 
             Actions\Action::make('uploadSignedCopy')
@@ -243,6 +217,7 @@ class ViewMOU extends ViewRecord
                 ])
                 ->action(function (Mou $record, array $data) {
                     app(MouWorkflowService::class)->uploadSignedCopy($record, $data['signed_pdf']);
+                    $record->refresh();
                     \Filament\Notifications\Notification::make()->title('Signed Copy Uploaded')->success()->send();
                 }),
                 
@@ -254,6 +229,7 @@ class ViewMOU extends ViewRecord
                 ->requiresConfirmation()
                 ->action(function (Mou $record) {
                     app(MouWorkflowService::class)->verify($record);
+                    $record->refresh();
                     \Filament\Notifications\Notification::make()->title('Agreement Verified')->success()->send();
                 }),
                 
@@ -266,8 +242,10 @@ class ViewMOU extends ViewRecord
                 ->action(function (Mou $record) {
                     $property = app(\App\Domain\Property\Services\PropertyOnboardingService::class)->createPropertyFromMou($record);
                     app(MouWorkflowService::class)->convert($record);
+                    
                     \Filament\Notifications\Notification::make()->title('Property Created')->success()->send();
-                    // In real scenario, redirect to Property Resource View
+                    
+                    return redirect(MOUResource::getUrl('view', ['record' => $record]));
                 }),
         ];
     }

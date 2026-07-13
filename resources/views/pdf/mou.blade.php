@@ -73,6 +73,7 @@
     <div class="header">
         <h1>Dwelly</h1>
         <h3>Marketing & Operational Agency Services Agreement</h3>
+        <p style="font-size: 12px; color: #777;">Version: {{ $mou->version ?? 1 }}</p>
     </div>
 
     <div class="section-title">PARTIES TO AGREEMENT</div>
@@ -86,7 +87,7 @@
         @if($mou->party && $mou->party->party_type === 'individual')
         <strong>S/o or D/o:</strong> <span class="form-line" style="width: 100%;">{{ $mou->party->individual->parent_name ?? '_______________________' }}</span><br>
         @endif
-        <strong>Address:</strong> <span class="form-line" style="width: 100%;">{{ $mou->party->addresses->first()->address_line_1 ?? '_______________________' }}</span><br>
+        <strong>Address:</strong> <span class="form-line" style="width: 100%;">{{ $mou->party->addresses->where('is_primary', true)->first()?->address_line_1 ?? $mou->party->addresses->first()?->address_line_1 ?? '_______________________' }}</span><br>
         <strong>Aadhaar No.:</strong> <span class="form-line">{{ $mou->party->individual->aadhaar_number ?? '_______________________' }}</span>
         <strong>PAN No.:</strong> <span class="form-line">{{ $mou->party->individual->pan_number ?? $mou->party->organization->pan ?? '_______________________' }}</span><br>
         <strong>Phone:</strong> <span class="form-line">{{ $mou->party->phone ?? '_______________________' }}</span>
@@ -96,7 +97,7 @@
 
     <p>
         The <strong>Property Owner</strong> is the absolute owner in full possession of the constructed structure as described –<br>
-        <strong>Property Address:</strong> <span class="form-line" style="width: 100%;">{{ $mou->opportunity->address ?? '_______________________' }}</span><br>
+        <strong>Property Address:</strong> <span class="form-line" style="width: 100%;">{{ $mou->legal_terms['address'] ?? $mou->opportunity->address ?? '_______________________' }}</span><br>
         <strong>APDCL Consumer ID:</strong> <span class="form-line" style="width: 300px;">{{ $mou->legal_terms['apdcl_consumer_id'] ?? '_______________________' }}</span><br>
     </p>
 
@@ -188,7 +189,7 @@
     </div>
 
     <p>The Owner and the Service Provider each reserve the right to propose a change in the applicable <strong>Commercial model - A, B, or C</strong> - based on the nature and profile of the Tenant. However, any such change shall be mutually agreed upon and approved by both parties in writing prior to the execution of the relevant rental agreement or any modification thereof.<br>
-    <strong>The Financial Model chosen by the Owner is <span style="text-decoration: underline; font-weight: bold;">{{ $mou->opportunity->expectedFinancialModel->name ?? '________' }}</span>.</strong></p>
+    <strong>The Financial Model chosen by the Owner is <span style="text-decoration: underline; font-weight: bold;">{{ isset($mou->legal_terms['financial_model_id']) ? \App\Domain\Opportunity\Models\FinancialModel::find($mou->legal_terms['financial_model_id'])?->name : ($mou->opportunity->expectedFinancialModel->name ?? '________') }}</span>.</strong></p>
 
     <div class="section-title">TAXES & RECONCILIATION</div>
     <p>The <strong>Service Provider</strong> does not take responsibility for any default in payment of applicable taxes by the <strong>Property Owner</strong>.</p>

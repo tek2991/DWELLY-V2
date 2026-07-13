@@ -29,7 +29,12 @@ class PropertiesTable
                 //
             ])
             ->recordActions([
-                EditAction::make(),
+                \Filament\Actions\Action::make('onboarding')
+                    ->label('Onboarding')
+                    ->icon('heroicon-o-clipboard-document-check')
+                    ->color('warning')
+                    ->url(fn (\App\Domain\Property\Models\Property $record): string => \App\Filament\Resources\Properties\PropertyResource::getUrl('onboarding', ['record' => $record])),
+                \Filament\Actions\EditAction::make(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

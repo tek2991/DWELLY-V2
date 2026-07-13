@@ -49,10 +49,12 @@ class EditParty extends EditRecord
             ];
         }
 
+        $primary = $this->record->addresses()->where('is_primary', true)->first();
         $billing = $this->record->addresses()->where('type', 'billing')->first();
         $shipping = $this->record->addresses()->where('type', 'shipping')->first();
-        if ($billing || $shipping) {
+        if ($primary || $billing || $shipping) {
             $data['address_details'] = [
+                'primary_address' => $primary?->address_line_1,
                 'billing_address' => $billing?->address_line_1,
                 'shipping_address' => $shipping?->address_line_1,
             ];

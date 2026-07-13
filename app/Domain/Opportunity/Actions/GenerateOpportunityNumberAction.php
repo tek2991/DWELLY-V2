@@ -10,7 +10,8 @@ class GenerateOpportunityNumberAction
     {
         $year = now()->format('Y');
         
-        $lastOpportunity = Opportunity::where('number', 'like', "OPP-{$year}-%")
+        $lastOpportunity = Opportunity::withTrashed()
+            ->where('number', 'like', "OPP-{$year}-%")
             ->orderBy('number', 'desc')
             ->first();
 

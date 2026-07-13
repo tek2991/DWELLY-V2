@@ -23,6 +23,16 @@ class PhotosRelationManager extends RelationManager
     {
         return $schema
             ->components([
+                \Filament\Forms\Components\Select::make('property_room_id')
+                    ->label('Room (Optional)')
+                    ->relationship('room', 'id', modifyQueryUsing: function ($query, \Filament\Resources\RelationManagers\RelationManager $livewire) {
+                        return $query->where('property_id', $livewire->getOwnerRecord()->id);
+                    })
+                    ->getOptionLabelFromRecordUsing(fn ($record) => $record->custom_name ?: ($record->roomDefinition ? $record->roomDefinition->name : 'Room ' . $record->id))
+                    ->nullable()
+                    ->searchable()
+                    ->preload()
+                    ->columnSpanFull(),
                 Forms\Components\FileUpload::make('file_path')
                     ->label('Photo')
                     ->image()
@@ -45,6 +55,11 @@ class PhotosRelationManager extends RelationManager
         return $table
             ->recordTitleAttribute('title')
             ->columns([
+                Tables\Columns\TextColumn::make('room.custom_name')
+                    ->label('Room')
+                    ->getStateUsing(fn ($record) => $record->room ? ($record->room->custom_name ?: ($record->room->roomDefinition ? $record->room->roomDefinition->name : 'Room')) : 'General')
+                    ->searchable()
+                    ->sortable(),
                 Tables\Columns\ImageColumn::make('file_path')
                     ->label('Photo')
                     ->height(100)

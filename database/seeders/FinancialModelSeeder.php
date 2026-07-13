@@ -12,26 +12,24 @@ class FinancialModelSeeder extends Seeder
      */
     public function run(): void
     {
+        // Clear foreign keys first so we can replace them
+        \Illuminate\Support\Facades\DB::table('opportunities')->update(['expected_financial_model_id' => null]);
+        
+        // Clear old models since we are replacing them
+        FinancialModel::query()->delete();
+
         $models = [
             [
-                'code' => 'FIXED_RENT',
-                'name' => 'Fixed Rent Guarantee',
-                'description' => 'Dwelly pays a fixed monthly rent to the owner, regardless of occupancy. Dwelly retains all upside from renting out to tenants.',
+                'code' => 'RENT_SHARE',
+                'name' => 'Rent share',
+                'description' => 'Monthly % of rent',
+                'fee_collection' => 'Auto-deducted from monthly owner payout',
             ],
             [
-                'code' => 'REVENUE_SHARE',
-                'name' => 'Revenue Share',
-                'description' => 'Dwelly and the property owner share the actual rental income generated from the tenants based on an agreed percentage split.',
-            ],
-            [
-                'code' => 'PROPERTY_MANAGEMENT',
-                'name' => 'Property Management (Fee-Based)',
-                'description' => 'The owner receives full rent from tenants and pays Dwelly a flat fee or percentage for management services.',
-            ],
-            [
-                'code' => 'HYBRID',
-                'name' => 'Hybrid Model',
-                'description' => 'A mix of fixed rent and revenue share (e.g., minimum guaranteed rent plus a share of revenue above a certain threshold).',
+                'code' => 'ANNUAL_SUBSCRIPTION',
+                'name' => 'Annual subscription',
+                'description' => "One month's rent",
+                'fee_collection' => 'Charged at agreement signing or renewal',
             ],
         ];
 
@@ -41,6 +39,7 @@ class FinancialModelSeeder extends Seeder
                 [
                     'name' => $modelData['name'],
                     'description' => $modelData['description'],
+                    'fee_collection' => $modelData['fee_collection'],
                     'is_active' => true,
                 ]
             );

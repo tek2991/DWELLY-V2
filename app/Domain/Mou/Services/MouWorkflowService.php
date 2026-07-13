@@ -19,13 +19,29 @@ class MouWorkflowService
             throw new \Exception("Cannot generate PDF: " . implode(' ', $readiness['errors']));
         }
 
+        // Increment version if a PDF is being regenerated
+        if ($mou->hasMedia('draft_pdf')) {
+            $mou->increment('version');
+            $mou->refresh();
+        }
+
+        // Archive existing signed PDF if present
+        if ($mou->hasMedia('signed_pdf')) {
+            $signedMedia = $mou->getMedia('signed_pdf');
+            foreach ($signedMedia as $media) {
+                $media->update(['collection_name' => 'archived_signed_pdf']);
+            }
+        }
+
         // Render the real PDF using DomPDF
         $pdf = Pdf::loadView('pdf.mou', ['mou' => $mou]);
         
-        $tempPath = sys_get_temp_dir() . '/' . $mou->number . '-draft.pdf';
+        $tempPath = sys_get_temp_dir() . '/' . $mou->number . '-draft-v' . $mou->version . '.pdf';
         $pdf->save($tempPath);
 
-        $mou->addMedia($tempPath)->toMediaCollection('draft_pdf');
+        $mou->addMedia($tempPath)
+            ->withCustomProperties(['version' => $mou->version])
+            ->toMediaCollection('draft_pdf');
 
         $mou->update([
             'status' => MouStatus::PDF_GENERATED,
