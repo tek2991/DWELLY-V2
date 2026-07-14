@@ -8,19 +8,34 @@ use App\Domain\Property\Services\PropertyOnboardingValidator;
 use App\Filament\Resources\Properties\PropertyResource;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
-use Filament\Resources\Pages\ViewRecord;
+use Filament\Resources\Pages\EditRecord;
 
-class OnboardingDashboard extends ViewRecord
+class OnboardingDashboard extends EditRecord
 {
     protected static string $resource = PropertyResource::class;
 
     protected static ?string $title = 'Onboarding Dashboard';
 
-    public function infolist(\Filament\Schemas\Schema $schema): \Filament\Schemas\Schema
+    protected function getHeaderWidgets(): array
     {
-        return $schema->components([
-            \Filament\Schemas\Components\View::make('filament.resources.properties.pages.onboarding-dashboard'),
-        ]);
+        return [
+            \App\Filament\Resources\Properties\Widgets\OnboardingProgressWidget::class,
+        ];
+    }
+
+    public function hasCombinedRelationManagerTabsWithContent(): bool
+    {
+        return true;
+    }
+
+    public function getContentTabLabel(): ?string
+    {
+        return 'Basic Details';
+    }
+
+    public function getContentTabIcon(): ?string
+    {
+        return 'heroicon-o-information-circle';
     }
 
     public function mount(int | string $record): void

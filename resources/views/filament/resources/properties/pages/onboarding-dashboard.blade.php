@@ -1,6 +1,6 @@
 @php
     // Get the record from the View component or Widget
-    $record = $this->getRecord ?? $this->record ?? $getRecord(); 
+    $record = $this->record ?? (method_exists($this, 'getRecord') ? $this->getRecord() : null); 
     $validationData = app(\App\Domain\Property\Services\PropertyOnboardingValidator::class)->validate($record);
     $progress = $validationData['progress'];
     $steps = $validationData['steps'];
