@@ -17,7 +17,7 @@ class UtilityTypeResource extends Resource
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-bolt';
 
-    protected static \UnitEnum|string|null $navigationGroup = 'Reference Data';
+    protected static ?string $cluster = \App\Filament\Clusters\ReferenceData\ReferenceDataCluster::class;
 
     public static function form(Schema $form): Schema
     {

@@ -33,6 +33,7 @@ class PropertiesTable
                     ->label('Onboarding')
                     ->icon('heroicon-o-clipboard-document-check')
                     ->color('warning')
+                    ->hidden(fn (\App\Domain\Property\Models\Property $record): bool => $record->onboardingProject?->status === 'Activated')
                     ->url(fn (\App\Domain\Property\Models\Property $record): string => \App\Filament\Resources\Properties\PropertyResource::getUrl('onboarding', ['record' => $record])),
                 \Filament\Actions\EditAction::make(),
             ])

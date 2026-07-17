@@ -26,7 +26,7 @@ class PropertyOnboardingValidator
 
         return [
             'progress' => $progress,
-            'is_ready' => $progress === 100,
+            'is_ready' => $progress == 100,
             'steps' => $steps,
         ];
     }
@@ -37,13 +37,15 @@ class PropertyOnboardingValidator
                    !empty($property->latitude) &&
                    !empty($property->longitude) &&
                    !empty($property->property_type_id) &&
-                   !empty($property->carpet_area) &&
-                   !empty($property->furnishing_type_id);
+                   !empty($property->floor_space_sqft) &&
+                   !empty($property->furnishing_type_id) &&
+                   !empty($property->bhk_type_id) &&
+                   !empty($property->locality_id);
 
         return [
             'name' => 'Property Information',
             'is_valid' => $isValid,
-            'missing' => $isValid ? [] : ['Ensure Address, Coordinates, Property Type, Area, and Furnishing are set.'],
+            'missing' => $isValid ? [] : ['Ensure Address, Coordinates, Property Type, BHK, Floor Space, Locality, and Furnishing are set.'],
             'tab' => 'main',
         ];
     }

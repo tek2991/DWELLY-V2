@@ -30,7 +30,7 @@ class OnboardingDashboard extends EditRecord
 
     public function getContentTabLabel(): ?string
     {
-        return 'Basic Details';
+        return 'Property Overview';
     }
 
     public function getContentTabIcon(): ?string
@@ -49,6 +49,16 @@ class OnboardingDashboard extends EditRecord
                 'status' => 'Draft',
             ]);
             $this->record->load('onboardingProject');
+        }
+
+        if ($this->record->onboardingProject->status === 'Activated') {
+            Notification::make()
+                ->warning()
+                ->title('Property already activated')
+                ->body('This property has already completed onboarding.')
+                ->send();
+                
+            $this->redirect($this->getResource()::getUrl('edit', ['record' => $this->record]));
         }
     }
 

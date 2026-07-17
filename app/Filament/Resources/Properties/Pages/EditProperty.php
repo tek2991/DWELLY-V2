@@ -17,7 +17,12 @@ class EditProperty extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-
+            Action::make('onboarding')
+                ->label('Onboarding')
+                ->icon('heroicon-o-clipboard-document-check')
+                ->color('warning')
+                ->hidden(fn (\App\Domain\Property\Models\Property $record): bool => $record->onboardingProject?->status === 'Activated')
+                ->url(fn (\App\Domain\Property\Models\Property $record): string => \App\Filament\Resources\Properties\PropertyResource::getUrl('onboarding', ['record' => $record])),
             DeleteAction::make(),
         ];
     }
@@ -29,7 +34,7 @@ class EditProperty extends EditRecord
 
     public function getContentTabLabel(): ?string
     {
-        return 'Basic Details';
+        return 'Property Overview';
     }
 
     public function getContentTabIcon(): ?string
@@ -40,5 +45,32 @@ class EditProperty extends EditRecord
     protected function getRedirectUrl(): string
     {
         return $this->getResource()::getUrl('index');
+    }
+
+    public function getSubheading(): ?\Illuminate\Contracts\Support\Htmlable
+    {
+        $status = $this->record->status ?? 'Draft';
+        $color = match($status) {
+            'Vacant' => 'success',
+            'Occupied' => 'primary',
+            'Maintenance' => 'warning',
+            default => 'gray',
+        };
+
+        return new \Illuminate\Support\HtmlString(
+            \Illuminate\Support\Facades\Blade::render(
+                "<div class='flex items-center gap-2 text-sm text-gray-500'>
+                    <span>Status:</span>
+                    <x-filament::badge color=\"{$color}\">{$status}</x-filament::badge>
+                </div>"
+            )
+        );
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [
+            \App\Filament\Resources\Properties\Widgets\PropertyAuditWidget::class,
+        ];
     }
 }

@@ -15,7 +15,7 @@ class RoomTypeResource extends Resource
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-squares-2x2';
     
-    protected static \UnitEnum|string|null $navigationGroup = 'Reference Data';
+    protected static ?string $cluster = \App\Filament\Clusters\ReferenceData\ReferenceDataCluster::class;
     
     protected static ?int $navigationSort = 15;
 

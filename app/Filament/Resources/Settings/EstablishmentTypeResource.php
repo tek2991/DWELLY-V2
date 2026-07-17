@@ -19,7 +19,7 @@ class EstablishmentTypeResource extends Resource
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-building-office';
     
-    protected static \UnitEnum|string|null $navigationGroup = 'Reference Data';
+    protected static ?string $cluster = \App\Filament\Clusters\ReferenceData\ReferenceDataCluster::class;
     
     protected static ?int $navigationSort = 17;
 

@@ -5,10 +5,21 @@ namespace App\Domain\Property\Models;
 use App\Domain\Shared\Models\DomainModel;
 use App\Domain\Geographic\Models\Locality;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Spatie\Activitylog\Traits\LogsActivity;
+use Spatie\Activitylog\LogOptions;
 
 class Property extends DomainModel
 {
+    use LogsActivity;
+
     protected $table = 'properties';
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logAll()
+            ->logOnlyDirty();
+    }
 
     public function locality(): BelongsTo
     {
@@ -75,5 +86,10 @@ class Property extends DomainModel
     public function onboardingProject(): \Illuminate\Database\Eloquent\Relations\HasOne
     {
         return $this->hasOne(OnboardingProject::class, 'property_id');
+    }
+
+    public function audits(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(\App\Domain\Audit\Models\Audit::class);
     }
 }

@@ -15,7 +15,7 @@ class RoleResource extends Resource
     protected static ?string $model = Role::class;
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-shield-check';
-    protected static \UnitEnum|string|null $navigationGroup = 'Administration';
+    protected static ?string $cluster = \App\Filament\Clusters\AdministrationCluster::class;
     protected static ?int $navigationSort = 1;
 
     public static function form(Schema $schema): Schema

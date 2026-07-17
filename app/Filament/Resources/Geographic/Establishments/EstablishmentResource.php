@@ -25,7 +25,7 @@ class EstablishmentResource extends Resource
 
     protected static string|\BackedEnum|null $navigationIcon = Heroicon::OutlinedBuildingOffice2;
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Geographic';
+    protected static ?string $cluster = \App\Filament\Clusters\GeographicCluster::class;
 
     public static function form(Schema $schema): Schema
     {

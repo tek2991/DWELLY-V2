@@ -14,6 +14,7 @@
         "vite": "^8.0.0"
     },
     "dependencies": {
+        "fabric": "^7.4.0",
         "puppeteer": "^25.3.0"
     }
 }

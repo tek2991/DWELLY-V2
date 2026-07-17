@@ -33,6 +33,9 @@ class PricingVersionsRelationManager extends RelationManager
                 \Filament\Forms\Components\TextInput::make('security_deposit')
                     ->numeric()
                     ->prefix('₹'),
+                \Filament\Forms\Components\TextInput::make('society_fee')
+                    ->numeric()
+                    ->prefix('₹'),
                 \Filament\Forms\Components\Select::make('pricing_model')
                     ->options(fn() => \App\Domain\Opportunity\Models\FinancialModel::pluck('name', 'name'))
                     ->searchable(),
@@ -62,6 +65,9 @@ class PricingVersionsRelationManager extends RelationManager
                     ->money('INR')
                     ->sortable(),
                 TextColumn::make('security_deposit')
+                    ->money('INR')
+                    ->sortable(),
+                TextColumn::make('society_fee')
                     ->money('INR')
                     ->sortable(),
                 TextColumn::make('pricing_model')

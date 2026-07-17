@@ -32,6 +32,13 @@ class OperationsPanelProvider extends PanelProvider
                 'primary' => Color::Blue,
             ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
+            ->discoverClusters(in: app_path('Filament/Clusters'), for: 'App\Filament\Clusters')
+            ->navigationGroups([
+                'Portfolio & Operations',
+                'Sales & CRM',
+                'Leasing & Finance',
+                'Settings',
+            ])
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
             ->pages([
                 Dashboard::class,
@@ -58,6 +65,10 @@ class OperationsPanelProvider extends PanelProvider
             ->renderHook(
                 \Filament\View\PanelsRenderHook::USER_MENU_BEFORE,
                 fn (): string => \Illuminate\Support\Facades\Blade::render('@livewire(\'branch-selector\')')
+            )
+            ->renderHook(
+                \Filament\View\PanelsRenderHook::BODY_END,
+                fn (): string => \Illuminate\Support\Facades\Blade::render('@vite(\'resources/js/annotation-editor.js\')')
             );
     }
 }
