@@ -41,7 +41,7 @@ class EvidenceAnnotationEditor extends Component
     public function saveAnnotation(array $fabricJson, EvidenceService $service)
     {
         $service->saveAnnotation($this->evidence, $fabricJson);
-        $this->dispatch('annotation-saved')->to(\App\Livewire\Operations\AuditInspectionComponent::class);
+        $this->dispatch('annotation-saved');
     }
 
     public function closeEditor()

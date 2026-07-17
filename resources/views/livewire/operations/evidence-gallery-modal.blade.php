@@ -77,13 +77,7 @@
                             >
                                 Annotate
                             </button>
-                            <button
-                                type="button"
-                                wire:click="openAnnotoriousEditor('{{ $evidence->id }}')"
-                                style="flex: 1; padding: 0.4rem 0.5rem; font-size: 0.75rem; font-weight: 600; color: rgba(17, 24, 39, 1); background-color: white; border: 1px solid rgba(209, 213, 219, 1); border-radius: 0.4rem; cursor: pointer; min-width: max-content;"
-                            >
-                                Evidence A
-                            </button>
+
                             <button
                                 type="button"
                                 wire:click="deleteEvidence('{{ $evidence->id }}')"

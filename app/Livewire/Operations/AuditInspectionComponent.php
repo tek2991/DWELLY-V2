@@ -96,7 +96,6 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
     }
 
     public ?string $editingEvidenceId = null;
-    public ?string $editingAnnotoriousEvidenceId = null;
     public ?string $currentItemId = null;
     public $uploads = [];
 
@@ -131,14 +130,6 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
         $this->unmountAction(false);
     }
 
-    public function openAnnotoriousEditor(string $evidenceId)
-    {
-        Log::info('openAnnotoriousEditor called: ' . $evidenceId);
-        $this->editingAnnotoriousEvidenceId = $evidenceId;
-        
-        $this->unmountAction(false);
-    }
-
     public function deleteEvidence(string $evidenceId)
     {
         $evidence = \App\Domain\Audit\Models\AuditEvidence::find($evidenceId);
@@ -152,7 +143,6 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
     public function closeEditor()
     {
         $this->editingEvidenceId = null;
-        $this->editingAnnotoriousEvidenceId = null;
     }
 
     public function render()

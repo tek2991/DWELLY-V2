@@ -111,7 +111,7 @@
     <x-filament-actions::modals />
 
     @if($editingEvidenceId)
-        <div @annotation-saved.window="$wire.closeEditor()">
+        <div wire:key="editor-wrapper-{{ $editingEvidenceId }}" @annotation-saved.window="$wire.closeEditor()">
             <livewire:operations.evidence-annotation-editor
                 :evidence="\App\Domain\Audit\Models\AuditEvidence::find($editingEvidenceId)"
                 :key="'editor-'.$editingEvidenceId"
@@ -119,12 +119,4 @@
         </div>
     @endif
 
-    @if($editingAnnotoriousEvidenceId)
-        <div @annotation-saved.window="$wire.closeEditor()">
-            <livewire:operations.annotorious-editor
-                :evidence="\App\Domain\Audit\Models\AuditEvidence::find($editingAnnotoriousEvidenceId)"
-                :key="'annotorious-editor-'.$editingAnnotoriousEvidenceId"
-            />
-        </div>
-    @endif
 </div>

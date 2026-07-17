@@ -5,7 +5,7 @@ import * as fabric from 'fabric';
 fabric.FabricObject.customProperties = ['id', 'remark', 'customType'];
 
 export class AnnotationEditor {
-    constructor(canvasElement, imageUrl, initialJson = null, onUpdate = null) {
+    constructor(canvasElement, imageUrl, initialJson = null, onUpdate = null, onSelection = null) {
         this.canvas = new fabric.Canvas(canvasElement, {
             isDrawingMode: false,
             preserveObjectStacking: true,
@@ -13,11 +13,13 @@ export class AnnotationEditor {
         
         this.imageUrl = imageUrl;
         this.onUpdate = onUpdate;
+        this.onSelection = onSelection;
         this._backgroundImg = null; // cached FabricImage for background
         
         this.history = [];
         this.historyIndex = -1;
         this.isHistoryAction = false;
+        this.numberCounter = 1;
         
         this.setupEvents();
         this.init(initialJson);
@@ -167,8 +169,38 @@ export class AnnotationEditor {
     }
 
     notifySelection(object) {
+        if (this.onSelection) {
+            let color = '#ff0000';
+            let width = 3;
+            let hasBg = false;
+            let bgColor = '#ffffff';
+            if (object) {
+                // If it's a text object or freehand (which uses stroke), extract properly
+                color = (object.fill && object.fill !== 'transparent') ? object.fill : (object.stroke || '#ff0000');
+                width = object.strokeWidth || 3;
+                if (object.backgroundColor) {
+                    hasBg = true;
+                    bgColor = object.backgroundColor;
+                }
+            }
+            this.onSelection(object ? object.id : null, color, width, hasBg, bgColor);
+        }
         if (this.onUpdate) {
             this.onUpdate(this.getLayers(), object ? object.id : null);
+        }
+    }
+    
+    updateStyle(color, width, bgColor) {
+        const activeObj = this.canvas.getActiveObject();
+        if (activeObj) {
+            if (activeObj.type === 'IText') {
+                activeObj.set({ fill: color, backgroundColor: bgColor || '' });
+            } else {
+                // For shapes like rect/circle, apply fill if bgColor exists, else transparent
+                activeObj.set({ stroke: color, strokeWidth: parseInt(width), fill: bgColor || 'transparent' });
+            }
+            this.canvas.requestRenderAll();
+            this.saveHistory();
         }
     }
 
@@ -230,16 +262,16 @@ export class AnnotationEditor {
         return Math.random().toString(36).substring(2, 9);
     }
 
-    async addShape(type) {
+    async addShape(type, color = '#ff0000', width = 3, bgColor = null) {
         this.canvas.isDrawingMode = false;
         
         const commonOpts = {
             id: this.generateId(),
             left: 100,
             top: 100,
-            stroke: 'red',
-            strokeWidth: 3,
-            fill: 'transparent',
+            stroke: color,
+            strokeWidth: parseInt(width),
+            fill: type === 'text' || type === 'number' || type === 'line' || type === 'arrow' ? '' : (bgColor || 'transparent'),
             remark: '',
             customType: type,
             strokeUniform: true,
@@ -251,12 +283,17 @@ export class AnnotationEditor {
             jsonObj = { type: 'Rect', ...commonOpts, width: 100, height: 100 };
         } else if (type === 'circle') {
             jsonObj = { type: 'Circle', ...commonOpts, radius: 50 };
-        } else if (type === 'arrow' || type === 'line') {
+        } else if (type === 'line') {
             jsonObj = { type: 'Line', ...commonOpts, x1: 100, y1: 100, x2: 200, y2: 200 };
+        } else if (type === 'arrow') {
+            // Diagonal arrow pointing bottom-right
+            jsonObj = { type: 'Path', ...commonOpts, path: 'M 0 0 L 100 100 L 80 100 M 100 100 L 100 80', fill: '' };
         } else if (type === 'text') {
-            jsonObj = { type: 'IText', ...commonOpts, text: 'Text', fontSize: 24, fill: 'red' };
+            jsonObj = { type: 'IText', ...commonOpts, text: 'Text', fontSize: 24, fill: color, stroke: null, strokeWidth: 0, backgroundColor: bgColor || '' };
         } else if (type === 'number') {
-            jsonObj = { type: 'IText', ...commonOpts, text: '①', fontSize: 32, fill: 'red' };
+            let numText = this.numberCounter <= 20 ? String.fromCharCode(9311 + this.numberCounter) : this.numberCounter.toString();
+            jsonObj = { type: 'IText', ...commonOpts, text: numText, fontSize: 32, fill: color, stroke: null, strokeWidth: 0, backgroundColor: bgColor || '' };
+            this.numberCounter++;
         }
 
         if (jsonObj) {
@@ -265,11 +302,17 @@ export class AnnotationEditor {
                 if (classObj) {
                     // In Fabric 7, fromObject might behave unpredictably with identity.
                     // Since these are new shapes, we can just instantiate them directly!
+                    const objType = jsonObj.type;
+                    delete jsonObj.type; // Avoid setter error
+
                     let obj;
-                    if (jsonObj.type === 'Line') {
+                    if (objType === 'Line') {
                         // Line constructor: new fabric.Line([x1, y1, x2, y2], options)
                         obj = new classObj([jsonObj.x1, jsonObj.y1, jsonObj.x2, jsonObj.y2], jsonObj);
-                    } else if (jsonObj.type === 'IText') {
+                    } else if (objType === 'Path') {
+                        // Path constructor: new fabric.Path(pathString, options)
+                        obj = new classObj(jsonObj.path, jsonObj);
+                    } else if (objType === 'IText') {
                         // IText constructor: new fabric.IText(text, options)
                         obj = new classObj(jsonObj.text, jsonObj);
                     } else {
@@ -287,10 +330,13 @@ export class AnnotationEditor {
         }
     }
 
-    enableDrawing(color = 'red', width = 3) {
+    enableDrawing(color = '#ff0000', width = 3) {
         this.canvas.isDrawingMode = true;
+        if (!this.canvas.freeDrawingBrush) {
+            this.canvas.freeDrawingBrush = new fabric.PencilBrush(this.canvas);
+        }
         this.canvas.freeDrawingBrush.color = color;
-        this.canvas.freeDrawingBrush.width = width;
+        this.canvas.freeDrawingBrush.width = parseInt(width);
         
         this.canvas.on('path:created', (e) => {
             e.path.set({
