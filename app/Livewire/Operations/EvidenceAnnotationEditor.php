@@ -16,7 +16,25 @@ class EvidenceAnnotationEditor extends Component
     {
         $this->evidence = $evidence;
         $media = $evidence->getFirstMedia('images');
-        $this->imageUrl = $media ? $media->getUrl() : '';
+        
+        if ($media) {
+            $url = $media->getUrl();
+            $appUrl = rtrim(config('app.url'), '/');
+            
+            // Convert to relative URL if it's served from the app's domain
+            // This prevents port mismatch issues in local development (e.g. localhost vs localhost:8000)
+            if (str_starts_with($url, $appUrl)) {
+                $url = substr($url, strlen($appUrl));
+                if (!str_starts_with($url, '/')) {
+                    $url = '/' . $url;
+                }
+            }
+            
+            $this->imageUrl = $url;
+        } else {
+            $this->imageUrl = '';
+        }
+        
         $this->annotationJson = $evidence->annotation_json;
     }
 

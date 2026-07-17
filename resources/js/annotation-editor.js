@@ -25,15 +25,21 @@ export class AnnotationEditor {
             const img = await fabric.Image.fromURL(this.imageUrl);
             console.log('[AnnotationEditor] Image loaded successfully', img.width, 'x', img.height);
             
-            let maxWidth = this.canvas.getElement().parentNode.clientWidth;
-            console.log('[AnnotationEditor] Parent clientWidth is:', maxWidth);
+            const container = this.canvas.getElement().parentNode.parentNode;
+            let availableWidth = container.clientWidth - 64; // accounting for 2rem padding on each side
+            let availableHeight = container.clientHeight - 64;
             
-            if (maxWidth === 0) {
-                maxWidth = window.innerWidth * 0.7; // Fallback
-                console.log('[AnnotationEditor] Using fallback maxWidth:', maxWidth);
+            if (availableWidth <= 0 || availableHeight <= 0) {
+                availableWidth = window.innerWidth * 0.7;
+                availableHeight = window.innerHeight * 0.7;
+                console.log('[AnnotationEditor] Using fallback dimensions');
             }
             
-            const scale = Math.min(1, maxWidth / img.width);
+            // Scale to fit the container perfectly (both width and height)
+            let scale = Math.min(availableWidth / img.width, availableHeight / img.height);
+            // Don't scale up beyond 5x to prevent extreme pixelation
+            scale = Math.min(scale, 5);
+            
             console.log('[AnnotationEditor] Calculated scale:', scale);
             
             this.canvas.setDimensions({ width: img.width * scale, height: img.height * scale });
@@ -76,6 +82,45 @@ export class AnnotationEditor {
         this.canvas.on('selection:created', (e) => this.notifySelection(e.selected[0]));
         this.canvas.on('selection:updated', (e) => this.notifySelection(e.selected[0]));
         this.canvas.on('selection:cleared', () => this.notifySelection(null));
+
+        // Add mouse wheel zooming
+        this.canvas.on('mouse:wheel', (opt) => {
+            const delta = opt.e.deltaY;
+            let zoom = this.canvas.getZoom();
+            zoom *= 0.999 ** delta;
+            if (zoom > 10) zoom = 10;
+            if (zoom < 0.5) zoom = 0.5;
+            this.canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom);
+            opt.e.preventDefault();
+            opt.e.stopPropagation();
+        });
+        
+        // Add alt+drag panning
+        this.canvas.on('mouse:down', (opt) => {
+            const evt = opt.e;
+            if (evt.altKey === true) {
+                this.isDragging = true;
+                this.canvas.selection = false;
+                this.lastPosX = evt.clientX;
+                this.lastPosY = evt.clientY;
+            }
+        });
+        this.canvas.on('mouse:move', (opt) => {
+            if (this.isDragging) {
+                const e = opt.e;
+                const vpt = this.canvas.viewportTransform;
+                vpt[4] += e.clientX - this.lastPosX;
+                vpt[5] += e.clientY - this.lastPosY;
+                this.canvas.requestRenderAll();
+                this.lastPosX = e.clientX;
+                this.lastPosY = e.clientY;
+            }
+        });
+        this.canvas.on('mouse:up', () => {
+            this.canvas.setViewportTransform(this.canvas.viewportTransform);
+            this.isDragging = false;
+            this.canvas.selection = true;
+        });
     }
 
     handleCanvasChange() {
@@ -140,7 +185,14 @@ export class AnnotationEditor {
             strokeWidth: 3,
             fill: 'transparent',
             remark: '',
-            customType: type
+            customType: type,
+            strokeUniform: true,
+            cornerStyle: 'circle',
+            cornerColor: 'white',
+            cornerStrokeColor: 'red',
+            borderColor: 'red',
+            transparentCorners: false,
+            padding: 5
         };
 
         if (type === 'rectangle') {

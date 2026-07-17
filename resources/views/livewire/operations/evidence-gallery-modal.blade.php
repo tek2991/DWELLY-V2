@@ -25,7 +25,18 @@
             @foreach($evidenceList as $evidence)
                 @php
                     $media = $evidence->getFirstMedia('images');
-                    $imageUrl = $media ? $media->getUrl() : '';
+                    $imageUrl = '';
+                    if ($media) {
+                        $url = $media->getUrl();
+                        $appUrl = rtrim(config('app.url'), '/');
+                        if (str_starts_with($url, $appUrl)) {
+                            $url = substr($url, strlen($appUrl));
+                            if (!str_starts_with($url, '/')) {
+                                $url = '/' . $url;
+                            }
+                        }
+                        $imageUrl = $url;
+                    }
                     $annotationCount = is_array($evidence->annotation_json) && isset($evidence->annotation_json['canvas']['objects'])
                         ? count($evidence->annotation_json['canvas']['objects'])
                         : 0;
