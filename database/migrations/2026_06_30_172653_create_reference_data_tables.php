@@ -20,7 +20,6 @@ return new class extends Migration
         'establishment_types',
         'vendor_trades',
         'maintenance_categories',
-        'utility_types',
         'task_types',
         'task_priorities',
         'payment_modes',

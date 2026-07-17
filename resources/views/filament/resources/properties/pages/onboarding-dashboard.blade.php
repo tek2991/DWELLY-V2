@@ -6,43 +6,71 @@
     $steps = $validationData['steps'];
 @endphp
 
-<div class="mb-8 p-6 bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800">
-    <div class="flex justify-between items-center mb-4">
-        <h2 class="text-xl font-bold text-gray-900 dark:text-white">Onboarding Progress</h2>
-        <span class="text-2xl font-black {{ $progress === 100 ? 'text-green-600' : 'text-primary-600' }}">
-            {{ $progress }}%
-        </span>
-    </div>
-    
-    <!-- Progress Bar -->
-    <div class="w-full bg-gray-200 dark:bg-gray-800 rounded-full h-4 mb-6 overflow-hidden">
-        <div class="h-4 rounded-full transition-all duration-500 ease-out {{ $progress === 100 ? 'bg-green-500' : 'bg-primary-500' }}" style="width: {{ $progress }}%"></div>
-    </div>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        @foreach($steps as $key => $step)
-            <div class="p-4 rounded-lg border {{ $step['is_valid'] ? 'border-green-200 bg-green-50 dark:border-green-900/50 dark:bg-green-900/20' : 'border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-900/20' }}">
-                <div class="flex items-center gap-2.5">
-                    @if($step['is_valid'])
-                        <x-heroicon-s-check-circle class="w-5 h-5 shrink-0 text-green-600 dark:text-green-400" style="width: 1.25rem; height: 1.25rem;" />
-                    @else
-                        <x-heroicon-s-x-circle class="w-5 h-5 shrink-0 text-red-600 dark:text-red-400" style="width: 1.25rem; height: 1.25rem;" />
-                    @endif
-                    <h3 class="text-base font-semibold {{ $step['is_valid'] ? 'text-green-900 dark:text-green-300' : 'text-red-900 dark:text-red-300' }}">
-                        {{ $step['name'] }}
-                    </h3>
+<x-filament-widgets::widget wire:poll.2s>
+    <x-filament::section>
+        <x-slot name="heading">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <span>Onboarding Progress</span>
+                    <span style="font-size: 1.5rem; font-weight: 900; color: {{ $progress === 100 ? '#10b981' : '#f59e0b' }};">
+                        {{ $progress }}%
+                    </span>
                 </div>
                 
-                @if(!$step['is_valid'])
-                    <div class="mt-3 pl-8 text-sm text-red-600 dark:text-red-400">
-                        <ul class="list-disc space-y-1">
-                            @foreach($step['missing'] as $msg)
-                                <li>{{ $msg }}</li>
-                            @endforeach
-                        </ul>
-                    </div>
+                @if($record->onboardingProject?->status === 'Activated')
+                    <x-filament::button color="success" icon="heroicon-o-check-badge" disabled>
+                        Property Activated
+                    </x-filament::button>
+                @else
+                    <x-filament::button 
+                        wire:click="activateProperty"
+                        wire:confirm="Are you sure you want to activate this property? It will be marked as Vacant and available for operations."
+                        color="success" 
+                        icon="heroicon-o-check-badge"
+                        :disabled="$progress != 100"
+                    >
+                        Activate Property
+                    </x-filament::button>
                 @endif
             </div>
-        @endforeach
-    </div>
-</div>
+        </x-slot>
+
+        <!-- Progress Bar -->
+        <div style="width: 100%; border-radius: 9999px; height: 1rem; margin-bottom: 1.5rem; overflow: hidden; background-color: rgba(128, 128, 128, 0.2);">
+            <div style="height: 100%; border-radius: 9999px; transition: all 500ms ease-out; width: {{ $progress }}%; background-color: {{ $progress === 100 ? '#10b981' : '#f59e0b' }};"></div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem;">
+            @foreach($steps as $key => $step)
+                @php
+                    $isSuccess = $step['is_valid'];
+                    $bgColor = $isSuccess ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)';
+                    $borderColor = $isSuccess ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)';
+                    $textColor = $isSuccess ? '#059669' : '#dc2626';
+                    $iconColor = $isSuccess ? '#10b981' : '#ef4444';
+                @endphp
+                <div style="padding: 1rem; border-radius: 0.75rem; border: 1px solid {{ $borderColor }}; background-color: {{ $bgColor }};">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <x-filament::icon 
+                            :icon="$step['is_valid'] ? 'heroicon-s-check-circle' : 'heroicon-s-x-circle'" 
+                            style="width: 1.25rem; height: 1.25rem; flex-shrink: 0; color: {{ $iconColor }};"
+                        />
+                        <h3 style="font-size: 1rem; font-weight: 600; margin: 0; color: {{ $textColor }};">
+                            {{ $step['name'] }}
+                        </h3>
+                    </div>
+                    
+                    @if(!$step['is_valid'])
+                        <div style="margin-top: 0.75rem; padding-left: 1.75rem; font-size: 0.875rem; color: #dc2626;">
+                            <ul style="list-style-type: disc; margin: 0; padding-left: 1rem; display: flex; flex-direction: column; gap: 0.25rem;">
+                                @foreach($step['missing'] as $msg)
+                                    <li>{{ $msg }}</li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
+                </div>
+            @endforeach
+        </div>
+    </x-filament::section>
+</x-filament-widgets::widget>
