@@ -21,7 +21,7 @@
             <button @click="editor?.deleteSelected()" title="Delete Selected" style="padding:0.5rem; border-radius:0.375rem; background:transparent; border:none; color:#f87171; cursor:pointer; font-size:1rem;">🗑</button>
         </div>
         <div style="display:flex; align-items:center; gap:0.75rem; flex-shrink:0;">
-            <button wire:click="closeEditor" style="padding:0.5rem 1rem; font-size:0.875rem; color:#d1d5db; background:transparent; border:1px solid #4b5563; border-radius:0.5rem; cursor:pointer;">Cancel</button>
+            <button type="button" @click="$dispatch('annotation-saved')" style="padding:0.5rem 1rem; font-size:0.875rem; color:#d1d5db; background:transparent; border:1px solid #4b5563; border-radius:0.5rem; cursor:pointer;">Cancel</button>
             <button @click="$wire.saveAnnotation(editor.serialize().canvas)" style="padding:0.5rem 1rem; font-size:0.875rem; font-weight:600; color:white; background:#4f46e5; border:none; border-radius:0.5rem; cursor:pointer;">Save Annotation</button>
         </div>
     </div>

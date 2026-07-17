@@ -1,5 +1,9 @@
 import * as fabric from 'fabric';
 
+// In Fabric v7, custom properties must be registered here to be included in toObject/toJSON serialization.
+// This is the ONLY correct way - passing propertiesToInclude to toJSON only affects canvas-level props.
+fabric.FabricObject.customProperties = ['id', 'remark', 'customType'];
+
 export class AnnotationEditor {
     constructor(canvasElement, imageUrl, initialJson = null, onUpdate = null) {
         this.canvas = new fabric.Canvas(canvasElement, {
@@ -9,6 +13,7 @@ export class AnnotationEditor {
         
         this.imageUrl = imageUrl;
         this.onUpdate = onUpdate;
+        this._backgroundImg = null; // cached FabricImage for background
         
         this.history = [];
         this.historyIndex = -1;
@@ -19,55 +24,79 @@ export class AnnotationEditor {
     }
 
     async init(initialJson) {
-        // Load background image
         try {
             console.log('[AnnotationEditor] Loading image from:', this.imageUrl);
-            const img = await fabric.Image.fromURL(this.imageUrl);
+            const img = await fabric.Image.fromURL(this.imageUrl, { crossOrigin: 'anonymous' });
             console.log('[AnnotationEditor] Image loaded successfully', img.width, 'x', img.height);
             
-            const container = this.canvas.getElement().parentNode.parentNode;
-            let availableWidth = container.clientWidth - 64; // accounting for 2rem padding on each side
-            let availableHeight = container.clientHeight - 64;
-            
-            if (availableWidth <= 0 || availableHeight <= 0) {
-                availableWidth = window.innerWidth * 0.7;
-                availableHeight = window.innerHeight * 0.7;
-                console.log('[AnnotationEditor] Using fallback dimensions');
+            // Determine available space for the canvas
+            let el = this.canvas.getElement();
+            let container = null;
+            while (el && el !== document) {
+                if (el.style && el.style.overflow === 'auto' && el.style.padding === '2rem') {
+                    container = el;
+                    break;
+                }
+                el = el.parentNode;
             }
             
-            // Scale to fit the container perfectly (both width and height)
-            let scale = Math.min(availableWidth / img.width, availableHeight / img.height);
-            // Don't scale up beyond 5x to prevent extreme pixelation
-            scale = Math.min(scale, 5);
+            let availableWidth, availableHeight;
+            if (container) {
+                availableWidth = container.clientWidth - 64;
+                availableHeight = container.clientHeight - 64;
+            } else {
+                availableWidth = window.innerWidth - 320 - 64;
+                availableHeight = window.innerHeight - 60 - 64;
+                console.log('[AnnotationEditor] Using fallback dimensions');
+            }
+            if (availableWidth <= 0) availableWidth = 800;
+            if (availableHeight <= 0) availableHeight = 600;
             
+            let scale = Math.min(availableWidth / img.width, availableHeight / img.height);
+            scale = Math.min(scale, 5);
             console.log('[AnnotationEditor] Calculated scale:', scale);
             
-            this.canvas.setDimensions({ width: img.width * scale, height: img.height * scale });
-            console.log('[AnnotationEditor] Canvas dimensions set to:', this.canvas.width, 'x', this.canvas.height);
+            // Size the canvas to match the scaled image
+            const canvasW = Math.round(img.width * scale);
+            const canvasH = Math.round(img.height * scale);
+            this._canvasW = canvasW;
+            this._canvasH = canvasH;
+            this.canvas.setDimensions({ width: canvasW, height: canvasH });
             
+            // Configure image as background
             img.set({
                 originX: 'left',
                 originY: 'top',
                 scaleX: scale,
                 scaleY: scale,
-                selectable: false,
-                evented: false,
             });
-            
+            this._backgroundImg = img;
             this.canvas.backgroundImage = img;
-            this.canvas.requestRenderAll();
             
-            // Draw a quick red box to confirm canvas is working even if background image is broken
-            const rect = new fabric.Rect({ left: 10, top: 10, width: 50, height: 50, fill: 'red' });
-            this.canvas.add(rect);
-            
-            console.log('[AnnotationEditor] Background image and test rect added');
-            
+            // Load saved annotation objects (if any), stripping any old background data
             if (initialJson && initialJson.canvas) {
-                await new Promise(resolve => this.loadFromJson(initialJson.canvas, resolve));
-            } else {
-                this.saveHistory();
+                const jsonData = { ...initialJson.canvas };
+                delete jsonData.backgroundImage; // remove any stale background
+                delete jsonData.backgroundVpt;
+                if (jsonData.objects) {
+                    jsonData.objects = jsonData.objects.filter(
+                        o => o.id !== 'bg-image' && o.customType !== 'background'
+                    );
+                }
+                // In Fabric v7, loadFromJSON returns a Promise.
+                // The reviver (2nd param) is called per-object to restore custom properties.
+                await this._loadJson(jsonData);
+                // loadFromJSON may clear/change backgroundImage and dimensions, so restore them
+                this.canvas.setDimensions({ width: canvasW, height: canvasH });
+                this.canvas.backgroundImage = img;
             }
+            
+            this.canvas.renderAll();
+            console.log('[AnnotationEditor] Canvas rendered. Dims:', canvasW, 'x', canvasH);
+            
+            this.saveHistory();
+            // Notify Alpine of the initial layers (e.g. when re-opening with saved annotations)
+            if (this.onUpdate) this.onUpdate(this.getLayers());
         } catch (e) {
             console.error('[AnnotationEditor] Failed to load image:', e);
         }
@@ -78,12 +107,11 @@ export class AnnotationEditor {
         this.canvas.on('object:modified', () => this.handleCanvasChange());
         this.canvas.on('object:removed', () => this.handleCanvasChange());
         
-        // Handle selection for Alpine integration
         this.canvas.on('selection:created', (e) => this.notifySelection(e.selected[0]));
         this.canvas.on('selection:updated', (e) => this.notifySelection(e.selected[0]));
         this.canvas.on('selection:cleared', () => this.notifySelection(null));
 
-        // Add mouse wheel zooming
+        // Mouse wheel zooming
         this.canvas.on('mouse:wheel', (opt) => {
             const delta = opt.e.deltaY;
             let zoom = this.canvas.getZoom();
@@ -95,7 +123,7 @@ export class AnnotationEditor {
             opt.e.stopPropagation();
         });
         
-        // Add alt+drag panning
+        // Alt+drag panning
         this.canvas.on('mouse:down', (opt) => {
             const evt = opt.e;
             if (evt.altKey === true) {
@@ -139,35 +167,57 @@ export class AnnotationEditor {
     }
 
     saveHistory() {
-        // Drop future history if we are in the middle of undo stack
         if (this.historyIndex < this.history.length - 1) {
             this.history = this.history.slice(0, this.historyIndex + 1);
         }
-        
-        this.history.push(JSON.stringify(this.canvas.toJSON(['id', 'remark', 'customType'])));
+        // Serialize annotation objects only (background is excluded since we never serialize it)
+        const json = this.canvas.toJSON();
+        delete json.backgroundImage;
+        this.history.push(JSON.stringify(json));
         this.historyIndex++;
     }
 
-    undo() {
+    async undo() {
         if (this.historyIndex > 0) {
             this.isHistoryAction = true;
             this.historyIndex--;
-            this.loadFromJson(JSON.parse(this.history[this.historyIndex]), () => {
-                this.isHistoryAction = false;
-                if (this.onUpdate) this.onUpdate(this.getLayers());
-            });
+            await this._restoreHistory(this.history[this.historyIndex]);
+            this.isHistoryAction = false;
+            if (this.onUpdate) this.onUpdate(this.getLayers());
         }
     }
 
-    redo() {
+    async redo() {
         if (this.historyIndex < this.history.length - 1) {
             this.isHistoryAction = true;
             this.historyIndex++;
-            this.loadFromJson(JSON.parse(this.history[this.historyIndex]), () => {
-                this.isHistoryAction = false;
-                if (this.onUpdate) this.onUpdate(this.getLayers());
-            });
+            await this._restoreHistory(this.history[this.historyIndex]);
+            this.isHistoryAction = false;
+            if (this.onUpdate) this.onUpdate(this.getLayers());
         }
+    }
+
+    async _restoreHistory(jsonString) {
+        const json = JSON.parse(jsonString);
+        await this._loadJson(json);
+        // Restore our background and dimensions
+        if (this._backgroundImg) {
+            this.canvas.backgroundImage = this._backgroundImg;
+        }
+        this.canvas.setDimensions({ width: this._canvasW, height: this._canvasH });
+        this.canvas.renderAll();
+    }
+
+    // Wraps canvas.loadFromJSON with a reviver to restore custom properties (id, remark, customType)
+    // that Fabric v7 does not restore automatically.
+    async _loadJson(jsonData) {
+        await this.canvas.loadFromJSON(jsonData, (jsonObj, instance, error) => {
+            if (instance && !error) {
+                if (jsonObj.id !== undefined) instance.id = jsonObj.id;
+                if (jsonObj.remark !== undefined) instance.remark = jsonObj.remark;
+                if (jsonObj.customType !== undefined) instance.customType = jsonObj.customType;
+            }
+        });
     }
 
     generateId() {
@@ -200,9 +250,7 @@ export class AnnotationEditor {
         } else if (type === 'circle') {
             obj = new fabric.Circle({ ...commonOpts, radius: 50 });
         } else if (type === 'arrow') {
-            // Fabric doesn't have an arrow primitive, so we use a line/polygon or just line for simplicity here
             obj = new fabric.Line([100, 100, 200, 200], { ...commonOpts });
-            // Advanced arrow requires grouped line and triangle
         } else if (type === 'line') {
             obj = new fabric.Line([100, 100, 200, 200], { ...commonOpts });
         } else if (type === 'text') {
@@ -216,7 +264,6 @@ export class AnnotationEditor {
                 customType: 'text'
             });
         } else if (type === 'number') {
-            const num = this.getLayers().filter(l => l.customType === 'number').length + 1;
             obj = new fabric.IText(`①`, {
                 id: this.generateId(),
                 left: 100,
@@ -239,7 +286,6 @@ export class AnnotationEditor {
         this.canvas.freeDrawingBrush.color = color;
         this.canvas.freeDrawingBrush.width = width;
         
-        // When drawing ends, give the path an ID and customType
         this.canvas.on('path:created', (e) => {
             e.path.set({
                 id: this.generateId(),
@@ -267,7 +313,7 @@ export class AnnotationEditor {
         const obj = this.canvas.getObjects().find(o => o.id === id);
         if (obj) {
             obj.set('remark', remark);
-            this.saveHistory(); // save history explicitly since object:modified doesn't fire on custom prop change
+            this.saveHistory();
             if (this.onUpdate) this.onUpdate(this.getLayers());
         }
     }
@@ -289,18 +335,12 @@ export class AnnotationEditor {
     }
 
     serialize() {
+        const json = this.canvas.toJSON();
+        delete json.backgroundImage;
         return {
             version: 1,
-            canvas: this.canvas.toJSON(['id', 'remark', 'customType'])
+            canvas: json
         };
-    }
-
-    loadFromJson(json, callback) {
-        this.canvas.loadFromJSON(json, () => {
-            this.canvas.renderAll();
-            if (callback) callback();
-            if (this.onUpdate && !this.isHistoryAction) this.onUpdate(this.getLayers());
-        });
     }
 }
 

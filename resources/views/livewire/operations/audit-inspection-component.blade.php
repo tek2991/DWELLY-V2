@@ -111,10 +111,11 @@
     <x-filament-actions::modals />
 
     @if($editingEvidenceId)
-        <livewire:operations.evidence-annotation-editor
-            :evidence="\App\Domain\Audit\Models\AuditEvidence::find($editingEvidenceId)"
-            :key="'editor-'.$editingEvidenceId"
-            @annotation-saved="closeEditor"
-        />
+        <div @annotation-saved.window="$wire.closeEditor()">
+            <livewire:operations.evidence-annotation-editor
+                :evidence="\App\Domain\Audit\Models\AuditEvidence::find($editingEvidenceId)"
+                :key="'editor-'.$editingEvidenceId"
+            />
+        </div>
     @endif
 </div>
