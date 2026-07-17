@@ -123,6 +123,12 @@ export class AnnotationEditor {
             opt.e.stopPropagation();
         });
         
+        // Always keep canvas offset fresh so control hit-areas stay accurate
+        // when the editor is inside a scrollable/flex container
+        this.canvas.on('mouse:over', () => {
+            this.canvas.calcOffset();
+        });
+        
         // Alt+drag panning
         this.canvas.on('mouse:down', (opt) => {
             const evt = opt.e;
@@ -224,9 +230,9 @@ export class AnnotationEditor {
         return Math.random().toString(36).substring(2, 9);
     }
 
-    addShape(type) {
+    async addShape(type) {
         this.canvas.isDrawingMode = false;
-        let obj;
+        
         const commonOpts = {
             id: this.generateId(),
             left: 100,
@@ -237,47 +243,47 @@ export class AnnotationEditor {
             remark: '',
             customType: type,
             strokeUniform: true,
-            cornerStyle: 'circle',
-            cornerColor: 'white',
-            cornerStrokeColor: 'red',
-            borderColor: 'red',
-            transparentCorners: false,
             padding: 5
         };
 
+        let jsonObj;
         if (type === 'rectangle') {
-            obj = new fabric.Rect({ ...commonOpts, width: 100, height: 100 });
+            jsonObj = { type: 'Rect', ...commonOpts, width: 100, height: 100 };
         } else if (type === 'circle') {
-            obj = new fabric.Circle({ ...commonOpts, radius: 50 });
-        } else if (type === 'arrow') {
-            obj = new fabric.Line([100, 100, 200, 200], { ...commonOpts });
-        } else if (type === 'line') {
-            obj = new fabric.Line([100, 100, 200, 200], { ...commonOpts });
+            jsonObj = { type: 'Circle', ...commonOpts, radius: 50 };
+        } else if (type === 'arrow' || type === 'line') {
+            jsonObj = { type: 'Line', ...commonOpts, x1: 100, y1: 100, x2: 200, y2: 200 };
         } else if (type === 'text') {
-            obj = new fabric.IText('Text', {
-                id: this.generateId(),
-                left: 100,
-                top: 100,
-                fill: 'red',
-                fontSize: 24,
-                remark: '',
-                customType: 'text'
-            });
+            jsonObj = { type: 'IText', ...commonOpts, text: 'Text', fontSize: 24, fill: 'red' };
         } else if (type === 'number') {
-            obj = new fabric.IText(`①`, {
-                id: this.generateId(),
-                left: 100,
-                top: 100,
-                fill: 'red',
-                fontSize: 32,
-                remark: '',
-                customType: 'number'
-            });
+            jsonObj = { type: 'IText', ...commonOpts, text: '①', fontSize: 32, fill: 'red' };
         }
 
-        if (obj) {
-            this.canvas.add(obj);
-            this.canvas.setActiveObject(obj);
+        if (jsonObj) {
+            try {
+                const classObj = fabric[jsonObj.type];
+                if (classObj) {
+                    // In Fabric 7, fromObject might behave unpredictably with identity.
+                    // Since these are new shapes, we can just instantiate them directly!
+                    let obj;
+                    if (jsonObj.type === 'Line') {
+                        // Line constructor: new fabric.Line([x1, y1, x2, y2], options)
+                        obj = new classObj([jsonObj.x1, jsonObj.y1, jsonObj.x2, jsonObj.y2], jsonObj);
+                    } else if (jsonObj.type === 'IText') {
+                        // IText constructor: new fabric.IText(text, options)
+                        obj = new classObj(jsonObj.text, jsonObj);
+                    } else {
+                        obj = new classObj(jsonObj);
+                    }
+                    
+                    this.canvas.add(obj);
+                    this.canvas.calcOffset();
+                    this.canvas.setActiveObject(obj);
+                    this.canvas.requestRenderAll();
+                }
+            } catch (e) {
+                console.error("Error adding shape via JSON:", e);
+            }
         }
     }
 

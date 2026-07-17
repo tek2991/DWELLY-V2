@@ -118,4 +118,13 @@
             />
         </div>
     @endif
+
+    @if($editingAnnotoriousEvidenceId)
+        <div @annotation-saved.window="$wire.closeEditor()">
+            <livewire:operations.annotorious-editor
+                :evidence="\App\Domain\Audit\Models\AuditEvidence::find($editingAnnotoriousEvidenceId)"
+                :key="'annotorious-editor-'.$editingAnnotoriousEvidenceId"
+            />
+        </div>
+    @endif
 </div>
