@@ -23,3 +23,9 @@ trigger: always_on
 4. **Spatie Media Library Plugin**
    The Spatie Media Library components are no longer bundled into the core `filament/forms` package.
    - To use `Filament\Forms\Components\SpatieMediaLibraryFileUpload`, ensure the `filament/spatie-laravel-media-library-plugin` package is installed via Composer.
+
+5. **Unified Layout & View Components (CRITICAL)**
+   In Filament 5, layout and structural components have been abstracted out of the Forms package into the core Schemas package.
+   - **DO NOT USE**: `Filament\Forms\Components\Section`, `Filament\Forms\Components\View`, `Filament\Forms\Components\Grid`, `Filament\Forms\Components\Tabs`, `Filament\Forms\Components\Placeholder` etc.
+   - **USE**: `Filament\Schemas\Components\Section`, `Filament\Schemas\Components\View`, `Filament\Schemas\Components\Grid`, `Filament\Schemas\Components\Tabs`, `Filament\Schemas\Components\Placeholder` etc.
+   Note: Form input components (like `TextInput`, `Select`) remain in `Filament\Forms\Components`.

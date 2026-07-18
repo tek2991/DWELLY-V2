@@ -1,18 +1,6 @@
 <div style="display: flex; flex-direction: column; gap: 1rem; padding: 1rem 0;">
 
-    {{-- Upload bar --}}
-    <div style="display: flex; align-items: center; justify-content: space-between;">
-        <span style="font-size: 0.875rem; font-weight: 600; color: rgba(55, 65, 81, 1);">
-            {{ $evidenceList->count() }} photo(s)
-        </span>
-        <label style="cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; font-size: 0.875rem; font-weight: 500; color: white; background-color: var(--primary-600, #6366f1); border-radius: 0.5rem;">
-            <svg xmlns="http://www.w3.org/2000/svg" style="width: 1rem; height: 1rem;" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.233-2.33 3 3 0 0 1 3.758 3.848A3.752 3.752 0 0 1 18 19.5H6.75Z" />
-            </svg>
-            Upload Photos
-            <input type="file" multiple wire:model.live="uploads" style="display: none;" accept="image/*">
-        </label>
-    </div>
+
 
 
 

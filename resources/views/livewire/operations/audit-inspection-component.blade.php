@@ -92,13 +92,7 @@
                                         {{ $item->evidence()->count() }}
                                     </div>
                                 @endif
-                                <button
-                                    type="button"
-                                    wire:click.stop="mountAction('evidence', { item_id: '{{ $item->id }}' })"
-                                    style="font-size: 0.75rem; font-weight: 600; padding: 0.25rem 0.6rem; color: rgba(99, 102, 241, 1); background: rgba(238, 242, 255, 1); border: none; border-radius: 0.375rem; cursor: pointer;"
-                                >
-                                    Evidence
-                                </button>
+
                                 <x-filament::icon icon="heroicon-m-chevron-right" style="width: 1.25rem; height: 1.25rem; color: rgba(156, 163, 175, 1);" />
                             </div>
                         </div>

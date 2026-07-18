@@ -58,13 +58,32 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
             ->label('Inspect')
             ->button()
             ->slideOver()
-            ->record(fn (array $arguments) => AuditItem::find($arguments['item_id']))
+            ->modalHeading(fn (AuditItem $record) => 'Inspect: ' . $record->name)
+            ->modalDescription(function (AuditItem $record) {
+                $code = $this->audit->property->code ?? 'N/A';
+                return 'Property Code: ' . $code;
+            })
+            ->record(function (array $arguments) {
+                $this->currentItemId = $arguments['item_id'];
+                return AuditItem::find($arguments['item_id']);
+            })
             ->form([
-                Select::make('condition')
-                    ->options(ItemCondition::class)
-                    ->required(),
-                Textarea::make('remarks')
-                    ->maxLength(65535),
+                \Filament\Schemas\Components\Section::make('Inspection Details')
+                    ->schema([
+                        Select::make('condition')
+                            ->options(ItemCondition::class)
+                            ->required(),
+                        Textarea::make('remarks')
+                            ->maxLength(65535),
+                    ]),
+                \Filament\Schemas\Components\Section::make('Evidence')
+                    ->heading(function () {
+                        $count = $this->currentItemId ? \App\Domain\Audit\Models\AuditItem::find($this->currentItemId)?->evidence()->count() ?? 0 : 0;
+                        return new \Illuminate\Support\HtmlString(view('livewire.operations.evidence-section-heading', ['count' => $count])->render());
+                    })
+                    ->schema([
+                        \Filament\Schemas\Components\View::make('livewire.operations.evidence-gallery-form-field')
+                    ])
             ])
             ->using(function (AuditItem $record, array $data): AuditItem {
                 $data['status'] = ItemStatus::INSPECTED;
@@ -74,25 +93,6 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
             ->after(function () {
                 $this->audit->load('categories.items');
             });
-    }
-
-    public function evidenceAction(): Action
-    {
-        return Action::make('evidence')
-            ->label('Evidence')
-            ->modalHeading(fn (array $arguments) => 'Evidence: ' . (AuditItem::find($arguments['item_id'])?->name ?? ''))
-            ->modalWidth('4xl')
-            ->modalContent(function (array $arguments) {
-                $item = AuditItem::find($arguments['item_id']);
-                $this->currentItemId = $arguments['item_id'];
-                $evidenceList = $item ? $item->evidence()->orderBy('display_order')->get() : collect();
-                return view('livewire.operations.evidence-gallery-modal', [
-                    'item' => $item,
-                    'evidenceList' => $evidenceList,
-                ]);
-            })
-            ->modalSubmitAction(false)
-            ->modalCancelActionLabel('Close');
     }
 
     public ?string $editingEvidenceId = null;
