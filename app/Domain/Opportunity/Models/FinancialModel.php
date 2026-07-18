@@ -9,7 +9,7 @@ class FinancialModel extends DomainModel
     protected $table = 'financial_models';
 
     protected $fillable = [
-        'code',
+        'slug',
         'name',
         'description',
         'fee_collection',

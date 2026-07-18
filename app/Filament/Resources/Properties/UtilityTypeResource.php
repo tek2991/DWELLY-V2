@@ -28,7 +28,7 @@ class UtilityTypeResource extends Resource
                     ->maxLength(255)
                     ->live(onBlur: true)
                     ->afterStateUpdated(fn (string $operation, $state, \Filament\Schemas\Components\Utilities\Set $set) => $operation === 'create' ? $set('slug', Str::slug($state)) : null),
-                Forms\Components\TextInput::make('slug')
+                Forms\Components\TextInput::make('slug')->rule(new \App\Rules\ValidSlug())
                     ->required()
                     ->maxLength(255)
                     ->unique(UtilityType::class, 'slug', ignoreRecord: true),

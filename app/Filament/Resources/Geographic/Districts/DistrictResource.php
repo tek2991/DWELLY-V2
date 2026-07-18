@@ -43,7 +43,7 @@ class DistrictResource extends Resource
                     ->maxLength(255)
                     ->live(debounce: 500)
                     ->afterStateUpdated(fn (Set $set, ?string $state) => $set('slug', Str::slug($state))),
-                TextInput::make('slug')
+                TextInput::make('slug')->rule(new \App\Rules\ValidSlug())
                     ->required()
                     ->maxLength(255)
                     ->unique(ignoreRecord: true),

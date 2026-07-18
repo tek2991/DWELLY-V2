@@ -20,28 +20,40 @@ class PropertyForm
                             ->maxLength(255),
                         TextInput::make('code')
                             ->label('Property Code')
+                            ->required()
+                            ->regex('/^[a-zA-Z0-9]+(?:-[a-zA-Z0-9]+)*$/')
+                            ->validationMessages([
+                                'regex' => 'The code must only contain letters, numbers, and single hyphens, and cannot start or end with a hyphen.'
+                            ])
                             ->unique(ignoreRecord: true)
                             ->maxLength(255),
                         Select::make('property_type_id')
+                            ->required()
                             ->options(fn() => \Illuminate\Support\Facades\DB::table('property_types')->pluck('name', 'id'))
                             ->searchable(),
                         Select::make('bhk_type_id')
+                            ->required()
                             ->options(fn() => \Illuminate\Support\Facades\DB::table('bhk_types')->pluck('name', 'id'))
                             ->searchable(),
                         TextInput::make('floor_space_sqft')
+                            ->required()
                             ->numeric()
                             ->label('Floor Space (sq. ft)'),
                         Select::make('flooring_type_id')
+                            ->required()
                             ->options(fn() => \Illuminate\Support\Facades\DB::table('flooring_types')->pluck('name', 'id'))
                             ->searchable()
                             ->label('Flooring'),
                         TextInput::make('floor')
+                            ->required()
                             ->numeric()
                             ->label('Floor'),
                         TextInput::make('total_floors')
+                            ->required()
                             ->numeric()
                             ->label('Total Floors'),
                         Select::make('furnishing_type_id')
+                            ->required()
                             ->options(fn() => \Illuminate\Support\Facades\DB::table('furnishing_types')->pluck('name', 'id'))
                             ->searchable()
                             ->label('Furnishing'),
@@ -49,16 +61,19 @@ class PropertyForm
 
                 \Filament\Schemas\Components\Section::make('Location & Address')
                     ->schema([
-                        TextInput::make('address_line_1')->maxLength(255),
+                        TextInput::make('address_line_1')->required()->maxLength(255),
                         TextInput::make('address_line_2')->maxLength(255),
-                        TextInput::make('landmark')->maxLength(255),
+                        TextInput::make('landmark')->required()->maxLength(255),
                         TextInput::make('latitude')
+                            ->required()
                             ->numeric()
                             ->label('Latitude'),
                         TextInput::make('longitude')
+                            ->required()
                             ->numeric()
                             ->label('Longitude'),
                         Select::make('state_id')
+                            ->required()
                             ->label('State')
                             ->options(fn() => \Tek2991\Accounting\Models\State::pluck('name', 'id'))
                             ->live()
@@ -79,6 +94,7 @@ class PropertyForm
                             ->searchable(),
                         
                         Select::make('district_id')
+                            ->required()
                             ->label('District')
                             ->options(function ($get) {
                                 $stateId = $get('state_id');
@@ -104,6 +120,7 @@ class PropertyForm
                             ->searchable(),
 
                         Select::make('city_id')
+                            ->required()
                             ->label('City')
                             ->options(function ($get) {
                                 $districtId = $get('district_id');

@@ -45,6 +45,7 @@ class AuditResource extends Resource
                         ->schema([
                             Forms\Components\Select::make('property_id')
                                 ->relationship('property', 'code')
+                                ->getOptionLabelFromRecordUsing(fn ($record) => $record->building_name . ($record->code ? ' (' . $record->code . ')' : ''))
                                 ->searchable()
                                 ->preload()
                                 ->required()

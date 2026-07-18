@@ -46,9 +46,12 @@ class PropertyAuditWidget extends Widget
 
     public function startAuditAction(): Action
     {
+        $isDisabled = empty($this->record->code) || $this->record->onboardingProject?->status !== 'Activated';
         return Action::make('startAudit')
             ->label('Start Audit')
             ->button()
+            ->disabled($isDisabled)
+            ->tooltip($isDisabled ? 'Complete onboarding and generate property code first.' : null)
             ->url(AuditResource::getUrl('create', ['property_id' => $this->record->id]));
     }
 

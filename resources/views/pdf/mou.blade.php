@@ -98,7 +98,7 @@
     <p>
         The <strong>Property Owner</strong> is the absolute owner in full possession of the constructed structure as described –<br>
         <strong>Property Address:</strong> <span class="form-line" style="width: 100%;">{{ $mou->legal_terms['address'] ?? $mou->opportunity->address ?? '_______________________' }}</span><br>
-        <strong>APDCL Consumer ID:</strong> <span class="form-line" style="width: 300px;">{{ $mou->legal_terms['apdcl_consumer_id'] ?? '_______________________' }}</span><br>
+        <strong>{{ isset($mou->legal_terms['electricity_provider_id']) ? \App\Domain\Property\Models\UtilityProvider::find($mou->legal_terms['electricity_provider_id'])?->name : 'Electricity Provider' }} Connection No.:</strong> <span class="form-line" style="width: 300px;">{{ $mou->legal_terms['electricity_consumer_id'] ?? '_______________________' }}</span><br>
     </p>
 
     <p>
@@ -254,7 +254,7 @@
     <p>
         <strong>Beneficiary Name:</strong> <span class="form-line" style="width: 300px;">{{ $mou->bank_details['account_holder_name'] ?? '_______________________' }}</span><br>
         <strong>Name of the Bank:</strong> <span class="form-line" style="width: 300px;">{{ $mou->bank_details['bank_name'] ?? '_______________________' }}</span><br>
-        <strong>Address of the Bank:</strong> <span class="form-line" style="width: 300px;">{{ $mou->bank_details['branch_address'] ?? '_______________________' }}</span><br>
+        <strong>Address of the Bank:</strong> <span class="form-line" style="width: 300px;">{{ $mou->bank_details['bank_address'] ?? '_______________________' }}</span><br>
         <strong>Bank Account No.:</strong> <span class="form-line" style="width: 300px;">{{ $mou->bank_details['account_number'] ?? '_______________________' }}</span><br>
         <strong>IFSC Code:</strong> <span class="form-line" style="width: 300px;">{{ $mou->bank_details['ifsc_code'] ?? '_______________________' }}</span>
     </p>

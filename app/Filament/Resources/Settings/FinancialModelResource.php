@@ -23,7 +23,7 @@ class FinancialModelResource extends Resource
     {
         return $schema
             ->schema([
-                Forms\Components\TextInput::make('code')
+                Forms\Components\TextInput::make('slug')->rule(new \App\Rules\ValidSlug())
                     ->required()
                     ->maxLength(255)
                     ->unique(ignoreRecord: true),
@@ -47,7 +47,7 @@ class FinancialModelResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('code')
+                Tables\Columns\TextColumn::make('slug')
                     ->searchable(),
                 Tables\Columns\TextColumn::make('name')
                     ->searchable(),

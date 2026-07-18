@@ -72,6 +72,21 @@ class AuditsRelationManager extends RelationManager
             ])
             ->headerActions([
                 \Filament\Actions\CreateAction::make()
+                    ->disabled(function (\Filament\Resources\RelationManagers\RelationManager $livewire) {
+                        $record = $livewire->getOwnerRecord();
+                        if ($record instanceof \App\Domain\Property\Models\Property) {
+                            return empty($record->code) || $record->onboardingProject?->status !== 'Activated';
+                        }
+                        return false;
+                    })
+                    ->tooltip(function (\Filament\Resources\RelationManagers\RelationManager $livewire) {
+                        $record = $livewire->getOwnerRecord();
+                        if ($record instanceof \App\Domain\Property\Models\Property) {
+                            $isDisabled = empty($record->code) || $record->onboardingProject?->status !== 'Activated';
+                            return $isDisabled ? 'Complete onboarding and generate property code first.' : null;
+                        }
+                        return null;
+                    })
                     ->mutateFormDataUsing(function (array $data): array {
                         if (!isset($data['reference_audit_id'])) {
                             $latestAudit = \App\Domain\Audit\Models\Audit::where('property_id', $this->getOwnerRecord()->id)

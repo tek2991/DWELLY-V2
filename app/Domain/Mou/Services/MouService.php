@@ -63,6 +63,8 @@ class MouService
                     'state_id' => $partyData['state_id'] ?? null,
                 ]);
 
+                $stateName = isset($partyData['state_id']) ? \Tek2991\Accounting\Models\State::find($partyData['state_id'])?->name : null;
+
                 if ($partyData['party_type'] === 'individual') {
                     \App\Domain\Party\Models\PartyIndividual::create([
                         'party_id' => $party->id,
@@ -95,6 +97,7 @@ class MouService
                             'party_id' => $party->id,
                             'type' => $type,
                             'address_line_1' => $partyData['address'],
+                            'state' => $stateName,
                             'is_primary' => true,
                         ]);
                     }

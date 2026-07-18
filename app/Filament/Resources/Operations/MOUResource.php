@@ -211,8 +211,16 @@ class MOUResource extends Resource
 
                     \Filament\Schemas\Components\Section::make('Legal Terms')
                         ->schema([
-                            Forms\Components\TextInput::make('legal_terms.apdcl_consumer_id')
-                                ->label('APDCL Consumer ID')
+                            Forms\Components\Select::make('legal_terms.electricity_provider_id')
+                                ->label('Electricity Provider')
+                                ->options(function () {
+                                    return \App\Domain\Property\Models\UtilityProvider::whereHas('utilityType', function ($query) {
+                                        $query->where('slug', 'electricity');
+                                    })->pluck('name', 'id');
+                                })
+                                ->searchable(),
+                            Forms\Components\TextInput::make('legal_terms.electricity_consumer_id')
+                                ->label('Connection Number')
                                 ->maxLength(255),
                         ])->columns(1)
                         ->collapsible(),
@@ -473,7 +481,7 @@ class MOUResource extends Resource
                             
                             \Filament\Notifications\Notification::make()->title('Property Created')->success()->send();
                             
-                            return redirect(MOUResource::getUrl('view', ['record' => $record]));
+                            return redirect(\App\Filament\Resources\Properties\PropertyResource::getUrl('onboarding', ['record' => $property]));
                         }),
                 ])->label('Workflow Actions'),
             ])

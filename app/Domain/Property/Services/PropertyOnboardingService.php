@@ -31,6 +31,18 @@ class PropertyOnboardingService
                 // ...
             ]);
 
+            // Auto-link "Keys" inventory item
+            $keysType = \App\Domain\Property\Models\InventoryType::firstOrCreate(
+                ['slug' => 'keys'],
+                ['name' => 'Keys', 'is_active' => true]
+            );
+
+            \App\Domain\Property\Models\PropertyInventory::create([
+                'property_id' => $property->id,
+                'inventory_type_id' => $keysType->id,
+                'count' => 1,
+            ]);
+
             return $property;
         });
     }

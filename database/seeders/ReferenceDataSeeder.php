@@ -18,6 +18,7 @@ class ReferenceDataSeeder extends Seeder
         $this->seedAmenityTypes();
         $this->seedInventoryTypes();
         $this->seedEstablishmentTypes();
+        $this->seedUtilityTypes();
     }
 
     private function insertReferenceData(string $table, array $items)
@@ -129,7 +130,7 @@ class ReferenceDataSeeder extends Seeder
             'Bed', 'Gas Stove', 'Induction Stove', 'Microwave', 'Gas Cylinder',
             'Exhaust Fan', 'Kitchen Chimney', 'Water Purifier', 'Geyser',
             'Air Conditioner', 'Television', 'Fridge', 'Washing Machine',
-            'Inverter', 'Study Table', 'Chair'
+            'Inverter', 'Study Table', 'Chair', 'Keys'
         ]);
     }
 
@@ -138,5 +139,26 @@ class ReferenceDataSeeder extends Seeder
         $this->insertReferenceData('establishment_types', [
             'Hospital', 'School', 'IT Park', 'Metro Station', 'Shopping Mall', 'Airport', 'Railway Station', 'Park'
         ]);
+    }
+
+    private function seedUtilityTypes()
+    {
+        $this->insertReferenceData('utility_types', [
+            'Electricity', 'Water', 'Gas', 'Internet', 'DTH', 'Maintenance'
+        ]);
+
+        $electricityType = DB::table('utility_types')->where('slug', 'electricity')->first();
+        if ($electricityType) {
+            DB::table('utility_providers')->updateOrInsert(
+                ['name' => 'APDCL', 'utility_type_id' => $electricityType->id],
+                [
+                    'id' => (string) Str::ulid(),
+                    'slug' => 'apdcl',
+                    'is_active' => true,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]
+            );
+        }
     }
 }

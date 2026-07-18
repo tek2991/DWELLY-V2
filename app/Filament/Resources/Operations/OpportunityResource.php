@@ -287,6 +287,13 @@ class OpportunityResource extends Resource
                             \Filament\Infolists\Components\TextEntry::make('expected_rent')->money('INR')->label('Expected Rent'),
                             \Filament\Infolists\Components\TextEntry::make('expectedFinancialModel.name')->label('Financial Model'),
                         ])->columns(3),
+                        
+                    \Filament\Schemas\Components\Section::make('Internal Summary')
+                        ->schema([
+                            \Filament\Infolists\Components\TextEntry::make('internal_summary')
+                                ->hiddenLabel()
+                                ->columnSpanFull(),
+                        ]),
                 ])->columnSpan(['lg' => 2]),
 
                 \Filament\Schemas\Components\Group::make([

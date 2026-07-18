@@ -8,8 +8,6 @@ class InventoryType extends DomainModel
 {
     protected $table = 'inventory_types';
 
-    protected $fillable = ['name'];
-
     protected $casts = [
         'is_active' => 'boolean',
     ];

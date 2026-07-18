@@ -31,7 +31,7 @@ class RoomDefinitionResource extends Resource
                     ->maxLength(255)
                     ->live(onBlur: true)
                     ->afterStateUpdated(fn (\Filament\Schemas\Components\Utilities\Set $set, ?string $state) => $set('slug', \Illuminate\Support\Str::slug($state))),
-                Forms\Components\TextInput::make('slug')
+                Forms\Components\TextInput::make('slug')->rule(new \App\Rules\ValidSlug())
                     ->required()
                     ->maxLength(255)
                     ->unique(ignoreRecord: true),

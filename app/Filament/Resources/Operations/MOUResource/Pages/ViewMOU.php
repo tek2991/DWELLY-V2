@@ -151,6 +151,12 @@ class ViewMOU extends ViewRecord
                         ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new')
                         ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new')
                         ->columnSpanFull(),
+                    Forms\Components\Select::make('state_id')
+                        ->label('State')
+                        ->options(fn() => \Tek2991\Accounting\Models\State::pluck('name', 'id'))
+                        ->searchable()
+                        ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new')
+                        ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new'),
                 ])
                 ->action(function (Mou $record, array $data) {
                     app(\App\Domain\Mou\Services\MouService::class)->resolveParty($record, $data);

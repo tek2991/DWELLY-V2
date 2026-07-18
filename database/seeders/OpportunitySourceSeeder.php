@@ -51,13 +51,13 @@ class OpportunitySourceSeeder extends Seeder
         foreach ($hierarchy as $parentName => $children) {
             $parent = OpportunitySource::firstOrCreate(
                 ['name' => $parentName],
-                ['is_active' => true, 'parent_id' => null]
+                ['slug' => \Illuminate\Support\Str::slug($parentName), 'is_active' => true, 'parent_id' => null]
             );
 
             foreach ($children as $childName) {
                 OpportunitySource::firstOrCreate(
                     ['name' => $childName],
-                    ['is_active' => true, 'parent_id' => $parent->id]
+                    ['slug' => \Illuminate\Support\Str::slug($childName), 'is_active' => true, 'parent_id' => $parent->id]
                 );
             }
         }

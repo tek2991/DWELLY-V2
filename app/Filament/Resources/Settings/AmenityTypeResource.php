@@ -23,7 +23,7 @@ class AmenityTypeResource extends Resource
     {
         return $schema
             ->schema([
-                Forms\Components\TextInput::make('slug')
+                Forms\Components\TextInput::make('slug')->rule(new \App\Rules\ValidSlug())
                     ->required()
                     ->maxLength(255)
                     ->unique(ignoreRecord: true),

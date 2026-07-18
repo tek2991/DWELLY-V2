@@ -65,16 +65,29 @@ class PropertyOnboardingValidator
     protected function validateInventory(Property $property): array
     {
         $rule = $property->furnishingType ? $property->furnishingType->inventory_validation_rule : 'skip';
-        
+
         $isValid = true;
+        $missing = [];
+
         if ($rule === 'required' && $property->inventories->count() === 0) {
             $isValid = false;
+            $missing[] = 'Inventory is required for this furnishing type.';
+        }
+
+        // Keys are mandatory for all properties
+        $hasKeys = $property->inventories->contains(function ($inventory) {
+            return $inventory->inventoryType && strtolower($inventory->inventoryType->slug) === 'keys';
+        });
+
+        if (!$hasKeys) {
+            $isValid = false;
+            $missing[] = 'Keys must be added to the inventory.';
         }
 
         return [
             'name' => 'Inventory Configuration',
             'is_valid' => $isValid,
-            'missing' => $isValid ? [] : ['Inventory is required for this furnishing type.'],
+            'missing' => $missing,
             'tab' => 'inventories',
         ];
     }

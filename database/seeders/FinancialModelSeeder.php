@@ -20,13 +20,13 @@ class FinancialModelSeeder extends Seeder
 
         $models = [
             [
-                'code' => 'RENT_SHARE',
+                'slug' => 'rent-share',
                 'name' => 'Rent share',
                 'description' => 'Monthly % of rent',
                 'fee_collection' => 'Auto-deducted from monthly owner payout',
             ],
             [
-                'code' => 'ANNUAL_SUBSCRIPTION',
+                'slug' => 'annual-subscription',
                 'name' => 'Annual subscription',
                 'description' => "One month's rent",
                 'fee_collection' => 'Charged at agreement signing or renewal',
@@ -35,7 +35,7 @@ class FinancialModelSeeder extends Seeder
 
         foreach ($models as $modelData) {
             FinancialModel::firstOrCreate(
-                ['code' => $modelData['code']],
+                ['slug' => $modelData['slug']],
                 [
                     'name' => $modelData['name'],
                     'description' => $modelData['description'],
