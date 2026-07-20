@@ -5,8 +5,9 @@
         $drafts = $record->getMedia('draft_pdf');
         $signed = $record->getMedia('signed_pdf');
         $archived = $record->getMedia('archived_signed_pdf');
+        $kyc = $record->getMedia('kyc_documents');
         
-        $mediaItems = $drafts->concat($signed)->concat($archived)->sortByDesc('created_at');
+        $mediaItems = $drafts->concat($signed)->concat($archived)->concat($kyc)->sortByDesc('created_at');
     }
 @endphp
 

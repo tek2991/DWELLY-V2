@@ -10,6 +10,8 @@ use Filament\Tables\Table;
 
 class ActivitiesRelationManager extends RelationManager
 {
+    use \App\Filament\Resources\Properties\RelationManagers\Traits\LocksDuringPropertyOnboarding;
+
     protected static string $relationship = 'activities';
 
     protected static ?string $recordTitleAttribute = 'description';

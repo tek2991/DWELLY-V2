@@ -101,4 +101,9 @@ class Property extends DomainModel
     {
         return $this->hasMany(\App\Domain\Audit\Models\Audit::class);
     }
+
+    public function isLockedDuringOnboarding(): bool
+    {
+        return $this->mou_id !== null && $this->onboardingProject?->status !== 'Activated';
+    }
 }

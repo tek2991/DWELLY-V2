@@ -42,10 +42,23 @@ class PropertyFinancials extends Page implements HasForms
         $latestPricing = $this->record->financialTerms()->latest('effective_from')->first();
         $mou = $this->record->mou;
 
+        $bankDetails = $mou?->bank_details ?? [];
+        if (!empty($bankDetails) && isset(array_values($bankDetails)[0]) && is_array(array_values($bankDetails)[0])) {
+            $bankDetails = array_values($bankDetails)[0];
+        }
+
         $this->form->fill([
             'pricing_model' => $latestPricing?->pricing_model,
             'fee_percentage' => $latestPricing?->fee_percentage,
-            'bank_details' => $mou?->bank_details ?? [],
+            'bank_details' => $bankDetails,
+            'start_date' => $mou?->start_date,
+            'is_signatory_different' => $mou?->is_signatory_different ?? false,
+            'signatory_name' => $mou?->signatory_name,
+            'signatory_relation' => $mou?->signatory_relation,
+            'signatory_phone' => $mou?->signatory_phone,
+            'signatory_email' => $mou?->signatory_email,
+            'signatory_aadhar_number' => $mou?->signatory_aadhar_number,
+            'signatory_pan_number' => $mou?->signatory_pan_number,
         ]);
     }
 
@@ -69,6 +82,9 @@ class PropertyFinancials extends Page implements HasForms
                                                 ->numeric()
                                                 ->suffix('%')
                                                 ->required(),
+                                            \Filament\Forms\Components\DatePicker::make('start_date')
+                                                ->label('MOU Start Date')
+                                                ->required(),
                                         ]),
                                     ]),
                             ]),
@@ -77,25 +93,54 @@ class PropertyFinancials extends Page implements HasForms
                                 Section::make('Bank Account Information')
                                     ->description('Enter the bank account details for remittances.')
                                     ->schema([
-                                        \Filament\Forms\Components\Repeater::make('bank_details')
+                                        \Filament\Schemas\Components\Group::make()
+                                            ->statePath('bank_details')
                                             ->schema([
                                                 TextInput::make('account_name')->required(),
                                                 TextInput::make('account_number')->required(),
                                                 TextInput::make('ifsc_code')->required(),
                                                 TextInput::make('bank_name')->required(),
                                             ])
-                                            ->columns(2)
-                                            ->defaultItems(1),
+                                            ->columns(2),
+                                    ]),
+                            ]),
+                        \Filament\Schemas\Components\Tabs\Tab::make('Signatory Details')
+                            ->schema([
+                                \Filament\Schemas\Components\Section::make('Signatory Details')
+                                    ->schema([
+                                        \Filament\Forms\Components\Toggle::make('is_signatory_different')
+                                            ->label('Is Signatory Authority different from Property Owner?')
+                                            ->default(false)
+                                            ->live(),
+
+                                        \Filament\Schemas\Components\Grid::make(2)
+                                            ->schema([
+                                                \Filament\Forms\Components\TextInput::make('signatory_name')
+                                                    ->label('Signatory Full Name')
+                                                    ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
+                                                \Filament\Forms\Components\TextInput::make('signatory_relation')
+                                                    ->label('Relation to Owner (e.g. POA, Son)')
+                                                    ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
+                                                \Filament\Forms\Components\TextInput::make('signatory_phone')
+                                                    ->label('Phone Number')
+                                                    ->tel(),
+                                                \Filament\Forms\Components\TextInput::make('signatory_email')
+                                                    ->label('Email Address')
+                                                    ->email(),
+                                                \Filament\Forms\Components\TextInput::make('signatory_aadhar_number')
+                                                    ->label('Aadhaar Number'),
+                                                \Filament\Forms\Components\TextInput::make('signatory_pan_number')
+                                                    ->label('PAN Number'),
+                                            ])
+                                            ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
                                     ]),
                             ]),
                         \Filament\Schemas\Components\Tabs\Tab::make('Additional Documents')
                             ->schema([
-                                \Filament\Forms\Components\SpatieMediaLibraryFileUpload::make('mou_attachments')
-                                    ->collection('mou_attachments')
-                                    ->multiple()
-                                    ->label('KYC & Cancelled Cheque (Images/PDFs)')
-                                    ->helperText('Upload Aadhar, PAN, Cancelled Cheque, etc.')
-                                    ->model($this->record->mou ?? $this->record),
+                                \Filament\Schemas\Components\Livewire::make(
+                                    \App\Filament\Resources\Properties\RelationManagers\AdditionalDocumentsRelationManager::class,
+                                    ['ownerRecord' => $this->record]
+                                )->key('additional-documents-relation-manager'),
                             ]),
                         \Filament\Schemas\Components\Tabs\Tab::make('MOU Documents')
                             ->schema([
@@ -125,10 +170,28 @@ class PropertyFinancials extends Page implements HasForms
                             'status' => 'draft',
                             'prepared_by' => auth()->id(),
                             'bank_details' => $data['bank_details'] ?? [],
+                            'start_date' => $data['start_date'] ?? null,
+                            'is_signatory_different' => $data['is_signatory_different'] ?? false,
+                            'signatory_name' => $data['signatory_name'] ?? null,
+                            'signatory_relation' => $data['signatory_relation'] ?? null,
+                            'signatory_phone' => $data['signatory_phone'] ?? null,
+                            'signatory_email' => $data['signatory_email'] ?? null,
+                            'signatory_aadhar_number' => $data['signatory_aadhar_number'] ?? null,
+                            'signatory_pan_number' => $data['signatory_pan_number'] ?? null,
                         ]);
                         $this->record->update(['mou_id' => $mou->id]);
                     } else {
-                        $mou->update(['bank_details' => $data['bank_details'] ?? []]);
+                        $mou->update([
+                            'bank_details' => $data['bank_details'] ?? [],
+                            'start_date' => $data['start_date'] ?? $mou->start_date,
+                            'is_signatory_different' => $data['is_signatory_different'] ?? false,
+                            'signatory_name' => $data['signatory_name'] ?? null,
+                            'signatory_relation' => $data['signatory_relation'] ?? null,
+                            'signatory_phone' => $data['signatory_phone'] ?? null,
+                            'signatory_email' => $data['signatory_email'] ?? null,
+                            'signatory_aadhar_number' => $data['signatory_aadhar_number'] ?? null,
+                            'signatory_pan_number' => $data['signatory_pan_number'] ?? null,
+                        ]);
                     }
 
                     \App\Domain\Property\Models\PropertyFinancialTerm::create([

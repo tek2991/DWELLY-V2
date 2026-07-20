@@ -90,10 +90,23 @@
         <strong>Address:</strong> <span class="form-line" style="width: 100%;">{{ $mou->party->addresses->where('is_primary', true)->first()?->address_line_1 ?? $mou->party->addresses->first()?->address_line_1 ?? '_______________________' }}</span><br>
         <strong>Aadhaar No.:</strong> <span class="form-line">{{ $mou->party->individual->aadhaar_number ?? '_______________________' }}</span>
         <strong>PAN No.:</strong> <span class="form-line">{{ $mou->party->individual->pan_number ?? $mou->party->organization->pan ?? '_______________________' }}</span><br>
+        @if($mou->party && $mou->party->party_type === 'individual' && optional($mou->party->individual)->voter_id)
+        <strong>Voter ID:</strong> <span class="form-line">{{ $mou->party->individual->voter_id }}</span><br>
+        @endif
         <strong>Phone:</strong> <span class="form-line">{{ $mou->party->phone ?? '_______________________' }}</span>
         <strong>Email:</strong> <span class="form-line">{{ $mou->party->email ?? '_______________________' }}</span><br>
         (herein stated as the <strong>'Property Owner'</strong>)
     </p>
+
+    @if($mou->is_signatory_different)
+    <p>
+        Represented by its authorized signatory:<br>
+        <strong>Signatory Name:</strong> <span class="form-line">{{ $mou->signatory_name ?? '_______________________' }}</span><br>
+        <strong>Relation to Owner:</strong> <span class="form-line">{{ $mou->signatory_relation ?? '_______________________' }}</span><br>
+        <strong>Aadhaar No.:</strong> <span class="form-line">{{ $mou->signatory_aadhar_number ?? '_______________________' }}</span>
+        <strong>PAN No.:</strong> <span class="form-line">{{ $mou->signatory_pan_number ?? '_______________________' }}</span><br>
+    </p>
+    @endif
 
     <p>
         The <strong>Property Owner</strong> is the absolute owner in full possession of the constructed structure as described –<br>
@@ -220,7 +233,12 @@
         </div>
         <div class="signature-box" style="float: right;">
             <div class="signature-line"></div>
-            <strong>Property Owner</strong>
+            @if($mou->is_signatory_different)
+                <strong>{{ $mou->signatory_name }}</strong><br>
+                <em>(Signatory for Property Owner / {{ $mou->signatory_relation }})</em>
+            @else
+                <strong>Property Owner</strong>
+            @endif
         </div>
         <div style="clear: both;"></div>
     </div>
@@ -267,7 +285,12 @@
         </div>
         <div class="signature-box" style="float: right;">
             <div class="signature-line"></div>
-            <strong>Property Owner</strong>
+            @if($mou->is_signatory_different)
+                <strong>{{ $mou->signatory_name }}</strong><br>
+                <em>(Signatory for Property Owner / {{ $mou->signatory_relation }})</em>
+            @else
+                <strong>Property Owner</strong>
+            @endif
         </div>
         <div style="clear: both;"></div>
     </div>
@@ -276,24 +299,6 @@
         Dwelly (Assam Alay), Registered Office: #61, Basistha Road, Beltola, Guwahati, Assam – 781028,<br>
         M: +91-80994 94817, Email: assamalay@gmail.com
     </div>
-
-    @if(isset($attachments) && count($attachments) > 0)
-        <div class="page-break"></div>
-        <div class="header">
-            <h1>Dwelly</h1>
-            <h3>Annexure II – KYC & Documents</h3>
-        </div>
-        
-        @foreach($attachments as $attachment)
-            <div style="margin-bottom: 2rem; text-align: center;">
-                <h4>{{ $attachment['name'] }}</h4>
-                <img src="{{ $attachment['data'] }}" style="max-width: 100%; max-height: 800px; border: 1px solid #ccc; padding: 5px;" alt="Attachment">
-            </div>
-            @if(!$loop->last)
-                <div class="page-break"></div>
-            @endif
-        @endforeach
-    @endif
 
 </body>
 </html>

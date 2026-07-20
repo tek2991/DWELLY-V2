@@ -62,11 +62,18 @@ class EditProperty extends EditRecord
             default => 'gray',
         };
 
+        $declaration = $this->record->isLockedDuringOnboarding()
+            ? "<div class='text-warning-600 text-sm font-medium mt-2'>Property must complete onboarding and be activated before changes can be made.</div>"
+            : "";
+
         return new \Illuminate\Support\HtmlString(
             \Illuminate\Support\Facades\Blade::render(
-                "<div class='flex items-center gap-2 text-sm text-gray-500'>
-                    <span>Status:</span>
-                    <x-filament::badge color=\"{$color}\">{$status}</x-filament::badge>
+                "<div class='flex flex-col'>
+                    <div class='flex items-center gap-2 text-sm text-gray-500'>
+                        <span>Status:</span>
+                        <x-filament::badge color=\"{$color}\">{$status}</x-filament::badge>
+                    </div>
+                    {$declaration}
                 </div>"
             )
         );
@@ -77,5 +84,22 @@ class EditProperty extends EditRecord
         return [
             \App\Filament\Resources\Properties\Widgets\PropertyAuditWidget::class,
         ];
+    }
+
+    protected function getFormActions(): array
+    {
+        if ($this->record->isLockedDuringOnboarding()) {
+            return [];
+        }
+
+        return parent::getFormActions();
+    }
+
+    public function form(\Filament\Schemas\Schema $schema): \Filament\Schemas\Schema
+    {
+        return parent::form($schema)
+            ->disabled(fn (\App\Domain\Property\Models\Property $record): bool => 
+                $record->isLockedDuringOnboarding()
+            );
     }
 }

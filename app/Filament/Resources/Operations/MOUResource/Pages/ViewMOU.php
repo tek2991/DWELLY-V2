@@ -137,6 +137,9 @@ class ViewMOU extends ViewRecord
                     Forms\Components\TextInput::make('aadhar_number')
                         ->label('Aadhar Number')
                         ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'individual'),
+                    Forms\Components\TextInput::make('voter_id')
+                        ->label('Voter ID')
+                        ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'individual'),
                     Forms\Components\TextInput::make('phone')
                         ->label('Phone Number')
                         ->default(fn (Mou $record) => $record->opportunity->owner_phone)

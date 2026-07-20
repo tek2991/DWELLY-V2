@@ -24,7 +24,13 @@ class Mou extends DomainModel implements HasMedia
         'version',
         'opportunity_id',
         'party_id',
-        'signatory_party_id',
+        'is_signatory_different',
+        'signatory_name',
+        'signatory_phone',
+        'signatory_email',
+        'signatory_aadhar_number',
+        'signatory_pan_number',
+        'signatory_relation',
         'status',
         'legal_terms',
         'bank_details',
@@ -38,6 +44,7 @@ class Mou extends DomainModel implements HasMedia
     ];
 
     protected $casts = [
+        'is_signatory_different' => 'boolean',
         'status' => MouStatus::class,
         'legal_terms' => 'array',
         'bank_details' => 'array',
@@ -66,11 +73,6 @@ class Mou extends DomainModel implements HasMedia
     public function party(): BelongsTo
     {
         return $this->belongsTo(Party::class);
-    }
-
-    public function signatoryParty(): BelongsTo
-    {
-        return $this->belongsTo(Party::class, 'signatory_party_id');
     }
 
     public function verifiedBy(): BelongsTo

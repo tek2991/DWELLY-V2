@@ -2,13 +2,14 @@
     $isDraft = $media->collection_name === 'draft_pdf';
     $isSigned = $media->collection_name === 'signed_pdf';
     $isArchived = $media->collection_name === 'archived_signed_pdf';
+    $isKyc = $media->collection_name === 'kyc_documents';
     
     $version = $media->getCustomProperty('version', '?');
     $date = $media->created_at->format('M d, Y h:i A');
     
-    $icon = $isSigned ? 'heroicon-m-check-badge' : 'heroicon-m-document';
-    $iconColor = $isSigned ? 'text-success-500' : ($isArchived ? 'text-gray-400' : 'text-primary-500');
-    $label = $isDraft ? "Draft v{$version}" : ($isSigned ? "Signed Copy" : "Archived Signed");
+    $icon = $isSigned ? 'heroicon-m-check-badge' : ($isKyc ? 'heroicon-m-identification' : 'heroicon-m-document');
+    $iconColor = $isSigned ? 'text-success-500' : ($isArchived ? 'text-gray-400' : ($isKyc ? 'text-warning-500' : 'text-primary-500'));
+    $label = $isKyc ? "KYC Documents v{$version}" : ($isDraft ? "Draft v{$version}" : ($isSigned ? "Signed Copy" : "Archived Signed"));
 @endphp
 <li class="flex items-center justify-between p-2 rounded-md bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10">
     <div class="flex items-center gap-2">

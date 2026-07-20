@@ -18,6 +18,8 @@ use Filament\Tables\Table;
 
 class PricingVersionsRelationManager extends RelationManager
 {
+    use \App\Filament\Resources\Properties\RelationManagers\Traits\LocksDuringPropertyOnboarding;
+
     protected static string $relationship = 'pricingVersions';
 
     public function form(Schema $schema): Schema

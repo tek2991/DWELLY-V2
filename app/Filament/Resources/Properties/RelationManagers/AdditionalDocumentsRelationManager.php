@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\Properties\RelationManagers;
 
 use Livewire\Component;
-use Filament\Schemas\Components\Tabs\Tab;
 use Illuminate\Database\Eloquent\Model;
 use Filament\Actions\Contracts\HasActions;
 use Filament\Actions\Concerns\InteractsWithActions;
@@ -14,9 +13,11 @@ use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Actions\Action;
+use Filament\Actions\DeleteAction;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
+use Illuminate\Support\Facades\Storage;
 
-class MappedDocumentsRelationManager extends Component implements HasActions, HasForms, HasTable
+class AdditionalDocumentsRelationManager extends Component implements HasActions, HasForms, HasTable
 {
     use InteractsWithActions;
     use InteractsWithForms;
@@ -24,54 +25,30 @@ class MappedDocumentsRelationManager extends Component implements HasActions, Ha
 
     public Model $ownerRecord;
 
-    public static function canViewForRecord(Model $ownerRecord, string $pageClass): bool
-    {
-        return true;
-    }
-
-    public static function getTabComponent(Model $ownerRecord, string $pageClass): Tab
-    {
-        return Tab::make('Mapped Documents')
-            ->icon('heroicon-o-document-text');
-    }
-
-    public static function getDefaultProperties(): array
-    {
-        return [];
-    }
-
     public function table(Table $table): Table
     {
         return $table
             ->query(function () {
-                $mouId = $this->ownerRecord->mou_id;
+                $targetModel = $this->ownerRecord->mou ?? $this->ownerRecord;
                 
-                $query = Media::query();
-                
-                if ($mouId) {
-                    $query->where('model_type', \App\Domain\Mou\Models\Mou::class)
-                          ->where('model_id', $mouId);
-                } else {
-                    $query->where('id', 0); // Empty query if no MOU
-                }
-                
-                return $query;
+                return Media::query()
+                    ->where('model_type', get_class($targetModel))
+                    ->where('model_id', $targetModel->id)
+                    ->whereIn('collection_name', ['mou_attachments', 'signatory_documents']);
             })
             ->columns([
                 TextColumn::make('collection_name')
-                    ->label('Document Type')
+                    ->label('Document Category')
                     ->formatStateUsing(fn (string $state) => match($state) {
-                        'signed_pdf' => 'Signed MOU',
-                        'draft_pdf' => 'Draft MOU',
-                        'archived_signed_pdf' => 'Archived MOU',
+                        'mou_attachments' => 'Owner KYC & Cancelled Cheque',
+                        'signatory_documents' => 'Signatory Authorization & KYC',
                         default => str($state)->headline(),
                     })
                     ->badge()
                     ->color(fn (string $state) => match($state) {
-                        'signed_pdf' => 'success',
-                        'draft_pdf' => 'warning',
-                        'archived_signed_pdf' => 'gray',
-                        default => 'primary',
+                        'mou_attachments' => 'primary',
+                        'signatory_documents' => 'warning',
+                        default => 'gray',
                     }),
                 TextColumn::make('file_name')
                     ->label('Name')
@@ -80,6 +57,33 @@ class MappedDocumentsRelationManager extends Component implements HasActions, Ha
                     ->label('Uploaded At')
                     ->dateTime('M d, Y h:i A')
                     ->sortable(),
+            ])
+            ->headerActions([
+                Action::make('addDocument')
+                    ->label('Upload Document')
+                    ->icon('heroicon-o-arrow-up-tray')
+                    ->form([
+                        \Filament\Forms\Components\Select::make('collection_name')
+                            ->label('Document Category')
+                            ->options([
+                                'mou_attachments' => 'Owner KYC & Cancelled Cheque',
+                                'signatory_documents' => 'Signatory Authorization & KYC',
+                            ])
+                            ->required(),
+                        \Filament\Forms\Components\FileUpload::make('files')
+                            ->label('Files (Images/PDFs)')
+                            ->multiple()
+                            ->preserveFilenames()
+                            ->required(),
+                    ])
+                    ->action(function (array $data) {
+                        $targetModel = $this->ownerRecord->mou ?? $this->ownerRecord;
+                        
+                        foreach ($data['files'] as $path) {
+                            $targetModel->addMedia(Storage::disk('public')->path($path))
+                                ->toMediaCollection($data['collection_name']);
+                        }
+                    })
             ])
             ->actions([
                 Action::make('view')
@@ -105,6 +109,8 @@ class MappedDocumentsRelationManager extends Component implements HasActions, Ha
                     ->action(function (Media $record) {
                         return response()->download($record->getPath(), $record->file_name);
                     }),
+                    
+                DeleteAction::make(),
             ])
             ->defaultSort('created_at', 'desc');
     }

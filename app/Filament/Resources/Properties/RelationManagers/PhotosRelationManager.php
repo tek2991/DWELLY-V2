@@ -15,6 +15,8 @@ use Filament\Actions\DeleteBulkAction;
 
 class PhotosRelationManager extends RelationManager
 {
+    use \App\Filament\Resources\Properties\RelationManagers\Traits\LocksDuringPropertyOnboarding;
+
     protected static string $relationship = 'photos';
 
     protected static ?string $recordTitleAttribute = 'title';

@@ -207,10 +207,6 @@ class MOUResource extends Resource
                                 ->label('Financial Model')
                                 ->options(fn () => \App\Domain\Opportunity\Models\FinancialModel::pluck('name', 'id'))
                                 ->required(),
-                        ])->columns(2),
-
-                    \Filament\Schemas\Components\Section::make('Legal Terms')
-                        ->schema([
                             Forms\Components\Select::make('legal_terms.electricity_provider_id')
                                 ->label('Electricity Provider')
                                 ->options(function () {
@@ -222,6 +218,52 @@ class MOUResource extends Resource
                             Forms\Components\TextInput::make('legal_terms.electricity_consumer_id')
                                 ->label('Connection Number')
                                 ->maxLength(255),
+                        ])->columns(2),
+
+                    \Filament\Schemas\Components\Section::make('Legal Terms')
+                        ->schema([
+                            Forms\Components\DatePicker::make('start_date')
+                                ->label('Start Date')
+                                ->required(),
+                                
+                            \Filament\Forms\Components\SpatieMediaLibraryFileUpload::make('mou_attachments')
+                                ->collection('mou_attachments')
+                                ->multiple()
+                                ->label('Owner KYC & Cancelled Cheque')
+                                ->helperText('Upload Aadhar, PAN, Cancelled Cheque, etc.'),
+
+                            Forms\Components\Toggle::make('is_signatory_different')
+                                ->label('Is Signatory Authority different from Property Owner?')
+                                ->default(false)
+                                ->live(),
+
+                            \Filament\Schemas\Components\Grid::make(2)
+                                ->schema([
+                                    Forms\Components\TextInput::make('signatory_name')
+                                        ->label('Signatory Full Name')
+                                        ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
+                                    Forms\Components\TextInput::make('signatory_relation')
+                                        ->label('Relation to Owner (e.g. POA, Son)')
+                                        ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
+                                    Forms\Components\TextInput::make('signatory_phone')
+                                        ->label('Phone Number')
+                                        ->tel(),
+                                    Forms\Components\TextInput::make('signatory_email')
+                                        ->label('Email Address')
+                                        ->email(),
+                                    Forms\Components\TextInput::make('signatory_aadhar_number')
+                                        ->label('Aadhaar Number'),
+                                    Forms\Components\TextInput::make('signatory_pan_number')
+                                        ->label('PAN Number'),
+                                ])
+                                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
+
+                            \Filament\Forms\Components\SpatieMediaLibraryFileUpload::make('signatory_documents')
+                                ->collection('signatory_documents')
+                                ->multiple()
+                                ->label('Signatory Authorization & KYC')
+                                ->helperText('Upload Power of Attorney, Signatory Aadhar, PAN, etc.')
+                                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
                         ])->columns(1)
                         ->collapsible(),
 
@@ -366,6 +408,9 @@ class MOUResource extends Resource
                                 ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'organization'),
                             Forms\Components\TextInput::make('aadhar_number')
                                 ->label('Aadhar Number')
+                                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'individual'),
+                            Forms\Components\TextInput::make('voter_id')
+                                ->label('Voter ID')
                                 ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'individual'),
                             Forms\Components\TextInput::make('phone')
                                 ->label('Phone Number')

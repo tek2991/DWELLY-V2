@@ -18,6 +18,8 @@ use Filament\Tables\Table;
 
 class EstablishmentsRelationManager extends RelationManager
 {
+    use \App\Filament\Resources\Properties\RelationManagers\Traits\LocksDuringPropertyOnboarding;
+
     protected static string $relationship = 'establishments';
 
     public function form(Schema $schema): Schema
@@ -74,6 +76,7 @@ class EstablishmentsRelationManager extends RelationManager
             ->headerActions([
                 CreateAction::make(),
                 \Filament\Actions\Action::make('bulkCreate')
+                    ->hidden(fn (\Filament\Resources\RelationManagers\RelationManager $livewire) => $livewire->isReadOnly())
                     ->label('Bulk Create')
                     ->icon('heroicon-o-squares-plus')
                     ->form(function () {

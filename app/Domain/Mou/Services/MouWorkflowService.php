@@ -39,9 +39,37 @@ class MouWorkflowService
         $tempPath = sys_get_temp_dir() . '/' . $mou->number . '-draft-v' . $mou->version . '.pdf';
         $pdf->save($tempPath);
 
+        // Generate KYC Documents PDF
+        $kycPdfService = app(\App\Domain\Mou\Services\MouPdfService::class);
+        $kycContent = $kycPdfService->generateKycPdf($mou);
+        
+        if ($kycContent) {
+            // Write KYC content to temp file for merging
+            $kycTempPath = sys_get_temp_dir() . '/kyc_' . uniqid() . '.pdf';
+            file_put_contents($kycTempPath, $kycContent);
+            
+            // Merge MOU and KYC using Ghostscript
+            $mergedTempPath = sys_get_temp_dir() . '/merged_' . uniqid() . '.pdf';
+            $cmd = "gs -q -dNOPAUSE -dBATCH -sDEVICE=pdfwrite -sOutputFile=" . escapeshellarg($mergedTempPath) . " " . escapeshellarg($tempPath) . " " . escapeshellarg($kycTempPath);
+            exec($cmd, $output, $returnVar);
+            
+            if ($returnVar === 0 && file_exists($mergedTempPath)) {
+                // Replace the original MOU with the merged one
+                copy($mergedTempPath, $tempPath);
+                unlink($mergedTempPath);
+            } else {
+                \Illuminate\Support\Facades\Log::error('Failed to merge MOU and KYC PDFs via Ghostscript. Return var: ' . $returnVar);
+            }
+            
+            unlink($kycTempPath);
+        }
+
         $mou->addMedia($tempPath)
             ->withCustomProperties(['version' => $mou->version])
             ->toMediaCollection('draft_pdf');
+
+        // Clean up the separate kyc_documents collection if it exists, since it's now appended
+        $mou->clearMediaCollection('kyc_documents');
 
         $mou->update([
             'status' => MouStatus::PDF_GENERATED,

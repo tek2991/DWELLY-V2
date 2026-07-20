@@ -19,6 +19,8 @@ use Filament\Tables\Table;
 
 class RoomsRelationManager extends RelationManager
 {
+    use \App\Filament\Resources\Properties\RelationManagers\Traits\LocksDuringPropertyOnboarding;
+
     protected static string $relationship = 'rooms';
 
     public function form(Schema $schema): Schema
@@ -67,6 +69,7 @@ class RoomsRelationManager extends RelationManager
             ])
             ->headerActions([
                 \Filament\Actions\Action::make('addRooms')
+                    ->hidden(fn (\Filament\Resources\RelationManagers\RelationManager $livewire) => $livewire->isReadOnly())
                     ->label('Add Rooms')
                     ->icon('heroicon-o-plus')
                     ->form([

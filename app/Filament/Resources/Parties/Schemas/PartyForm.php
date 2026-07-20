@@ -58,6 +58,7 @@ class PartyForm
                         TextInput::make('individual_data.name')->label('Full Name')->required(),
                         TextInput::make('individual_data.aadhaar_number'),
                         TextInput::make('individual_data.pan_number'),
+                        TextInput::make('individual_data.voter_id')->label('Voter ID'),
                         TextInput::make('individual_data.gstin')
                             ->label('GSTIN')
                             ->key('individual_gstin')
