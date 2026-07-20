@@ -39,7 +39,7 @@ class PropertyAuditWidget extends Widget
         return [
             'total' => $audits->count(),
             'approved' => $audits->where('status', AuditStatus::APPROVED)->count(),
-            'in_progress' => $audits->whereIn('status', [AuditStatus::IN_PROGRESS, AuditStatus::SCHEDULED])->count(),
+            'in_progress' => $audits->whereIn('status', [AuditStatus::IN_PROGRESS, AuditStatus::PENDING_REVIEW, AuditStatus::IN_REVIEW, AuditStatus::PARTIALLY_APPROVED])->count(),
             'draft' => $audits->where('status', AuditStatus::DRAFT)->count(),
         ];
     }

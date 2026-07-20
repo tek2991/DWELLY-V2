@@ -15,8 +15,6 @@ class PropertyPricingVersion extends DomainModel
         'rent',
         'security_deposit',
         'society_fee',
-        'pricing_model',
-        'fee_percentage',
         'booking_amount',
         'notes',
         'created_by',

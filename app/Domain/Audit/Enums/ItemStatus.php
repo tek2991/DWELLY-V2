@@ -6,14 +6,18 @@ enum ItemStatus: string
 {
     case PENDING = 'pending';
     case INSPECTED = 'inspected';
-    case VERIFIED = 'verified';
+    case UNDER_REVIEW = 'under_review';
+    case APPROVED = 'approved';
+    case REJECTED = 'rejected';
 
     public function getLabel(): string
     {
         return match ($this) {
             self::PENDING => 'Pending',
             self::INSPECTED => 'Inspected',
-            self::VERIFIED => 'Verified',
+            self::UNDER_REVIEW => 'Under Review',
+            self::APPROVED => 'Approved',
+            self::REJECTED => 'Rejected',
         };
     }
 
@@ -22,7 +26,9 @@ enum ItemStatus: string
         return match ($this) {
             self::PENDING => 'gray',
             self::INSPECTED => 'info',
-            self::VERIFIED => 'success',
+            self::UNDER_REVIEW => 'warning',
+            self::APPROVED => 'success',
+            self::REJECTED => 'danger',
         };
     }
 }

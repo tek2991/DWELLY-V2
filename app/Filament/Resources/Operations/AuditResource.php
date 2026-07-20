@@ -123,7 +123,6 @@ class AuditResource extends Resource
                                 ->content(function (?Audit $record): \Illuminate\Support\HtmlString {
                                     $label = $record?->status?->getLabel() ?? 'Draft';
                                     $color = match ($record?->status) {
-                                        AuditStatus::SCHEDULED => 'text-warning-600',
                                         AuditStatus::IN_PROGRESS => 'text-info-600',
                                         AuditStatus::COMPLETED => 'text-success-600',
                                         AuditStatus::APPROVED => 'text-primary-600',
@@ -187,47 +186,22 @@ class AuditResource extends Resource
                     ->visible(fn ($record) => static::canEdit($record)),
                 
                 \Filament\Actions\ActionGroup::make([
-                    \Filament\Actions\Action::make('markScheduled')
-                        ->label('Mark Scheduled')
-                        ->icon('heroicon-o-calendar')
-                        ->visible(fn (Audit $record) => $record->status === AuditStatus::DRAFT)
-                        ->action(function (Audit $record) {
-                            $record->update(['status' => AuditStatus::SCHEDULED]);
-                        }),
-                        
                     \Filament\Actions\Action::make('startAudit')
                         ->label('Start Audit')
                         ->icon('heroicon-o-play')
                         ->color('info')
-                        ->visible(fn (Audit $record) => in_array($record->status, [AuditStatus::DRAFT, AuditStatus::SCHEDULED]))
+                        ->visible(fn (Audit $record) => $record->status === AuditStatus::DRAFT)
                         ->action(function (Audit $record) {
                             $record->update(['status' => AuditStatus::IN_PROGRESS]);
                         }),
                         
-                    \Filament\Actions\Action::make('completeAudit')
-                        ->label('Complete Audit')
-                        ->icon('heroicon-o-check-circle')
+                    \Filament\Actions\Action::make('submitForReview')
+                        ->label('Submit for Review')
+                        ->icon('heroicon-o-paper-airplane')
                         ->color('success')
-                        ->visible(fn (Audit $record) => $record->status === AuditStatus::IN_PROGRESS)
+                        ->visible(fn (Audit $record) => $record->canSubmit())
                         ->action(function (Audit $record) {
-                            $record->update([
-                                'status' => AuditStatus::COMPLETED,
-                                'completed_at' => now(),
-                                'completed_by_id' => auth()->id(),
-                            ]);
-                        }),
-                        
-                    \Filament\Actions\Action::make('approveAudit')
-                        ->label('Approve Audit')
-                        ->icon('heroicon-o-shield-check')
-                        ->color('primary')
-                        ->visible(fn (Audit $record) => $record->status === AuditStatus::COMPLETED)
-                        ->action(function (Audit $record) {
-                            $record->update([
-                                'status' => AuditStatus::APPROVED,
-                                'approved_at' => now(),
-                                'approved_by_id' => auth()->id(),
-                            ]);
+                            app(\App\Domain\Audit\Services\AuditReviewService::class)->submitForReview($record);
                         }),
                 ])->label('Transitions'),
             ])
@@ -244,6 +218,7 @@ class AuditResource extends Resource
             'index' => Pages\ListAudits::route('/'),
             'create' => Pages\CreateAudit::route('/create'),
             'edit' => Pages\EditAudit::route('/{record}/edit'),
+            'review' => Pages\ReviewAudit::route('/{record}/review'),
         ];
     }
 }

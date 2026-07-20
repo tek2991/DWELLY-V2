@@ -277,5 +277,23 @@
         M: +91-80994 94817, Email: assamalay@gmail.com
     </div>
 
+    @if(isset($attachments) && count($attachments) > 0)
+        <div class="page-break"></div>
+        <div class="header">
+            <h1>Dwelly</h1>
+            <h3>Annexure II – KYC & Documents</h3>
+        </div>
+        
+        @foreach($attachments as $attachment)
+            <div style="margin-bottom: 2rem; text-align: center;">
+                <h4>{{ $attachment['name'] }}</h4>
+                <img src="{{ $attachment['data'] }}" style="max-width: 100%; max-height: 800px; border: 1px solid #ccc; padding: 5px;" alt="Attachment">
+            </div>
+            @if(!$loop->last)
+                <div class="page-break"></div>
+            @endif
+        @endforeach
+    @endif
+
 </body>
 </html>

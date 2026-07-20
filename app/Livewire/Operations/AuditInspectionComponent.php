@@ -52,6 +52,54 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
         $this->activeCategoryId = $categoryId;
     }
 
+    public function createItemAction(): Action
+    {
+        return Action::make('createItem')
+            ->label('Add New Item')
+            ->icon('heroicon-o-plus')
+            ->button()
+            ->modalHeading('Add Found Item')
+            ->form([
+                \Filament\Forms\Components\TextInput::make('name')
+                    ->required()
+                    ->maxLength(255),
+                Select::make('condition')
+                    ->options(ItemCondition::class)
+                    ->required(),
+                Textarea::make('remarks')
+                    ->maxLength(65535),
+            ])
+            ->action(function (array $data) {
+                if (!$this->activeCategoryId) return;
+
+                $item = AuditItem::create([
+                    'audit_category_id' => $this->activeCategoryId,
+                    'name' => $data['name'],
+                    'status' => ItemStatus::INSPECTED,
+                    'condition' => $data['condition'],
+                    'remarks' => $data['remarks'],
+                    'snapshot_data' => [
+                        'is_new' => true,
+                    ],
+                ]);
+
+                // Create initial revision
+                $item->revisions()->create([
+                    'updated_by_id' => auth()->id(),
+                    'snapshot_data' => [
+                        'condition' => $data['condition'],
+                        'remarks' => $data['remarks'],
+                    ],
+                ]);
+
+                activity()
+                    ->performedOn($item)
+                    ->log('Added new item during inspection: ' . $item->name);
+
+                $this->audit->load('categories.items');
+            });
+    }
+
     public function editItemAction(): Action
     {
         return \Filament\Actions\EditAction::make('editItem')
@@ -72,22 +120,44 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
                     ->schema([
                         Select::make('condition')
                             ->options(ItemCondition::class)
-                            ->required(),
+                            ->required()
+                            ->disabled(fn (AuditItem $record) => !$record->isEditable()),
                         Textarea::make('remarks')
-                            ->maxLength(65535),
+                            ->maxLength(65535)
+                            ->disabled(fn (AuditItem $record) => !$record->isEditable()),
                     ]),
                 \Filament\Schemas\Components\Section::make('Evidence')
-                    ->heading(function () {
+                    ->heading(function (AuditItem $record) {
                         $count = $this->currentItemId ? \App\Domain\Audit\Models\AuditItem::find($this->currentItemId)?->evidence()->count() ?? 0 : 0;
-                        return new \Illuminate\Support\HtmlString(view('livewire.operations.evidence-section-heading', ['count' => $count])->render());
+                        return new \Illuminate\Support\HtmlString(view('livewire.operations.evidence-section-heading', ['count' => $count, 'isEditable' => $record->isEditable()])->render());
                     })
                     ->schema([
                         \Filament\Schemas\Components\View::make('livewire.operations.evidence-gallery-form-field')
                     ])
             ])
+            ->modalSubmitAction(fn ($action, AuditItem $record) => $record->isEditable() ? $action : $action->hidden())
             ->using(function (AuditItem $record, array $data): AuditItem {
+                if (!$record->isEditable()) {
+                    return $record;
+                }
+
                 $data['status'] = ItemStatus::INSPECTED;
                 $record->update($data);
+
+                // Log revision
+                $record->revisions()->create([
+                    'updated_by_id' => auth()->id(),
+                    'snapshot_data' => [
+                        'condition' => $data['condition'] ?? null,
+                        'remarks' => $data['remarks'] ?? null,
+                        'evidence_count' => $record->evidence()->count(),
+                    ],
+                ]);
+
+                activity()
+                    ->performedOn($record)
+                    ->log('Inspection: ' . $record->name . ' updated');
+
                 return $record;
             })
             ->after(function () {
@@ -110,7 +180,10 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
         if (empty($this->uploads) || !$this->currentItemId) return;
 
         $item = AuditItem::find($this->currentItemId);
-        if (!$item) return;
+        if (!$item || !$item->isEditable()) {
+            $this->uploads = [];
+            return;
+        }
 
         $service = app(\App\Domain\Audit\Services\EvidenceService::class);
         $dtos = $service->createFromUpload($item, $this->uploads);
@@ -132,8 +205,8 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
 
     public function deleteEvidence(string $evidenceId)
     {
-        $evidence = \App\Domain\Audit\Models\AuditEvidence::find($evidenceId);
-        if ($evidence) {
+        $evidence = \App\Domain\Audit\Models\AuditEvidence::with('auditItem')->find($evidenceId);
+        if ($evidence && $evidence->auditItem?->isEditable()) {
             $service = app(\App\Domain\Audit\Services\EvidenceService::class);
             $service->deleteEvidence($evidence);
         }

@@ -20,6 +20,9 @@ class PropertiesTable
                     ->searchable(),
                 \Filament\Tables\Columns\TextColumn::make('status')
                     ->badge(),
+                \Filament\Tables\Columns\ToggleColumn::make('is_listed')
+                    ->label('Listed')
+                    ->sortable(),
                 \Filament\Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

@@ -25,6 +25,8 @@ class Audit extends DomainModel
         'scheduled_at' => 'datetime',
         'completed_at' => 'datetime',
         'approved_at' => 'datetime',
+        'submitted_at' => 'datetime',
+        'review_started_at' => 'datetime',
     ];
 
     public function getActivitylogOptions(): LogOptions
@@ -110,5 +112,39 @@ class Audit extends DomainModel
     public function items(): \Illuminate\Database\Eloquent\Relations\HasManyThrough
     {
         return $this->hasManyThrough(AuditItem::class, AuditCategory::class);
+    }
+
+    public function reviewer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reviewer_id');
+    }
+
+    // Policy Methods
+
+    public function canSubmit(): bool
+    {
+        // Enforce 100% inspected logic here or inside the service.
+        // For basic policy, must be in progress or partially approved
+        return in_array($this->status, [AuditStatus::IN_PROGRESS, AuditStatus::PARTIALLY_APPROVED]);
+    }
+
+    public function canReview(): bool
+    {
+        return in_array($this->status, [AuditStatus::PENDING_REVIEW, AuditStatus::IN_REVIEW]);
+    }
+
+    public function canRequestChanges(): bool
+    {
+        return $this->canReview();
+    }
+
+    public function canApprove(): bool
+    {
+        return $this->status === AuditStatus::IN_REVIEW;
+    }
+
+    public function isImmutable(): bool
+    {
+        return in_array($this->status, [AuditStatus::APPROVED, AuditStatus::COMPLETED]);
     }
 }

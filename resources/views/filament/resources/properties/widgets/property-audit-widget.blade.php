@@ -14,11 +14,10 @@
                 </div>
                 
                 <div style="display: flex; align-items: center; gap: 0.75rem; align-self: center; margin-top: -0.25rem; margin-bottom: -0.25rem;">
-                    @if($latest && in_array($latest->status, [\App\Domain\Audit\Enums\AuditStatus::DRAFT, \App\Domain\Audit\Enums\AuditStatus::SCHEDULED, \App\Domain\Audit\Enums\AuditStatus::IN_PROGRESS, \App\Domain\Audit\Enums\AuditStatus::COMPLETED]))
+                    @if($latest && in_array($latest->status, [\App\Domain\Audit\Enums\AuditStatus::DRAFT, \App\Domain\Audit\Enums\AuditStatus::IN_PROGRESS, \App\Domain\Audit\Enums\AuditStatus::COMPLETED]))
                         @php
                             $actionLabel = match($latest->status) {
                                 \App\Domain\Audit\Enums\AuditStatus::DRAFT => 'Continue Draft',
-                                \App\Domain\Audit\Enums\AuditStatus::SCHEDULED => 'Open Audit',
                                 \App\Domain\Audit\Enums\AuditStatus::IN_PROGRESS => 'Continue Audit',
                                 \App\Domain\Audit\Enums\AuditStatus::COMPLETED => 'Review Audit',
                                 default => 'View Audit'
@@ -64,7 +63,7 @@
             <div style="flex: 1 1 250px; display: flex; flex-direction: column;">
                 <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--gray-500); margin-bottom: 0.75rem;">Current Audit</div>
                 
-                @if($latest && in_array($latest->status, [\App\Domain\Audit\Enums\AuditStatus::DRAFT, \App\Domain\Audit\Enums\AuditStatus::SCHEDULED, \App\Domain\Audit\Enums\AuditStatus::IN_PROGRESS, \App\Domain\Audit\Enums\AuditStatus::COMPLETED]))
+                @if($latest && in_array($latest->status, [\App\Domain\Audit\Enums\AuditStatus::DRAFT, \App\Domain\Audit\Enums\AuditStatus::IN_PROGRESS, \App\Domain\Audit\Enums\AuditStatus::COMPLETED]))
                     <div>
                         <div style="margin-bottom: 0.5rem;">
                             <x-filament::badge :color="$latest->status->getColor()">

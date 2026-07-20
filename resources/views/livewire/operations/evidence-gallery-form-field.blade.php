@@ -5,5 +5,6 @@
 
 @include('livewire.operations.evidence-gallery-modal', [
     'item' => $item,
-    'evidenceList' => $evidenceList
+    'evidenceList' => $evidenceList,
+    'isEditable' => $item ? $item->isEditable() : false
 ])

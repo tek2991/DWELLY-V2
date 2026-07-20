@@ -35,10 +35,6 @@ class PropertyResource extends Resource
     public static function getRelations(): array
     {
         return [
-            \Filament\Resources\RelationManagers\RelationGroup::make('Documents', [
-                \App\Filament\Resources\Properties\RelationManagers\MappedDocumentsRelationManager::class,
-                \App\Filament\Resources\Properties\RelationManagers\PropertyDocumentsRelationManager::class,
-            ]),
             \App\Filament\Resources\Properties\RelationManagers\RoomsRelationManager::class,
             \App\Filament\Resources\Properties\RelationManagers\InventoriesRelationManager::class,
             \App\Filament\Resources\Properties\RelationManagers\AmenitiesRelationManager::class,
@@ -57,6 +53,7 @@ class PropertyResource extends Resource
             'index' => ListProperties::route('/'),
             'create' => CreateProperty::route('/create'),
             'edit' => EditProperty::route('/{record}/edit'),
+            'financials' => \App\Filament\Resources\Properties\Pages\PropertyFinancials::route('/{record}/financials'),
             'onboarding' => \App\Filament\Resources\Properties\Pages\OnboardingDashboard::route('/{record}/onboarding'),
         ];
     }

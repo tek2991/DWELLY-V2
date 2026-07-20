@@ -199,8 +199,8 @@ class PropertyForm
                         \Filament\Forms\Components\Placeholder::make('current_model')
                             ->label('Pricing Model')
                             ->content(function (?\Illuminate\Database\Eloquent\Model $record) {
-                                $pricing = $record?->pricingVersions()->latest('effective_from')->first();
-                                return $pricing && $pricing->pricing_model ? $pricing->pricing_model : 'N/A';
+                                $financialTerm = $record?->financialTerms()->latest('effective_from')->first();
+                                return $financialTerm && $financialTerm->pricing_model ? $financialTerm->pricing_model : 'N/A';
                             }),
                     ])->columns(3)
                     ->hidden(fn (?\Illuminate\Database\Eloquent\Model $record) => !$record || $record->pricingVersions()->count() === 0),

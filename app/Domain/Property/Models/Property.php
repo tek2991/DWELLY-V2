@@ -14,6 +14,10 @@ class Property extends DomainModel
 
     protected $table = 'properties';
 
+    protected $casts = [
+        'is_listed' => 'boolean',
+    ];
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
@@ -54,6 +58,11 @@ class Property extends DomainModel
     public function pricingVersions(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(PropertyPricingVersion::class);
+    }
+
+    public function financialTerms(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(PropertyFinancialTerm::class);
     }
 
     public function photos(): \Illuminate\Database\Eloquent\Relations\HasMany

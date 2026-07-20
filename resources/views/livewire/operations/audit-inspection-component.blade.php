@@ -2,7 +2,7 @@
     <!-- Progress Indicator -->
     @php
         $totalItems = $audit->items->count();
-        $inspectedItems = $audit->items->whereIn('status', [\App\Domain\Audit\Enums\ItemStatus::INSPECTED, \App\Domain\Audit\Enums\ItemStatus::VERIFIED])->count();
+        $inspectedItems = $audit->items->where('status', '!=', \App\Domain\Audit\Enums\ItemStatus::PENDING)->count();
         $progress = $totalItems > 0 ? round(($inspectedItems / $totalItems) * 100) : 0;
     @endphp
     
@@ -30,7 +30,7 @@
                 >
                     {{ $category->name }}
                     <x-slot name="badge">
-                        {{ $category->items->whereIn('status', [\App\Domain\Audit\Enums\ItemStatus::INSPECTED, \App\Domain\Audit\Enums\ItemStatus::VERIFIED])->count() }} / {{ $category->items->count() }}
+                        {{ $category->items->where('status', '!=', \App\Domain\Audit\Enums\ItemStatus::PENDING)->count() }} / {{ $category->items->count() }}
                     </x-slot>
                 </x-filament::tabs.item>
             @endforeach
@@ -99,6 +99,9 @@
                     </x-filament::section>
                 @endforeach
             @endif
+        </div>
+        <div style="margin-top: 1rem;">
+            {{ $this->createItemAction }}
         </div>
     @endif
 

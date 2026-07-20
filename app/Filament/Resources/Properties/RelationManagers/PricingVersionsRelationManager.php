@@ -36,12 +36,6 @@ class PricingVersionsRelationManager extends RelationManager
                 \Filament\Forms\Components\TextInput::make('society_fee')
                     ->numeric()
                     ->prefix('₹'),
-                \Filament\Forms\Components\Select::make('pricing_model')
-                    ->options(fn() => \App\Domain\Opportunity\Models\FinancialModel::pluck('name', 'name'))
-                    ->searchable(),
-                \Filament\Forms\Components\TextInput::make('fee_percentage')
-                    ->numeric()
-                    ->suffix('%'),
                 \Filament\Forms\Components\TextInput::make('booking_amount')
                     ->numeric()
                     ->prefix('₹'),
@@ -70,8 +64,6 @@ class PricingVersionsRelationManager extends RelationManager
                 TextColumn::make('society_fee')
                     ->money('INR')
                     ->sortable(),
-                TextColumn::make('pricing_model')
-                    ->searchable(),
             ])
             ->filters([
                 //

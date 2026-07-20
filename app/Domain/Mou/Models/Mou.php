@@ -24,6 +24,7 @@ class Mou extends DomainModel implements HasMedia
         'version',
         'opportunity_id',
         'party_id',
+        'signatory_party_id',
         'status',
         'legal_terms',
         'bank_details',
@@ -33,6 +34,7 @@ class Mou extends DomainModel implements HasMedia
         'generated_by',
         'cancelled_at',
         'expires_at',
+        'start_date',
     ];
 
     protected $casts = [
@@ -42,6 +44,7 @@ class Mou extends DomainModel implements HasMedia
         'verified_at' => 'datetime',
         'cancelled_at' => 'datetime',
         'expires_at' => 'datetime',
+        'start_date' => 'date',
     ];
 
     public function registerMediaCollections(): void
@@ -51,6 +54,8 @@ class Mou extends DomainModel implements HasMedia
         $this->addMediaCollection('annexures');
         $this->addMediaCollection('owner_documents');
         $this->addMediaCollection('property_documents');
+        $this->addMediaCollection('mou_attachments');
+        $this->addMediaCollection('signatory_documents');
     }
 
     public function opportunity(): BelongsTo
@@ -61,6 +66,11 @@ class Mou extends DomainModel implements HasMedia
     public function party(): BelongsTo
     {
         return $this->belongsTo(Party::class);
+    }
+
+    public function signatoryParty(): BelongsTo
+    {
+        return $this->belongsTo(Party::class, 'signatory_party_id');
     }
 
     public function verifiedBy(): BelongsTo

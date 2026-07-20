@@ -17,6 +17,11 @@ class EditProperty extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('financials')
+                ->label('Financials')
+                ->icon('heroicon-o-currency-rupee')
+                ->color('success')
+                ->url(fn (\App\Domain\Property\Models\Property $record): string => \App\Filament\Resources\Properties\PropertyResource::getUrl('financials', ['record' => $record])),
             Action::make('onboarding')
                 ->label('Onboarding')
                 ->icon('heroicon-o-clipboard-document-check')

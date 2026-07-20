@@ -34,6 +34,10 @@ class EvidenceService
 
             $dtos->push(EvidenceDTO::fromModel($evidence));
         }
+        
+        if (!empty($files)) {
+            activity()->performedOn($item)->log('Inspection: Evidence added');
+        }
 
         return $dtos;
     }
@@ -46,14 +50,21 @@ class EvidenceService
         ];
         $evidence->status = EvidenceStatus::ANNOTATED;
         $evidence->save();
+        
+        activity()->performedOn($evidence->auditItem)->log('Inspection: Evidence annotated');
 
         return EvidenceDTO::fromModel($evidence);
     }
 
     public function deleteEvidence(AuditEvidence $evidence): void
     {
+        $item = $evidence->auditItem;
         $evidence->clearMediaCollection('images');
         $evidence->delete();
+        
+        if ($item) {
+            activity()->performedOn($item)->log('Inspection: Evidence deleted');
+        }
     }
 
     public function reorder(array $orderedIds): void
