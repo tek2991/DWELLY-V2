@@ -25,7 +25,8 @@ return new class extends Migration
         Schema::create('properties', function (Blueprint $table) {
             $table->ulid('id')->primary();
             $table->string('code')->nullable()->unique(); // e.g. GAU-0042
-            $table->char('region_id', 26);
+            $table->boolean('is_listed')->default(true);
+            $table->char('locality_id', 26)->nullable();
             $table->string('status'); // PropertyStatus state machine
             $table->string('building_name')->nullable();
             $table->string('address_line_1')->nullable();
@@ -47,7 +48,6 @@ return new class extends Migration
             $table->integer('floor_space_sqft')->nullable();
             $table->char('flooring_type_id', 26)->nullable();
             $table->char('furnishing_type_id', 26)->nullable();
-            $table->string('pricing_model')->nullable();
             $table->boolean('is_promoted')->default(false);
             $table->date('available_from')->nullable();
             $table->foreignId('assigned_executive_id')->nullable()->constrained('users')->nullOnDelete();
@@ -55,7 +55,7 @@ return new class extends Migration
             $table->string('archived_reason')->nullable();
             $table->timestamps();
 
-            $table->foreign('region_id')->references('id')->on('regions')->cascadeOnDelete();
+            $table->foreign('locality_id')->references('id')->on('localities')->nullOnDelete();
             $table->foreign('bhk_type_id')->references('id')->on('bhk_types')->nullOnDelete();
             $table->foreign('property_type_id')->references('id')->on('property_types')->nullOnDelete();
             $table->foreign('flooring_type_id')->references('id')->on('flooring_types')->nullOnDelete();
@@ -69,9 +69,7 @@ return new class extends Migration
             $table->date('effective_to')->nullable();
             $table->decimal('rent', 12, 2)->nullable();
             $table->decimal('security_deposit', 12, 2)->nullable();
-            $table->decimal('society_fee', 12, 2)->nullable();
-            $table->string('pricing_model')->nullable(); // snapshot
-            $table->decimal('fee_percentage', 5, 2)->nullable();
+            $table->decimal('society_fee', 10, 2)->nullable();
             $table->decimal('booking_amount', 12, 2)->nullable();
             $table->text('notes')->nullable();
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
@@ -102,28 +100,37 @@ return new class extends Migration
 
             $table->foreign('property_id')->references('id')->on('properties')->cascadeOnDelete();
             $table->foreign('amenity_type_id')->references('id')->on('amenity_types')->cascadeOnDelete();
+            $table->unique(['property_id', 'amenity_type_id']);
         });
 
         Schema::create('property_rooms', function (Blueprint $table) {
             $table->ulid('id')->primary();
             $table->char('property_id', 26);
-            $table->char('room_type_id', 26);
-            $table->integer('count')->default(1);
+            $table->char('room_definition_id', 26);
+            $table->string('custom_name')->nullable();
+            $table->integer('floor')->nullable();
+            $table->decimal('area', 8, 2)->nullable();
+            $table->text('description')->nullable();
+            $table->integer('display_order')->default(0);
+            $table->boolean('is_active')->default(true);
             $table->timestamps();
 
             $table->foreign('property_id')->references('id')->on('properties')->cascadeOnDelete();
-            $table->foreign('room_type_id')->references('id')->on('room_types')->cascadeOnDelete();
+            $table->foreign('room_definition_id')->references('id')->on('room_definitions')->cascadeOnDelete();
         });
 
         Schema::create('property_inventories', function (Blueprint $table) {
             $table->ulid('id')->primary();
             $table->char('property_id', 26);
             $table->char('inventory_type_id', 26);
+            $table->char('property_room_id', 26)->nullable();
             $table->integer('count')->default(1);
             $table->timestamps();
 
             $table->foreign('property_id')->references('id')->on('properties')->cascadeOnDelete();
             $table->foreign('inventory_type_id')->references('id')->on('inventory_types')->cascadeOnDelete();
+            $table->foreign('property_room_id')->references('id')->on('property_rooms')->nullOnDelete();
+            $table->unique(['property_id', 'inventory_type_id', 'property_room_id'], 'prop_inv_unique_room');
         });
 
         Schema::create('property_assignments', function (Blueprint $table) {
@@ -151,11 +158,28 @@ return new class extends Migration
 
             $table->foreign('property_id')->references('id')->on('properties')->cascadeOnDelete();
             $table->foreign('establishment_id')->references('id')->on('establishments')->cascadeOnDelete();
+            $table->unique(['property_id', 'establishment_id']);
+        });
+
+        Schema::create('property_financial_terms', function (Blueprint $table) {
+            $table->ulid('id')->primary();
+            $table->char('property_id', 26);
+            $table->char('mou_id', 26)->nullable();
+            $table->string('pricing_model');
+            $table->decimal('fee_percentage', 5, 2)->nullable();
+            $table->date('effective_from');
+            $table->date('effective_to')->nullable();
+            $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->timestamps();
+
+            $table->foreign('property_id')->references('id')->on('properties')->cascadeOnDelete();
+            $table->foreign('mou_id')->references('id')->on('mous')->nullOnDelete();
         });
     }
 
     public function down(): void
     {
+        Schema::dropIfExists('property_financial_terms');
         Schema::dropIfExists('property_establishments');
         Schema::dropIfExists('property_assignments');
         Schema::dropIfExists('property_inventories');

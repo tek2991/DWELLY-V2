@@ -17,6 +17,7 @@ return new class extends Migration
 
         Schema::create("{$prefix}contacts", function (Blueprint $table) use ($prefix) {
             $table->id();
+            $table->char('party_id', 26)->nullable();
             
             $table->string('type')->default('customer'); // customer, vendor, both
             
@@ -48,6 +49,8 @@ return new class extends Migration
             $table->text('bank_address')->nullable();
             $table->string('bank_account_no')->nullable();
             $table->string('bank_ifsc_code')->nullable();
+
+            $table->foreign('party_id')->references('id')->on('parties')->nullOnDelete();
             
             $table->timestamps();
             $table->softDeletes();

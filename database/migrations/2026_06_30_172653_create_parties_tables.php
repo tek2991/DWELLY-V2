@@ -15,18 +15,19 @@ return new class extends Migration
             $table->string('phone')->nullable()->index();
             $table->string('email')->nullable()->index();
             $table->string('whatsapp_number')->nullable();
-            $table->char('region_id', 26)->nullable();
             $table->string('accounting_contact_id')->nullable();
+            $table->boolean('is_tax_registered')->default(false);
+            $table->string('gst_registration_type')->nullable();
+            $table->foreignId('state_id')->nullable()->constrained('acc_states')->nullOnDelete();
             $table->timestamps();
-
-            $table->foreign('region_id')->references('id')->on('regions')->nullOnDelete();
         });
 
         Schema::create('party_individuals', function (Blueprint $table) {
             $table->ulid('id')->primary();
             $table->char('party_id', 26)->unique();
-            $table->string('first_name');
-            $table->string('last_name')->nullable();
+            $table->string('name');
+            $table->string('parent_name')->nullable();
+            $table->string('gstin')->nullable()->index();
             $table->date('date_of_birth')->nullable();
             $table->string('gender')->nullable();
             $table->string('aadhaar_number')->nullable()->index();
@@ -58,10 +59,11 @@ return new class extends Migration
         Schema::create('party_bank_accounts', function (Blueprint $table) {
             $table->ulid('id')->primary();
             $table->char('party_id', 26);
-            $table->string('account_name');
+            $table->string('beneficiary_name');
             $table->string('account_number');
             $table->string('ifsc_code');
             $table->string('bank_name')->nullable();
+            $table->text('bank_address')->nullable();
             $table->boolean('is_primary')->default(false);
             $table->boolean('is_verified')->default(false);
             $table->timestamps();

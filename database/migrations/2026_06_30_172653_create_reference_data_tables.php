@@ -37,12 +37,17 @@ return new class extends Migration
     public function up(): void
     {
         foreach ($this->lookupTables as $tableName) {
-            Schema::create($tableName, function (Blueprint $table) {
+            Schema::create($tableName, function (Blueprint $table) use ($tableName) {
                 $table->ulid('id')->primary();
                 $table->string('name');
                 $table->string('slug')->unique()->nullable();
                 $table->text('description')->nullable();
                 $table->boolean('is_active')->default(true);
+                
+                if ($tableName === 'furnishing_types') {
+                    $table->string('inventory_validation_rule')->default('skip');
+                }
+                
                 $table->timestamps();
             });
         }

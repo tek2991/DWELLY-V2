@@ -38,6 +38,12 @@ return new class extends Migration
             
             $table->text('notes')->nullable();
 
+            // Review
+            $table->foreignId('reviewer_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->integer('review_round')->default(1);
+            $table->timestamp('submitted_at')->nullable();
+            $table->timestamp('review_started_at')->nullable();
+
             $table->timestamps();
             $table->softDeletes();
         });

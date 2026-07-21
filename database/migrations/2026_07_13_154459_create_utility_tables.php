@@ -22,6 +22,17 @@ return new class extends Migration
             $table->softDeletes();
         });
 
+        Schema::create('utility_providers', function (Blueprint $table) {
+            $table->ulid('id')->primary();
+            $table->char('utility_type_id', 26);
+            $table->string('name');
+            $table->string('slug')->unique()->nullable();
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
+
+            $table->foreign('utility_type_id')->references('id')->on('utility_types')->cascadeOnDelete();
+        });
+
         Schema::create('property_utilities', function (Blueprint $table) {
             $table->ulid('id')->primary();
             $table->char('property_id', 26);
@@ -45,6 +56,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('property_utilities');
+        Schema::dropIfExists('utility_providers');
         Schema::dropIfExists('utility_types');
     }
 };

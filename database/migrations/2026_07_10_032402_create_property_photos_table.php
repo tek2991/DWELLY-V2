@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::create('property_photos', function (Blueprint $table) {
             $table->ulid('id')->primary();
             $table->char('property_id', 26);
+            $table->char('property_room_id', 26)->nullable();
             $table->string('file_path');
             $table->string('title')->nullable();
             $table->boolean('is_featured')->default(false);
@@ -22,6 +23,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->foreign('property_id')->references('id')->on('properties')->cascadeOnDelete();
+            $table->foreign('property_room_id')->references('id')->on('property_rooms')->nullOnDelete();
         });
     }
 

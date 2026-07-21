@@ -16,7 +16,6 @@ return new class extends Migration
             $table->string('number')->unique();
             $table->string('title');
             $table->string('status');
-            $table->foreignUlid('lead_origin_id')->nullable()->constrained('lead_origins');
             $table->foreignUlid('opportunity_source_id')->nullable()->constrained('opportunity_sources');
             $table->foreignUlid('assigned_user_id')->nullable()->constrained('users');
             $table->foreignUlid('owner_party_id')->nullable()->constrained('parties');
@@ -25,9 +24,7 @@ return new class extends Migration
             $table->string('owner_phone')->nullable();
             $table->string('owner_email')->nullable();
             
-            $table->string('address')->nullable();
-            $table->string('city')->nullable();
-            $table->string('landmark')->nullable();
+            $table->text('address')->nullable();
             
             $table->foreignUlid('estimated_property_type_id')->nullable()->constrained('property_types');
             

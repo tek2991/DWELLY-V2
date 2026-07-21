@@ -15,10 +15,16 @@ return new class extends Migration
             $table->ulid('id')->primary();
             $table->string('number')->unique(); // E.g., MOU-2026-0001
             $table->integer('version')->default(1);
+            $table->date('start_date')->nullable();
             $table->foreignUlid('opportunity_id')->constrained('opportunities')->cascadeOnDelete();
             
+            $table->foreignUlid('property_id')->nullable()->constrained('properties')->cascadeOnDelete();
+            $table->string('type')->default('onboarding');
+
             // The resolved Party after Party Resolution
             $table->foreignUlid('party_id')->nullable()->constrained('parties');
+            $table->boolean('is_signatory_different')->default(false);
+            $table->json('signatory_details')->nullable();
             
             $table->string('status'); // Draft, Generated, Signed, Verified, Cancelled
             
