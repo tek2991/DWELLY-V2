@@ -99,13 +99,12 @@
     </p>
 
     @if($mou->is_signatory_different)
-    <p>
+        <br><br>
         Represented by its authorized signatory:<br>
-        <strong>Signatory Name:</strong> <span class="form-line">{{ $mou->signatory_name ?? '_______________________' }}</span><br>
-        <strong>Relation to Owner:</strong> <span class="form-line">{{ $mou->signatory_relation ?? '_______________________' }}</span><br>
-        <strong>Aadhaar No.:</strong> <span class="form-line">{{ $mou->signatory_aadhar_number ?? '_______________________' }}</span>
-        <strong>PAN No.:</strong> <span class="form-line">{{ $mou->signatory_pan_number ?? '_______________________' }}</span><br>
-    </p>
+        <strong>Signatory Name:</strong> <span class="form-line">{{ $mou->signatory_details['name'] ?? '_______________________' }}</span><br>
+        <strong>Relation to Owner:</strong> <span class="form-line">{{ $mou->signatory_details['relation'] ?? '_______________________' }}</span><br>
+        <strong>Aadhaar No.:</strong> <span class="form-line">{{ $mou->signatory_details['aadhar_number'] ?? '_______________________' }}</span>
+        <strong>PAN No.:</strong> <span class="form-line">{{ $mou->signatory_details['pan_number'] ?? '_______________________' }}</span><br>
     @endif
 
     <p>
@@ -234,8 +233,8 @@
         <div class="signature-box" style="float: right;">
             <div class="signature-line"></div>
             @if($mou->is_signatory_different)
-                <strong>{{ $mou->signatory_name }}</strong><br>
-                <em>(Signatory for Property Owner / {{ $mou->signatory_relation }})</em>
+                <strong>{{ $mou->signatory_details['name'] ?? '' }}</strong><br>
+                <em>(Signatory for Property Owner / {{ $mou->signatory_details['relation'] ?? '' }})</em>
             @else
                 <strong>Property Owner</strong>
             @endif
@@ -286,8 +285,8 @@
         <div class="signature-box" style="float: right;">
             <div class="signature-line"></div>
             @if($mou->is_signatory_different)
-                <strong>{{ $mou->signatory_name }}</strong><br>
-                <em>(Signatory for Property Owner / {{ $mou->signatory_relation }})</em>
+                <strong>{{ $mou->signatory_details['name'] ?? '' }}</strong><br>
+                <em>(Signatory for Property Owner / {{ $mou->signatory_details['relation'] ?? '' }})</em>
             @else
                 <strong>Property Owner</strong>
             @endif

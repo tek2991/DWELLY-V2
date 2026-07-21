@@ -53,12 +53,12 @@ class PropertyFinancials extends Page implements HasForms
             'bank_details' => $bankDetails,
             'start_date' => $mou?->start_date,
             'is_signatory_different' => $mou?->is_signatory_different ?? false,
-            'signatory_name' => $mou?->signatory_name,
-            'signatory_relation' => $mou?->signatory_relation,
-            'signatory_phone' => $mou?->signatory_phone,
-            'signatory_email' => $mou?->signatory_email,
-            'signatory_aadhar_number' => $mou?->signatory_aadhar_number,
-            'signatory_pan_number' => $mou?->signatory_pan_number,
+            'signatory_name' => $mou?->signatory_details['name'] ?? null,
+            'signatory_relation' => $mou?->signatory_details['relation'] ?? null,
+            'signatory_phone' => $mou?->signatory_details['phone'] ?? null,
+            'signatory_email' => $mou?->signatory_details['email'] ?? null,
+            'signatory_aadhar_number' => $mou?->signatory_details['aadhar_number'] ?? null,
+            'signatory_pan_number' => $mou?->signatory_details['pan_number'] ?? null,
         ]);
     }
 
@@ -137,7 +137,7 @@ class PropertyFinancials extends Page implements HasForms
                                             ])
                                             ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
 
-                                        \Filament\Schemas\Components\Grid::make(2)
+                                        \Filament\Schemas\Components\Grid::make(3)
                                             ->schema([
                                                 \Filament\Forms\Components\Placeholder::make('owner_name')
                                                     ->label('Owner Name')
@@ -148,6 +148,18 @@ class PropertyFinancials extends Page implements HasForms
                                                 \Filament\Forms\Components\Placeholder::make('owner_phone')
                                                     ->label('Owner Phone')
                                                     ->content(fn () => $this->record->mous()->latest()->first()?->party?->phone ?? 'N/A'),
+                                                \Filament\Forms\Components\Placeholder::make('owner_pan')
+                                                    ->label('PAN Number')
+                                                    ->content(fn () => $this->record->mous()->latest()->first()?->party?->individual?->pan_number ?? $this->record->mous()->latest()->first()?->party?->organization?->pan ?? 'N/A'),
+                                                \Filament\Forms\Components\Placeholder::make('owner_aadhaar')
+                                                    ->label('Aadhaar Number')
+                                                    ->content(fn () => $this->record->mous()->latest()->first()?->party?->individual?->aadhaar_number ?? 'N/A'),
+                                                \Filament\Forms\Components\Placeholder::make('owner_voter')
+                                                    ->label('Voter ID')
+                                                    ->content(fn () => $this->record->mous()->latest()->first()?->party?->individual?->voter_id ?? 'N/A'),
+                                                \Filament\Forms\Components\Placeholder::make('owner_gstin')
+                                                    ->label('GSTIN (If Company)')
+                                                    ->content(fn () => $this->record->mous()->latest()->first()?->party?->organization?->gstin ?? 'N/A'),
                                             ])
                                             ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => !$get('is_signatory_different')),
                                     ]),

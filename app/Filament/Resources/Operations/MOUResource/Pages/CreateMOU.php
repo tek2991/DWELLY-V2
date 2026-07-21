@@ -36,6 +36,15 @@ class CreateMOU extends CreateRecord
         $data['number'] = app(\App\Domain\Mou\Actions\GenerateMouNumberAction::class)->execute();
         $data['status'] = \App\Domain\Opportunity\Enums\MouStatus::DRAFT;
         $data['prepared_by'] = auth()->id();
+        
+        if (!empty($data['legal_terms']['financial_model_id'])) {
+            $model = \App\Domain\Opportunity\Models\FinancialModel::find($data['legal_terms']['financial_model_id']);
+            if ($model) {
+                $data['legal_terms']['pricing_model'] = $model->name;
+                $data['legal_terms']['fee_percentage'] = $model->fee_percentage;
+            }
+        }
+        
         return $data;
     }
 

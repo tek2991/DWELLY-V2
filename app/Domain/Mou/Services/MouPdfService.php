@@ -161,7 +161,7 @@ class MouPdfService
         
         // Process Signatory documents
         if ($mou->is_signatory_different) {
-            $signatoryName = $mou->signatory_name ?? 'Signatory Authority';
+            $signatoryName = $mou->signatory_details['name'] ?? 'Signatory Authority';
             $processMedia('signatory_documents', 'Signatory Authority', $signatoryName);
         }
 

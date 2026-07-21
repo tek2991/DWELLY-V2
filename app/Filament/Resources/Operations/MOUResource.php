@@ -241,24 +241,24 @@ class MOUResource extends Resource
 
                             \Filament\Schemas\Components\Grid::make(2)
                                 ->schema([
-                                    Forms\Components\TextInput::make('signatory_name')
+                                    Forms\Components\TextInput::make('signatory_details.name')
                                         ->label('Signatory Full Name')
                                         ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
-                                    Forms\Components\TextInput::make('signatory_relation')
+                                    Forms\Components\TextInput::make('signatory_details.relation')
                                         ->label('Relation to Owner (e.g. POA, Son)')
                                         ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
-                                    Forms\Components\TextInput::make('signatory_phone')
+                                    Forms\Components\TextInput::make('signatory_details.phone')
                                         ->label('Phone Number')
                                         ->tel()
                                         ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
-                                    Forms\Components\TextInput::make('signatory_email')
+                                    Forms\Components\TextInput::make('signatory_details.email')
                                         ->label('Email Address')
                                         ->email()
                                         ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
-                                    Forms\Components\TextInput::make('signatory_aadhar_number')
+                                    Forms\Components\TextInput::make('signatory_details.aadhar_number')
                                         ->label('Aadhaar Number')
                                         ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
-                                    Forms\Components\TextInput::make('signatory_pan_number')
+                                    Forms\Components\TextInput::make('signatory_details.pan_number')
                                         ->label('PAN Number')
                                         ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
                                 ])

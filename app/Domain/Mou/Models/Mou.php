@@ -26,13 +26,8 @@ class Mou extends DomainModel implements HasMedia
         'property_id',
         'type',
         'party_id',
+        'signatory_details',
         'is_signatory_different',
-        'signatory_name',
-        'signatory_phone',
-        'signatory_email',
-        'signatory_aadhar_number',
-        'signatory_pan_number',
-        'signatory_relation',
         'status',
         'legal_terms',
         'bank_details',
@@ -46,6 +41,9 @@ class Mou extends DomainModel implements HasMedia
     ];
 
     protected $casts = [
+        'legal_terms' => 'array',
+        'bank_details' => 'array',
+        'signatory_details' => 'array',
         'is_signatory_different' => 'boolean',
         'status' => MouStatus::class,
         'type' => \App\Domain\Mou\Enums\MouType::class,

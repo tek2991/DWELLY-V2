@@ -61,4 +61,17 @@ class EditMOU extends EditRecord
     {
         return $this->getResource()::getUrl('view', ['record' => $this->getRecord()]);
     }
+    
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        if (!empty($data['legal_terms']['financial_model_id'])) {
+            $model = \App\Domain\Opportunity\Models\FinancialModel::find($data['legal_terms']['financial_model_id']);
+            if ($model) {
+                $data['legal_terms']['pricing_model'] = $model->name;
+                $data['legal_terms']['fee_percentage'] = $model->fee_percentage;
+            }
+        }
+        
+        return $data;
+    }
 }
