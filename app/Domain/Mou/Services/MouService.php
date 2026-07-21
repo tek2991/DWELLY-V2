@@ -124,7 +124,7 @@ class MouService
                     [
                         'bank_name' => $mou->bank_details['bank_name'] ?? 'Unknown',
                         'bank_address' => $mou->bank_details['bank_address'] ?? null,
-                        'account_name' => $mou->bank_details['account_holder_name'] ?? 'Unknown',
+                        'beneficiary_name' => $mou->bank_details['beneficiary_name'] ?? 'Unknown',
                         'ifsc_code' => $mou->bank_details['ifsc_code'] ?? 'Unknown',
                         'is_primary' => true,
                     ]
@@ -157,7 +157,7 @@ class MouService
                 'party_id' => $mou->party_id,
                 'bank_name' => $bankDetails['bank_name'],
                 'bank_address' => $bankDetails['bank_address'] ?? null,
-                'account_name' => $bankDetails['account_holder_name'],
+                'beneficiary_name' => $bankDetails['beneficiary_name'],
                 'account_number' => $bankDetails['account_number'],
                 'ifsc_code' => $bankDetails['ifsc_code'],
                 'is_primary' => true,

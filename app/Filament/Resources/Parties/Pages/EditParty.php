@@ -41,11 +41,11 @@ class EditParty extends EditRecord
         $bank = $this->record->bankAccounts()->where('is_primary', true)->first();
         if ($bank) {
             $data['bank_details'] = [
-                'bank_beneficiary_name' => $bank->account_name,
+                'beneficiary_name' => $bank->beneficiary_name,
                 'bank_name' => $bank->bank_name,
                 'bank_address' => $bank->bank_address,
-                'bank_account_no' => $bank->account_number,
-                'bank_ifsc_code' => $bank->ifsc_code,
+                'account_number' => $bank->account_number,
+                'ifsc_code' => $bank->ifsc_code,
             ];
         }
 

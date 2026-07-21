@@ -95,11 +95,13 @@ class PropertyFinancials extends Page implements HasForms
                                     ->schema([
                                         \Filament\Schemas\Components\Group::make()
                                             ->statePath('bank_details')
+                                            ->disabled()
                                             ->schema([
-                                                TextInput::make('account_name')->required(),
+                                                TextInput::make('beneficiary_name')->label('Beneficiary Name')->required(),
                                                 TextInput::make('account_number')->required(),
                                                 TextInput::make('ifsc_code')->required(),
                                                 TextInput::make('bank_name')->required(),
+                                                TextInput::make('bank_address')->label('Bank Address'),
                                             ])
                                             ->columns(2),
                                     ]),
@@ -111,6 +113,7 @@ class PropertyFinancials extends Page implements HasForms
                                         \Filament\Forms\Components\Toggle::make('is_signatory_different')
                                             ->label('Is Signatory Authority different from Property Owner?')
                                             ->default(false)
+                                            ->disabled()
                                             ->live(),
 
                                         \Filament\Schemas\Components\Grid::make(2)
@@ -133,6 +136,20 @@ class PropertyFinancials extends Page implements HasForms
                                                     ->label('PAN Number'),
                                             ])
                                             ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
+
+                                        \Filament\Schemas\Components\Grid::make(2)
+                                            ->schema([
+                                                \Filament\Forms\Components\Placeholder::make('owner_name')
+                                                    ->label('Owner Name')
+                                                    ->content(fn () => $this->record->mous()->latest()->first()?->party?->display_name ?? 'N/A'),
+                                                \Filament\Forms\Components\Placeholder::make('owner_email')
+                                                    ->label('Owner Email')
+                                                    ->content(fn () => $this->record->mous()->latest()->first()?->party?->email ?? 'N/A'),
+                                                \Filament\Forms\Components\Placeholder::make('owner_phone')
+                                                    ->label('Owner Phone')
+                                                    ->content(fn () => $this->record->mous()->latest()->first()?->party?->phone ?? 'N/A'),
+                                            ])
+                                            ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => !$get('is_signatory_different')),
                                     ]),
                             ]),
                         \Filament\Schemas\Components\Tabs\Tab::make('Additional Documents')

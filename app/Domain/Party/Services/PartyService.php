@@ -38,11 +38,11 @@ class PartyService
 
             if (!empty(array_filter($bankDetails))) {
                 $party->bankAccounts()->create([
-                    'account_name' => $bankDetails['bank_beneficiary_name'] ?? null,
+                    'beneficiary_name' => $bankDetails['beneficiary_name'] ?? null,
                     'bank_name' => $bankDetails['bank_name'] ?? null,
                     'bank_address' => $bankDetails['bank_address'] ?? null,
-                    'account_number' => $bankDetails['bank_account_no'] ?? null,
-                    'ifsc_code' => $bankDetails['bank_ifsc_code'] ?? null,
+                    'account_number' => $bankDetails['account_number'] ?? null,
+                    'ifsc_code' => $bankDetails['ifsc_code'] ?? null,
                     'is_primary' => true,
                 ]);
             }
@@ -118,11 +118,11 @@ class PartyService
                 $party->bankAccounts()->updateOrCreate(
                     ['party_id' => $party->id, 'is_primary' => true],
                     [
-                        'account_name' => $bankDetails['bank_beneficiary_name'] ?? null,
+                        'beneficiary_name' => $bankDetails['beneficiary_name'] ?? null,
                         'bank_name' => $bankDetails['bank_name'] ?? null,
                         'bank_address' => $bankDetails['bank_address'] ?? null,
-                        'account_number' => $bankDetails['bank_account_no'] ?? null,
-                        'ifsc_code' => $bankDetails['bank_ifsc_code'] ?? null,
+                        'account_number' => $bankDetails['account_number'] ?? null,
+                        'ifsc_code' => $bankDetails['ifsc_code'] ?? null,
                     ]
                 );
             }

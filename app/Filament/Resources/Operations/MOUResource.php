@@ -201,8 +201,7 @@ class MOUResource extends Resource
                                 ->columnSpanFull(),
                             Forms\Components\TextInput::make('legal_terms.rent_amount')
                                 ->label('Rent Amount')
-                                ->numeric()
-                                ->required(),
+                                ->numeric(),
                             Forms\Components\Select::make('legal_terms.financial_model_id')
                                 ->label('Financial Model')
                                 ->options(fn () => \App\Domain\Opportunity\Models\FinancialModel::pluck('name', 'id'))
@@ -214,10 +213,12 @@ class MOUResource extends Resource
                                         $query->where('slug', 'electricity');
                                     })->pluck('name', 'id');
                                 })
-                                ->searchable(),
+                                ->searchable()
+                                ->required(),
                             Forms\Components\TextInput::make('legal_terms.electricity_consumer_id')
                                 ->label('Connection Number')
-                                ->maxLength(255),
+                                ->maxLength(255)
+                                ->required(),
                         ])->columns(2),
 
                     \Filament\Schemas\Components\Section::make('Legal Terms')
@@ -230,7 +231,8 @@ class MOUResource extends Resource
                                 ->collection('mou_attachments')
                                 ->multiple()
                                 ->label('Owner KYC & Cancelled Cheque')
-                                ->helperText('Upload Aadhar, PAN, Cancelled Cheque, etc.'),
+                                ->helperText('Upload Aadhar, PAN, Cancelled Cheque, etc.')
+                                ->required(),
 
                             Forms\Components\Toggle::make('is_signatory_different')
                                 ->label('Is Signatory Authority different from Property Owner?')
@@ -247,14 +249,18 @@ class MOUResource extends Resource
                                         ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
                                     Forms\Components\TextInput::make('signatory_phone')
                                         ->label('Phone Number')
-                                        ->tel(),
+                                        ->tel()
+                                        ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
                                     Forms\Components\TextInput::make('signatory_email')
                                         ->label('Email Address')
-                                        ->email(),
+                                        ->email()
+                                        ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
                                     Forms\Components\TextInput::make('signatory_aadhar_number')
-                                        ->label('Aadhaar Number'),
+                                        ->label('Aadhaar Number')
+                                        ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
                                     Forms\Components\TextInput::make('signatory_pan_number')
-                                        ->label('PAN Number'),
+                                        ->label('PAN Number')
+                                        ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
                                 ])
                                 ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
 
@@ -263,6 +269,7 @@ class MOUResource extends Resource
                                 ->multiple()
                                 ->label('Signatory Authorization & KYC')
                                 ->helperText('Upload Power of Attorney, Signatory Aadhar, PAN, etc.')
+                                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different'))
                                 ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
                         ])->columns(1)
                         ->collapsible(),
@@ -270,15 +277,20 @@ class MOUResource extends Resource
                     \Filament\Schemas\Components\Section::make('Bank Details')
                         ->schema([
                             Forms\Components\TextInput::make('bank_details.bank_name')
-                                ->label('Bank Name'),
-                            Forms\Components\TextInput::make('bank_details.account_holder_name')
-                                ->label('Account Holder'),
+                                ->label('Bank Name')
+                                ->required(),
+                            Forms\Components\TextInput::make('bank_details.beneficiary_name')
+                                ->label('Beneficiary Name')
+                                ->required(),
                             Forms\Components\TextInput::make('bank_details.account_number')
-                                ->label('Account Number'),
+                                ->label('Account Number')
+                                ->required(),
                             Forms\Components\TextInput::make('bank_details.ifsc_code')
-                                ->label('IFSC Code'),
+                                ->label('IFSC Code')
+                                ->required(),
                             Forms\Components\Textarea::make('bank_details.bank_address')
                                 ->label('Address of the Bank')
+                                ->required()
                                 ->columnSpanFull(),
                         ])->columns(2),
                 ])->columnSpan(['lg' => 2]),

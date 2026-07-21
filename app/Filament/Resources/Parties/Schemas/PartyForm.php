@@ -139,7 +139,7 @@ class PartyForm
                 Section::make('Bank Details')
                     ->columns(2)
                     ->schema([
-                        TextInput::make('bank_details.bank_beneficiary_name')
+                        TextInput::make('bank_details.beneficiary_name')
                             ->label('Beneficiary Name')
                             ->maxLength(255),
                         TextInput::make('bank_details.bank_name')
@@ -149,10 +149,10 @@ class PartyForm
                             ->label('Address of the Bank')
                             ->columnSpanFull()
                             ->rows(2),
-                        TextInput::make('bank_details.bank_account_no')
-                            ->label('Bank Account No.')
+                        TextInput::make('bank_details.account_number')
+                            ->label('Account Number')
                             ->maxLength(255),
-                        TextInput::make('bank_details.bank_ifsc_code')
+                        TextInput::make('bank_details.ifsc_code')
                             ->label('IFSC Code')
                             ->maxLength(255),
                     ]),
