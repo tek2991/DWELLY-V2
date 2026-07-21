@@ -87,7 +87,7 @@ class RoomDefinitionResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => \App\Filament\Resources\Settings\RoomDefinitionResource\Pages\ManageRoomDefinitions::route('/'),
+            'index' => \App\Filament\Resources\Settings\RoomDefinitionResource\Pages\ManageRoomTypes::route('/'),
         ];
     }
 }

@@ -10,12 +10,16 @@ class OpportunityReadinessService
     {
         $errors = [];
 
+        if (!$opportunity->title) {
+            $errors[] = 'Title is required.';
+        }
+
         if (!$opportunity->owner_name || !$opportunity->owner_phone) {
             $errors[] = 'Owner contact information (Name and Phone) is required.';
         }
 
-        if (!$opportunity->expected_rent) {
-            $errors[] = 'Expected rent is required.';
+        if (!$opportunity->assigned_user_id) {
+            $errors[] = 'Assigned user is required.';
         }
 
         return [

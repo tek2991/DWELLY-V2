@@ -26,8 +26,10 @@ class OpportunityResource extends Resource
     
     protected static ?int $navigationSort = 1;
 
-    public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
+    public static function canEdit(?\Illuminate\Database\Eloquent\Model $record = null): bool
     {
+        if (!$record) return true;
+
         return !$record->mou()->exists();
     }
 
@@ -49,6 +51,7 @@ class OpportunityResource extends Resource
                                 ->relationship('assignedUser', 'name')
                                 ->searchable()
                                 ->preload()
+                                ->required()
                                 ->default(fn () => auth()->id()),
                         ])->columns(2),
 
@@ -107,7 +110,8 @@ class OpportunityResource extends Resource
                             Forms\Components\TextInput::make('owner_phone')
                                 ->label('Owner Phone')
                                 ->tel()
-                                ->maxLength(255),
+                                ->maxLength(255)
+                                ->required(),
                             Forms\Components\TextInput::make('owner_email')
                                 ->label('Owner Email')
                                 ->email()
@@ -194,6 +198,10 @@ class OpportunityResource extends Resource
                         ->label('Ready For MOU')
                         ->icon('heroicon-o-check-badge')
                         ->color('success')
+                        ->requiresConfirmation()
+                        ->modalHeading('Mark as Ready for MOU')
+                        ->modalDescription('Are you sure you want to mark this opportunity as Ready for MOU?')
+                        ->modalSubmitActionLabel('Confirm')
                         ->visible(fn (Opportunity $record) => $record->status === OpportunityStatus::NEW)
                         ->action(function (Opportunity $record) {
                             $readiness = app(OpportunityReadinessService::class)->canCreateMOU($record);
@@ -214,12 +222,16 @@ class OpportunityResource extends Resource
                         ->icon('heroicon-o-document-text')
                         ->color('primary')
                         ->visible(fn (Opportunity $record) => in_array($record->status, [OpportunityStatus::READY_FOR_MOU, OpportunityStatus::CONVERTED]))
-                        ->url(function (Opportunity $record) {
+                        ->requiresConfirmation(fn (Opportunity $record) => !Mou::where('opportunity_id', $record->id)->exists())
+                        ->modalHeading('Create MOU')
+                        ->modalDescription('Are you sure you want to create an MOU for this opportunity?')
+                        ->modalSubmitActionLabel('Create')
+                        ->action(function (Opportunity $record) {
                             $mou = Mou::where('opportunity_id', $record->id)->first();
                             if ($mou) {
-                                return MOUResource::getUrl('view', ['record' => $mou]);
+                                return redirect(MOUResource::getUrl('view', ['record' => $mou]));
                             }
-                            return MOUResource::getUrl('create', ['opportunity_id' => $record->id]);
+                            return redirect(MOUResource::getUrl('create', ['opportunity_id' => $record->id]));
                         }),
                         
                     \Filament\Actions\Action::make('closeLost')

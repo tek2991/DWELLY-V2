@@ -19,11 +19,11 @@ class ViewMOU extends ViewRecord
         return [
             Actions\Action::make('viewHistoryPdf')
                 ->extraAttributes(['style' => 'display: none !important;']) // Hide from header visually, but keep mountable
-                ->modalHeading(fn (array $arguments) => $arguments['title'] ?? 'View Document')
+                ->modalHeading(fn (?array $arguments = null) => $arguments['title'] ?? 'View Document')
                 ->modalWidth('7xl')
                 ->modalSubmitActionLabel('Download Document')
                 ->modalCancelActionLabel('Close')
-                ->modalContent(function (array $arguments) {
+                ->modalContent(function (?array $arguments = null) {
                     $mediaId = $arguments['mediaId'] ?? null;
                     if (!$mediaId) return null;
                     
@@ -34,7 +34,7 @@ class ViewMOU extends ViewRecord
                         'path' => $media->getPath()
                     ]);
                 })
-                ->action(function (array $arguments, Mou $record) {
+                ->action(function (?array $arguments = null, ?Mou $record = null) {
                     $mediaId = $arguments['mediaId'] ?? null;
                     if (!$mediaId) return;
                     
@@ -59,7 +59,7 @@ class ViewMOU extends ViewRecord
                 ->label('Resolve Party')
                 ->icon('heroicon-o-users')
                 ->color('primary')
-                ->visible(fn (Mou $record) => !$record->party_id && $record->status === MouStatus::DRAFT)
+                ->visible(fn (?Mou $record) => $record && !$record->party_id && $record->status === MouStatus::DRAFT)
                 ->form([
                     Forms\Components\Radio::make('action_type')
                         ->label('Action')
@@ -96,7 +96,7 @@ class ViewMOU extends ViewRecord
                     // --- INDIVIDUAL FIELDS ---
                     Forms\Components\TextInput::make('name')
                         ->label('Full Name')
-                        ->default(fn (Mou $record) => $record->opportunity?->owner_name)
+                        ->default(fn (?Mou $record) => $record?->opportunity?->owner_name)
                         ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'individual')
                         ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'individual'),
                     Forms\Components\TextInput::make('parent_name')
@@ -117,7 +117,7 @@ class ViewMOU extends ViewRecord
                     // --- ORGANIZATION FIELDS ---
                     Forms\Components\TextInput::make('legal_name')
                         ->label('Company Legal Name')
-                        ->default(fn (Mou $record) => $record->opportunity?->owner_name)
+                        ->default(fn (?Mou $record) => $record?->opportunity?->owner_name)
                         ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'organization')
                         ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'organization'),
                     Forms\Components\TextInput::make('contact_person_name')
@@ -142,15 +142,15 @@ class ViewMOU extends ViewRecord
                         ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'individual'),
                     Forms\Components\TextInput::make('phone')
                         ->label('Phone Number')
-                        ->default(fn (Mou $record) => $record->opportunity->owner_phone)
+                        ->default(fn (?Mou $record) => $record?->opportunity?->owner_phone)
                         ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new'),
                     Forms\Components\TextInput::make('email')
                         ->label('Email Address')
-                        ->default(fn (Mou $record) => $record->opportunity->owner_email)
+                        ->default(fn (?Mou $record) => $record?->opportunity?->owner_email)
                         ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new'),
                     Forms\Components\Textarea::make('address')
                         ->label(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('party_type') === 'organization' ? 'Registered Address' : 'Personal Address')
-                        ->default(fn (Mou $record) => $record->opportunity?->address)
+                        ->default(fn (?Mou $record) => $record?->opportunity?->address)
                         ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new')
                         ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new')
                         ->columnSpanFull(),
@@ -171,7 +171,7 @@ class ViewMOU extends ViewRecord
                 ->label('Provision Accounting')
                 ->icon('heroicon-o-banknotes')
                 ->color('primary')
-                ->visible(fn (Mou $record) => $record->party_id && empty($record->bank_details) && $record->status === MouStatus::DRAFT)
+                ->visible(fn (?Mou $record) => $record && $record->party_id && empty($record->bank_details) && $record->status === MouStatus::DRAFT)
                 ->form([
                     Forms\Components\TextInput::make('bank_name')->required(),
                     Forms\Components\TextInput::make('account_holder_name')->required(),
@@ -186,10 +186,10 @@ class ViewMOU extends ViewRecord
                 }),
 
             Actions\Action::make('generatePdf')
-                ->label(fn (Mou $record) => $record->hasMedia('draft_pdf') ? 'Regenerate PDF' : 'Generate PDF')
+                ->label(fn (?Mou $record) => $record?->hasMedia('draft_pdf') ? 'Regenerate PDF' : 'Generate PDF')
                 ->icon('heroicon-o-document-arrow-down')
                 ->color('warning')
-                ->visible(fn (Mou $record) => in_array($record->status, [
+                ->visible(fn (?Mou $record) => $record && in_array($record->status, [
                     MouStatus::DRAFT, 
                     MouStatus::PARTY_PENDING, 
                     MouStatus::READY_TO_GENERATE, 
@@ -197,9 +197,9 @@ class ViewMOU extends ViewRecord
                     MouStatus::DOWNLOADED,
                     MouStatus::SIGNED_COPY_UPLOADED
                 ]))
-                ->requiresConfirmation(fn (Mou $record) => $record->hasMedia('draft_pdf'))
-                ->modalHeading(fn (Mou $record) => $record->hasMedia('draft_pdf') ? 'Regenerate Draft PDF' : 'Generate Draft PDF')
-                ->modalDescription(fn (Mou $record) => $record->hasMedia('signed_pdf') 
+                ->requiresConfirmation(fn (?Mou $record) => (bool) $record?->hasMedia('draft_pdf'))
+                ->modalHeading(fn (?Mou $record) => $record?->hasMedia('draft_pdf') ? 'Regenerate Draft PDF' : 'Generate Draft PDF')
+                ->modalDescription(fn (?Mou $record) => $record?->hasMedia('signed_pdf') 
                     ? 'Are you sure you want to regenerate the draft PDF? The currently uploaded signed PDF will be archived, and the MOU status will revert to "PDF Generated".' 
                     : 'Are you sure you want to generate a new draft PDF? This will increment the document version.')
                 ->action(function (Mou $record) {
@@ -216,7 +216,7 @@ class ViewMOU extends ViewRecord
                 ->label('Upload Signed PDF')
                 ->icon('heroicon-o-document-arrow-up')
                 ->color('info')
-                ->visible(fn (Mou $record) => in_array($record->status, [MouStatus::PDF_GENERATED, MouStatus::DOWNLOADED, MouStatus::SIGNED_COPY_UPLOADED]))
+                ->visible(fn (?Mou $record) => $record && in_array($record->status, [MouStatus::PDF_GENERATED, MouStatus::DOWNLOADED, MouStatus::SIGNED_COPY_UPLOADED]))
                 ->form([
                     Forms\Components\FileUpload::make('signed_pdf')
                         ->label('Signed PDF File')
@@ -234,7 +234,7 @@ class ViewMOU extends ViewRecord
                 ->label('Verify Agreement')
                 ->icon('heroicon-o-check-badge')
                 ->color('success')
-                ->visible(fn (Mou $record) => $record->status === MouStatus::SIGNED_COPY_UPLOADED)
+                ->visible(fn (?Mou $record) => $record?->status === MouStatus::SIGNED_COPY_UPLOADED)
                 ->requiresConfirmation()
                 ->action(function (Mou $record) {
                     app(MouWorkflowService::class)->verify($record);
@@ -246,15 +246,15 @@ class ViewMOU extends ViewRecord
                 ->label('Convert to Property')
                 ->icon('heroicon-o-building-office')
                 ->color('success')
-                ->visible(fn (Mou $record) => $record->status === MouStatus::VERIFIED)
+                ->visible(fn (?Mou $record) => $record?->status === MouStatus::VERIFIED)
                 ->requiresConfirmation()
-                ->action(function (Mou $record) {
+                ->action(function (?Mou $record = null) {
                     $property = app(\App\Domain\Property\Services\PropertyOnboardingService::class)->createPropertyFromMou($record);
                     app(MouWorkflowService::class)->convert($record);
                     
                     \Filament\Notifications\Notification::make()->title('Property Created')->success()->send();
                     
-                    return redirect(MOUResource::getUrl('view', ['record' => $record]));
+                    return redirect(\App\Filament\Resources\Properties\PropertyResource::getUrl('edit', ['record' => $property]));
                 }),
         ];
     }

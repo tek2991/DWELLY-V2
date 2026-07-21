@@ -6,7 +6,7 @@ use App\Filament\Resources\Settings\RoomDefinitionResource;
 use Filament\Actions;
 use Filament\Resources\Pages\ManageRecords;
 
-class ManageRoomDefinitions extends ManageRecords
+class ManageRoomTypes extends ManageRecords
 {
     protected static string $resource = RoomDefinitionResource::class;
 

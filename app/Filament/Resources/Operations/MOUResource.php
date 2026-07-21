@@ -27,8 +27,10 @@ class MOUResource extends Resource
         return auth()->user()->hasAnyRole(['Business Owner', 'Operations Manager', 'Legal']);
     }
 
-    public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
+    public static function canEdit(?\Illuminate\Database\Eloquent\Model $record = null): bool
     {
+        if (!$record) return true;
+
         return !in_array($record->status, [
             \App\Domain\Opportunity\Enums\MouStatus::VERIFIED,
             \App\Domain\Opportunity\Enums\MouStatus::CONVERTED
@@ -538,7 +540,7 @@ class MOUResource extends Resource
                             
                             \Filament\Notifications\Notification::make()->title('Property Created')->success()->send();
                             
-                            return redirect(\App\Filament\Resources\Properties\PropertyResource::getUrl('onboarding', ['record' => $property]));
+                            return redirect(\App\Filament\Resources\Properties\PropertyResource::getUrl('edit', ['record' => $property]));
                         }),
                 ])->label('Workflow Actions'),
             ])

@@ -28,6 +28,10 @@ class ViewOpportunity extends ViewRecord
                 ->label('Ready For MOU')
                 ->icon('heroicon-o-check-badge')
                 ->color('success')
+                ->requiresConfirmation()
+                ->modalHeading('Mark as Ready for MOU')
+                ->modalDescription('Are you sure you want to mark this opportunity as Ready for MOU?')
+                ->modalSubmitActionLabel('Confirm')
                 ->visible(fn (Opportunity $record) => $record->status === OpportunityStatus::NEW)
                 ->action(function (Opportunity $record) {
                     $readiness = app(OpportunityReadinessService::class)->canCreateMOU($record);
@@ -48,12 +52,16 @@ class ViewOpportunity extends ViewRecord
                 ->icon('heroicon-o-document-text')
                 ->color('primary')
                 ->visible(fn (Opportunity $record) => in_array($record->status, [OpportunityStatus::READY_FOR_MOU, OpportunityStatus::CONVERTED]))
-                ->url(function (Opportunity $record) {
+                ->requiresConfirmation(fn (Opportunity $record) => !Mou::where('opportunity_id', $record->id)->exists())
+                ->modalHeading('Create MOU')
+                ->modalDescription('Are you sure you want to create an MOU for this opportunity?')
+                ->modalSubmitActionLabel('Create')
+                ->action(function (Opportunity $record) {
                     $mou = Mou::where('opportunity_id', $record->id)->first();
                     if ($mou) {
-                        return MOUResource::getUrl('view', ['record' => $mou]);
+                        return redirect(MOUResource::getUrl('view', ['record' => $mou]));
                     }
-                    return MOUResource::getUrl('create', ['opportunity_id' => $record->id]);
+                    return redirect(MOUResource::getUrl('create', ['opportunity_id' => $record->id]));
                 }),
                 
             Actions\Action::make('closeLost')
