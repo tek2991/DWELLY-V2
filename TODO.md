@@ -9,10 +9,9 @@
 
 5. [x] Billing will always be to the owner. (No action needed for this, right now)
 
-
 6. [x] No documents, pricing model and perfentage fee. in onboarding/property resources. They need a seperate page due to security reasons. Need to remove from the pricing version table of the properties resource.
 
-7. [x] The documents, pricing model and perfentage fee, and bank details will be on a seperate page discussed above and will be access restricted. Changing the pricing model, perfentage fee, and bank details needs a work flow sor generating a new MOU, with the new terms. Documents may be uploaded from this page for the new MOU.
+7. [x] The documents, pricing model and perfentage fee, and bank details will be on a seperate page discussed above and will be access restricted. 
 
 8. [x] Property listing toggle in property index
 
@@ -21,5 +20,9 @@
 10. Ability to add audit items during the audit, if approver approves it then there will be option to update the propoerty with the added items. (No action needed for this, right now)
 
 11. Need audit templates as a reference data resource. It will define which room refination and inventory type will require minimum how many photo as evidence. (No action needed for this, right now)
+
+12. Pricing policy data saved in mou needs work. screenshot should not just refference id, it should save all details.
+
+13. Changing the pricing model, perfentage fee, and bank details needs a work flow sor generating a new MOU, with the new terms. Documents may be uploaded from this page for the new MOU.
 
 
