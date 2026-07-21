@@ -19,6 +19,76 @@ class MouService
         protected AccountingProvisioningService $accountingProvisioning
     ) {}
 
+    public function getOwnerDetails(?\App\Domain\Party\Models\Party $party = null, ?Opportunity $opportunity = null): array
+    {
+        if ($party) {
+            $party->loadMissing(['individual', 'organization', 'addresses']);
+            $firstAddress = $party->addresses->first();
+            return [
+                'party_id' => $party->id,
+                'party_type' => $party->party_type,
+                'name' => $party->display_name,
+                'parent_name' => $party->individual?->parent_name ?? null,
+                'phone' => $party->phone,
+                'email' => $party->email,
+                'pan_number' => $party->individual?->pan_number ?? $party->organization?->pan ?? null,
+                'aadhar_number' => $party->individual?->aadhaar_number ?? null,
+                'gstin' => $party->organization?->gstin ?? null,
+                'cin' => $party->organization?->cin ?? null,
+                'contact_person_name' => $party->organization?->contact_person_name ?? null,
+                'contact_person_phone' => $party->organization?->contact_person_phone ?? null,
+                'address' => $firstAddress?->address_line_1 ?? null,
+                'state' => $firstAddress?->state ?? null,
+            ];
+        }
+
+        if ($opportunity) {
+            return [
+                'name' => $opportunity->owner_name,
+                'phone' => $opportunity->owner_phone,
+                'email' => $opportunity->owner_email,
+                'address' => $opportunity->address,
+            ];
+        }
+
+        return [];
+    }
+
+    public function getSignatoryDetailsForOwner(?\App\Domain\Party\Models\Party $party = null, ?Opportunity $opportunity = null): array
+    {
+        if ($party) {
+            $party->loadMissing(['individual', 'organization']);
+            return [
+                'name' => $party->display_name,
+                'relation' => 'Self',
+                'phone' => $party->phone,
+                'email' => $party->email,
+                'aadhar_number' => $party->individual?->aadhaar_number ?? null,
+                'pan_number' => $party->individual?->pan_number ?? $party->organization?->pan ?? null,
+            ];
+        }
+
+        if ($opportunity) {
+            return [
+                'name' => $opportunity->owner_name,
+                'relation' => 'Self',
+                'phone' => $opportunity->owner_phone,
+                'email' => $opportunity->owner_email,
+                'aadhar_number' => null,
+                'pan_number' => null,
+            ];
+        }
+
+        return [
+            'name' => null,
+            'relation' => 'Self',
+            'phone' => null,
+            'email' => null,
+            'aadhar_number' => null,
+            'pan_number' => null,
+        ];
+    }
+
     public function createDraftFromOpportunity(Opportunity $opportunity): Mou
     {
         if ($opportunity->status->value !== 'ready_for_mou') {
@@ -26,14 +96,31 @@ class MouService
         }
 
         return DB::transaction(function () use ($opportunity) {
+            $financialModel = $opportunity->expected_financial_model_id
+                ? \App\Domain\Opportunity\Models\FinancialModel::find($opportunity->expected_financial_model_id)
+                : null;
+
+            $legalTerms = [
+                'address' => $opportunity->address,
+                'rent_amount' => $opportunity->expected_rent,
+                'is_furnished' => $opportunity->estimated_is_furnished,
+            ];
+
+            if ($financialModel) {
+                $legalTerms['financial_model_id'] = $financialModel->id;
+                $legalTerms['financial_model_name'] = $financialModel->name;
+                $legalTerms['financial_model_description'] = $financialModel->description;
+                $legalTerms['financial_model_fee_collection'] = $financialModel->fee_collection;
+            }
+
             $mou = Mou::create([
                 'number' => $this->generateMouNumberAction->execute(),
                 'opportunity_id' => $opportunity->id,
                 'status' => MouStatus::DRAFT,
-                'legal_terms' => [
-                    'rent_amount' => $opportunity->expected_rent,
-                    'is_furnished' => $opportunity->estimated_is_furnished,
-                ],
+                'owner_details' => $this->getOwnerDetails(null, $opportunity),
+                'is_signatory_different' => false,
+                'signatory_details' => $this->getSignatoryDetailsForOwner(null, $opportunity),
+                'legal_terms' => $legalTerms,
                 'prepared_by' => auth()->id(),
             ]);
 
@@ -109,7 +196,15 @@ class MouService
                 ]);
             }
 
-            $mou->update(['party_id' => $party->id]);
+            $ownerDetails = $this->getOwnerDetails($party, $mou->opportunity);
+            $mouUpdateData = [
+                'party_id' => $party->id,
+                'owner_details' => $ownerDetails,
+            ];
+            if (!$mou->is_signatory_different) {
+                $mouUpdateData['signatory_details'] = $this->getSignatoryDetailsForOwner($party, $mou->opportunity);
+            }
+            $mou->update($mouUpdateData);
             
             // Sync resolved party back to Opportunity
             $mou->opportunity->update(['owner_party_id' => $party->id]);

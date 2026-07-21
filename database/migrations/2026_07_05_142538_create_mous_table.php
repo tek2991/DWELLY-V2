@@ -23,6 +23,7 @@ return new class extends Migration
 
             // The resolved Party after Party Resolution
             $table->foreignUlid('party_id')->nullable()->constrained('parties');
+            $table->json('owner_details')->nullable();
             $table->boolean('is_signatory_different')->default(false);
             $table->json('signatory_details')->nullable();
             

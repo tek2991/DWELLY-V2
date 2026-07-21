@@ -40,9 +40,25 @@ class CreateMOU extends CreateRecord
         if (!empty($data['legal_terms']['financial_model_id'])) {
             $model = \App\Domain\Opportunity\Models\FinancialModel::find($data['legal_terms']['financial_model_id']);
             if ($model) {
-                $data['legal_terms']['pricing_model'] = $model->name;
-                $data['legal_terms']['fee_percentage'] = $model->fee_percentage;
+                $data['legal_terms']['financial_model_name'] = $model->name;
+                $data['legal_terms']['financial_model_description'] = $model->description;
+                $data['legal_terms']['financial_model_fee_collection'] = $model->fee_collection;
             }
+        }
+        
+        if (!empty($data['legal_terms']['electricity_provider_id'])) {
+            $provider = \App\Domain\Property\Models\UtilityProvider::find($data['legal_terms']['electricity_provider_id']);
+            if ($provider) {
+                $data['legal_terms']['electricity_provider_name'] = $provider->name;
+            }
+        }
+
+        unset($data['legal_terms']['pricing_model'], $data['legal_terms']['fee_percentage']);
+        
+        if (empty($data['is_signatory_different'])) {
+            $party = !empty($data['party_id']) ? \App\Domain\Party\Models\Party::find($data['party_id']) : null;
+            $opportunity = !empty($data['opportunity_id']) ? Opportunity::find($data['opportunity_id']) : null;
+            $data['signatory_details'] = app(\App\Domain\Mou\Services\MouService::class)->getSignatoryDetailsForOwner($party, $opportunity);
         }
         
         return $data;

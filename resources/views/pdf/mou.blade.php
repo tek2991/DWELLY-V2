@@ -83,18 +83,15 @@
     </p>
 
     <p>
-        <strong>Name:</strong> <span class="form-line">{{ $mou->party->display_name ?? '_______________________' }}</span><br>
-        @if($mou->party && $mou->party->party_type === 'individual')
-        <strong>S/o or D/o:</strong> <span class="form-line" style="width: 100%;">{{ $mou->party->individual->parent_name ?? '_______________________' }}</span><br>
+        <strong>Name:</strong> <span class="form-line">{{ $mou->owner_details['name'] ?? $mou->party?->display_name ?? $mou->opportunity->owner_name ?? '_______________________' }}</span><br>
+        @if(($mou->owner_details['parent_name'] ?? $mou->party?->individual?->parent_name))
+        <strong>S/o or D/o:</strong> <span class="form-line" style="width: 100%;">{{ $mou->owner_details['parent_name'] ?? $mou->party?->individual?->parent_name }}</span><br>
         @endif
-        <strong>Address:</strong> <span class="form-line" style="width: 100%;">{{ $mou->party->addresses->where('is_primary', true)->first()?->address_line_1 ?? $mou->party->addresses->first()?->address_line_1 ?? '_______________________' }}</span><br>
-        <strong>Aadhaar No.:</strong> <span class="form-line">{{ $mou->party->individual->aadhaar_number ?? '_______________________' }}</span>
-        <strong>PAN No.:</strong> <span class="form-line">{{ $mou->party->individual->pan_number ?? $mou->party->organization->pan ?? '_______________________' }}</span><br>
-        @if($mou->party && $mou->party->party_type === 'individual' && optional($mou->party->individual)->voter_id)
-        <strong>Voter ID:</strong> <span class="form-line">{{ $mou->party->individual->voter_id }}</span><br>
-        @endif
-        <strong>Phone:</strong> <span class="form-line">{{ $mou->party->phone ?? '_______________________' }}</span>
-        <strong>Email:</strong> <span class="form-line">{{ $mou->party->email ?? '_______________________' }}</span><br>
+        <strong>Address:</strong> <span class="form-line" style="width: 100%;">{{ $mou->owner_details['address'] ?? $mou->party?->addresses->where('is_primary', true)->first()?->address_line_1 ?? $mou->party?->addresses->first()?->address_line_1 ?? $mou->opportunity->address ?? '_______________________' }}</span><br>
+        <strong>Aadhaar No.:</strong> <span class="form-line">{{ $mou->owner_details['aadhar_number'] ?? $mou->party?->individual?->aadhaar_number ?? '_______________________' }}</span>
+        <strong>PAN No.:</strong> <span class="form-line">{{ $mou->owner_details['pan_number'] ?? $mou->party?->individual?->pan_number ?? $mou->party?->organization?->pan ?? '_______________________' }}</span><br>
+        <strong>Phone:</strong> <span class="form-line">{{ $mou->owner_details['phone'] ?? $mou->party?->phone ?? $mou->opportunity->owner_phone ?? '_______________________' }}</span>
+        <strong>Email:</strong> <span class="form-line">{{ $mou->owner_details['email'] ?? $mou->party?->email ?? $mou->opportunity->owner_email ?? '_______________________' }}</span><br>
         (herein stated as the <strong>'Property Owner'</strong>)
     </p>
 
@@ -110,7 +107,7 @@
     <p>
         The <strong>Property Owner</strong> is the absolute owner in full possession of the constructed structure as described –<br>
         <strong>Property Address:</strong> <span class="form-line" style="width: 100%;">{{ $mou->legal_terms['address'] ?? $mou->opportunity->address ?? '_______________________' }}</span><br>
-        <strong>{{ isset($mou->legal_terms['electricity_provider_id']) ? \App\Domain\Property\Models\UtilityProvider::find($mou->legal_terms['electricity_provider_id'])?->name : 'Electricity Provider' }} Connection No.:</strong> <span class="form-line" style="width: 300px;">{{ $mou->legal_terms['electricity_consumer_id'] ?? '_______________________' }}</span><br>
+        <strong>{{ $mou->legal_terms['electricity_provider_name'] ?? (isset($mou->legal_terms['electricity_provider_id']) ? \App\Domain\Property\Models\UtilityProvider::find($mou->legal_terms['electricity_provider_id'])?->name : 'Electricity Provider') }} Connection No.:</strong> <span class="form-line" style="width: 300px;">{{ $mou->legal_terms['electricity_consumer_id'] ?? '_______________________' }}</span><br>
     </p>
 
     <p>
@@ -201,7 +198,7 @@
     </div>
 
     <p>The Owner and the Service Provider each reserve the right to propose a change in the applicable <strong>Commercial model - A, B, or C</strong> - based on the nature and profile of the Tenant. However, any such change shall be mutually agreed upon and approved by both parties in writing prior to the execution of the relevant rental agreement or any modification thereof.<br>
-    <strong>The Financial Model chosen by the Owner is <span style="text-decoration: underline; font-weight: bold;">{{ isset($mou->legal_terms['financial_model_id']) ? \App\Domain\Opportunity\Models\FinancialModel::find($mou->legal_terms['financial_model_id'])?->name : ($mou->opportunity->expectedFinancialModel->name ?? '________') }}</span>.</strong></p>
+    <strong>The Financial Model chosen by the Owner is <span style="text-decoration: underline; font-weight: bold;">{{ $mou->legal_terms['financial_model_name'] ?? (isset($mou->legal_terms['financial_model_id']) ? \App\Domain\Opportunity\Models\FinancialModel::find($mou->legal_terms['financial_model_id'])?->name : ($mou->opportunity->expectedFinancialModel->name ?? '________')) }}</span>.</strong></p>
 
     <div class="section-title">TAXES & RECONCILIATION</div>
     <p>The <strong>Service Provider</strong> does not take responsibility for any default in payment of applicable taxes by the <strong>Property Owner</strong>.</p>
@@ -264,7 +261,7 @@
     <p>I/We hereby request you to effect all payments due to us from the Service Provider to my/our bank account, details of which are given below, through RTGS/NEFT/Electronic Payment Platform.</p>
 
     <p>
-        <strong>Name of the Property Owner:</strong> <span class="form-line" style="width: 300px;">{{ $mou->party->display_name ?? '_______________________' }}</span>
+        <strong>Name of the Property Owner:</strong> <span class="form-line" style="width: 300px;">{{ $mou->owner_details['name'] ?? $mou->party?->display_name ?? $mou->opportunity->owner_name ?? '_______________________' }}</span>
     </p>
 
     <p style="font-weight: bold; font-style: italic; text-decoration: underline;">Bank Details:</p>

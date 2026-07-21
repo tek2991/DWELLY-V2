@@ -101,7 +101,8 @@ class ViewMOU extends ViewRecord
                         ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'individual'),
                     Forms\Components\TextInput::make('parent_name')
                         ->label('S/o or D/o (Parent/Guardian Name)')
-                        ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'individual'),
+                        ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'individual')
+                        ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'individual'),
                     Forms\Components\DatePicker::make('date_of_birth')
                         ->label('Date of Birth')
                         ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'individual'),
