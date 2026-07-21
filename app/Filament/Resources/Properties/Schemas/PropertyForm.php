@@ -162,24 +162,25 @@ class PropertyForm
                     ->schema([
                         \Filament\Forms\Components\Placeholder::make('owner_name')
                             ->label('Name')
-                            ->content(fn (?\Illuminate\Database\Eloquent\Model $record) => $record?->mou?->party?->display_name ?? 'N/A'),
+                            ->content(fn (?\Illuminate\Database\Eloquent\Model $record) => $record?->mous()->latest()->first()?->party?->display_name ?? 'N/A'),
                         \Filament\Forms\Components\Placeholder::make('owner_email')
                             ->label('Email')
-                            ->content(fn (?\Illuminate\Database\Eloquent\Model $record) => $record?->mou?->party?->email ?? 'N/A'),
+                            ->content(fn (?\Illuminate\Database\Eloquent\Model $record) => $record?->mous()->latest()->first()?->party?->email ?? 'N/A'),
                         \Filament\Forms\Components\Placeholder::make('owner_phone')
                             ->label('Phone')
-                            ->content(fn (?\Illuminate\Database\Eloquent\Model $record) => $record?->mou?->party?->phone ?? 'N/A'),
+                            ->content(fn (?\Illuminate\Database\Eloquent\Model $record) => $record?->mous()->latest()->first()?->party?->phone ?? 'N/A'),
                         \Filament\Forms\Components\Placeholder::make('owner_profile')
                             ->label('Action')
                             ->content(function (?\Illuminate\Database\Eloquent\Model $record) {
-                                if ($record && $record->mou && $record->mou->party_id) {
-                                    $url = \App\Filament\Resources\Parties\PartyResource::getUrl('edit', ['record' => $record->mou->party_id]);
+                                $mou = $record?->mous()->latest()->first();
+                                if ($record && $mou && $mou->party_id) {
+                                    $url = \App\Filament\Resources\Parties\PartyResource::getUrl('edit', ['record' => $mou->party_id]);
                                     return new \Illuminate\Support\HtmlString("<a href=\"{$url}\" target=\"_blank\" class=\"text-primary-600 hover:underline\">View Owner Profile &rarr;</a>");
                                 }
                                 return 'N/A';
                             }),
                     ])->columns(2)
-                    ->hidden(fn (?\Illuminate\Database\Eloquent\Model $record) => !($record && $record->mou_id)),
+                    ->hidden(fn (?\Illuminate\Database\Eloquent\Model $record) => !($record && $record->mous()->exists())),
 
                 \Filament\Schemas\Components\Section::make('Current Pricing')
                     ->description('Overview of the currently active pricing version. Manage pricing history in the Pricing Versions tab.')

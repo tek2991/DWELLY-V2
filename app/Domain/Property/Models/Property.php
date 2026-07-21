@@ -82,9 +82,9 @@ class Property extends DomainModel
 
 
 
-    public function mou(): BelongsTo
+    public function mous(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
-        return $this->belongsTo(\App\Domain\Mou\Models\Mou::class, 'mou_id');
+        return $this->hasMany(\App\Domain\Mou\Models\Mou::class, 'property_id');
     }
 
     public function furnishingType(): BelongsTo
@@ -104,6 +104,7 @@ class Property extends DomainModel
 
     public function isLockedDuringOnboarding(): bool
     {
-        return $this->mou_id !== null && $this->onboardingProject?->status !== 'Activated';
+        return $this->mous()->where('type', \App\Domain\Mou\Enums\MouType::ONBOARDING)->exists() 
+            && $this->onboardingProject?->status !== 'Activated';
     }
 }

@@ -44,13 +44,13 @@ class MappedDocumentsRelationManager extends Component implements HasActions, Ha
     {
         return $table
             ->query(function () {
-                $mouId = $this->ownerRecord->mou_id;
+                $mouIds = $this->ownerRecord->mous()->pluck('id')->toArray();
                 
                 $query = Media::query();
                 
-                if ($mouId) {
+                if (!empty($mouIds)) {
                     $query->where('model_type', \App\Domain\Mou\Models\Mou::class)
-                          ->where('model_id', $mouId);
+                          ->whereIn('model_id', $mouIds);
                 } else {
                     $query->where('id', 0); // Empty query if no MOU
                 }
@@ -58,6 +58,10 @@ class MappedDocumentsRelationManager extends Component implements HasActions, Ha
                 return $query;
             })
             ->columns([
+                TextColumn::make('model.type')
+                    ->label('MOU Type')
+                    ->formatStateUsing(fn ($state) => $state instanceof \App\Domain\Mou\Enums\MouType ? $state->label() : str($state)->headline())
+                    ->badge(),
                 TextColumn::make('collection_name')
                     ->label('Document Type')
                     ->formatStateUsing(fn (string $state) => match($state) {

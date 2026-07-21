@@ -40,7 +40,7 @@ class PropertyFinancials extends Page implements HasForms
         // abort_unless(auth()->user()->can('view_financials_property'), 403, 'Unauthorized access to financials.');
 
         $latestPricing = $this->record->financialTerms()->latest('effective_from')->first();
-        $mou = $this->record->mou;
+        $mou = $this->record->mous()->latest()->first();
 
         $bankDetails = $mou?->bank_details ?? [];
         if (!empty($bankDetails) && isset(array_values($bankDetails)[0]) && is_array(array_values($bankDetails)[0])) {
@@ -156,62 +156,7 @@ class PropertyFinancials extends Page implements HasForms
 
     protected function getHeaderActions(): array
     {
-        return [
-            Action::make('generateMou')
-                ->label('Generate New MOU')
-                ->color('primary')
-                ->requiresConfirmation()
-                ->action(function () {
-                    $data = $this->form->getState();
-                    
-                    $mou = $this->record->mou;
-                    if (!$mou) {
-                        $mou = \App\Domain\Mou\Models\Mou::create([
-                            'status' => 'draft',
-                            'prepared_by' => auth()->id(),
-                            'bank_details' => $data['bank_details'] ?? [],
-                            'start_date' => $data['start_date'] ?? null,
-                            'is_signatory_different' => $data['is_signatory_different'] ?? false,
-                            'signatory_name' => $data['signatory_name'] ?? null,
-                            'signatory_relation' => $data['signatory_relation'] ?? null,
-                            'signatory_phone' => $data['signatory_phone'] ?? null,
-                            'signatory_email' => $data['signatory_email'] ?? null,
-                            'signatory_aadhar_number' => $data['signatory_aadhar_number'] ?? null,
-                            'signatory_pan_number' => $data['signatory_pan_number'] ?? null,
-                        ]);
-                        $this->record->update(['mou_id' => $mou->id]);
-                    } else {
-                        $mou->update([
-                            'bank_details' => $data['bank_details'] ?? [],
-                            'start_date' => $data['start_date'] ?? $mou->start_date,
-                            'is_signatory_different' => $data['is_signatory_different'] ?? false,
-                            'signatory_name' => $data['signatory_name'] ?? null,
-                            'signatory_relation' => $data['signatory_relation'] ?? null,
-                            'signatory_phone' => $data['signatory_phone'] ?? null,
-                            'signatory_email' => $data['signatory_email'] ?? null,
-                            'signatory_aadhar_number' => $data['signatory_aadhar_number'] ?? null,
-                            'signatory_pan_number' => $data['signatory_pan_number'] ?? null,
-                        ]);
-                    }
-
-                    \App\Domain\Property\Models\PropertyFinancialTerm::create([
-                        'property_id' => $this->record->id,
-                        'mou_id' => $mou->id,
-                        'pricing_model' => $data['pricing_model'],
-                        'fee_percentage' => $data['fee_percentage'],
-                        'effective_from' => now()->toDateString(),
-                        'created_by' => auth()->id(),
-                    ]);
-                    
-                    $pdfService = app(\App\Domain\Mou\Services\MouPdfService::class);
-                    $pdfService->saveMouPdf($mou);
-                    
-                    Notification::make()
-                        ->title('MOU Generated successfully!')
-                        ->success()
-                        ->send();
-                })
-        ];
+        return [];
     }
 
     public function save(): void

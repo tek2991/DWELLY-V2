@@ -23,6 +23,8 @@ class Mou extends DomainModel implements HasMedia
         'number',
         'version',
         'opportunity_id',
+        'property_id',
+        'type',
         'party_id',
         'is_signatory_different',
         'signatory_name',
@@ -46,6 +48,7 @@ class Mou extends DomainModel implements HasMedia
     protected $casts = [
         'is_signatory_different' => 'boolean',
         'status' => MouStatus::class,
+        'type' => \App\Domain\Mou\Enums\MouType::class,
         'legal_terms' => 'array',
         'bank_details' => 'array',
         'verified_at' => 'datetime',
@@ -90,8 +93,8 @@ class Mou extends DomainModel implements HasMedia
         return $this->belongsTo(User::class, 'generated_by');
     }
 
-    public function property(): \Illuminate\Database\Eloquent\Relations\HasOne
+    public function property(): BelongsTo
     {
-        return $this->hasOne(\App\Domain\Property\Models\Property::class, 'mou_id');
+        return $this->belongsTo(\App\Domain\Property\Models\Property::class);
     }
 }

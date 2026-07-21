@@ -29,7 +29,15 @@ class AdditionalDocumentsRelationManager extends Component implements HasActions
     {
         return $table
             ->query(function () {
-                $targetModel = $this->ownerRecord->mou ?? $this->ownerRecord;
+                $relevantMou = $this->ownerRecord->mous()
+                    ->whereIn('type', [
+                        \App\Domain\Mou\Enums\MouType::ONBOARDING, 
+                        \App\Domain\Mou\Enums\MouType::KYC_UPDATE,
+                        \App\Domain\Mou\Enums\MouType::BANK_DETAILS_UPDATE
+                    ])
+                    ->latest()
+                    ->first();
+                $targetModel = $relevantMou ?? $this->ownerRecord;
                 
                 return Media::query()
                     ->where('model_type', get_class($targetModel))
@@ -77,7 +85,15 @@ class AdditionalDocumentsRelationManager extends Component implements HasActions
                             ->required(),
                     ])
                     ->action(function (array $data) {
-                        $targetModel = $this->ownerRecord->mou ?? $this->ownerRecord;
+                        $relevantMou = $this->ownerRecord->mous()
+                            ->whereIn('type', [
+                                \App\Domain\Mou\Enums\MouType::ONBOARDING, 
+                                \App\Domain\Mou\Enums\MouType::KYC_UPDATE,
+                                \App\Domain\Mou\Enums\MouType::BANK_DETAILS_UPDATE
+                            ])
+                            ->latest()
+                            ->first();
+                        $targetModel = $relevantMou ?? $this->ownerRecord;
                         
                         foreach ($data['files'] as $path) {
                             $targetModel->addMedia(Storage::disk('public')->path($path))

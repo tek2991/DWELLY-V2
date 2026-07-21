@@ -22,13 +22,17 @@ class PropertyOnboardingService
             // Logic to extract data from MOU and create Property
             $property = Property::create([
                 'code' => null,
-                'mou_id' => $mou->id,
                 'status' => 'draft',
                 'address_line_1' => $mou->opportunity->address,
                 'building_name' => $mou->opportunity->title,
                 'property_type_id' => $mou->opportunity->estimated_property_type_id,
                 'bhk_type_id' => \Illuminate\Support\Facades\DB::table('bhk_types')->where('name', $mou->opportunity->estimated_bhk)->value('id'),
                 // ...
+            ]);
+
+            $mou->update([
+                'property_id' => $property->id,
+                'type' => \App\Domain\Mou\Enums\MouType::ONBOARDING,
             ]);
 
             // Auto-link "Keys" inventory item
