@@ -43,15 +43,27 @@ class PropertyFinancials extends Page implements HasForms
         $mou = $this->record->mous()->latest()->first();
 
         $bankDetails = $mou?->bank_details ?? [];
-        if (!empty($bankDetails) && isset(array_values($bankDetails)[0]) && is_array(array_values($bankDetails)[0])) {
+        if (isset($bankDetails['bank_details']) && is_array($bankDetails['bank_details'])) {
+            $bankDetails = $bankDetails['bank_details'];
+        } elseif (!empty($bankDetails) && isset(array_values($bankDetails)[0]) && is_array(array_values($bankDetails)[0])) {
             $bankDetails = array_values($bankDetails)[0];
         }
 
+        $financialModelName = $latestPricing?->pricing_model
+            ?? $mou?->legal_terms['financial_model_name']
+            ?? $mou?->legal_terms['pricing_model']
+            ?? (isset($mou?->legal_terms['financial_model_id']) ? \App\Domain\Opportunity\Models\FinancialModel::find($mou->legal_terms['financial_model_id'])?->name : null)
+            ?? $mou?->opportunity?->expectedFinancialModel?->name;
+
+        $feePercentage = $latestPricing?->fee_percentage
+            ?? $mou?->legal_terms['fee_percentage']
+            ?? null;
+
         $this->form->fill([
-            'pricing_model' => $latestPricing?->pricing_model,
-            'fee_percentage' => $latestPricing?->fee_percentage,
+            'pricing_model' => $financialModelName,
+            'fee_percentage' => $feePercentage,
             'bank_details' => $bankDetails,
-            'start_date' => $mou?->start_date,
+            'start_date' => $mou?->start_date?->format('Y-m-d'),
             'is_signatory_different' => $mou?->is_signatory_different ?? false,
             'signatory_name' => $mou?->signatory_details['name'] ?? null,
             'signatory_relation' => $mou?->signatory_details['relation'] ?? null,
@@ -75,6 +87,7 @@ class PropertyFinancials extends Page implements HasForms
                                     ->schema([
                                         Grid::make(2)->schema([
                                             Select::make('pricing_model')
+                                                ->label('Financial Model')
                                                 ->options(fn() => FinancialModel::pluck('name', 'name'))
                                                 ->required()
                                                 ->searchable(),
@@ -141,25 +154,25 @@ class PropertyFinancials extends Page implements HasForms
                                             ->schema([
                                                 \Filament\Forms\Components\Placeholder::make('owner_name')
                                                     ->label('Owner Name')
-                                                    ->content(fn () => $this->record->mous()->latest()->first()?->party?->display_name ?? 'N/A'),
+                                                    ->content(fn () => $this->record->mous()->latest()->first()?->party?->display_name ?? $this->record->mous()->latest()->first()?->owner_details['name'] ?? 'N/A'),
                                                 \Filament\Forms\Components\Placeholder::make('owner_email')
                                                     ->label('Owner Email')
-                                                    ->content(fn () => $this->record->mous()->latest()->first()?->party?->email ?? 'N/A'),
+                                                    ->content(fn () => $this->record->mous()->latest()->first()?->party?->email ?? $this->record->mous()->latest()->first()?->owner_details['email'] ?? 'N/A'),
                                                 \Filament\Forms\Components\Placeholder::make('owner_phone')
                                                     ->label('Owner Phone')
-                                                    ->content(fn () => $this->record->mous()->latest()->first()?->party?->phone ?? 'N/A'),
+                                                    ->content(fn () => $this->record->mous()->latest()->first()?->party?->phone ?? $this->record->mous()->latest()->first()?->owner_details['phone'] ?? 'N/A'),
                                                 \Filament\Forms\Components\Placeholder::make('owner_pan')
                                                     ->label('PAN Number')
-                                                    ->content(fn () => $this->record->mous()->latest()->first()?->party?->individual?->pan_number ?? $this->record->mous()->latest()->first()?->party?->organization?->pan ?? 'N/A'),
+                                                    ->content(fn () => $this->record->mous()->latest()->first()?->party?->individual?->pan_number ?? $this->record->mous()->latest()->first()?->party?->organization?->pan ?? $this->record->mous()->latest()->first()?->owner_details['pan_number'] ?? 'N/A'),
                                                 \Filament\Forms\Components\Placeholder::make('owner_aadhaar')
                                                     ->label('Aadhaar Number')
-                                                    ->content(fn () => $this->record->mous()->latest()->first()?->party?->individual?->aadhaar_number ?? 'N/A'),
+                                                    ->content(fn () => $this->record->mous()->latest()->first()?->party?->individual?->aadhaar_number ?? $this->record->mous()->latest()->first()?->owner_details['aadhar_number'] ?? 'N/A'),
                                                 \Filament\Forms\Components\Placeholder::make('owner_voter')
                                                     ->label('Voter ID')
                                                     ->content(fn () => $this->record->mous()->latest()->first()?->party?->individual?->voter_id ?? 'N/A'),
                                                 \Filament\Forms\Components\Placeholder::make('owner_gstin')
                                                     ->label('GSTIN (If Company)')
-                                                    ->content(fn () => $this->record->mous()->latest()->first()?->party?->organization?->gstin ?? 'N/A'),
+                                                    ->content(fn () => $this->record->mous()->latest()->first()?->party?->organization?->gstin ?? $this->record->mous()->latest()->first()?->owner_details['gstin'] ?? 'N/A'),
                                             ])
                                             ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => !$get('is_signatory_different')),
                                     ]),

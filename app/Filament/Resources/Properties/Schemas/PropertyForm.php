@@ -198,7 +198,7 @@ class PropertyForm
                                 return $pricing && $pricing->security_deposit ? '₹ ' . number_format($pricing->security_deposit, 2) : 'N/A';
                             }),
                         \Filament\Forms\Components\Placeholder::make('current_model')
-                            ->label('Pricing Model')
+                            ->label('Financial Model')
                             ->content(function (?\Illuminate\Database\Eloquent\Model $record) {
                                 $financialTerm = $record?->financialTerms()->latest('effective_from')->first();
                                 return $financialTerm && $financialTerm->pricing_model ? $financialTerm->pricing_model : 'N/A';
