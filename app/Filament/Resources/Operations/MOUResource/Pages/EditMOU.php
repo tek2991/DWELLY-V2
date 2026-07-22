@@ -80,7 +80,7 @@ class EditMOU extends EditRecord
             }
         }
 
-        unset($data['legal_terms']['pricing_model'], $data['legal_terms']['fee_percentage']);
+        unset($data['legal_terms']['pricing_model']);
         
         if (empty($data['is_signatory_different'])) {
             $mou = $this->getRecord();

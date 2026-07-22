@@ -174,7 +174,7 @@
 
     <div class="section-title">COMMERCIALS</div>
     <p><strong>A. Standard Rent Collection Service with monthly fee:</strong></p>
-    <p>The <strong>Service Provider</strong> shall charge <strong>12% of the monthly rent as Service Fee</strong> (for an un-furnished property) when the property is occupied. This Service Fee is exclusive of GST (whenever applicable).</p>
+    <p>The <strong>Service Provider</strong> shall charge <strong>{{ isset($mou->legal_terms['fee_percentage']) ? rtrim(rtrim(number_format((float)$mou->legal_terms['fee_percentage'], 2), '0'), '.') : 12 }}% of the monthly rent as Service Fee</strong> (for an un-furnished property) when the property is occupied. This Service Fee is exclusive of GST (whenever applicable).</p>
     <p>Collection of rent against the property shall be the <strong>Service Provider's</strong> responsibility. Electricity bills, water bills, apartment maintenance charges (wherever applicable), and similar expenses will be paid directly to the Owner.</p>
     <p>The <strong>Security Deposit</strong> collected from the Tenant shall be held with the <strong>Service Provider</strong> and will be refunded directly to the Tenant as per the terms and conditions of the rental agreement signed between the Property Owner and the Tenant.</p>
     <p>In case of continuous rent payment default by the Tenant while retaining possession of the property, the <strong>Service Provider</strong> will cover rental payments for a maximum of <strong>two (2) defaulting months</strong> only.</p>

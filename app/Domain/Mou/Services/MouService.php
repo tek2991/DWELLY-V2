@@ -104,6 +104,7 @@ class MouService
                 'address' => $opportunity->address,
                 'rent_amount' => $opportunity->expected_rent,
                 'is_furnished' => $opportunity->estimated_is_furnished,
+                'fee_percentage' => 12,
             ];
 
             if ($financialModel) {

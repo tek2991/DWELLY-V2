@@ -204,6 +204,13 @@ class MOUResource extends Resource
                             Forms\Components\TextInput::make('legal_terms.rent_amount')
                                 ->label('Rent Amount')
                                 ->numeric(),
+                            Forms\Components\TextInput::make('legal_terms.fee_percentage')
+                                ->label('Fee Percentage')
+                                ->numeric()
+                                ->suffix('%')
+                                ->step(0.01)
+                                ->minValue(0)
+                                ->maxValue(100),
                             Forms\Components\Select::make('legal_terms.financial_model_id')
                                 ->label('Financial Model')
                                 ->options(fn () => \App\Domain\Opportunity\Models\FinancialModel::pluck('name', 'id'))

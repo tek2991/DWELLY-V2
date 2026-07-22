@@ -18,8 +18,12 @@ class MouPdfService
     {
         $mou->load(['property', 'party', 'signatoryParty']);
 
+        $view = ($mou->type && $mou->type !== \App\Domain\Mou\Enums\MouType::ONBOARDING)
+            ? 'pdf.mou_addendum'
+            : 'pdf.mou';
+
         // Generate PDF using dompdf without attachments
-        $pdf = Pdf::loadView('pdf.mou', [
+        $pdf = Pdf::loadView($view, [
             'mou' => $mou,
             'property' => $mou->property,
             'party' => $mou->party,

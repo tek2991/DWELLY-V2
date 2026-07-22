@@ -47,6 +47,19 @@ class PropertyOnboardingService
                 'count' => 1,
             ]);
 
+            $pricingModelName = $mou->legal_terms['financial_model_name']
+                ?? (isset($mou->legal_terms['financial_model_id']) ? \App\Domain\Opportunity\Models\FinancialModel::find($mou->legal_terms['financial_model_id'])?->name : null)
+                ?? $mou->opportunity->expectedFinancialModel?->name
+                ?? 'Standard';
+
+            \App\Domain\Property\Models\PropertyFinancialTerm::create([
+                'property_id' => $property->id,
+                'mou_id' => $mou->id,
+                'pricing_model' => $pricingModelName,
+                'fee_percentage' => $mou->legal_terms['fee_percentage'] ?? null,
+                'effective_from' => $mou->start_date ?? now(),
+            ]);
+
             return $property;
         });
     }

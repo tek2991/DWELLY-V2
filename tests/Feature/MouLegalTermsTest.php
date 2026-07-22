@@ -120,6 +120,7 @@ class MouLegalTermsTest extends TestCase
                 'legal_terms' => [
                     'address' => 'Sample Address 123 Updated',
                     'rent_amount' => 12000,
+                    'fee_percentage' => 15,
                     'financial_model_id' => $financialModel->id,
                     'electricity_provider_id' => $provider->id,
                     'electricity_consumer_id' => '123456789',
@@ -133,8 +134,8 @@ class MouLegalTermsTest extends TestCase
         $this->assertEquals('Monthly % of rent', $mou->legal_terms['financial_model_description']);
         $this->assertEquals('Auto-deducted from monthly owner payout', $mou->legal_terms['financial_model_fee_collection']);
         $this->assertEquals('Assam Power Distribution Company Limited (APDCL)', $mou->legal_terms['electricity_provider_name']);
+        $this->assertEquals(15, $mou->legal_terms['fee_percentage']);
         
         $this->assertArrayNotHasKey('pricing_model', $mou->legal_terms);
-        $this->assertArrayNotHasKey('fee_percentage', $mou->legal_terms);
     }
 }

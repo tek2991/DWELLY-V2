@@ -25,6 +25,7 @@ class CreateMOU extends CreateRecord
                         'rent_amount' => $opportunity->expected_rent,
                         'address' => $opportunity->address,
                         'financial_model_id' => $opportunity->expected_financial_model_id,
+                        'fee_percentage' => 12,
                     ],
                 ]);
             }
@@ -53,7 +54,7 @@ class CreateMOU extends CreateRecord
             }
         }
 
-        unset($data['legal_terms']['pricing_model'], $data['legal_terms']['fee_percentage']);
+        unset($data['legal_terms']['pricing_model']);
         
         if (empty($data['is_signatory_different'])) {
             $party = !empty($data['party_id']) ? \App\Domain\Party\Models\Party::find($data['party_id']) : null;

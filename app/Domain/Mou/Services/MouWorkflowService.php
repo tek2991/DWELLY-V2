@@ -34,7 +34,11 @@ class MouWorkflowService
         }
 
         // Render the real PDF using DomPDF
-        $pdf = Pdf::loadView('pdf.mou', ['mou' => $mou]);
+        $view = ($mou->type && $mou->type !== \App\Domain\Mou\Enums\MouType::ONBOARDING)
+            ? 'pdf.mou_addendum'
+            : 'pdf.mou';
+
+        $pdf = Pdf::loadView($view, ['mou' => $mou]);
         
         $tempPath = sys_get_temp_dir() . '/' . $mou->number . '-draft-v' . $mou->version . '.pdf';
         $pdf->save($tempPath);
@@ -114,6 +118,10 @@ class MouWorkflowService
             'verified_at' => now(),
             'verified_by' => auth()->id(),
         ]);
+
+        if ($mou->type && $mou->type !== \App\Domain\Mou\Enums\MouType::ONBOARDING) {
+            app(PropertyUpdateMouService::class)->commitUpdateMou($mou);
+        }
     }
 
     public function convert(Mou $mou): void
