@@ -19,7 +19,7 @@ return new class extends Migration
             $table->string('name');
             
             // Polymorphic relation to the source of truth (Room, Inventory, Utility, etc.)
-            $table->uuidMorphs('source');
+            $table->nullableUuidMorphs('source');
             
             // Immutable snapshot of essential fields at creation time
             $table->json('snapshot_data')->nullable();

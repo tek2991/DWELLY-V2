@@ -40,9 +40,10 @@
         <div style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1.5rem;">
             @php
                 $activeCategory = $audit->categories->firstWhere('id', $activeCategoryId);
+                $activeCategoryName = strtolower($activeCategory?->name ?? '');
             @endphp
             
-            @if($activeCategory)
+            @if($activeCategory && $activeCategory->items->isNotEmpty())
                 @foreach($activeCategory->items as $item)
                     <x-filament::section compact>
                         <div wire:click="mountAction('editItem', { item_id: '{{ $item->id }}' })" 
@@ -61,8 +62,15 @@
                                     @endif
                                 </div>
                                 <div>
-                                    <h4 style="font-size: 1rem; font-weight: 500; margin: 0;">{{ $item->name }}</h4>
-                                    <div style="font-size: 0.875rem; color: rgba(107, 114, 128, 1); margin-top: 0.25rem; display: flex; align-items: center; gap: 0.5rem;">
+                                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                        <h4 style="font-size: 1rem; font-weight: 500; margin: 0;">{{ $item->name }}</h4>
+                                        @if(!empty($item->snapshot_data['is_new']))
+                                            <x-filament::badge color="warning" size="sm">
+                                                Added in Audit
+                                            </x-filament::badge>
+                                        @endif
+                                    </div>
+                                    <div style="font-size: 0.875rem; color: rgba(107, 114, 128, 1); margin-top: 0.25rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                                         <span>{{ $item->snapshot_data['display_name'] ?? ($item->snapshot_data['brand'] ?? 'Item Details') }}</span>
                                         
                                         @php
@@ -85,7 +93,7 @@
                                 </div>
                             </div>
 
-                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <div style="display: flex; align-items: center; gap: 0.75rem;">
                                 @if($item->evidence()->count() > 0)
                                     <div style="display: flex; align-items: center; font-size: 0.875rem; color: rgba(107, 114, 128, 1);">
                                         <x-filament::icon icon="heroicon-o-camera" style="width: 1rem; height: 1rem; margin-right: 0.25rem;" />
@@ -98,10 +106,22 @@
                         </div>
                     </x-filament::section>
                 @endforeach
+            @else
+                <div style="text-align: center; padding: 1.5rem; color: rgba(107, 114, 128, 1);">
+                    No items in this category yet. Click below to add an item.
+                </div>
             @endif
         </div>
-        <div style="margin-top: 1rem;">
-            {{ $this->createItemAction }}
+        <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
+            @if($activeCategoryName === 'rooms')
+                {{ $this->createRoomAction }}
+            @elseif($activeCategoryName === 'inventory')
+                {{ $this->createInventoryAction }}
+            @elseif($activeCategoryName === 'utilities')
+                {{ $this->createUtilityAction }}
+            @else
+                {{ $this->createItemAction }}
+            @endif
         </div>
     @endif
 

@@ -3,6 +3,7 @@
 namespace App\Livewire\Operations;
 
 use App\Domain\Audit\Models\Audit;
+use App\Domain\Audit\Models\AuditCategory;
 use App\Domain\Audit\Models\AuditItem;
 use App\Domain\Audit\Enums\ItemCondition;
 use App\Domain\Audit\Enums\ItemStatus;
@@ -10,6 +11,7 @@ use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Form;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
 use Illuminate\Support\Facades\Log;
 use Filament\Actions\Concerns\InteractsWithActions;
@@ -52,6 +54,264 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
         $this->activeCategoryId = $categoryId;
     }
 
+    public function createRoomAction(): Action
+    {
+        return Action::make('createRoom')
+            ->label('Add Room')
+            ->icon('heroicon-o-plus')
+            ->button()
+            ->modalHeading('Add Room (Staged for Audit)')
+            ->form([
+                Select::make('room_type_id')
+                    ->label('Room Type')
+                    ->options(\App\Domain\Property\Models\RoomType::query()->pluck('name', 'id'))
+                    ->live()
+                    ->required(),
+                Select::make('room_definition_id')
+                    ->label('Room Definition')
+                    ->options(function (callable $get) {
+                        $typeId = $get('room_type_id');
+                        if (!$typeId) return [];
+                        return \App\Domain\Property\Models\RoomDefinition::query()
+                            ->where('room_type_id', $typeId)
+                            ->pluck('name', 'id');
+                    })
+                    ->searchable()
+                    ->preload()
+                    ->required()
+                    ->visible(fn (callable $get) => filled($get('room_type_id'))),
+                Select::make('condition')
+                    ->label('Initial Condition')
+                    ->options(ItemCondition::class)
+                    ->required(),
+            ])
+            ->action(function (array $data) {
+                $category = AuditCategory::firstOrCreate(
+                    ['audit_id' => $this->audit->id, 'name' => 'Rooms'],
+                    ['sort_order' => 10]
+                );
+
+                $roomDef = \App\Domain\Property\Models\RoomDefinition::find($data['room_definition_id']);
+                $displayName = $roomDef?->name ?? 'Room';
+
+                $item = AuditItem::create([
+                    'audit_category_id' => $category->id,
+                    'name' => $displayName,
+                    'source_type' => null,
+                    'source_id' => null,
+                    'status' => ItemStatus::INSPECTED,
+                    'condition' => $data['condition'],
+                    'remarks' => null,
+                    'snapshot_data' => [
+                        'is_new' => true,
+                        'staged_type' => 'room',
+                        'room_type_id' => $data['room_type_id'],
+                        'room_definition_id' => $data['room_definition_id'],
+                        'room_definition' => $displayName,
+                        'display_name' => $displayName,
+                    ],
+                ]);
+
+                $item->revisions()->create([
+                    'updated_by_id' => auth()->id(),
+                    'snapshot_data' => [
+                        'condition' => $data['condition'],
+                        'remarks' => null,
+                    ],
+                ]);
+
+                activity()
+                    ->performedOn($item)
+                    ->log('Added room during audit inspection: ' . $displayName);
+
+                $this->activeCategoryId = $category->id;
+                $this->audit->load('categories.items');
+                \Filament\Notifications\Notification::make()->title('Room added to audit staging')->success()->send();
+            });
+    }
+
+    public function createInventoryAction(): Action
+    {
+        return Action::make('createInventory')
+            ->label('Add Inventory Item')
+            ->icon('heroicon-o-plus')
+            ->button()
+            ->modalHeading('Add Inventory Item (Staged for Audit)')
+            ->form([
+                Select::make('property_room_id')
+                    ->label('Room')
+                    ->options(function () {
+                        $options = [];
+                        if ($this->audit->property) {
+                            foreach ($this->audit->property->rooms as $room) {
+                                $label = $room->custom_name ?: ($room->roomDefinition?->name ?? 'Room ' . $room->id);
+                                $options['existing_' . $room->id] = $label;
+                            }
+                        }
+                        foreach ($this->audit->items as $item) {
+                            if (($item->snapshot_data['staged_type'] ?? null) === 'room') {
+                                $options['staged_' . $item->id] = ($item->snapshot_data['display_name'] ?? $item->name) . ' (Staged Room)';
+                            }
+                        }
+                        return $options;
+                    })
+                    ->nullable()
+                    ->searchable(),
+                Select::make('inventory_type_id')
+                    ->label('Inventory Type')
+                    ->options(\App\Domain\Property\Models\InventoryType::query()->pluck('name', 'id'))
+                    ->searchable()
+                    ->preload()
+                    ->required(),
+                TextInput::make('count')
+                    ->label('Quantity / Count')
+                    ->numeric()
+                    ->default(1)
+                    ->minValue(1)
+                    ->required(),
+                Select::make('condition')
+                    ->label('Initial Condition')
+                    ->options(ItemCondition::class)
+                    ->required(),
+            ])
+            ->action(function (array $data) {
+                $category = AuditCategory::firstOrCreate(
+                    ['audit_id' => $this->audit->id, 'name' => 'Inventory'],
+                    ['sort_order' => 20]
+                );
+
+                $invType = \App\Domain\Property\Models\InventoryType::find($data['inventory_type_id']);
+                $typeName = $invType?->name ?? 'Item';
+
+                $roomLabel = null;
+                $realRoomId = null;
+                $stagedRoomId = null;
+                if (!empty($data['property_room_id'])) {
+                    $val = $data['property_room_id'];
+                    if (str_starts_with($val, 'existing_')) {
+                        $realRoomId = substr($val, 9);
+                        $room = \App\Domain\Property\Models\PropertyRoom::find($realRoomId);
+                        $roomLabel = $room?->custom_name ?: ($room?->roomDefinition?->name ?? 'Room');
+                    } elseif (str_starts_with($val, 'staged_')) {
+                        $stagedRoomId = substr($val, 7);
+                        $stagedItem = AuditItem::find($stagedRoomId);
+                        $roomLabel = $stagedItem?->name ?? 'Staged Room';
+                    }
+                }
+
+                $displayName = $typeName . ($roomLabel ? ' (' . $roomLabel . ')' : '');
+
+                $item = AuditItem::create([
+                    'audit_category_id' => $category->id,
+                    'name' => $displayName,
+                    'source_type' => null,
+                    'source_id' => null,
+                    'status' => ItemStatus::INSPECTED,
+                    'condition' => $data['condition'],
+                    'remarks' => null,
+                    'snapshot_data' => [
+                        'is_new' => true,
+                        'staged_type' => 'inventory',
+                        'inventory_type_id' => $data['inventory_type_id'],
+                        'inventory_type' => $typeName,
+                        'property_room_id' => $realRoomId,
+                        'staged_room_item_id' => $stagedRoomId,
+                        'room_name' => $roomLabel,
+                        'count' => (int) $data['count'],
+                        'display_name' => $displayName,
+                    ],
+                ]);
+
+                $item->revisions()->create([
+                    'updated_by_id' => auth()->id(),
+                    'snapshot_data' => [
+                        'condition' => $data['condition'],
+                        'remarks' => null,
+                    ],
+                ]);
+
+                activity()
+                    ->performedOn($item)
+                    ->log('Added inventory item during audit inspection: ' . $displayName);
+
+                $this->activeCategoryId = $category->id;
+                $this->audit->load('categories.items');
+                \Filament\Notifications\Notification::make()->title('Inventory item added to audit staging')->success()->send();
+            });
+    }
+
+    public function createUtilityAction(): Action
+    {
+        return Action::make('createUtility')
+            ->label('Add Utility')
+            ->icon('heroicon-o-plus')
+            ->button()
+            ->modalHeading('Add Utility Configuration (Staged for Audit)')
+            ->form([
+                Select::make('utility_type_id')
+                    ->label('Utility Type')
+                    ->options(\App\Domain\Property\Models\UtilityType::query()->pluck('name', 'id'))
+                    ->searchable()
+                    ->preload()
+                    ->required(),
+                Select::make('paid_by')
+                    ->label('Paid By')
+                    ->options([
+                        'owner' => 'Owner',
+                        'tenant' => 'Tenant',
+                        'dwelly' => 'Dwelly',
+                    ])
+                    ->required(),
+                Select::make('condition')
+                    ->label('Initial Condition')
+                    ->options(ItemCondition::class)
+                    ->required(),
+            ])
+            ->action(function (array $data) {
+                $category = AuditCategory::firstOrCreate(
+                    ['audit_id' => $this->audit->id, 'name' => 'Utilities'],
+                    ['sort_order' => 30]
+                );
+
+                $utilityType = \App\Domain\Property\Models\UtilityType::find($data['utility_type_id']);
+                $typeName = $utilityType?->name ?? 'Utility';
+
+                $item = AuditItem::create([
+                    'audit_category_id' => $category->id,
+                    'name' => $typeName,
+                    'source_type' => null,
+                    'source_id' => null,
+                    'status' => ItemStatus::INSPECTED,
+                    'condition' => $data['condition'],
+                    'remarks' => null,
+                    'snapshot_data' => [
+                        'is_new' => true,
+                        'staged_type' => 'utility',
+                        'utility_type_id' => $data['utility_type_id'],
+                        'utility_type' => $typeName,
+                        'paid_by' => $data['paid_by'],
+                        'display_name' => $typeName,
+                    ],
+                ]);
+
+                $item->revisions()->create([
+                    'updated_by_id' => auth()->id(),
+                    'snapshot_data' => [
+                        'condition' => $data['condition'],
+                        'remarks' => null,
+                    ],
+                ]);
+
+                activity()
+                    ->performedOn($item)
+                    ->log('Added utility during audit inspection: ' . $typeName);
+
+                $this->activeCategoryId = $category->id;
+                $this->audit->load('categories.items');
+                \Filament\Notifications\Notification::make()->title('Utility added to audit staging')->success()->send();
+            });
+    }
+
     public function createItemAction(): Action
     {
         return Action::make('createItem')
@@ -60,7 +320,7 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
             ->button()
             ->modalHeading('Add Found Item')
             ->form([
-                \Filament\Forms\Components\TextInput::make('name')
+                TextInput::make('name')
                     ->required()
                     ->maxLength(255),
                 Select::make('condition')
