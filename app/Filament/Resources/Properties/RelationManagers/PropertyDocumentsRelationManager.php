@@ -12,6 +12,8 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class PropertyDocumentsRelationManager extends RelationManager
 {
+    use \App\Filament\Resources\Properties\RelationManagers\Traits\LocksDuringPropertyOnboarding;
+
     protected static string $relationship = 'documents';
 
     protected static ?string $title = 'Uploaded Documents';

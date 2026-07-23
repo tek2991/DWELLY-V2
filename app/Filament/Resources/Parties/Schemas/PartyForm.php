@@ -8,8 +8,12 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Toggle;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\CheckboxList;
+use Filament\Forms\Components\Hidden;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
+use Filament\Actions\Action;
+use Illuminate\Support\HtmlString;
 use Tek2991\Accounting\Enums\GstRegistrationType;
 use Tek2991\Accounting\Models\State;
 use Tek2991\Accounting\Utilities\GstinValidator;
@@ -137,8 +141,61 @@ class PartyForm
                     ->visible(fn (Get $get) => $get('party_type') === 'organization'),
 
                 Section::make('Bank Details')
+                    ->description('Bank account details for remittances and financial payouts.')
+                    ->headerActions([
+                        Action::make('editBankDetails')
+                            ->label('Edit Bank Details')
+                            ->icon('heroicon-o-lock-closed')
+                            ->color('warning')
+                            ->modalHeading('Update Bank Details Warning')
+                            ->modalDescription('Bank details should ideally be updated via the official MOU update workflow on the Property\'s Financial Terms & MOU page.')
+                            ->modalContent(function ($record) {
+                                if (!$record) {
+                                    return new HtmlString('<p class="text-sm text-gray-600 dark:text-gray-400">Save the party profile before linking to properties.</p>');
+                                }
+                                
+                                $properties = \App\Domain\Property\Models\Property::where('owner_party_id', $record->id)
+                                    ->orWhereHas('mous', fn ($q) => $q->where('party_id', $record->id))
+                                    ->distinct()
+                                    ->get();
+
+                                if ($properties->isEmpty()) {
+                                    return new HtmlString('<p class="text-sm text-gray-600 dark:text-gray-400">No properties are currently linked to this party.</p>');
+                                }
+
+                                $links = $properties->map(function ($property) {
+                                    $url = \App\Filament\Resources\Properties\PropertyResource::getUrl('financials', ['record' => $property]);
+                                    $code = e($property->code ?? $property->building_name ?? 'Property #' . $property->id);
+                                    return "<li class=\"py-1\"><a href=\"{$url}\" target=\"_blank\" class=\"text-primary-600 hover:underline font-semibold inline-flex items-center gap-1\"><svg class=\"w-4 h-4 inline\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14\"/></svg> {$code} &mdash; Financial Terms & MOU</a></li>";
+                                })->implode('');
+
+                                return new HtmlString("
+                                    <div class=\"space-y-3 text-sm text-gray-700 dark:text-gray-300\">
+                                        <p>To ensure legally binding financial terms, please initiate a <strong>Bank Details Update MOU</strong> from the financial page of the relevant property:</p>
+                                        <ul class=\"list-disc pl-5 font-medium\">
+                                            {$links}
+                                        </ul>
+                                        <p class=\"pt-2 text-xs text-gray-500\">If you need to make an emergency manual correction without an MOU update, click <strong>Unlock Manual Editing</strong> below.</p>
+                                    </div>
+                                ");
+                            })
+                            ->modalSubmitActionLabel('Unlock Manual Editing')
+                            ->action(function (Set $set) {
+                                $set('is_bank_editing_unlocked', true);
+                                \Filament\Notifications\Notification::make()
+                                    ->title('Manual Editing Unlocked')
+                                    ->body('You can now edit bank details directly. Remember to save changes.')
+                                    ->warning()
+                                    ->send();
+                            })
+                            ->visible(fn (Get $get) => !$get('is_bank_editing_unlocked')),
+                    ])
+                    ->disabled(fn (Get $get) => !$get('is_bank_editing_unlocked'))
                     ->columns(2)
                     ->schema([
+                        Hidden::make('is_bank_editing_unlocked')
+                            ->default(false)
+                            ->dehydrated(false),
                         TextInput::make('bank_details.beneficiary_name')
                             ->label('Beneficiary Name')
                             ->maxLength(255),

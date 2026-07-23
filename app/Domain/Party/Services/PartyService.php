@@ -25,7 +25,7 @@ class PartyService
             $bankDetails = $partyData['bank_details'] ?? [];
             $addressDetails = $partyData['address_details'] ?? [];
             
-            unset($partyData['individual_data'], $partyData['organization_data'], $partyData['bank_details'], $partyData['address_details']);
+            unset($partyData['individual_data'], $partyData['organization_data'], $partyData['bank_details'], $partyData['address_details'], $partyData['is_bank_editing_unlocked']);
             
             $party = Party::create($partyData);
 
@@ -104,7 +104,7 @@ class PartyService
             $addressDetails = $data['address_details'] ?? null;
             $roles = $data['roles'] ?? null;
             
-            unset($data['individual_data'], $data['organization_data'], $data['profile_type'], $data['roles'], $data['bank_details'], $data['address_details']);
+            unset($data['individual_data'], $data['organization_data'], $data['profile_type'], $data['roles'], $data['bank_details'], $data['address_details'], $data['is_bank_editing_unlocked']);
             
             $party->update($data);
 

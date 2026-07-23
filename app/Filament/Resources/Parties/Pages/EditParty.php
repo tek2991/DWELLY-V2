@@ -20,6 +20,8 @@ class EditParty extends EditRecord
 
     protected function mutateFormDataBeforeFill(array $data): array
     {
+        $data['is_bank_editing_unlocked'] = false;
+
         if ($this->record->party_type === 'individual' && $this->record->individual) {
             $data['individual_data'] = $this->record->individual->toArray();
         } elseif ($this->record->party_type === 'organization' && $this->record->organization) {

@@ -40,6 +40,7 @@ class PropertyResource extends Resource
             \App\Filament\Resources\Properties\RelationManagers\AmenitiesRelationManager::class,
             \App\Filament\Resources\Properties\RelationManagers\EstablishmentsRelationManager::class,
             \App\Filament\Resources\Properties\RelationManagers\PhotosRelationManager::class,
+            \App\Filament\Resources\Properties\RelationManagers\PropertyDocumentsRelationManager::class,
             \App\Filament\Resources\Properties\RelationManagers\PricingVersionsRelationManager::class,
             \App\Filament\Resources\Properties\RelationManagers\UtilitiesRelationManager::class,
             \App\Filament\Resources\Properties\RelationManagers\AuditsRelationManager::class,

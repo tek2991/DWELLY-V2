@@ -155,19 +155,23 @@ class PropertyUpdateMouService
                     'effective_from' => $mou->start_date ?? now(),
                 ]);
             } elseif ($type === MouType::BANK_DETAILS_UPDATE) {
-                if ($mou->party_id && !empty($mou->bank_details)) {
+                if ($mou->party_id && !empty($mou->bank_details) && !empty($mou->bank_details['account_number'])) {
                     // Mark older accounts as non-primary
                     PartyBankAccount::where('party_id', $mou->party_id)->update(['is_primary' => false]);
 
-                    $bankAccount = PartyBankAccount::create([
-                        'party_id' => $mou->party_id,
-                        'bank_name' => $mou->bank_details['bank_name'] ?? 'Unknown',
-                        'bank_address' => $mou->bank_details['bank_address'] ?? null,
-                        'beneficiary_name' => $mou->bank_details['beneficiary_name'] ?? 'Unknown',
-                        'account_number' => $mou->bank_details['account_number'] ?? 'Unknown',
-                        'ifsc_code' => $mou->bank_details['ifsc_code'] ?? 'Unknown',
-                        'is_primary' => true,
-                    ]);
+                    $bankAccount = PartyBankAccount::updateOrCreate(
+                        [
+                            'party_id' => $mou->party_id,
+                            'account_number' => $mou->bank_details['account_number'],
+                        ],
+                        [
+                            'bank_name' => $mou->bank_details['bank_name'] ?? 'Unknown',
+                            'bank_address' => $mou->bank_details['bank_address'] ?? null,
+                            'beneficiary_name' => $mou->bank_details['beneficiary_name'] ?? 'Unknown',
+                            'ifsc_code' => $mou->bank_details['ifsc_code'] ?? 'Unknown',
+                            'is_primary' => true,
+                        ]
+                    );
 
                     $profile = OwnerProfile::where('party_id', $mou->party_id)->first();
                     if ($profile) {

@@ -52,6 +52,31 @@ class PropertyFinancials extends Page implements HasForms
         $this->loadFormData();
     }
 
+    public function getSubheading(): string | HtmlString | null
+    {
+        if (!$this->record) {
+            return null;
+        }
+
+        $code = $this->record->code;
+        $name = $this->record->building_name ?? $this->record->address_line_1 ?? 'Property #' . $this->record->id;
+        $propertyUrl = PropertyResource::getUrl('edit', ['record' => $this->record]);
+
+        $codeBadge = $code
+            ? '<span class="inline-flex items-center gap-1 font-mono text-xs font-semibold px-2 py-0.5 rounded bg-primary-50 text-primary-700 dark:bg-primary-950/50 dark:text-primary-300 ring-1 ring-inset ring-primary-600/20">' . e($code) . '</span>'
+            : '';
+
+        return new HtmlString(
+            '<div class="flex items-center gap-2 text-sm font-medium mt-1">' .
+                $codeBadge .
+                '<span class="text-gray-900 dark:text-white font-semibold text-base">' . e($name) . '</span>' .
+                '<a href="' . $propertyUrl . '" class="inline-flex items-center justify-center p-1 rounded bg-primary-100 hover:bg-primary-200 text-primary-700 dark:bg-primary-900/60 dark:hover:bg-primary-900 dark:text-primary-300 transition-colors" title="View Property Profile" aria-label="View Property Profile">' .
+                    '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>' .
+                '</a>' .
+            '</div>'
+        );
+    }
+
     protected function loadFormData(): void
     {
         $latestPricing = $this->record->financialTerms()->latest('effective_from')->first();
@@ -352,6 +377,62 @@ class PropertyFinancials extends Page implements HasForms
                                         return new HtmlString('Current active bank account for remittances. ' . $sourceHtml);
                                     })
                                     ->headerActions([
+                                        Action::make('pushBankDetailsToParty')
+                                            ->label('Push to Party Profile')
+                                            ->icon('heroicon-o-arrow-up-right')
+                                            ->color('success')
+                                            ->requiresConfirmation()
+                                            ->modalHeading('Push Bank Details to Owner Party Profile')
+                                            ->modalDescription(function () {
+                                                $party = $this->record->owner_party_id ? \App\Domain\Party\Models\Party::find($this->record->owner_party_id) : $this->record->mous()->whereNotNull('party_id')->latest()->first()?->party;
+                                                $partyName = $party ? $party->display_name : 'Owner Party';
+                                                return "Are you sure you want to push these bank details directly to {$partyName}'s party profile? This will set these bank details as their primary bank account.";
+                                            })
+                                            ->visible(function () {
+                                                $details = $this->data['bank_details'] ?? [];
+                                                return !empty($details['account_number']);
+                                            })
+                                            ->action(function () {
+                                                $party = $this->record->owner_party_id ? \App\Domain\Party\Models\Party::find($this->record->owner_party_id) : $this->record->mous()->whereNotNull('party_id')->latest()->first()?->party;
+                                                if (!$party) {
+                                                    Notification::make()->title('No Owner Party Linked')->danger()->send();
+                                                    return;
+                                                }
+
+                                                $details = $this->data['bank_details'] ?? [];
+                                                if (empty($details['account_number'])) {
+                                                    Notification::make()->title('No Bank Details to Push')->danger()->send();
+                                                    return;
+                                                }
+
+                                                \App\Domain\Party\Models\PartyBankAccount::where('party_id', $party->id)->update(['is_primary' => false]);
+
+                                                $bankAccount = \App\Domain\Party\Models\PartyBankAccount::updateOrCreate(
+                                                    [
+                                                        'party_id' => $party->id,
+                                                        'account_number' => $details['account_number'],
+                                                    ],
+                                                    [
+                                                        'beneficiary_name' => $details['beneficiary_name'] ?? $party->display_name,
+                                                        'bank_name' => $details['bank_name'] ?? 'Unknown',
+                                                        'bank_address' => $details['bank_address'] ?? null,
+                                                        'ifsc_code' => $details['ifsc_code'] ?? 'Unknown',
+                                                        'is_primary' => true,
+                                                    ]
+                                                );
+
+                                                $profile = \App\Domain\Party\Models\OwnerProfile::where('party_id', $party->id)->first();
+                                                if ($profile) {
+                                                    $profile->update(['default_bank_account_id' => $bankAccount->id]);
+                                                }
+
+                                                $this->loadFormData();
+                                                Notification::make()
+                                                    ->title("Bank details pushed to {$party->display_name} successfully!")
+                                                    ->success()
+                                                    ->send();
+                                            }),
+
                                         Action::make('initiateBankUpdate')
                                             ->label('Update Bank Details')
                                             ->icon('heroicon-o-building-library')
