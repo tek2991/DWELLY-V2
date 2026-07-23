@@ -106,13 +106,31 @@ class PropertyOnboardingValidator
 
     protected function validateDocuments(Property $property): array
     {
-        $isValid = $property->documents->count() > 0;
-        
+        $hasPropertyDocs = $property->documents->count() > 0;
+
+        $relevantMou = $property->mous()
+            ->whereIn('type', [
+                \App\Domain\Mou\Enums\MouType::ONBOARDING,
+                \App\Domain\Mou\Enums\MouType::KYC_UPDATE,
+                \App\Domain\Mou\Enums\MouType::BANK_DETAILS_UPDATE,
+            ])
+            ->latest()
+            ->first();
+        $targetModel = $relevantMou ?? $property;
+
+        $hasMediaDocs = \Spatie\MediaLibrary\MediaCollections\Models\Media::query()
+            ->where('model_type', get_class($targetModel))
+            ->where('model_id', $targetModel->id)
+            ->whereIn('collection_name', ['mou_attachments', 'signatory_documents', 'signed_pdf', 'draft_pdf'])
+            ->exists();
+
+        $isValid = $hasPropertyDocs || $hasMediaDocs;
+
         return [
             'name' => 'Documents',
             'is_valid' => $isValid,
-            'missing' => $isValid ? [] : ['At least one document is required.'],
-            'tab' => 'documents',
+            'missing' => $isValid ? [] : ['At least one document (Owner KYC / MOU Attachment) must be uploaded under Financial Terms & MOU.'],
+            'tab' => 'financials',
         ];
     }
 
