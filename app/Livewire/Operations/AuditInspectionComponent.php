@@ -396,7 +396,7 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
                     ])
             ])
             ->modalSubmitAction(fn ($action, AuditItem $record) => $record->isEditable() ? $action : $action->hidden())
-            ->using(function (AuditItem $record, array $data): AuditItem {
+            ->using(function (AuditItem $record, array $data, Action $action): AuditItem {
                 if (!$record->isEditable()) {
                     return $record;
                 }
@@ -417,6 +417,15 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
                 activity()
                     ->performedOn($record)
                     ->log('Inspection: ' . $record->name . ' updated');
+
+                \Filament\Notifications\Notification::make()
+                    ->title('Inspection details saved')
+                    ->success()
+                    ->send();
+
+                $this->audit->load('categories.items');
+
+                $action->halt();
 
                 return $record;
             })
