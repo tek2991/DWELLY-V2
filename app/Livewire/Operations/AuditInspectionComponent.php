@@ -360,13 +360,56 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
             });
     }
 
+    public function getCategoryItems(AuditItem $record)
+    {
+        $category = $this->audit->categories->firstWhere('id', $record->audit_category_id);
+        if (!$category) {
+            $category = AuditCategory::with('items')->find($record->audit_category_id);
+        }
+
+        return $category?->items ?? collect();
+    }
+
+    public function getPreviousItemId(AuditItem $record): ?string
+    {
+        $items = $this->getCategoryItems($record)->values();
+        $currentIndex = $items->search(fn ($i) => (string)$i->id === (string)$record->id);
+
+        if ($currentIndex !== false && $currentIndex > 0) {
+            return (string) $items[$currentIndex - 1]->id;
+        }
+
+        return null;
+    }
+
+    public function getNextItemId(AuditItem $record): ?string
+    {
+        $items = $this->getCategoryItems($record)->values();
+        $currentIndex = $items->search(fn ($i) => (string)$i->id === (string)$record->id);
+
+        if ($currentIndex !== false && $currentIndex < $items->count() - 1) {
+            return (string) $items[$currentIndex + 1]->id;
+        }
+
+        return null;
+    }
+
     public function editItemAction(): Action
     {
         return \Filament\Actions\EditAction::make('editItem')
             ->label('Inspect')
             ->button()
             ->slideOver()
-            ->modalHeading(fn (AuditItem $record) => 'Inspect: ' . $record->name)
+            ->modalHeading(function (AuditItem $record) {
+                $item = $this->currentItemId ? AuditItem::find($this->currentItemId) : $record;
+                $items = $item ? $this->getCategoryItems($item)->values() : collect();
+                $currentIndex = $item ? $items->search(fn ($i) => (string)$i->id === (string)$item->id) : false;
+                $total = $items->count();
+
+                $positionText = ($currentIndex !== false && $total > 0) ? ' (' . ($currentIndex + 1) . ' of ' . $total . ')' : '';
+
+                return 'Inspect: ' . ($item?->name ?? '') . $positionText;
+            })
             ->modalDescription(function (AuditItem $record) {
                 $code = $this->audit->property->code ?? 'N/A';
                 return 'Property Code: ' . $code;
@@ -396,6 +439,84 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
                     ])
             ])
             ->modalSubmitAction(fn ($action, AuditItem $record) => $record->isEditable() ? $action : $action->hidden())
+            ->extraModalFooterActions(function (AuditItem $record) {
+                return [
+                    Action::make('prevItem')
+                        ->label('Previous')
+                        ->icon('heroicon-o-chevron-left')
+                        ->color('gray')
+                        ->button()
+                        ->disabled(function () use ($record) {
+                            $item = $this->currentItemId ? AuditItem::find($this->currentItemId) : $record;
+                            return !$item || !$this->getPreviousItemId($item);
+                        })
+                        ->action(function (AuditItem $record) {
+                            $item = $this->currentItemId ? AuditItem::find($this->currentItemId) : $record;
+                            if (!$item) return;
+
+                            $prevId = $this->getPreviousItemId($item);
+                            if (!$prevId) return;
+
+                            $schema = $this->getMountedActionSchema();
+                            $data = $schema ? $schema->getState() : [];
+
+                            if ($item->isEditable() && !empty($data['condition'])) {
+                                $data['status'] = ItemStatus::INSPECTED;
+                                $item->update($data);
+
+                                $item->revisions()->create([
+                                    'updated_by_id' => auth()->id(),
+                                    'snapshot_data' => [
+                                        'condition' => $data['condition'] ?? null,
+                                        'remarks' => $data['remarks'] ?? null,
+                                        'evidence_count' => $item->evidence()->count(),
+                                    ],
+                                ]);
+                            }
+
+                            $this->audit->load('categories.items');
+                            $this->replaceMountedAction('editItem', ['item_id' => $prevId], ['seq' => microtime(true)]);
+                        }),
+
+                    Action::make('nextItem')
+                        ->label('Next')
+                        ->icon('heroicon-o-chevron-right')
+                        ->iconPosition('after')
+                        ->color('gray')
+                        ->button()
+                        ->disabled(function () use ($record) {
+                            $item = $this->currentItemId ? AuditItem::find($this->currentItemId) : $record;
+                            return !$item || !$this->getNextItemId($item);
+                        })
+                        ->action(function (AuditItem $record) {
+                            $item = $this->currentItemId ? AuditItem::find($this->currentItemId) : $record;
+                            if (!$item) return;
+
+                            $nextId = $this->getNextItemId($item);
+                            if (!$nextId) return;
+
+                            $schema = $this->getMountedActionSchema();
+                            $data = $schema ? $schema->getState() : [];
+
+                            if ($item->isEditable() && !empty($data['condition'])) {
+                                $data['status'] = ItemStatus::INSPECTED;
+                                $item->update($data);
+
+                                $item->revisions()->create([
+                                    'updated_by_id' => auth()->id(),
+                                    'snapshot_data' => [
+                                        'condition' => $data['condition'] ?? null,
+                                        'remarks' => $data['remarks'] ?? null,
+                                        'evidence_count' => $item->evidence()->count(),
+                                    ],
+                                ]);
+                            }
+
+                            $this->audit->load('categories.items');
+                            $this->replaceMountedAction('editItem', ['item_id' => $nextId], ['seq' => microtime(true)]);
+                        }),
+                ];
+            })
             ->using(function (AuditItem $record, array $data, Action $action): AuditItem {
                 if (!$record->isEditable()) {
                     return $record;
