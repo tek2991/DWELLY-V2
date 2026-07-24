@@ -1,4 +1,4 @@
-<div style="display: flex; flex-direction: column; gap: 1.5rem;">
+<div @mount-edit-item.window="$wire.mountEditItem($event.detail.itemId)" style="display: flex; flex-direction: column; gap: 1.5rem;">
     <!-- Progress Indicator -->
     @php
         $totalItems = $audit->items->count();

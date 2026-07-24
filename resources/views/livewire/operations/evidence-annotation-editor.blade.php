@@ -154,6 +154,8 @@
             saveAnnotationData() {
                 if (_editor) {
                     this.$wire.saveAnnotation(_editor.serialize().canvas);
+                } else {
+                    this.$dispatch('annotation-saved');
                 }
             }
         };

@@ -467,8 +467,6 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
     {
         Log::info('openEditor called: ' . $evidenceId);
         $this->editingEvidenceId = $evidenceId;
-        
-        // Close the evidence gallery modal since we're going full-screen
         $this->unmountAction(false);
     }
 
@@ -485,6 +483,16 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
     public function closeEditor()
     {
         $this->editingEvidenceId = null;
+        $this->audit->load('categories.items');
+
+        if ($this->currentItemId && AuditItem::where('id', $this->currentItemId)->exists()) {
+            $this->dispatch('mount-edit-item', itemId: $this->currentItemId);
+        }
+    }
+
+    public function mountEditItem(string $itemId)
+    {
+        $this->mountAction('editItem', ['item_id' => $itemId]);
     }
 
     public function render()
