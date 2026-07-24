@@ -142,11 +142,6 @@ class AuditResource extends Resource
                                 ->visible(fn (?Audit $record) => $record && $record->approved_at),
                         ]),
                 ])->columnSpan(['lg' => 1]),
-
-                \Filament\Schemas\Components\Group::make()->schema([
-                    \Filament\Schemas\Components\View::make('filament.forms.components.audit-inspection-view')
-                        ->visible(fn (?Audit $record) => $record !== null)
-                ])->columnSpan(['lg' => 3]),
             ])
             ->columns(3);
     }
@@ -182,6 +177,12 @@ class AuditResource extends Resource
                     ->options(AuditType::class),
             ])
             ->actions([
+                \Filament\Actions\Action::make('inspect')
+                    ->label('Perform Inspection')
+                    ->icon('heroicon-o-clipboard-document-check')
+                    ->color('primary')
+                    ->url(fn (Audit $record) => static::getUrl('inspect', ['record' => $record])),
+
                 \Filament\Actions\EditAction::make()
                     ->visible(fn ($record) => static::canEdit($record)),
                 
@@ -218,6 +219,7 @@ class AuditResource extends Resource
             'index' => Pages\ListAudits::route('/'),
             'create' => Pages\CreateAudit::route('/create'),
             'edit' => Pages\EditAudit::route('/{record}/edit'),
+            'inspect' => Pages\InspectAudit::route('/{record}/inspect'),
             'review' => Pages\ReviewAudit::route('/{record}/review'),
         ];
     }

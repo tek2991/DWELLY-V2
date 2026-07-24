@@ -64,9 +64,9 @@ class AuditItem extends DomainModel implements HasMedia
             return false;
         }
 
-        // If the entire audit is pending review or in review, items are locked
+        // If the entire audit is draft, pending review, in review, approved, or completed, items are locked
         $auditStatus = $this->category?->audit?->status;
-        if (in_array($auditStatus, [\App\Domain\Audit\Enums\AuditStatus::PENDING_REVIEW, \App\Domain\Audit\Enums\AuditStatus::IN_REVIEW, \App\Domain\Audit\Enums\AuditStatus::APPROVED, \App\Domain\Audit\Enums\AuditStatus::COMPLETED])) {
+        if (in_array($auditStatus, [\App\Domain\Audit\Enums\AuditStatus::DRAFT, \App\Domain\Audit\Enums\AuditStatus::PENDING_REVIEW, \App\Domain\Audit\Enums\AuditStatus::IN_REVIEW, \App\Domain\Audit\Enums\AuditStatus::APPROVED, \App\Domain\Audit\Enums\AuditStatus::COMPLETED])) {
             return false;
         }
 

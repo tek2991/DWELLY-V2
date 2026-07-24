@@ -35,6 +35,27 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
         $this->activeCategoryId = $categoryId;
     }
 
+    public function acceptAllAction(): Action
+    {
+        return Action::make('acceptAll')
+            ->label('Accept All Items')
+            ->icon('heroicon-o-check-badge')
+            ->color('success')
+            ->button()
+            ->requiresConfirmation()
+            ->modalHeading('Accept All Items')
+            ->modalDescription('Are you sure you want to accept all remaining items in this audit?')
+            ->visible(fn () => $this->audit->canReview())
+            ->action(function () {
+                app(\App\Domain\Audit\Services\AuditReviewService::class)->acceptAllItems($this->audit, auth()->user());
+                $this->audit->load('categories.items.evidence', 'categories.items.reviews');
+                \Filament\Notifications\Notification::make()
+                    ->title('All items accepted successfully.')
+                    ->success()
+                    ->send();
+            });
+    }
+
     public function approveItemAction(): Action
     {
         return Action::make('approveItem')

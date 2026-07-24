@@ -54,12 +54,68 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
         $this->activeCategoryId = $categoryId;
     }
 
+    public function isAuditEditable(): bool
+    {
+        return $this->audit->status === \App\Domain\Audit\Enums\AuditStatus::IN_PROGRESS;
+    }
+
+    public function startAuditAction(): Action
+    {
+        return Action::make('startAudit')
+            ->label('Start Audit')
+            ->icon('heroicon-o-play')
+            ->color('info')
+            ->button()
+            ->visible(fn () => $this->audit->status === \App\Domain\Audit\Enums\AuditStatus::DRAFT)
+            ->action(function () {
+                $this->audit->update(['status' => \App\Domain\Audit\Enums\AuditStatus::IN_PROGRESS]);
+                $this->audit->refresh();
+                \Filament\Notifications\Notification::make()
+                    ->title('Audit started successfully')
+                    ->body('You can now inspect items and submit for review once all items are inspected.')
+                    ->success()
+                    ->send();
+            });
+    }
+
+    public function submitForReviewAction(): Action
+    {
+        return Action::make('submitForReview')
+            ->label('Submit Audit for Approval')
+            ->icon('heroicon-o-paper-airplane')
+            ->color('success')
+            ->button()
+            ->requiresConfirmation()
+            ->modalHeading('Submit Audit for Review')
+            ->modalDescription('Once submitted, you will not be able to edit items until the reviewer reviews them or requests changes.')
+            ->visible(fn () => $this->audit->canSubmit())
+            ->action(function () {
+                $pendingCount = $this->audit->items()->where('status', \App\Domain\Audit\Enums\ItemStatus::PENDING)->count();
+                if ($pendingCount > 0) {
+                    \Filament\Notifications\Notification::make()
+                        ->title('Cannot Submit Audit')
+                        ->body("All audit items have to be inspected before submitting for review. ({$pendingCount} item(s) pending inspection)")
+                        ->warning()
+                        ->send();
+                    return;
+                }
+
+                app(\App\Domain\Audit\Services\AuditReviewService::class)->submitForReview($this->audit);
+                $this->audit->refresh();
+                \Filament\Notifications\Notification::make()
+                    ->title('Audit submitted for approval successfully.')
+                    ->success()
+                    ->send();
+            });
+    }
+
     public function createRoomAction(): Action
     {
         return Action::make('createRoom')
             ->label('Add Room')
             ->icon('heroicon-o-plus')
             ->button()
+            ->visible(fn () => $this->isAuditEditable())
             ->modalHeading('Add Room (Staged for Audit)')
             ->form([
                 Select::make('room_type_id')
@@ -136,6 +192,7 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
             ->label('Add Inventory Item')
             ->icon('heroicon-o-plus')
             ->button()
+            ->visible(fn () => $this->isAuditEditable())
             ->modalHeading('Add Inventory Item (Staged for Audit)')
             ->form([
                 Select::make('property_room_id')
@@ -246,6 +303,7 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
             ->label('Add Utility')
             ->icon('heroicon-o-plus')
             ->button()
+            ->visible(fn () => $this->isAuditEditable())
             ->modalHeading('Add Utility Configuration (Staged for Audit)')
             ->form([
                 Select::make('utility_type_id')
@@ -318,6 +376,7 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
             ->label('Add New Item')
             ->icon('heroicon-o-plus')
             ->button()
+            ->visible(fn () => $this->isAuditEditable())
             ->modalHeading('Add Found Item')
             ->form([
                 TextInput::make('name')

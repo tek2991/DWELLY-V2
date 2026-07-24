@@ -4,6 +4,21 @@ import * as fabric from 'fabric';
 // This is the ONLY correct way - passing propertiesToInclude to toJSON only affects canvas-level props.
 fabric.FabricObject.customProperties = ['id', 'remark', 'customType'];
 
+function getRelativeUrl(url) {
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+        try {
+            const parsed = new URL(url);
+            if (parsed.hostname === window.location.hostname || 
+                parsed.hostname === 'localhost' || 
+                parsed.hostname === '127.0.0.1') {
+                return parsed.pathname + parsed.search + parsed.hash;
+            }
+        } catch(e) {}
+    }
+    return url;
+}
+
 export class AnnotationEditor {
     constructor(canvasElement, imageUrl, initialJson = null, onUpdate = null, onSelection = null) {
         this.canvas = new fabric.Canvas(canvasElement, {
@@ -11,7 +26,7 @@ export class AnnotationEditor {
             preserveObjectStacking: true,
         });
         
-        this.imageUrl = imageUrl;
+        this.imageUrl = getRelativeUrl(imageUrl);
         this.onUpdate = onUpdate;
         this.onSelection = onSelection;
         this._backgroundImg = null; // cached FabricImage for background
@@ -31,31 +46,13 @@ export class AnnotationEditor {
             const img = await fabric.Image.fromURL(this.imageUrl, { crossOrigin: 'anonymous' });
             console.log('[AnnotationEditor] Image loaded successfully', img.width, 'x', img.height);
             
-            // Determine available space for the canvas
-            let el = this.canvas.getElement();
-            let container = null;
-            while (el && el !== document) {
-                if (el.style && el.style.overflow === 'auto' && el.style.padding === '2rem') {
-                    container = el;
-                    break;
-                }
-                el = el.parentNode;
-            }
-            
-            let availableWidth, availableHeight;
-            if (container) {
-                availableWidth = container.clientWidth - 64;
-                availableHeight = container.clientHeight - 64;
-            } else {
-                availableWidth = window.innerWidth - 320 - 64;
-                availableHeight = window.innerHeight - 60 - 64;
-                console.log('[AnnotationEditor] Using fallback dimensions');
-            }
-            if (availableWidth <= 0) availableWidth = 800;
-            if (availableHeight <= 0) availableHeight = 600;
+            // Determine available space for the canvas based on window dimensions
+            let availableWidth = Math.min(window.innerWidth - 380, 1150);
+            let availableHeight = Math.min(window.innerHeight - 140, 720);
+            if (availableWidth <= 0) availableWidth = 900;
+            if (availableHeight <= 0) availableHeight = 650;
             
             let scale = Math.min(availableWidth / img.width, availableHeight / img.height);
-            scale = Math.min(scale, 5);
             console.log('[AnnotationEditor] Calculated scale:', scale);
             
             // Size the canvas to match the scaled image
@@ -69,6 +66,8 @@ export class AnnotationEditor {
             img.set({
                 originX: 'left',
                 originY: 'top',
+                left: 0,
+                top: 0,
                 scaleX: scale,
                 scaleY: scale,
             });
@@ -396,4 +395,84 @@ export class AnnotationEditor {
     }
 }
 
+export class AnnotationViewer {
+    constructor(canvasElement, imageUrl, initialJson = null, onUpdate = null) {
+        this.canvas = new fabric.Canvas(canvasElement, {
+            isDrawingMode: false,
+            selection: false,
+            preserveObjectStacking: true,
+        });
+        
+        this.imageUrl = getRelativeUrl(imageUrl);
+        this.onUpdate = onUpdate;
+        this.init(initialJson);
+    }
+
+    async init(initialJson) {
+        try {
+            console.log('[AnnotationViewer] Loading image from:', this.imageUrl);
+            const img = await fabric.Image.fromURL(this.imageUrl, { crossOrigin: 'anonymous' });
+            
+            let availableWidth = Math.min(window.innerWidth - 460, 920);
+            let availableHeight = Math.min(window.innerHeight - 220, 600);
+            if (availableWidth <= 0) availableWidth = 750;
+            if (availableHeight <= 0) availableHeight = 500;
+
+            let scale = Math.min(availableWidth / img.width, availableHeight / img.height);
+
+            const canvasW = Math.round(img.width * scale);
+            const canvasH = Math.round(img.height * scale);
+            this.canvas.setDimensions({ width: canvasW, height: canvasH });
+
+            img.set({
+                originX: 'left',
+                originY: 'top',
+                left: 0,
+                top: 0,
+                scaleX: scale,
+                scaleY: scale,
+            });
+            this.canvas.backgroundImage = img;
+
+            if (initialJson && initialJson.canvas) {
+                const jsonData = { ...initialJson.canvas };
+                delete jsonData.backgroundImage;
+                delete jsonData.backgroundVpt;
+                if (jsonData.objects) {
+                    jsonData.objects = jsonData.objects.filter(
+                        o => o.id !== 'bg-image' && o.customType !== 'background'
+                    );
+                }
+                await this.canvas.loadFromJSON(jsonData, (jsonObj, instance, error) => {
+                    if (instance && !error) {
+                        if (jsonObj.id !== undefined) instance.id = jsonObj.id;
+                        if (jsonObj.remark !== undefined) instance.remark = jsonObj.remark;
+                        if (jsonObj.customType !== undefined) instance.customType = jsonObj.customType;
+                        instance.selectable = false;
+                        instance.evented = false;
+                    }
+                });
+                this.canvas.setDimensions({ width: canvasW, height: canvasH });
+                this.canvas.backgroundImage = img;
+            }
+
+            this.canvas.renderAll();
+            if (this.onUpdate) {
+                this.onUpdate(this.getLayers());
+            }
+        } catch (e) {
+            console.error('[AnnotationViewer] Failed to load image:', e);
+        }
+    }
+
+    getLayers() {
+        return this.canvas.getObjects().map(obj => ({
+            id: obj.id,
+            type: obj.customType || obj.type,
+            remark: obj.remark || (obj.type === 'IText' ? obj.text : '')
+        }));
+    }
+}
+
 window.AnnotationEditor = AnnotationEditor;
+window.AnnotationViewer = AnnotationViewer;

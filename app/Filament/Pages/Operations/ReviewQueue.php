@@ -68,7 +68,7 @@ class ReviewQueue extends Page implements HasTable
                         if (!$record->reviewer_id && (auth()->user()->can('audit.review') || auth()->user()->can('audit.approve'))) {
                             $record->update(['reviewer_id' => auth()->id()]);
                         }
-                        return redirect(route('filament.operations.resources.audits.review', $record));
+                        return redirect(AuditResource::getUrl('review', ['record' => $record]));
                     }),
             ])
             ->modifyQueryUsing(function (Builder $query) {

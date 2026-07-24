@@ -32,6 +32,24 @@ class ReviewAudit extends Page
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('acceptAll')
+                ->label('Accept All Items')
+                ->color('success')
+                ->icon('heroicon-o-check-badge')
+                ->requiresConfirmation()
+                ->modalHeading('Accept All Items')
+                ->modalDescription('Are you sure you want to accept all remaining items in this audit?')
+                ->visible(fn () => $this->record->canReview())
+                ->action(function () {
+                    app(\App\Domain\Audit\Services\AuditReviewService::class)->acceptAllItems($this->record, auth()->user());
+                    $this->record->refresh();
+                    
+                    \Filament\Notifications\Notification::make()
+                        ->title('All items accepted successfully.')
+                        ->success()
+                        ->send();
+                }),
+
             Action::make('requestChanges')
                 ->label('Request Changes')
                 ->color('danger')
@@ -41,12 +59,18 @@ class ReviewAudit extends Page
                     app(\App\Domain\Audit\Services\AuditReviewService::class)->requestChanges($this->record);
                     
                     \Filament\Notifications\Notification::make()
-                        ->title('Changes requested')
+                        ->title('Changes requested from inspector')
                         ->success()
                         ->send();
                         
                     return redirect(route('filament.operations.pages.review-queue'));
                 }),
+
+            Action::make('backToInspection')
+                ->label('Inspection Page')
+                ->color('gray')
+                ->icon('heroicon-o-clipboard-document-list')
+                ->url(fn () => AuditResource::getUrl('inspect', ['record' => $this->record])),
         ];
     }
 }

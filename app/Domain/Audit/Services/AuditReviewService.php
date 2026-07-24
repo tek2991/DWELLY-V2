@@ -117,7 +117,7 @@ class AuditReviewService
             ]);
         }
 
-        // If all items are approved, auto-approve the audit
+        // If all items are approved, auto-approve the audit and sync items to property
         if ($approvedItems === $totalItems) {
             $audit->update([
                 'status' => AuditStatus::APPROVED,
@@ -125,9 +125,130 @@ class AuditReviewService
                 'approved_by_id' => auth()->id() ?? $audit->reviewer_id,
             ]);
 
+            $this->syncApprovedItemsToProperty($audit);
+
             activity()
                 ->performedOn($audit)
                 ->log('Workflow: Audit approved');
         }
+    }
+
+    /**
+     * Accept all pending or non-approved items in an audit at once.
+     */
+    public function acceptAllItems(Audit $audit, User $reviewer): void
+    {
+        DB::transaction(function () use ($audit, $reviewer) {
+            $items = $audit->items()->get();
+
+            foreach ($items as $item) {
+                if ($item->status !== ItemStatus::APPROVED) {
+                    $item->update(['status' => ItemStatus::APPROVED]);
+
+                    $item->reviews()->create([
+                        'reviewer_id' => $reviewer->id,
+                        'review_round' => $audit->review_round ?? 1,
+                        'status' => 'approved',
+                        'reviewed_at' => now(),
+                    ]);
+                }
+            }
+
+            $this->evaluateWorkflowState($audit);
+        });
+
+        activity()
+            ->performedOn($audit)
+            ->log('Review: All items approved by reviewer');
+    }
+
+    /**
+     * Sync approved items added/staged during audit inspection into property models.
+     */
+    public function syncApprovedItemsToProperty(Audit $audit): void
+    {
+        DB::transaction(function () use ($audit) {
+            $approvedItems = $audit->items()
+                ->where('status', ItemStatus::APPROVED)
+                ->get();
+
+            $roomMap = [];
+
+            // 1. Sync Staged Rooms
+            foreach ($approvedItems as $item) {
+                $snapshot = $item->snapshot_data ?? [];
+                if (!empty($snapshot['is_new']) && ($snapshot['staged_type'] ?? null) === 'room') {
+                    $roomDefId = $snapshot['room_definition_id'] ?? null;
+                    $displayName = $snapshot['display_name'] ?? $item->name;
+
+                    $newRoom = \App\Domain\Property\Models\PropertyRoom::create([
+                        'property_id' => $audit->property_id,
+                        'room_definition_id' => $roomDefId,
+                        'custom_name' => $displayName,
+                        'is_active' => true,
+                    ]);
+
+                    $roomMap[$item->id] = $newRoom->id;
+
+                    unset($snapshot['is_new']);
+                    $item->update([
+                        'source_type' => \App\Domain\Property\Models\PropertyRoom::class,
+                        'source_id' => $newRoom->id,
+                        'snapshot_data' => $snapshot,
+                    ]);
+                }
+            }
+
+            // 2. Sync Staged Inventory
+            foreach ($approvedItems as $item) {
+                $snapshot = $item->snapshot_data ?? [];
+                if (!empty($snapshot['is_new']) && ($snapshot['staged_type'] ?? null) === 'inventory') {
+                    $invTypeId = $snapshot['inventory_type_id'] ?? null;
+                    $count = $snapshot['count'] ?? 1;
+
+                    $roomId = $snapshot['property_room_id'] ?? null;
+                    $stagedRoomItemId = $snapshot['staged_room_item_id'] ?? null;
+                    if (!$roomId && $stagedRoomItemId && isset($roomMap[$stagedRoomItemId])) {
+                        $roomId = $roomMap[$stagedRoomItemId];
+                    }
+
+                    $newInv = \App\Domain\Property\Models\PropertyInventory::create([
+                        'property_id' => $audit->property_id,
+                        'property_room_id' => $roomId,
+                        'inventory_type_id' => $invTypeId,
+                        'count' => $count,
+                    ]);
+
+                    unset($snapshot['is_new']);
+                    $item->update([
+                        'source_type' => \App\Domain\Property\Models\PropertyInventory::class,
+                        'source_id' => $newInv->id,
+                        'snapshot_data' => $snapshot,
+                    ]);
+                }
+            }
+
+            // 3. Sync Staged Utilities
+            foreach ($approvedItems as $item) {
+                $snapshot = $item->snapshot_data ?? [];
+                if (!empty($snapshot['is_new']) && ($snapshot['staged_type'] ?? null) === 'utility') {
+                    $utilityTypeId = $snapshot['utility_type_id'] ?? null;
+                    $paidBy = $snapshot['paid_by'] ?? 'owner';
+
+                    $newUtil = \App\Domain\Property\Models\PropertyUtility::create([
+                        'property_id' => $audit->property_id,
+                        'utility_type_id' => $utilityTypeId,
+                        'paid_by' => $paidBy,
+                    ]);
+
+                    unset($snapshot['is_new']);
+                    $item->update([
+                        'source_type' => \App\Domain\Property\Models\PropertyUtility::class,
+                        'source_id' => $newUtil->id,
+                        'snapshot_data' => $snapshot,
+                    ]);
+                }
+            }
+        });
     }
 }

@@ -123,9 +123,7 @@ class Audit extends DomainModel
 
     public function canSubmit(): bool
     {
-        // Enforce 100% inspected logic here or inside the service.
-        // For basic policy, must be in progress or partially approved
-        return in_array($this->status, [AuditStatus::IN_PROGRESS, AuditStatus::PARTIALLY_APPROVED]);
+        return in_array($this->status, [AuditStatus::DRAFT, AuditStatus::IN_PROGRESS, AuditStatus::PARTIALLY_APPROVED]);
     }
 
     public function canReview(): bool
