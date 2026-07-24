@@ -46,6 +46,9 @@ export class AnnotationEditor {
             const img = await fabric.Image.fromURL(this.imageUrl, { crossOrigin: 'anonymous' });
             console.log('[AnnotationEditor] Image loaded successfully', img.width, 'x', img.height);
             
+            this.imgNativeWidth = img.width;
+            this.imgNativeHeight = img.height;
+
             // Determine available space for the canvas based on window dimensions
             let availableWidth = Math.min(window.innerWidth - 380, 1150);
             let availableHeight = Math.min(window.innerHeight - 140, 720);
@@ -53,6 +56,7 @@ export class AnnotationEditor {
             if (availableHeight <= 0) availableHeight = 650;
             
             let scale = Math.min(availableWidth / img.width, availableHeight / img.height);
+            this.currentScale = scale;
             console.log('[AnnotationEditor] Calculated scale:', scale);
             
             // Size the canvas to match the scaled image
@@ -84,10 +88,13 @@ export class AnnotationEditor {
                         o => o.id !== 'bg-image' && o.customType !== 'background'
                     );
                 }
-                // In Fabric v7, loadFromJSON returns a Promise.
-                // The reviver (2nd param) is called per-object to restore custom properties.
-                await this._loadJson(jsonData);
-                // loadFromJSON may clear/change backgroundImage and dimensions, so restore them
+                
+                let scaleFactor = scale;
+                if (!initialJson.baseWidth && jsonData.width) {
+                    scaleFactor = canvasW / jsonData.width;
+                }
+
+                await this._loadJson(jsonData, scaleFactor);
                 this.canvas.setDimensions({ width: canvasW, height: canvasH });
                 this.canvas.backgroundImage = img;
             }
@@ -245,14 +252,32 @@ export class AnnotationEditor {
         this.canvas.renderAll();
     }
 
-    // Wraps canvas.loadFromJSON with a reviver to restore custom properties (id, remark, customType)
-    // that Fabric v7 does not restore automatically.
-    async _loadJson(jsonData) {
+    async _loadJson(jsonData, scaleFactor = 1) {
         await this.canvas.loadFromJSON(jsonData, (jsonObj, instance, error) => {
             if (instance && !error) {
                 if (jsonObj.id !== undefined) instance.id = jsonObj.id;
                 if (jsonObj.remark !== undefined) instance.remark = jsonObj.remark;
                 if (jsonObj.customType !== undefined) instance.customType = jsonObj.customType;
+
+                if (scaleFactor && scaleFactor !== 1) {
+                    instance.left = (jsonObj.left || 0) * scaleFactor;
+                    instance.top = (jsonObj.top || 0) * scaleFactor;
+                    instance.scaleX = (jsonObj.scaleX || 1) * scaleFactor;
+                    instance.scaleY = (jsonObj.scaleY || 1) * scaleFactor;
+                    if (jsonObj.strokeWidth) {
+                        instance.strokeWidth = jsonObj.strokeWidth * scaleFactor;
+                    }
+                    if (jsonObj.fontSize) {
+                        instance.fontSize = jsonObj.fontSize * scaleFactor;
+                    }
+                    if (jsonObj.type === 'Line') {
+                        if (jsonObj.x1 !== undefined) instance.x1 = jsonObj.x1 * scaleFactor;
+                        if (jsonObj.y1 !== undefined) instance.y1 = jsonObj.y1 * scaleFactor;
+                        if (jsonObj.x2 !== undefined) instance.x2 = jsonObj.x2 * scaleFactor;
+                        if (jsonObj.y2 !== undefined) instance.y2 = jsonObj.y2 * scaleFactor;
+                    }
+                    instance.setCoords();
+                }
             }
         });
     }
@@ -386,10 +411,31 @@ export class AnnotationEditor {
     }
 
     serialize() {
+        const scale = this.currentScale || 1;
         const json = this.canvas.toJSON();
         delete json.backgroundImage;
+
+        if (json.objects && scale !== 1) {
+            json.objects.forEach(obj => {
+                if (obj.left !== undefined) obj.left = obj.left / scale;
+                if (obj.top !== undefined) obj.top = obj.top / scale;
+                if (obj.scaleX !== undefined) obj.scaleX = (obj.scaleX || 1) / scale;
+                if (obj.scaleY !== undefined) obj.scaleY = (obj.scaleY || 1) / scale;
+                if (obj.strokeWidth) obj.strokeWidth = obj.strokeWidth / scale;
+                if (obj.fontSize) obj.fontSize = obj.fontSize / scale;
+                if (obj.type === 'Line') {
+                    if (obj.x1 !== undefined) obj.x1 = obj.x1 / scale;
+                    if (obj.y1 !== undefined) obj.y1 = obj.y1 / scale;
+                    if (obj.x2 !== undefined) obj.x2 = obj.x2 / scale;
+                    if (obj.y2 !== undefined) obj.y2 = obj.y2 / scale;
+                }
+            });
+        }
+
         return {
             version: 1,
+            baseWidth: this.imgNativeWidth,
+            baseHeight: this.imgNativeHeight,
             canvas: json
         };
     }
@@ -443,15 +489,13 @@ export class AnnotationViewer {
                         o => o.id !== 'bg-image' && o.customType !== 'background'
                     );
                 }
-                await this.canvas.loadFromJSON(jsonData, (jsonObj, instance, error) => {
-                    if (instance && !error) {
-                        if (jsonObj.id !== undefined) instance.id = jsonObj.id;
-                        if (jsonObj.remark !== undefined) instance.remark = jsonObj.remark;
-                        if (jsonObj.customType !== undefined) instance.customType = jsonObj.customType;
-                        instance.selectable = false;
-                        instance.evented = false;
-                    }
-                });
+
+                let scaleFactor = scale;
+                if (!initialJson.baseWidth && jsonData.width) {
+                    scaleFactor = canvasW / jsonData.width;
+                }
+
+                await this._loadJson(jsonData, scaleFactor);
                 this.canvas.setDimensions({ width: canvasW, height: canvasH });
                 this.canvas.backgroundImage = img;
             }
@@ -463,6 +507,38 @@ export class AnnotationViewer {
         } catch (e) {
             console.error('[AnnotationViewer] Failed to load image:', e);
         }
+    }
+
+    async _loadJson(jsonData, scaleFactor = 1) {
+        await this.canvas.loadFromJSON(jsonData, (jsonObj, instance, error) => {
+            if (instance && !error) {
+                if (jsonObj.id !== undefined) instance.id = jsonObj.id;
+                if (jsonObj.remark !== undefined) instance.remark = jsonObj.remark;
+                if (jsonObj.customType !== undefined) instance.customType = jsonObj.customType;
+                instance.selectable = false;
+                instance.evented = false;
+
+                if (scaleFactor && scaleFactor !== 1) {
+                    instance.left = (jsonObj.left || 0) * scaleFactor;
+                    instance.top = (jsonObj.top || 0) * scaleFactor;
+                    instance.scaleX = (jsonObj.scaleX || 1) * scaleFactor;
+                    instance.scaleY = (jsonObj.scaleY || 1) * scaleFactor;
+                    if (jsonObj.strokeWidth) {
+                        instance.strokeWidth = jsonObj.strokeWidth * scaleFactor;
+                    }
+                    if (jsonObj.fontSize) {
+                        instance.fontSize = jsonObj.fontSize * scaleFactor;
+                    }
+                    if (jsonObj.type === 'Line') {
+                        if (jsonObj.x1 !== undefined) instance.x1 = jsonObj.x1 * scaleFactor;
+                        if (jsonObj.y1 !== undefined) instance.y1 = jsonObj.y1 * scaleFactor;
+                        if (jsonObj.x2 !== undefined) instance.x2 = jsonObj.x2 * scaleFactor;
+                        if (jsonObj.y2 !== undefined) instance.y2 = jsonObj.y2 * scaleFactor;
+                    }
+                    instance.setCoords();
+                }
+            }
+        });
     }
 
     getLayers() {
