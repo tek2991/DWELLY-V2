@@ -35,6 +35,13 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
         $this->activeCategoryId = $categoryId;
     }
 
+    public function refreshAuditRelations(): void
+    {
+        $this->audit->unsetRelation('categories');
+        $this->audit->unsetRelation('items');
+        $this->audit->load('categories.items.evidence', 'categories.items.reviews', 'items');
+    }
+
     public function acceptAllAction(): Action
     {
         return Action::make('acceptAll')
@@ -48,7 +55,7 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
             ->visible(fn () => $this->audit->canReview())
             ->action(function () {
                 app(\App\Domain\Audit\Services\AuditReviewService::class)->acceptAllItems($this->audit, auth()->user());
-                $this->audit->load('categories.items.evidence', 'categories.items.reviews');
+                $this->refreshAuditRelations();
                 \Filament\Notifications\Notification::make()
                     ->title('All items accepted successfully.')
                     ->success()
@@ -66,7 +73,7 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
                 $item = AuditItem::find($arguments['item_id']);
                 if ($item) {
                     app(\App\Domain\Audit\Services\AuditReviewService::class)->approveItem($item, auth()->user());
-                    $this->audit->load('categories.items.evidence', 'categories.items.reviews');
+                    $this->refreshAuditRelations();
                 }
             });
     }
@@ -96,7 +103,7 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
                 $item = AuditItem::find($arguments['item_id']);
                 if ($item) {
                     app(\App\Domain\Audit\Services\AuditReviewService::class)->rejectItem($item, auth()->user(), $data['reason'], $data['comment_type']);
-                    $this->audit->load('categories.items.evidence', 'categories.items.reviews');
+                    $this->refreshAuditRelations();
                 }
             });
     }
