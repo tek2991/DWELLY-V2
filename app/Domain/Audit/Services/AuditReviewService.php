@@ -46,7 +46,7 @@ class AuditReviewService
                 'reviewed_at' => now(),
             ]);
 
-            $this->evaluateWorkflowState($item->category->audit);
+            $this->evaluateWorkflowState($item->category->audit, true);
         });
         
         activity()
@@ -71,12 +71,36 @@ class AuditReviewService
                 'reviewed_at' => now(),
             ]);
 
-            $this->evaluateWorkflowState($item->category->audit);
+            $this->evaluateWorkflowState($item->category->audit, true);
         });
 
         activity()
             ->performedOn($item)
             ->log('Review: ' . $item->name . ' rejected');
+    }
+
+    /**
+     * Reset a review decision on an item back to inspected status.
+     */
+    public function resetItem(AuditItem $item, User $reviewer)
+    {
+        DB::transaction(function () use ($item, $reviewer) {
+            $item->update(['status' => ItemStatus::INSPECTED]);
+
+            $item->reviews()->create([
+                'reviewer_id' => $reviewer->id,
+                'review_round' => $item->category->audit->review_round,
+                'status' => 'pending',
+                'comments' => 'Review status reset to inspected',
+                'reviewed_at' => now(),
+            ]);
+
+            $this->evaluateWorkflowState($item->category->audit, true);
+        });
+
+        activity()
+            ->performedOn($item)
+            ->log('Review: ' . $item->name . ' reset to inspected');
     }
 
     /**
@@ -97,7 +121,7 @@ class AuditReviewService
      * Re-evaluate the workflow state based on item statuses.
      * This is the ONLY method that should transition the Audit status automatically during review.
      */
-    public function evaluateWorkflowState(Audit $audit)
+    public function evaluateWorkflowState(Audit $audit, bool $fromUserAction = false)
     {
         $items = $audit->items()->get();
 
@@ -117,8 +141,8 @@ class AuditReviewService
             ]);
         }
 
-        // If all items are approved, auto-approve the audit and sync items to property
-        if ($approvedItems === $totalItems) {
+        // If all items are approved, auto-approve the audit and sync items to property only when triggered from a user action
+        if ($fromUserAction && $approvedItems === $totalItems) {
             $audit->update([
                 'status' => AuditStatus::APPROVED,
                 'approved_at' => now(),
@@ -154,7 +178,7 @@ class AuditReviewService
                 }
             }
 
-            $this->evaluateWorkflowState($audit);
+            $this->evaluateWorkflowState($audit, true);
         });
 
         activity()
@@ -177,7 +201,7 @@ class AuditReviewService
             // 1. Sync Staged Rooms
             foreach ($approvedItems as $item) {
                 $snapshot = $item->snapshot_data ?? [];
-                if (!empty($snapshot['is_new']) && ($snapshot['staged_type'] ?? null) === 'room') {
+                if (!empty($snapshot['is_new']) && empty($snapshot['exclude_from_sync']) && ($snapshot['staged_type'] ?? null) === 'room') {
                     $roomDefId = $snapshot['room_definition_id'] ?? null;
                     $displayName = $snapshot['display_name'] ?? $item->name;
 
@@ -202,7 +226,7 @@ class AuditReviewService
             // 2. Sync Staged Inventory
             foreach ($approvedItems as $item) {
                 $snapshot = $item->snapshot_data ?? [];
-                if (!empty($snapshot['is_new']) && ($snapshot['staged_type'] ?? null) === 'inventory') {
+                if (!empty($snapshot['is_new']) && empty($snapshot['exclude_from_sync']) && ($snapshot['staged_type'] ?? null) === 'inventory') {
                     $invTypeId = $snapshot['inventory_type_id'] ?? null;
                     $count = $snapshot['count'] ?? 1;
 
@@ -231,7 +255,7 @@ class AuditReviewService
             // 3. Sync Staged Utilities
             foreach ($approvedItems as $item) {
                 $snapshot = $item->snapshot_data ?? [];
-                if (!empty($snapshot['is_new']) && ($snapshot['staged_type'] ?? null) === 'utility') {
+                if (!empty($snapshot['is_new']) && empty($snapshot['exclude_from_sync']) && ($snapshot['staged_type'] ?? null) === 'utility') {
                     $utilityTypeId = $snapshot['utility_type_id'] ?? null;
                     $paidBy = $snapshot['paid_by'] ?? 'owner';
 
@@ -250,5 +274,52 @@ class AuditReviewService
                 }
             }
         });
+    }
+
+    /**
+     * Reopen an approved or completed audit (unless locked).
+     */
+    public function reopenAudit(Audit $audit, ?User $actor = null): void
+    {
+        if ($audit->is_locked) {
+            throw new \Exception("Cannot reopen audit. The audit is permanently locked.");
+        }
+
+        $auditStatusValue = $audit->status instanceof AuditStatus ? $audit->status->value : (string)$audit->status;
+        if (!in_array($auditStatusValue, ['approved', 'completed'])) {
+            throw new \Exception("Only approved or completed audits can be reopened.");
+        }
+
+        $audit->update([
+            'status' => AuditStatus::IN_REVIEW,
+            'approved_at' => null,
+            'approved_by_id' => null,
+        ]);
+
+        activity()
+            ->performedOn($audit)
+            ->by($actor ?? auth()->user())
+            ->log('Workflow: Audit reopened from approved state');
+    }
+
+    /**
+     * Permanently lock an audit.
+     */
+    public function lockAudit(Audit $audit, ?User $actor = null): void
+    {
+        if ($audit->is_locked) {
+            return;
+        }
+
+        $audit->update([
+            'is_locked' => true,
+            'locked_at' => now(),
+            'locked_by_id' => $actor?->id ?? auth()->id(),
+        ]);
+
+        activity()
+            ->performedOn($audit)
+            ->by($actor ?? auth()->user())
+            ->log('Workflow: Audit permanently locked');
     }
 }

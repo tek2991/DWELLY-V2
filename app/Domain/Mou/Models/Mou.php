@@ -66,6 +66,12 @@ class Mou extends DomainModel implements HasMedia
         $this->addMediaCollection('property_documents');
         $this->addMediaCollection('mou_attachments');
         $this->addMediaCollection('signatory_documents');
+        $this->addMediaCollection('owner_aadhaar');
+        $this->addMediaCollection('owner_pan');
+        $this->addMediaCollection('cancelled_cheque');
+        $this->addMediaCollection('signatory_aadhaar');
+        $this->addMediaCollection('signatory_pan');
+        $this->addMediaCollection('signatory_poa');
     }
 
     public function opportunity(): BelongsTo

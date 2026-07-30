@@ -64,16 +64,32 @@ class MappedDocumentsRelationManager extends Component implements HasActions, Ha
                     ->badge(),
                 TextColumn::make('collection_name')
                     ->label('Document Type')
-                    ->formatStateUsing(fn (string $state) => match($state) {
-                        'signed_pdf' => 'Signed MOU',
-                        'draft_pdf' => 'Draft MOU',
-                        'archived_signed_pdf' => 'Archived MOU',
-                        default => str($state)->headline(),
+                    ->formatStateUsing(function (string $state, Media $record) {
+                        $docTypeVal = $record->getCustomProperty('document_type');
+                        if ($docTypeVal) {
+                            $enumLabel = \App\Domain\Shared\Enums\DocumentType::tryFrom($docTypeVal)?->getLabel();
+                            if ($enumLabel) return $enumLabel;
+                        }
+                        return match($state) {
+                            'signed_pdf' => 'Signed MOU',
+                            'draft_pdf' => 'Draft MOU',
+                            'archived_signed_pdf' => 'Archived MOU',
+                            'owner_aadhaar' => 'Owner Aadhaar Card',
+                            'owner_pan' => 'Owner PAN Card',
+                            'cancelled_cheque' => 'Cancelled Cheque',
+                            'signatory_aadhaar' => 'Signatory Aadhaar Card',
+                            'signatory_pan' => 'Signatory PAN Card',
+                            'signatory_poa' => 'Power of Attorney',
+                            'mou_attachments' => 'Owner Attachment',
+                            'signatory_documents' => 'Signatory Attachment',
+                            default => str($state)->headline(),
+                        };
                     })
                     ->badge()
                     ->color(fn (string $state) => match($state) {
-                        'signed_pdf' => 'success',
-                        'draft_pdf' => 'warning',
+                        'signed_pdf', 'owner_aadhaar', 'owner_pan' => 'success',
+                        'draft_pdf', 'signatory_aadhaar', 'signatory_pan', 'signatory_poa' => 'warning',
+                        'cancelled_cheque' => 'info',
                         'archived_signed_pdf' => 'gray',
                         default => 'primary',
                     }),

@@ -52,6 +52,9 @@ class MouPdfService
                 if (!file_exists($path)) continue;
                 
                 $mimeType = $media->mime_type;
+                $docTypeVal = $media->getCustomProperty('document_type');
+                $docTypeLabel = $docTypeVal ? (\App\Domain\Shared\Enums\DocumentType::tryFrom($docTypeVal)?->getLabel() ?? str($docTypeVal)->headline()) : null;
+                $effectiveOwnerType = $docTypeLabel ? "{$ownerType} - {$docTypeLabel}" : $ownerType;
                 
                 if (str_starts_with($mimeType, 'image/')) {
                     $type = pathinfo($path, PATHINFO_EXTENSION);
@@ -100,7 +103,7 @@ class MouPdfService
                     $attachments[] = [
                         'name' => $media->file_name,
                         'data' => $base64,
-                        'ownerType' => $ownerType,
+                        'ownerType' => $effectiveOwnerType,
                         'ownerName' => $ownerName,
                     ];
                 } elseif ($mimeType === 'application/pdf') {
@@ -146,7 +149,7 @@ class MouPdfService
                             $attachments[] = [
                                 'name' => $media->file_name . ' (Page ' . $pageIndex . ')',
                                 'data' => $base64,
-                                'ownerType' => $ownerType,
+                                'ownerType' => $effectiveOwnerType,
                                 'ownerName' => $ownerName,
                             ];
                             
@@ -161,12 +164,18 @@ class MouPdfService
 
         // Process Owner documents
         $ownerName = $mou->party->display_name ?? 'Property Owner';
-        $processMedia('mou_attachments', 'Property Owner', $ownerName);
+        $processMedia('owner_aadhaar', 'Property Owner (Aadhaar)', $ownerName);
+        $processMedia('owner_pan', 'Property Owner (PAN)', $ownerName);
+        $processMedia('cancelled_cheque', 'Property Owner (Cancelled Cheque)', $ownerName);
+        $processMedia('mou_attachments', 'Property Owner Attachments', $ownerName);
         
         // Process Signatory documents
         if ($mou->is_signatory_different) {
             $signatoryName = $mou->signatory_details['name'] ?? 'Signatory Authority';
-            $processMedia('signatory_documents', 'Signatory Authority', $signatoryName);
+            $processMedia('signatory_aadhaar', 'Signatory Authority (Aadhaar)', $signatoryName);
+            $processMedia('signatory_pan', 'Signatory Authority (PAN)', $signatoryName);
+            $processMedia('signatory_poa', 'Signatory Authority (Power of Attorney)', $signatoryName);
+            $processMedia('signatory_documents', 'Signatory Authority Attachments', $signatoryName);
         }
 
         if (empty($attachments)) {

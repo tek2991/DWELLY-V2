@@ -8,7 +8,7 @@ class PropertyOnboardingValidator
 {
     public function validate(Property $property): array
     {
-        $property->loadMissing(['rooms', 'inventories', 'furnishingType', 'photos', 'documents', 'utilities', 'pricingVersions']);
+        $property->loadMissing(['rooms', 'inventories', 'furnishingType', 'photos', 'documents', 'utilities', 'pricingVersions', 'establishments']);
 
         $steps = [
             'property_info' => $this->validatePropertyInfo($property),
@@ -18,6 +18,7 @@ class PropertyOnboardingValidator
             'documents' => $this->validateDocuments($property),
             'utilities' => $this->validateUtilities($property),
             'financials' => $this->validateFinancials($property),
+            'establishments' => $this->validateEstablishments($property),
         ];
 
         $completed = count(array_filter($steps, fn($step) => $step['is_valid']));
@@ -121,7 +122,7 @@ class PropertyOnboardingValidator
         $hasMediaDocs = \Spatie\MediaLibrary\MediaCollections\Models\Media::query()
             ->where('model_type', get_class($targetModel))
             ->where('model_id', $targetModel->id)
-            ->whereIn('collection_name', ['mou_attachments', 'signatory_documents', 'signed_pdf', 'draft_pdf'])
+            ->whereIn('collection_name', ['owner_aadhaar', 'owner_pan', 'cancelled_cheque', 'signatory_aadhaar', 'signatory_pan', 'signatory_poa', 'mou_attachments', 'signatory_documents', 'signed_pdf', 'draft_pdf'])
             ->exists();
 
         $isValid = $hasPropertyDocs || $hasMediaDocs;
@@ -156,6 +157,31 @@ class PropertyOnboardingValidator
             'is_valid' => $isValid,
             'missing' => $isValid ? [] : ['Pricing and financial configuration is required.'],
             'tab' => 'pricingVersions',
+        ];
+    }
+
+    protected function validateEstablishments(Property $property): array
+    {
+        $hasEstablishments = $property->establishments->count() > 0;
+        $missingDistance = $property->establishments->contains(function ($est) {
+            return is_null($est->distance_km) || $est->distance_km === '';
+        });
+
+        $missing = [];
+        if (!$hasEstablishments) {
+            $missing[] = 'At least one nearby establishment must be mapped.';
+        }
+        if ($hasEstablishments && $missingDistance) {
+            $missing[] = 'Distance (KM) must be provided for all mapped establishments.';
+        }
+
+        $isValid = $hasEstablishments && !$missingDistance;
+
+        return [
+            'name' => 'Nearby Establishments',
+            'is_valid' => $isValid,
+            'missing' => $missing,
+            'tab' => 'establishments',
         ];
     }
 }

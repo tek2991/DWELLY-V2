@@ -18,16 +18,42 @@ class PropertyOnboardingService
             throw new Exception("Cannot convert to property. MOU is not verified.");
         }
 
+        if ($mou->type && $mou->type !== \App\Domain\Mou\Enums\MouType::ONBOARDING) {
+            throw new Exception("Only onboarding MOUs can be converted to a new property.");
+        }
+
         return \Illuminate\Support\Facades\DB::transaction(function () use ($mou) {
+            $cityId = $mou->legal_terms['city_id'] ?? null;
+            $localityId = null;
+            $cityName = $mou->legal_terms['city_name'] ?? null;
+
+            if ($cityId) {
+                $cityModel = \App\Domain\Geographic\Models\City::find($cityId);
+                if ($cityModel) {
+                    $cityName = $cityModel->name;
+                    $locality = \App\Domain\Geographic\Models\Locality::where('city_id', $cityId)->first();
+                    if (!$locality) {
+                        $locality = \App\Domain\Geographic\Models\Locality::create([
+                            'city_id' => $cityId,
+                            'name' => 'General ' . $cityName,
+                            'slug' => \Illuminate\Support\Str::slug('general-' . $cityName . '-' . \Illuminate\Support\Str::random(5)),
+                            'is_active' => true,
+                        ]);
+                    }
+                    $localityId = $locality->id;
+                }
+            }
+
             // Logic to extract data from MOU and create Property
             $property = Property::create([
                 'code' => null,
                 'status' => 'draft',
-                'address_line_1' => $mou->opportunity->address,
-                'building_name' => $mou->opportunity->title,
-                'property_type_id' => $mou->opportunity->estimated_property_type_id,
-                'bhk_type_id' => \Illuminate\Support\Facades\DB::table('bhk_types')->where('name', $mou->opportunity->estimated_bhk)->value('id'),
-                // ...
+                'address_line_1' => $mou->legal_terms['address'] ?? $mou->opportunity?->address,
+                'building_name' => $mou->opportunity?->title,
+                'property_type_id' => $mou->opportunity?->estimated_property_type_id,
+                'bhk_type_id' => \Illuminate\Support\Facades\DB::table('bhk_types')->where('name', $mou->opportunity?->estimated_bhk)->value('id'),
+                'locality_id' => $localityId,
+                'city' => $cityName,
             ]);
 
             $mou->update([

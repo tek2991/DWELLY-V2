@@ -25,9 +25,30 @@ class Property extends DomainModel
             ->logOnlyDirty();
     }
 
-    public function locality(): BelongsTo
+    public function localityRef(): BelongsTo
     {
-        return $this->belongsTo(Locality::class);
+        return $this->belongsTo(Locality::class, 'locality_id');
+    }
+
+    public function getCityIdAttribute(): ?string
+    {
+        if ($this->locality_id) {
+            $locality = Locality::find($this->locality_id);
+            if ($locality?->city_id) {
+                return $locality->city_id;
+            }
+        }
+
+        $mouCityId = $this->mous()->latest()->first()?->legal_terms['city_id'] ?? null;
+        if ($mouCityId) {
+            return $mouCityId;
+        }
+
+        if ($this->city) {
+            return \App\Domain\Geographic\Models\City::where('name', 'LIKE', $this->city)->value('id');
+        }
+
+        return null;
     }
 
     public function agreements(): \Illuminate\Database\Eloquent\Relations\HasMany
@@ -100,6 +121,18 @@ class Property extends DomainModel
     public function audits(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(\App\Domain\Audit\Models\Audit::class);
+    }
+
+    public function owner(): \Illuminate\Database\Eloquent\Relations\HasOneThrough
+    {
+        return $this->hasOneThrough(
+            \App\Domain\Party\Models\Party::class,
+            \App\Domain\Mou\Models\Mou::class,
+            'property_id',
+            'id',
+            'id',
+            'party_id'
+        );
     }
 
     public function isLockedDuringOnboarding(): bool

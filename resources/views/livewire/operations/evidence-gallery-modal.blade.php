@@ -58,25 +58,29 @@
                         </div>
 
                         <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                            <button
-                                type="button"
-                                wire:click="openEditor('{{ $evidence->id }}')"
-                                style="flex: 1; padding: 0.4rem 0.5rem; font-size: 0.75rem; font-weight: 600; color: white; background-color: rgba(17, 24, 39, 1); border: none; border-radius: 0.4rem; cursor: pointer; min-width: max-content;"
-                            >
-                                Annotate
-                            </button>
-
                             @if($isEditable ?? true)
-                            <button
-                                type="button"
-                                wire:click="deleteEvidence('{{ $evidence->id }}')"
-                                wire:confirm="Delete this photo permanently?"
-                                style="padding: 0.4rem 0.6rem; font-size: 0.8rem; font-weight: 600; color: rgba(220, 38, 38, 1); background-color: rgba(254, 242, 242, 1); border: none; border-radius: 0.4rem; cursor: pointer;"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" style="width: 0.9rem; height: 0.9rem;" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
-                                </svg>
-                            </button>
+                                <button
+                                    type="button"
+                                    wire:click="openEditor('{{ $evidence->id }}')"
+                                    style="flex: 1; padding: 0.4rem 0.5rem; font-size: 0.75rem; font-weight: 600; color: white; background-color: rgba(17, 24, 39, 1); border: none; border-radius: 0.4rem; cursor: pointer; min-width: max-content;"
+                                >
+                                    Annotate
+                                </button>
+
+                                <button
+                                    type="button"
+                                    wire:click="deleteEvidence('{{ $evidence->id }}')"
+                                    wire:confirm="Delete this photo permanently?"
+                                    style="padding: 0.4rem 0.6rem; font-size: 0.8rem; font-weight: 600; color: rgba(220, 38, 38, 1); background-color: rgba(254, 242, 242, 1); border: none; border-radius: 0.4rem; cursor: pointer;"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" style="width: 0.9rem; height: 0.9rem;" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                                    </svg>
+                                </button>
+                            @else
+                                <div style="font-size: 0.75rem; color: rgba(107, 114, 128, 1); font-weight: 500; text-align: center; width: 100%; padding: 0.35rem 0.5rem; background: rgba(243, 244, 246, 1); border-radius: 0.375rem; border: 1px solid rgba(229, 231, 235, 1);">
+                                    🔒 Accepted Item (Read-only)
+                                </div>
                             @endif
                         </div>
                     </div>

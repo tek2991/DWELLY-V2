@@ -40,6 +40,15 @@ class EvidenceAnnotationEditor extends Component
 
     public function saveAnnotation(array $fabricJson, EvidenceService $service)
     {
+        if (!$this->evidence->auditItem?->isEditable()) {
+            \Filament\Notifications\Notification::make()
+                ->title('Permission Denied')
+                ->body('You cannot modify annotations for accepted items.')
+                ->danger()
+                ->send();
+            return;
+        }
+
         $service->saveAnnotation($this->evidence, $fabricJson);
         $this->dispatch('annotation-saved');
     }

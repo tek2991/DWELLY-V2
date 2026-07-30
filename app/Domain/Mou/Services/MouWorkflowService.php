@@ -122,6 +122,17 @@ class MouWorkflowService
         if ($mou->type && $mou->type !== \App\Domain\Mou\Enums\MouType::ONBOARDING) {
             app(PropertyUpdateMouService::class)->commitUpdateMou($mou);
         }
+
+        // Permanently lock audits associated with the property upon verifying signed MOU
+        if ($mou->property_id) {
+            $audits = \App\Domain\Audit\Models\Audit::where('property_id', $mou->property_id)
+                ->where('is_locked', false)
+                ->get();
+            $reviewService = app(\App\Domain\Audit\Services\AuditReviewService::class);
+            foreach ($audits as $audit) {
+                $reviewService->lockAudit($audit, auth()->user());
+            }
+        }
     }
 
     public function convert(Mou $mou): void

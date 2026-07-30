@@ -20,6 +20,15 @@ class AuditsRelationManager extends RelationManager
 
     protected static ?string $title = 'Audits';
 
+    public static function canViewForRecord(\Illuminate\Database\Eloquent\Model $ownerRecord, string $pageClass): bool
+    {
+        if ($pageClass === \App\Filament\Resources\Properties\Pages\OnboardingDashboard::class) {
+            return false;
+        }
+
+        return parent::canViewForRecord($ownerRecord, $pageClass);
+    }
+
     public function form(Schema $schema): Schema
     {
         return $schema

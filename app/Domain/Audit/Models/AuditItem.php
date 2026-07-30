@@ -64,18 +64,23 @@ class AuditItem extends DomainModel implements HasMedia
             return false;
         }
 
+        $audit = $this->category?->audit;
+        if (!$audit || !$audit->isInspector()) {
+            return false;
+        }
+
         // If the entire audit is draft, pending review, in review, approved, or completed, items are locked
-        $auditStatus = $this->category?->audit?->status;
+        $auditStatus = $audit->status;
         if (in_array($auditStatus, [\App\Domain\Audit\Enums\AuditStatus::DRAFT, \App\Domain\Audit\Enums\AuditStatus::PENDING_REVIEW, \App\Domain\Audit\Enums\AuditStatus::IN_REVIEW, \App\Domain\Audit\Enums\AuditStatus::APPROVED, \App\Domain\Audit\Enums\AuditStatus::COMPLETED])) {
             return false;
         }
 
-        // If audit is partially approved (returned to inspector), only rejected items are editable
+        // If audit is partially approved (returned to inspector), non-approved items (rejected, pending, or newly added) are editable
         if ($auditStatus === \App\Domain\Audit\Enums\AuditStatus::PARTIALLY_APPROVED) {
-            return $this->isRejected();
+            return !$this->isApproved();
         }
 
-        // Otherwise (draft, in progress), it's editable
+        // Otherwise (in progress), it's editable
         return true;
     }
 }

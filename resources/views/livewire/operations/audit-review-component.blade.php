@@ -9,11 +9,29 @@
     <!-- Audit Summary -->
     <x-filament::section>
         <x-slot name="heading">
-            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
-                <span style="font-size: 1.125rem; font-weight: 600;">Audit Summary</span>
-                <span style="font-size: 0.875rem; color: rgba(107, 114, 128, 1); background: rgba(243, 244, 246, 1); padding: 0.25rem 0.75rem; border-radius: 9999px;">
-                    Review Round: <strong>{{ $audit->review_round }}</strong>
-                </span>
+            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; flex-wrap: wrap; gap: 0.5rem;">
+                <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                    <span style="font-size: 1.125rem; font-weight: 600;">Audit Summary</span>
+                    <span style="font-size: 0.875rem; font-weight: 500; color: #374151; background: #f3f4f6; padding: 0.25rem 0.75rem; border-radius: 0.375rem; border: 1px solid #e5e7eb;">
+                        📋 Type: <strong>{{ $audit->audit_type?->getLabel() ?? 'Audit' }}</strong>
+                    </span>
+                    <span style="font-size: 0.875rem; font-weight: 500; color: #374151; background: #f3f4f6; padding: 0.25rem 0.75rem; border-radius: 0.375rem; border: 1px solid #e5e7eb;">
+                        👤 Inspector: <strong>{{ $audit->inspector?->name ?? $audit->completedBy?->name ?? 'Unassigned' }}</strong>
+                    </span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                    <span style="font-size: 0.875rem; color: rgba(107, 114, 128, 1); background: rgba(243, 244, 246, 1); padding: 0.25rem 0.75rem; border-radius: 9999px; margin-right: 0.5rem;">
+                        Review Round: <strong>{{ $audit->review_round }}</strong>
+                    </span>
+
+                    @if($audit->canReview())
+                        {{ $this->acceptAllAction }}
+                        {{ $this->requestChangesAction }}
+                    @endif
+                    @if($audit->canReopen())
+                        {{ $this->reopenAuditAction }}
+                    @endif
+                </div>
             </div>
         </x-slot>
         
@@ -40,24 +58,24 @@
         </div>
     </x-filament::section>
 
-    <!-- Shortcut Action Header -->
-    @if($audit->canReview())
-        <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(249, 250, 251, 1); padding: 1rem 1.25rem; border-radius: 0.5rem; border: 1px solid rgba(229, 231, 235, 1);">
-            <div>
-                <strong style="font-size: 1rem; color: rgba(17, 24, 39, 1);">Review Controls</strong>
-                <div style="font-size: 0.875rem; color: rgba(107, 114, 128, 1);">Accept items individually or use the shortcut below to accept all items at once.</div>
-            </div>
-            <div>
-                {{ $this->acceptAllAction }}
-            </div>
-        </div>
-    @endif
 
-    @if($audit->categories->isEmpty())
+
+    @if($audit->categories->isEmpty() && !$audit->getFirstMedia('layout_video'))
         <div style="text-align: center; padding: 2rem 0; color: rgba(107, 114, 128, 1);">No categories found in this audit.</div>
     @else
         <!-- Tabs -->
         <x-filament::tabs label="Audit Categories">
+            <x-filament::tabs.item
+                :active="$activeCategoryId === 'layout_video'"
+                wire:click="setActiveCategory('layout_video')"
+                icon="heroicon-o-video-camera"
+            >
+                Property Video
+                <x-slot name="badge">
+                    {{ $audit->getFirstMedia('layout_video') ? '1 / 1' : '0 / 1' }}
+                </x-slot>
+            </x-filament::tabs.item>
+
             @foreach($audit->categories as $category)
                 <x-filament::tabs.item
                     :active="$activeCategoryId === $category->id"
@@ -73,9 +91,56 @@
 
         <!-- Active Category Content -->
         <div style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem;">
-            @php
-                $activeCategory = $audit->categories->firstWhere('id', $activeCategoryId);
-            @endphp
+            @if($activeCategoryId === 'layout_video')
+                @php
+                    $layoutVideoMedia = $audit->getFirstMedia('layout_video');
+                    $layoutVideoUrl = $layoutVideoMedia?->getUrl();
+                @endphp
+
+                @if($layoutVideoUrl)
+                    <x-filament::section>
+                        <x-slot name="heading">
+                            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; flex-wrap: wrap; gap: 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <x-filament::icon icon="heroicon-o-video-camera" style="width: 1.25rem; height: 1.25rem; color: var(--primary-600, #4f46e5);" />
+                                    <span style="font-size: 1.125rem; font-weight: 600;">Overall Property Layout Video</span>
+                                </div>
+                                <span style="font-size: 0.75rem; color: rgba(107, 114, 128, 1); background: rgba(243, 244, 246, 1); padding: 0.25rem 0.625rem; border-radius: 0.375rem;">
+                                    Layout Context
+                                </span>
+                            </div>
+                        </x-slot>
+
+                        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                            <div style="position: relative; width: 100%; max-height: 450px; background-color: #000; border-radius: 0.5rem; overflow: hidden; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(229, 231, 235, 1);">
+                                <video controls preload="metadata" style="max-height: 450px; width: 100%; object-fit: contain;">
+                                    <source src="{{ $layoutVideoUrl }}" type="{{ $layoutVideoMedia->mime_type ?? 'video/mp4' }}">
+                                    Your browser does not support the video tag.
+                                </video>
+                            </div>
+                            <div style="font-size: 0.875rem; color: rgba(107, 114, 128, 1); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+                                <span>📹 Overall walkthrough video for property layout context.</span>
+                                <span>File: <strong>{{ $layoutVideoMedia->file_name }}</strong> ({{ number_format($layoutVideoMedia->size / (1024 * 1024), 2) }} MB)</span>
+                            </div>
+                        </div>
+                    </x-filament::section>
+                @else
+                    <div style="border: 2px dashed rgba(209, 213, 219, 1); border-radius: 0.5rem; padding: 3rem 1.5rem; text-align: center; background-color: rgba(249, 250, 251, 1); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem;">
+                        <div style="width: 3.5rem; height: 3.5rem; border-radius: 9999px; background-color: rgba(243, 244, 246, 1); display: flex; align-items: center; justify-content: center;">
+                            <x-filament::icon icon="heroicon-o-video-camera" style="width: 1.75rem; height: 1.75rem; color: rgba(156, 163, 175, 1);" />
+                        </div>
+                        <div>
+                            <h4 style="font-size: 1rem; font-weight: 600; margin: 0; color: rgba(17, 24, 39, 1);">No Property Layout Video Uploaded</h4>
+                            <p style="font-size: 0.875rem; color: rgba(107, 114, 128, 1); margin: 0.25rem 0 0 0;">
+                                No overall video walkthrough was recorded during this property audit inspection.
+                            </p>
+                        </div>
+                    </div>
+                @endif
+            @else
+                @php
+                    $activeCategory = $audit->categories->firstWhere('id', $activeCategoryId);
+                @endphp
             
             @if($activeCategory)
                 @foreach($activeCategory->items as $item)
@@ -89,6 +154,11 @@
                                         @if(!empty($item->snapshot_data['is_new']))
                                             <x-filament::badge color="warning" size="sm">
                                                 Added in Audit
+                                            </x-filament::badge>
+                                        @endif
+                                        @if(!empty($item->snapshot_data['exclude_from_sync']))
+                                            <x-filament::badge color="gray" size="sm">
+                                                🚫 Excluded
                                             </x-filament::badge>
                                         @endif
                                     </div>
@@ -121,7 +191,7 @@
 
                                     @if($item->remarks)
                                         <div style="font-size: 0.875rem; color: rgba(75, 85, 99, 1); background: rgba(243, 244, 246, 1); padding: 0.5rem 0.75rem; border-radius: 0.25rem;">
-                                            <strong>Inspector Remarks:</strong> {{ $item->remarks }}
+                                            <strong>Inspector Remarks ({{ $audit->inspector?->name ?? $audit->completedBy?->name ?? 'Inspector' }}):</strong> {{ $item->remarks }}
                                         </div>
                                     @endif
 
@@ -135,10 +205,22 @@
                                     @endif
                                 </div>
 
-                                <div style="display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; flex-wrap: wrap;">
                                     @if($audit->canReview())
-                                        {{ ($this->approveItemAction)(['item_id' => $item->id]) }}
-                                        {{ ($this->rejectItemAction)(['item_id' => $item->id]) }}
+                                        @if($item->isApproved())
+                                            {{ ($this->rejectItemAction)(['item_id' => $item->id]) }}
+                                            {{ ($this->resetItemAction)(['item_id' => $item->id]) }}
+                                        @elseif($item->isRejected())
+                                            {{ ($this->approveItemAction)(['item_id' => $item->id]) }}
+                                            {{ ($this->resetItemAction)(['item_id' => $item->id]) }}
+                                        @else
+                                            {{ ($this->approveItemAction)(['item_id' => $item->id]) }}
+                                            {{ ($this->rejectItemAction)(['item_id' => $item->id]) }}
+                                        @endif
+
+                                        @if(!empty($item->snapshot_data['is_new']))
+                                            {{ ($this->toggleExcludeFromSyncAction)(['item_id' => $item->id]) }}
+                                        @endif
                                     @endif
                                     @if($item->isApproved() && empty($item->source_id))
                                         {{ ($this->syncToPropertyAction)(['item_id' => $item->id]) }}
@@ -175,12 +257,12 @@
                                     </div>
                                 </div>
                             @endif
-                            
                         </div>
                     </x-filament::section>
                 @endforeach
             @endif
-        </div>
+        @endif
+    </div>
     @endif
 
     <!-- Evidence Modal with Fabric Annotation Viewer -->

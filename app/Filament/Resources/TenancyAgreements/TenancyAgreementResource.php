@@ -20,7 +20,9 @@ class TenancyAgreementResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
-    protected static \UnitEnum|string|null $navigationGroup = 'Leasing & Finance';
+    protected static \UnitEnum|string|null $navigationGroup = 'Sales & CRM';
+
+    protected static ?int $navigationSort = 99;
 
     public static function form(Schema $schema): Schema
     {

@@ -3,65 +3,713 @@
 namespace App\Filament\Resources\TenancyAgreements\Schemas;
 
 use Filament\Schemas\Schema;
-use Filament\Forms\Components\Wizard;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Group;
+use Filament\Schemas\Components\Tabs;
+use Filament\Forms\Components\Placeholder;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Toggle;
+use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
+use App\Domain\Audit\Models\Audit;
+use App\Domain\Party\Models\Party;
 use Illuminate\Support\HtmlString;
 
 class TenancyAgreementForm
 {
     public static function configure(Schema $schema): Schema
     {
+        $operation = $schema->getOperation();
+
+        if ($operation === 'create') {
+            return static::configureCreationForm($schema);
+        }
+
+        return static::configureWorkflowForm($schema);
+    }
+
+    private static function configureCreationForm(Schema $schema): Schema
+    {
         return $schema
             ->components([
-                Wizard::make([
-                    Wizard\Step::make('Property & Terms')
-                        ->schema([
-                            Select::make('property_id')
-                                ->relationship('property', 'building_name')
-                                ->searchable()
-                                ->required(),
-                            TextInput::make('rent_amount')
-                                ->numeric()
-                                ->prefix('₹')
-                                ->required(),
-                            TextInput::make('security_deposit')
-                                ->numeric()
-                                ->prefix('₹')
-                                ->helperText('Leave blank to auto-calculate (2 months rent)'),
-                            DatePicker::make('start_date')->required(),
-                            DatePicker::make('end_date')->required(),
-                            TextInput::make('lock_in_period_months')
-                                ->numeric()
-                                ->default(0),
-                            TextInput::make('notice_period_days')
-                                ->numeric()
-                                ->default(30),
-                        ])->columns(2),
+                Section::make('1. Tenant Selection / Inline Party Creation')
+                    ->schema([
+                        Toggle::make('create_new_tenant')
+                            ->label('Create New Tenant Party')
+                            ->helperText('ON: Enter new tenant details inline (default) | OFF: Select an existing party from database')
+                            ->default(true)
+                            ->live()
+                            ->columnSpanFull(),
 
-                    Wizard\Step::make('Tenants & Roles')
-                        ->schema([
-                            Select::make('primary_tenant_id')
-                                ->label('Primary Tenant')
-                                ->options(fn() => \App\Domain\Party\Models\Party::whereHas('tenantProfile')
-                                    ->pluck('display_name', 'id'))
-                                ->searchable()
-                                ->required(),
-                        ]),
+                        // Existing Tenant Select
+                        Select::make('primary_tenant_id')
+                            ->label('Select Existing Tenant (Party)')
+                            ->options(fn() => Party::whereHas('tenantProfile')
+                                ->orWhere('party_type', 'individual')
+                                ->pluck('display_name', 'id'))
+                            ->searchable()
+                            ->hidden(fn(Get $get) => (bool)$get('create_new_tenant'))
+                            ->required(fn(Get $get) => !(bool)$get('create_new_tenant'))
+                            ->columnSpanFull(),
 
-                    Wizard\Step::make('E-Signature & Review')
-                        ->schema([
-                            Textarea::make('special_terms')
-                                ->columnSpanFull(),
-                            Placeholder::make('e_signature')
-                                ->label('E-Signature Placeholder')
-                                ->content(new HtmlString('<div class="p-4 border-2 border-dashed border-gray-300 rounded-lg text-center text-gray-500">Document generation and e-signature provider integration will appear here during activation workflow.</div>'))
-                                ->columnSpanFull()
+                        // Inline New Tenant Form
+                        Group::make()
+                            ->schema([
+                                TextInput::make('new_tenant.display_name')
+                                    ->label('Tenant Full Name')
+                                    ->required(fn(Get $get) => (bool)$get('create_new_tenant')),
+
+                                TextInput::make('new_tenant.phone')
+                                    ->label('Phone Number')
+                                    ->tel()
+                                    ->required(fn(Get $get) => (bool)$get('create_new_tenant')),
+
+                                TextInput::make('new_tenant.email')
+                                    ->label('Email Address')
+                                    ->email(),
+
+                                TextInput::make('new_tenant.parent_name')
+                                    ->label("Father's / Care-Of Name")
+                                    ->placeholder("e.g. S/o Late Rajesh Sharma"),
+
+                                TextInput::make('new_tenant.aadhaar_number')
+                                    ->label('Aadhaar Number')
+                                    ->placeholder('12-digit Aadhaar number'),
+
+                                TextInput::make('new_tenant.pan_number')
+                                    ->label('PAN Number')
+                                    ->placeholder('10-character PAN'),
+
+                                TextInput::make('new_tenant.address_line_1')
+                                    ->label('Permanent Address')
+                                    ->columnSpanFull(),
+                            ])
+                            ->columns(2)
+                            ->visible(fn(Get $get) => (bool)$get('create_new_tenant'))
+                            ->columnSpanFull(),
+                    ]),
+
+                Section::make('2. Select Property & Commencement Dates')
+                    ->description('Select the target property for onboarding')
+                    ->schema([
+                        Select::make('property_id')
+                            ->label('Property')
+                            ->options(function (?TenancyAgreement $record) {
+                                $query = \App\Domain\Property\Models\Property::query()
+                                    ->whereHas('onboardingProject', fn($q) => $q->whereRaw('LOWER(status) = ?', ['activated']))
+                                    ->whereRaw('LOWER(status) = ?', ['vacant']);
+
+                                if ($record && $record->property_id) {
+                                    $query->orWhere('id', $record->property_id);
+                                }
+
+                                $options = $query->get()->mapWithKeys(fn($p) => [
+                                    $p->id => ($p->building_name ?? $p->address_line_1 ?? 'Property #' . $p->id) . ($p->code ? ' (' . $p->code . ')' : '')
+                                ]);
+
+                                if ($options->isEmpty()) {
+                                    return \App\Domain\Property\Models\Property::all()->mapWithKeys(fn($p) => [
+                                        $p->id => ($p->building_name ?? $p->address_line_1 ?? 'Property #' . $p->id) . ($p->code ? ' (' . $p->code . ')' : '')
+                                    ]);
+                                }
+
+                                return $options;
+                            })
+                            ->searchable()
+                            ->required()
+                            ->columnSpanFull(),
+
+                        DatePicker::make('start_date')
+                            ->label('Agreement Start Date')
+                            ->required()
+                            ->live(onBlur: true)
+                            ->afterStateUpdated(function (Get $get, Set $set, ?string $state) {
+                                if ($state && !$get('end_date')) {
+                                    try {
+                                        $startDate = \Illuminate\Support\Carbon::parse($state);
+                                        $set('end_date', $startDate->copy()->addMonths(11)->subDay()->format('Y-m-d'));
+                                    } catch (\Throwable $e) {
+                                        // ignore
+                                    }
+                                }
+                            }),
+
+                        DatePicker::make('end_date')
+                            ->label('Agreement End Date')
+                            ->required(),
+                    ])->columns(2),
+
+                Section::make('3. Tenant KYC & Document Collection')
+                    ->description('Upload tenant verification documents (Aadhaar, PAN, Cancelled Cheque / Bank Proof, Police Verification, etc.)')
+                    ->schema([
+                        Grid::make(3)
+                            ->schema([
+                                SpatieMediaLibraryFileUpload::make('tenant_aadhaar')
+                                    ->collection('tenant_aadhaar')
+                                    ->label('Tenant Aadhaar Card')
+                                    ->helperText('Front & Back image or PDF')
+                                    ->required(),
+
+                                SpatieMediaLibraryFileUpload::make('tenant_pan')
+                                    ->collection('tenant_pan')
+                                    ->label('Tenant PAN Card')
+                                    ->helperText('Clear image or PDF')
+                                    ->required(),
+
+                                SpatieMediaLibraryFileUpload::make('cancelled_cheque')
+                                    ->collection('cancelled_cheque')
+                                    ->label('Cancelled Cheque')
+                                    ->helperText('Cancelled Cheque or Passbook')
+                                    ->required(),
+                            ]),
+
+                        \Filament\Schemas\Components\Actions::make([
+                            \Filament\Actions\Action::make('uploadDocumentModal')
+                                ->label('Upload additional documents')
+                                ->icon('heroicon-o-arrow-up-tray')
+                                ->color('primary')
+                                ->button()
+                                ->modalHeading('Upload Document (Select Type & File)')
+                                ->modalDescription('Select document type (Passport, Voter ID, Police Verification, Income Proof, Sale Deed, etc.) and attach file.')
+                                ->form([
+                                    Select::make('document_type')
+                                        ->label('Document Type')
+                                        ->options(\App\Domain\Shared\Enums\DocumentType::class)
+                                        ->required()
+                                        ->searchable(),
+                                    \Filament\Forms\Components\FileUpload::make('files')
+                                        ->label('Files (Images / PDF)')
+                                        ->multiple()
+                                        ->preserveFilenames()
+                                        ->required(),
+                                ])
+                                ->action(function (array $data, ?\App\Domain\Agreement\Models\TenancyAgreement $record, Set $set, Get $get) {
+                                    $collection = match ($data['document_type']) {
+                                        'aadhaar', 'tenant_aadhaar' => 'tenant_aadhaar',
+                                        'pan', 'tenant_pan' => 'tenant_pan',
+                                        'cancelled_cheque' => 'cancelled_cheque',
+                                        default => 'kyc_documents',
+                                    };
+
+                                    if ($record && $record->exists) {
+                                        foreach ($data['files'] as $path) {
+                                            $fullPath = \Illuminate\Support\Facades\Storage::disk(config('filament.default_filesystem_disk'))->path($path);
+                                            if (!file_exists($fullPath)) {
+                                                $fullPath = \Illuminate\Support\Facades\Storage::disk('public')->path($path);
+                                            }
+
+                                            $record->addMedia($fullPath)
+                                                ->withCustomProperties([
+                                                    'document_type' => $data['document_type'],
+                                                ])
+                                                ->toMediaCollection($collection);
+                                        }
+                                        $record->refresh();
+                                        \Filament\Notifications\Notification::make()->title('Document Uploaded Successfully')->success()->send();
+                                    } else {
+                                        $existing = $get($collection) ?? [];
+                                        if (is_string($existing)) {
+                                            $existing = [$existing];
+                                        }
+                                        $merged = array_values(array_unique(array_merge((array)$existing, (array)$data['files'])));
+                                        $set($collection, $merged);
+                                        \Filament\Notifications\Notification::make()
+                                            ->title('Document Attached')
+                                            ->body('File added to form. It will be saved when you submit the Tenancy Agreement.')
+                                            ->success()
+                                            ->send();
+                                    }
+                                }),
                         ]),
-                ])->columnSpanFull(),
+                    ]),
+
+                Placeholder::make('workflow_notice')
+                    ->label('Workflow Initiation Notice')
+                    ->content(new HtmlString(
+                        '<div class="p-4 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg text-blue-900 dark:text-blue-100 text-sm">' .
+                            '<strong>What happens next?</strong><br>' .
+                            '• Creates the Tenant Party record & enables Tenant role.<br>' .
+                            '• Initiates the Tenancy Agreement record.<br>' .
+                            '• <strong>Automatically triggers and creates a Move-In Audit</strong> linked to the Property and Tenant.<br>' .
+                            '• Redirects you to the Onboarding Workflow management page.' .
+                            '</div>'
+                    ))
+                    ->columnSpanFull(),
             ]);
+    }
+
+    private static function configureWorkflowForm(Schema $schema): Schema
+    {
+        return $schema
+            ->components([
+                Placeholder::make('workflow_header')
+                    ->content(function ($record) {
+                        if (!$record) return '';
+                        $status = $record->status ?? 'draft';
+                        $code = $record->code ?? '';
+
+                        $property = $record->property;
+                        $propertyName = $property?->building_name ?? $property?->address_line_1 ?? 'Property #' . $property?->id;
+                        $propertyCode = $property?->code;
+                        $address = $property?->address_line_1 ?? '';
+                        $bhk = $property?->bhkType?->name;
+                        $ownerParty = $property?->owner;
+                        $ownerName = $ownerParty?->display_name ?? 'N/A';
+                        $ownerUrl = $ownerParty ? \App\Filament\Resources\Parties\PartyResource::getUrl('edit', ['record' => $ownerParty]) : null;
+                        $ownerLinkHtml = $ownerUrl
+                            ? ' <a href="' . e($ownerUrl) . '" target="_blank" title="View Owner Party Profile" style="display: inline-flex; align-items: center; color: #2563eb; text-decoration: none; margin-left: 2px;"><svg style="width: 14px; height: 14px; display: inline-block; vertical-align: text-bottom;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></a>'
+                            : '';
+
+                        $primaryRole = $record->roles()->where('is_primary', true)->first();
+                        $tenantParty = $primaryRole?->party ?? $record->tenants->first();
+                        $tenantName = $tenantParty?->display_name ?? 'N/A';
+                        $tenantUrl = $tenantParty ? \App\Filament\Resources\Parties\PartyResource::getUrl('edit', ['record' => $tenantParty]) : null;
+                        $tenantLinkHtml = $tenantUrl
+                            ? ' <a href="' . e($tenantUrl) . '" target="_blank" title="View Tenant Party Profile" style="display: inline-flex; align-items: center; color: #2563eb; text-decoration: none; margin-left: 2px;"><svg style="width: 14px; height: 14px; display: inline-block; vertical-align: text-bottom;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></a>'
+                            : '';
+
+                        $propertyUrl = $property ? \App\Filament\Resources\Properties\PropertyResource::getUrl('edit', ['record' => $property]) : '#';
+
+                        $audit = $record->audit;
+                        $auditStatusValue = $audit?->status instanceof \App\Domain\Audit\Enums\AuditStatus
+                            ? $audit->status->value
+                            : (string) ($audit?->status ?? '');
+                        $s1 = (bool) ($audit && in_array($auditStatusValue, ['approved', 'completed']));
+                        $s2 = static::areTermsComplete($record);
+                        $s3 = (bool) $record->signed_by_tenant;
+                        $s4 = (bool) $record->keys_handed_over || $status === 'active';
+
+                        $completedCount = ($s1 ? 1 : 0) + ($s2 ? 1 : 0) + ($s3 ? 1 : 0) + ($s4 ? 1 : 0);
+                        $progress = (int) round(($completedCount / 4) * 100);
+                        $progressColor = $progress === 100 ? '#10b981' : ($progress >= 50 ? '#3b82f6' : '#f59e0b');
+
+                        $getStepStyle = function (bool $isValid, string $title, string $desc) {
+                            $bg = $isValid ? 'rgba(16, 185, 129, 0.08)' : 'rgba(128, 128, 128, 0.04)';
+                            $border = $isValid ? 'rgba(16, 185, 129, 0.3)' : 'rgba(128, 128, 128, 0.18)';
+                            $titleColor = $isValid ? '#059669' : 'inherit';
+                            $descColor = $isValid ? '#10b981' : 'rgba(128, 128, 128, 0.75)';
+                            $icon = $isValid ? '✓' : '○';
+                            $iconColor = $isValid ? '#10b981' : 'rgba(128, 128, 128, 0.6)';
+
+                            return '<div style="padding: 0.85rem; border-radius: 0.75rem; border: 1px solid ' . $border . '; background-color: ' . $bg . ';">' .
+                                '<div style="display: flex; align-items: center; gap: 0.5rem;">' .
+                                '<span style="font-size: 1rem; font-weight: 700; color: ' . $iconColor . ';">' . $icon . '</span>' .
+                                '<h4 style="font-size: 0.875rem; font-weight: 600; margin: 0; color: ' . $titleColor . ';">' . e($title) . '</h4>' .
+                                '</div>' .
+                                '<div style="font-size: 0.75rem; margin-top: 0.35rem; color: ' . $descColor . ';">' . e($desc) . '</div>' .
+                                '</div>';
+                        };
+
+                        $card1 = $getStepStyle($s1, '1. Move-In Audit', $s1 ? 'Audit approved' : 'Pending audit approval');
+                        $card2 = $getStepStyle($s2, '2. Terms & Drafts', $s2 ? 'Terms set & drafts ready' : 'Fill all agreement terms & bank details');
+                        $card3 = $getStepStyle($s3, '3. Signed & KYC', $s3 ? 'Agreement executed & KYC uploaded' : 'Upload signed PDF & KYC');
+                        $card4 = $getStepStyle($s4, '4. Keys & Active', $s4 ? 'Keys handed over & tenancy active' : 'Handover keys & activate');
+
+                        $badgeBg = $status === 'active' ? '#10b981' : '#3b82f6';
+
+                        return new HtmlString(
+                            '<div style="background-color: rgba(128, 128, 128, 0.03); border: 1px solid rgba(128, 128, 128, 0.2); border-radius: 0.75rem; padding: 1.25rem; margin-bottom: 1.5rem; font-family: ui-sans-serif, system-ui, sans-serif; color: inherit;">' .
+                                '<!-- Property Info Header -->' .
+                                '<div style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%; border-bottom: 1px solid rgba(128, 128, 128, 0.15); padding-bottom: 0.85rem; margin-bottom: 1rem;">' .
+                                '<div>' .
+                                '<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">' .
+                                '<span style="font-size: 1.15rem; font-weight: 800; color: inherit;">' . e($propertyName) . '</span>' .
+                                ($propertyCode ? '<span style="display: inline-flex; align-items: center; font-family: monospace; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; background-color: rgba(37, 99, 235, 0.15); color: #2563eb;">' . e($propertyCode) . '</span>' : '') .
+                                '<a href="' . e($propertyUrl) . '" target="_blank" style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; background-color: rgba(37, 99, 235, 0.1); color: #2563eb; font-size: 12px; font-weight: 600; text-decoration: none;" title="View Property Profile">' .
+                                'View Property Profile &rarr;' .
+                                '</a>' .
+                                '</div>' .
+                                '<div style="font-size: 13px; color: rgba(128, 128, 128, 0.85); margin-top: 5px; display: flex; gap: 12px; flex-wrap: wrap;">' .
+                                '<span>📍 ' . e($address) . '</span>' .
+                                ($bhk ? '<span>🏢 <strong>' . e($bhk) . '</strong></span>' : '') .
+                                '<span>👤 Owner: <strong>' . e($ownerName) . '</strong>' . $ownerLinkHtml . '</span>' .
+                                '<span>🔑 Tenant: <strong>' . e($tenantName) . '</strong>' . $tenantLinkHtml . '</span>' .
+                                '</div>' .
+                                '</div>' .
+                                '<div style="text-align: right; flex-shrink: 0; margin-left: 1rem;">' .
+                                '<div style="display: flex; align-items: center; gap: 8px; justify-content: flex-end;">' .
+                                '<span style="font-size: 1.25rem; font-weight: 900; color: ' . $progressColor . ';">' . $progress . '%</span>' .
+                                '<span style="padding: 3px 10px; font-size: 0.75rem; border-radius: 9999px; font-weight: 700; background-color: ' . $badgeBg . '; color: #ffffff; text-transform: uppercase;">' . e($status) . '</span>' .
+                                '</div>' .
+                                '<div style="font-size: 11px; color: rgba(128, 128, 128, 0.7); margin-top: 2px;">Agreement Code: <strong>' . e($code) . '</strong></div>' .
+                                '</div>' .
+                                '</div>' .
+
+                                '<!-- Progress Bar -->' .
+                                '<div style="width: 100%; border-radius: 9999px; height: 0.75rem; margin-bottom: 1.25rem; overflow: hidden; background-color: rgba(128, 128, 128, 0.15);">' .
+                                '<div style="height: 100%; border-radius: 9999px; transition: all 500ms ease-out; width: ' . $progress . '%; background-color: ' . $progressColor . ';"></div>' .
+                                '</div>' .
+
+                                '<!-- Steps Grid -->' .
+                                '<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.75rem;">' .
+                                $card1 . $card2 . $card3 . $card4 .
+                                '</div>' .
+                                '</div>'
+                        );
+                    })
+                    ->columnSpanFull(),
+
+                Tabs::make('Onboarding Stages')
+                    ->tabs([
+                        Tabs\Tab::make('1. Move-In Audit')
+                            ->icon('heroicon-o-clipboard-document-check')
+                            ->schema([
+                                Select::make('audit_id')
+                                    ->label('Linked Move-In Audit')
+                                    ->options(function (Get $get) {
+                                        $propertyId = $get('property_id');
+                                        if (!$propertyId) {
+                                            return Audit::pluck('audit_number', 'id');
+                                        }
+                                        return Audit::where('property_id', $propertyId)
+                                            ->get()
+                                            ->mapWithKeys(fn($audit) => [
+                                                $audit->id => "{$audit->audit_number} ({$audit->audit_type->getLabel()} - {$audit->status->value})"
+                                            ]);
+                                    })
+                                    ->disabled()
+                                    ->dehydrated()
+                                    ->helperText('Move-In Audit auto-triggered for this property & tenant.'),
+
+                                 Placeholder::make('audit_action_card')
+                                     ->label('Move-In Audit Status & Perform Link')
+                                     ->content(function ($record) {
+                                         if (!$record || !$record->audit) {
+                                             return new HtmlString('<div style="padding: 16px; background-color: #f1f5f9; border-radius: 6px; color: #475569;">No Move-In Audit linked.</div>');
+                                         }
+                                         $audit = $record->audit;
+                                         
+                                         $hasInspector = !empty($audit->inspector_id);
+                                         
+                                         if ($hasInspector) {
+                                             try {
+                                                 $targetUrl = \App\Filament\Resources\Operations\AuditResource::getUrl('inspect', ['record' => $audit]);
+                                             } catch (\Throwable $e) {
+                                                 $targetUrl = url("/operations/audits/{$audit->id}/inspect");
+                                             }
+                                             $buttonLabel = 'Perform / Inspect Move-In Audit &rarr;';
+                                             $buttonBg = '#2563eb';
+                                             $inspectorText = 'Inspector: <strong>' . e($audit->inspector?->name ?? 'Assigned') . '</strong>';
+                                         } else {
+                                             try {
+                                                 $targetUrl = \App\Filament\Resources\Operations\AuditResource::getUrl('edit', ['record' => $audit]);
+                                             } catch (\Throwable $e) {
+                                                 $targetUrl = url("/operations/audits/{$audit->id}/edit");
+                                             }
+                                             $buttonLabel = 'Assign Inspector (Required) &rarr;';
+                                             $buttonBg = '#d97706';
+                                             $inspectorText = '<span style="color: #dc2626; font-weight: 600;">⚠️ Inspector Unassigned</span>';
+                                         }
+
+                                         return new HtmlString(
+                                             '<div style="background-color: rgba(128, 128, 128, 0.03); border: 1px solid rgba(128, 128, 128, 0.2); padding: 16px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; color: inherit; flex-wrap: wrap; gap: 12px;">' .
+                                                 '<div>' .
+                                                 '<div style="font-weight: 700; font-size: 15px; color: inherit;">Move-In Audit: ' . e($audit->audit_number) . '</div>' .
+                                                 '<div style="font-size: 13px; color: rgba(128, 128, 128, 0.85); margin-top: 4px;">Type: <strong>' . e($audit->audit_type->getLabel()) . '</strong> | Status: <span style="padding: 2px 8px; font-size: 11px; border-radius: 4px; font-weight: 600; background-color: #dbeafe; color: #1e40af; text-transform: uppercase;">' . e($audit->status->value) . '</span></div>' .
+                                                 (function () use ($audit, $inspectorText) {
+                                                     $auditTenantParty = $audit->tenant;
+                                                     $auditTenantUrl = $auditTenantParty ? \App\Filament\Resources\Parties\PartyResource::getUrl('edit', ['record' => $auditTenantParty]) : null;
+                                                     $auditTenantLinkHtml = $auditTenantUrl
+                                                         ? ' <a href="' . e($auditTenantUrl) . '" target="_blank" title="View Tenant Party Profile" style="display: inline-flex; align-items: center; color: #2563eb; text-decoration: none; margin-left: 2px;"><svg style="width: 13px; height: 13px; display: inline-block; vertical-align: text-bottom;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></a>'
+                                                         : '';
+                                                     return '<div style="font-size: 12px; color: rgba(128, 128, 128, 0.7); margin-top: 4px;">Linked Tenant: <strong>' . e($audit->tenant?->display_name ?? 'Primary Tenant') . '</strong>' . $auditTenantLinkHtml . ' &bull; ' . $inspectorText . '</div>';
+                                                 })() .
+                                                 '</div>' .
+                                                 '<a href="' . e($targetUrl) . '" target="_blank" style="display: inline-flex; align-items: center; padding: 8px 16px; background-color: ' . $buttonBg . '; color: #ffffff; font-weight: 600; font-size: 13px; border-radius: 6px; text-decoration: none; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">' .
+                                                 $buttonLabel .
+                                                 '</a>' .
+                                                 '</div>'
+                                         );
+                                     })
+                                     ->columnSpanFull(),
+                             ]),
+
+                        Tabs\Tab::make('2. Agreement Terms & Bank Details')
+                            ->icon('heroicon-o-currency-rupee')
+                            ->schema([
+                                Select::make('property_id')
+                                    ->relationship('property', 'building_name')
+                                    ->disabled()
+                                    ->dehydrated(),
+
+                                TextInput::make('rent_amount')
+                                    ->label('Monthly License Fee (Rent)')
+                                    ->numeric()
+                                    ->prefix('₹')
+                                    ->required()
+                                    ->default(function ($record) {
+                                        if ($record && (float)$record->rent_amount > 0) {
+                                            return $record->rent_amount;
+                                        }
+                                        return $record?->property?->pricingVersions()?->latest('effective_from')?->first()?->rent;
+                                    })
+                                    ->helperText('Auto-fetched from Property Pricing Model.')
+                                    ->live(onBlur: true)
+                                    ->afterStateUpdated(function (Get $get, Set $set, ?string $state) {
+                                        if ($state && !$get('security_deposit')) {
+                                            $set('security_deposit', (float)$state * 2);
+                                        }
+                                    }),
+
+                                TextInput::make('security_deposit')
+                                    ->label('Security Deposit')
+                                    ->numeric()
+                                    ->prefix('₹')
+                                    ->required()
+                                    ->default(function ($record) {
+                                        if ($record && (float)$record->security_deposit > 0) {
+                                            return $record->security_deposit;
+                                        }
+                                        $pricing = $record?->property?->pricingVersions()?->latest('effective_from')?->first();
+                                        return $pricing?->security_deposit ?? ($pricing?->rent ? $pricing->rent * 2 : null);
+                                    })
+                                    ->helperText('Defaults to property pricing model terms or 2 months rent'),
+
+                                DatePicker::make('start_date')->required(),
+                                DatePicker::make('end_date')->required(),
+
+                                TextInput::make('lock_in_period_months')
+                                    ->label('Lock-in Period (Months)')
+                                    ->numeric()
+                                    ->required()
+                                    ->default(6),
+
+                                TextInput::make('notice_period_days')
+                                    ->label('Notice Period (Days)')
+                                    ->numeric()
+                                    ->required()
+                                    ->default(30),
+
+                                Select::make('electricity_provider_id')
+                                    ->label('Electricity Provider')
+                                    ->options(function () {
+                                        return \App\Domain\Property\Models\UtilityProvider::whereHas('utilityType', function ($query) {
+                                            $query->where('slug', 'electricity');
+                                        })->pluck('name', 'id');
+                                    })
+                                    ->searchable()
+                                    ->required(),
+
+                                TextInput::make('apdcl_consumer_id')
+                                    ->label('Connection Number')
+                                    ->placeholder('e.g. 100234567')
+                                    ->required(),
+
+                                Textarea::make('special_terms')
+                                    ->label('Special Terms & Conditions')
+                                    ->columnSpanFull(),
+
+                                Section::make('Annexure I – Rent & Deposit Collection Account Details (Licensor / Dwelly)')
+                                    ->description('Pre-fetched from verified MOU for rent & deposit collection (View Only)')
+                                    ->schema([
+                                        Placeholder::make('annexure_i_beneficiary_name')
+                                            ->label('Beneficiary Name')
+                                            ->content(fn($record, Get $get) => static::getAnnexureIBankDetails($record, $get('property_id'))['beneficiary_name']),
+
+                                        Placeholder::make('annexure_i_bank_name')
+                                            ->label('Name of the Bank')
+                                            ->content(fn($record, Get $get) => static::getAnnexureIBankDetails($record, $get('property_id'))['bank_name']),
+
+                                        Placeholder::make('annexure_i_bank_address')
+                                            ->label('Address of the Bank')
+                                            ->content(fn($record, Get $get) => static::getAnnexureIBankDetails($record, $get('property_id'))['bank_address']),
+
+                                        Placeholder::make('annexure_i_account_number')
+                                            ->label('Bank Account No')
+                                            ->content(fn($record, Get $get) => static::getAnnexureIBankDetails($record, $get('property_id'))['account_number']),
+
+                                        Placeholder::make('annexure_i_account_type')
+                                            ->label('Account Type')
+                                            ->content(fn($record, Get $get) => static::getAnnexureIBankDetails($record, $get('property_id'))['account_type']),
+
+                                        Placeholder::make('annexure_i_ifsc_code')
+                                            ->label('IFSC Code')
+                                            ->content(fn($record, Get $get) => static::getAnnexureIBankDetails($record, $get('property_id'))['ifsc_code']),
+                                    ])->columns(2),
+
+                                Section::make('Annexure II – Tenant Security Deposit Refund Account Details')
+                                    ->description('Captured for automatic refund of security deposit at move-out')
+                                    ->schema([
+                                        TextInput::make('tenant_bank_details.account_holder_name')->label('Beneficiary Name')->required(),
+                                        TextInput::make('tenant_bank_details.bank_name')->label('Bank Name')->required(),
+                                        TextInput::make('tenant_bank_details.bank_address')->label('Branch Address')->required(),
+                                        TextInput::make('tenant_bank_details.account_number')->label('Account Number')->required(),
+                                        Select::make('tenant_bank_details.account_type')
+                                            ->label('Account Type')
+                                            ->options(['Saving' => 'Savings Account', 'Current' => 'Current Account'])
+                                            ->default('Saving')
+                                            ->required(),
+                                        TextInput::make('tenant_bank_details.ifsc_code')->label('IFSC Code')->required(),
+                                        TextInput::make('tenant_bank_details.pan_number')->label('PAN Number')->required(),
+                                    ])->columns(2),
+                            ])->columns(2),
+
+                        Tabs\Tab::make('3. Draft PDF & Word')
+                            ->icon('heroicon-o-document-text')
+                            ->schema([
+                                Placeholder::make('draft_actions_card')
+                                    ->label('Draft Document Management & Actions')
+                                    ->content(new HtmlString(
+                                        '<div style="background-color: rgba(128, 128, 128, 0.04); border: 1px solid rgba(128, 128, 128, 0.2); border-radius: 0.75rem; padding: 1.25rem; margin-bottom: 1.25rem;">' .
+                                            '<div style="font-weight: 700; font-size: 15px; color: inherit; margin-bottom: 0.35rem;">Compile & Download Draft Documents</div>' .
+                                            '<div style="font-size: 13px; color: rgba(128, 128, 128, 0.85); margin-bottom: 1rem;">Compile Leave & License Agreement PDF and Word (.docx) drafts with Annexures I, II, and III (pulled automatically from Move-In Audit).</div>' .
+                                            '<div style="display: flex; gap: 10px; flex-wrap: wrap;">' .
+                                            '<button type="button" wire:click="generateDraftDocuments" wire:loading.attr="disabled" style="display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; background-color: #2563eb; color: #ffffff; font-weight: 600; font-size: 13px; border-radius: 6px; border: none; cursor: pointer;">' .
+                                            '<svg style="width: 16px; height: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"></path></svg>' .
+                                            'Generate Draft Documents' .
+                                            '</button>' .
+                                            '<button type="button" wire:click="downloadDraftPdf" style="display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; background-color: #059669; color: #ffffff; font-weight: 600; font-size: 13px; border-radius: 6px; border: none; cursor: pointer;">' .
+                                            '<svg style="width: 16px; height: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>' .
+                                            'Download Draft PDF' .
+                                            '</button>' .
+                                            '<button type="button" wire:click="downloadDraftWord" style="display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; background-color: #0891b2; color: #ffffff; font-weight: 600; font-size: 13px; border-radius: 6px; border: none; cursor: pointer;">' .
+                                            '<svg style="width: 16px; height: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>' .
+                                            'Download Draft Word (.docx)' .
+                                            '</button>' .
+                                            '</div>' .
+                                            '</div>'
+                                    ))
+                                    ->columnSpanFull(),
+                            ])->columns(2),
+
+                        Tabs\Tab::make('4. Signed Agreement & KYC')
+                            ->icon('heroicon-o-identification')
+                            ->schema([
+                                DateTimePicker::make('signed_at')
+                                    ->label('Date & Time Executed/Signed'),
+
+                                Toggle::make('signed_by_tenant')
+                                    ->label('Agreement Executed & Signed by Tenant and Owner'),
+
+                                SpatieMediaLibraryFileUpload::make('signed_agreement')
+                                    ->label('Executed Leave & License Agreement (PDF with E-Stamp & Signatures)')
+                                    ->collection('signed_agreement')
+                                    ->acceptedFileTypes(['application/pdf'])
+                                    ->downloadable()
+                                    ->openable()
+                                    ->columnSpanFull(),
+
+                                Placeholder::make('kyc_info')
+                                    ->label('Tenant Identity & Address Proofs')
+                                    ->content(new HtmlString('<p style="font-size: 13px; color: rgba(128,128,128,0.85);">Upload tenant KYC documents (Aadhaar, PAN, Passport, Income Proof, Tenant Police Verification Report).</p>'))
+                                    ->columnSpanFull(),
+
+                                SpatieMediaLibraryFileUpload::make('kyc_documents')
+                                    ->label('Tenant KYC Attachments')
+                                    ->collection('kyc_documents')
+                                    ->multiple()
+                                    ->reorderable()
+                                    ->downloadable()
+                                    ->openable()
+                                    ->columnSpanFull(),
+                            ])->columns(2),
+
+                        Tabs\Tab::make('5. Key Handover & Activation')
+                            ->icon('heroicon-o-key')
+                            ->schema([
+                                Toggle::make('keys_handed_over')
+                                    ->label('Keys Handed Over to Tenant')
+                                    ->live(),
+
+                                DateTimePicker::make('keys_handed_over_at')
+                                    ->label('Key Handover Date & Time'),
+
+                                Textarea::make('key_handover_notes')
+                                    ->label('Key Handover Notes & Instructions')
+                                    ->placeholder('e.g. Handed over 2 main door keys, 2 bedroom keys, 1 balcony key, 1 society gate access badge.')
+                                    ->columnSpanFull(),
+
+                                SpatieMediaLibraryFileUpload::make('key_handover_attachments')
+                                    ->label('Key Handover Photo / Acknowledgement Receipt')
+                                    ->collection('key_handover_attachments')
+                                    ->multiple()
+                                    ->downloadable()
+                                    ->openable()
+                                    ->columnSpanFull(),
+
+                                Placeholder::make('activation_actions_card')
+                                    ->label('Tenancy Activation Action')
+                                    ->content(function ($record) {
+                                        if (!$record) return '';
+                                        if ($record->status === 'active') {
+                                            return new HtmlString(
+                                                '<div style="padding: 14px; background-color: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; color: #047857; font-weight: 600; font-size: 14px;">' .
+                                                    '✓ Tenancy Agreement is Active' .
+                                                    '</div>'
+                                            );
+                                        }
+                                        return new HtmlString(
+                                            '<div style="background-color: rgba(128, 128, 128, 0.04); border: 1px solid rgba(128, 128, 128, 0.2); border-radius: 0.75rem; padding: 1.25rem; display: flex; align-items: center; justify-content: space-between;">' .
+                                                '<div>' .
+                                                '<div style="font-weight: 700; font-size: 15px; color: inherit;">Activate Tenancy</div>' .
+                                                '<div style="font-size: 13px; color: rgba(128, 128, 128, 0.85); margin-top: 2px;">Mark tenancy active, set property status to Occupied, and post initial invoices.</div>' .
+                                                '</div>' .
+                                                '<button type="button" wire:click="activateTenancy" wire:confirm="Are you sure you want to activate this tenancy agreement?" style="display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; background-color: #16a34a; color: #ffffff; font-weight: 600; font-size: 13px; border-radius: 6px; border: none; cursor: pointer;">' .
+                                                'Activate Tenancy &rarr;' .
+                                                '</button>' .
+                                                '</div>'
+                                        );
+                                    })
+                                    ->columnSpanFull(),
+                            ])->columns(2),
+                    ])->columnSpanFull(),
+            ]);
+    }
+
+    public static function areTermsComplete(?\App\Domain\Agreement\Models\TenancyAgreement $record): bool
+    {
+        if (!$record) {
+            return false;
+        }
+
+        $bankDetails = $record->tenant_bank_details ?? [];
+
+        return (float) ($record->rent_amount ?? 0) > 0
+            && (float) ($record->security_deposit ?? 0) > 0
+            && !empty($record->start_date)
+            && !empty($record->end_date)
+            && !is_null($record->lock_in_period_months) && $record->lock_in_period_months !== ''
+            && !is_null($record->notice_period_days) && $record->notice_period_days !== ''
+            && !empty($record->electricity_provider_id)
+            && !empty($record->apdcl_consumer_id)
+            && !empty($bankDetails['account_holder_name'] ?? null)
+            && !empty($bankDetails['bank_name'] ?? null)
+            && !empty($bankDetails['bank_address'] ?? null)
+            && !empty($bankDetails['account_number'] ?? null)
+            && !empty($bankDetails['account_type'] ?? null)
+            && !empty($bankDetails['ifsc_code'] ?? null)
+            && !empty($bankDetails['pan_number'] ?? null);
+    }
+
+    public static function getAnnexureIBankDetails($record, ?string $propertyId): array
+    {
+        $property = $record?->property ?? ($propertyId ? \App\Domain\Property\Models\Property::find($propertyId) : null);
+        $mou = $property?->mous()?->latest()->first();
+
+        if ($mou && !empty($mou->bank_details)) {
+            return [
+                'beneficiary_name' => $mou->bank_details['beneficiary_name'] ?? $mou->bank_details['account_holder_name'] ?? 'ASSAM ALAY',
+                'bank_name' => $mou->bank_details['bank_name'] ?? 'IndusInd Bank',
+                'bank_address' => $mou->bank_details['bank_address'] ?? 'Beltola, Guwahati',
+                'account_number' => $mou->bank_details['account_number'] ?? '201025429005',
+                'account_type' => $mou->bank_details['account_type'] ?? 'Current',
+                'ifsc_code' => $mou->bank_details['ifsc_code'] ?? 'INDB0000662',
+            ];
+        }
+
+        return [
+            'beneficiary_name' => 'ASSAM ALAY',
+            'bank_name' => 'IndusInd Bank',
+            'bank_address' => 'Beltola, Guwahati',
+            'account_number' => '201025429005',
+            'account_type' => 'Current',
+            'ifsc_code' => 'INDB0000662',
+        ];
     }
 }

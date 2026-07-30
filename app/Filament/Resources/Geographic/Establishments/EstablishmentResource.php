@@ -54,8 +54,29 @@ class EstablishmentResource extends Resource
                 TextInput::make('address')
                     ->maxLength(65535)
                     ->columnSpanFull(),
-                TextInput::make('city')
-                    ->maxLength(255),
+                Select::make('city_id')
+                    ->label('City')
+                    ->relationship('city', 'name')
+                    ->searchable()
+                    ->preload()
+                    ->createOptionForm([
+                        TextInput::make('name')
+                            ->required()
+                            ->maxLength(255)
+                            ->live(debounce: 500)
+                            ->afterStateUpdated(fn (Set $set, ?string $state) => $set('slug', Str::slug($state))),
+                        TextInput::make('slug')->rule(new \App\Rules\ValidSlug())
+                            ->required()
+                            ->maxLength(255)
+                            ->unique('cities', 'slug'),
+                        Select::make('district_id')
+                            ->relationship('district', 'name')
+                            ->searchable()
+                            ->preload()
+                            ->required(),
+                        Toggle::make('is_active')
+                            ->default(true),
+                    ]),
                 TextInput::make('latitude')
                     ->numeric(),
                 TextInput::make('longitude')
@@ -74,8 +95,10 @@ class EstablishmentResource extends Resource
                 TextColumn::make('establishmentType.name')
                     ->searchable()
                     ->sortable(),
-                TextColumn::make('city')
-                    ->searchable(),
+                TextColumn::make('city.name')
+                    ->label('City')
+                    ->searchable()
+                    ->sortable(),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

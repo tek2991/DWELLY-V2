@@ -64,6 +64,13 @@ class EditMOU extends EditRecord
     
     protected function mutateFormDataBeforeSave(array $data): array
     {
+        if (!empty($data['legal_terms']['city_id'])) {
+            $city = \App\Domain\Geographic\Models\City::find($data['legal_terms']['city_id']);
+            if ($city) {
+                $data['legal_terms']['city_name'] = $city->name;
+            }
+        }
+
         if (!empty($data['legal_terms']['financial_model_id'])) {
             $model = \App\Domain\Opportunity\Models\FinancialModel::find($data['legal_terms']['financial_model_id']);
             if ($model) {

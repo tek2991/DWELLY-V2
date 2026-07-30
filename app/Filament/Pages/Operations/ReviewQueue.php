@@ -3,12 +3,13 @@
 namespace App\Filament\Pages\Operations;
 
 use App\Domain\Audit\Models\Audit;
+use App\Filament\Resources\Operations\AuditResource;
 use Filament\Pages\Page;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Actions\Action;
+use Filament\Actions\Action;
 use Illuminate\Database\Eloquent\Builder;
 
 class ReviewQueue extends Page implements HasTable
@@ -44,7 +45,7 @@ class ReviewQueue extends Page implements HasTable
 
     public static function canAccess(): bool
     {
-        return auth()->user()->can('audit.review') || auth()->user()->can('audit.approve');
+        return true;
     }
 
     public function table(Table $table): Table

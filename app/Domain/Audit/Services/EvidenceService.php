@@ -17,6 +17,10 @@ class EvidenceService
      */
     public function createFromUpload(AuditItem $item, array $files): Collection
     {
+        if (!$item->isEditable()) {
+            throw new \DomainException('Cannot upload evidence for non-editable audit items.');
+        }
+
         $dtos = collect();
 
         foreach ($files as $file) {
@@ -44,6 +48,10 @@ class EvidenceService
 
     public function saveAnnotation(AuditEvidence $evidence, array $fabricJson): EvidenceDTO
     {
+        if (!$evidence->auditItem?->isEditable()) {
+            throw new \DomainException('Cannot modify annotations for non-editable audit items.');
+        }
+
         $evidence->annotation_json = [
             'version' => 1,
             'canvas' => $fabricJson,
@@ -59,6 +67,10 @@ class EvidenceService
     public function deleteEvidence(AuditEvidence $evidence): void
     {
         $item = $evidence->auditItem;
+        if ($item && !$item->isEditable()) {
+            throw new \DomainException('Cannot delete evidence for non-editable audit items.');
+        }
+
         $evidence->clearMediaCollection('images');
         $evidence->delete();
         

@@ -12,12 +12,42 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
 
-class Audit extends DomainModel
+class Audit extends DomainModel implements HasMedia
 {
-    use SoftDeletes, LogsActivity;
+    use SoftDeletes, LogsActivity, InteractsWithMedia;
+
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection('layout_video')->singleFile();
+    }
 
     protected $table = 'audits';
+
+    protected $fillable = [
+        'audit_number',
+        'property_id',
+        'tenant_id',
+        'audit_type',
+        'status',
+        'reference_audit_id',
+        'inspector_id',
+        'scheduled_at',
+        'completed_at',
+        'completed_by_id',
+        'approved_at',
+        'approved_by_id',
+        'notes',
+        'reviewer_id',
+        'review_round',
+        'submitted_at',
+        'review_started_at',
+        'is_locked',
+        'locked_at',
+        'locked_by_id',
+    ];
 
     protected $casts = [
         'audit_type' => AuditType::class,
@@ -27,12 +57,14 @@ class Audit extends DomainModel
         'approved_at' => 'datetime',
         'submitted_at' => 'datetime',
         'review_started_at' => 'datetime',
+        'is_locked' => 'boolean',
+        'locked_at' => 'datetime',
     ];
 
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['status'])
+            ->logOnly(['status', 'is_locked'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -48,8 +80,8 @@ class Audit extends DomainModel
         });
 
         static::updating(function ($audit) {
-            if ($audit->getOriginal('status') === AuditStatus::APPROVED) {
-                // Strictly lock the model once approved
+            if ($audit->getOriginal('is_locked')) {
+                // Strictly lock the model once permanently locked
                 return false; 
             }
         });
@@ -84,6 +116,11 @@ class Audit extends DomainModel
         return $this->belongsTo(Property::class);
     }
 
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(\App\Domain\Party\Models\Party::class, 'tenant_id');
+    }
+
     public function referenceAudit(): BelongsTo
     {
         return $this->belongsTo(Audit::class, 'reference_audit_id');
@@ -104,6 +141,11 @@ class Audit extends DomainModel
         return $this->belongsTo(User::class, 'approved_by_id');
     }
 
+    public function lockedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'locked_by_id');
+    }
+
     public function categories(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(AuditCategory::class)->orderBy('sort_order');
@@ -121,14 +163,30 @@ class Audit extends DomainModel
 
     // Policy Methods
 
+    public function isInspector(?User $user = null): bool
+    {
+        $userId = $user ? $user->id : auth()->id();
+        return !empty($this->inspector_id) && (string)$this->inspector_id === (string)$userId;
+    }
+
+    public function canStart(?User $user = null): bool
+    {
+        return !$this->is_locked && $this->status === AuditStatus::DRAFT && $this->isInspector($user);
+    }
+
+    public function canInspect(?User $user = null): bool
+    {
+        return !$this->is_locked && in_array($this->status, [AuditStatus::IN_PROGRESS, AuditStatus::PARTIALLY_APPROVED]) && $this->isInspector($user);
+    }
+
     public function canSubmit(): bool
     {
-        return in_array($this->status, [AuditStatus::DRAFT, AuditStatus::IN_PROGRESS, AuditStatus::PARTIALLY_APPROVED]);
+        return !$this->is_locked && in_array($this->status, [AuditStatus::DRAFT, AuditStatus::IN_PROGRESS, AuditStatus::PARTIALLY_APPROVED]) && $this->isInspector();
     }
 
     public function canReview(): bool
     {
-        return in_array($this->status, [AuditStatus::PENDING_REVIEW, AuditStatus::IN_REVIEW]);
+        return !$this->is_locked && in_array($this->status, [AuditStatus::PENDING_REVIEW, AuditStatus::IN_REVIEW]);
     }
 
     public function canRequestChanges(): bool
@@ -138,11 +196,23 @@ class Audit extends DomainModel
 
     public function canApprove(): bool
     {
-        return $this->status === AuditStatus::IN_REVIEW;
+        return !$this->is_locked && $this->status === AuditStatus::IN_REVIEW;
+    }
+
+    public function canReopen(): bool
+    {
+        $statusVal = $this->status instanceof AuditStatus ? $this->status->value : (string)$this->status;
+        return !$this->is_locked && in_array($statusVal, ['approved', 'completed']);
+    }
+
+    public function canLock(): bool
+    {
+        $statusVal = $this->status instanceof AuditStatus ? $this->status->value : (string)$this->status;
+        return !$this->is_locked && in_array($statusVal, ['approved', 'completed']);
     }
 
     public function isImmutable(): bool
     {
-        return in_array($this->status, [AuditStatus::APPROVED, AuditStatus::COMPLETED]);
+        return $this->is_locked || in_array($this->status, [AuditStatus::APPROVED, AuditStatus::COMPLETED]);
     }
 }

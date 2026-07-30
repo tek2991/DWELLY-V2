@@ -197,6 +197,12 @@ class MOUResource extends Resource
                     \Filament\Schemas\Components\Section::make('Property & Commercial Details')
                         ->description('These details are mapped to the MOU Document and can be modified here without affecting the original Opportunity.')
                         ->schema([
+                            Forms\Components\Select::make('legal_terms.city_id')
+                                ->label('City')
+                                ->options(fn () => \App\Domain\Geographic\Models\City::pluck('name', 'id'))
+                                ->searchable()
+                                ->preload()
+                                ->required(),
                             Forms\Components\Textarea::make('legal_terms.address')
                                 ->label('Property Address')
                                 ->required()
@@ -230,18 +236,92 @@ class MOUResource extends Resource
                                 ->required(),
                         ])->columns(2),
 
-                    \Filament\Schemas\Components\Section::make('Legal Terms')
+                    \Filament\Schemas\Components\Section::make('Owner KYC & Verification Documents')
                         ->schema([
                             Forms\Components\DatePicker::make('start_date')
                                 ->label('Start Date')
                                 ->required(),
                                 
-                            \Filament\Forms\Components\SpatieMediaLibraryFileUpload::make('mou_attachments')
-                                ->collection('mou_attachments')
-                                ->multiple()
-                                ->label('Owner KYC & Cancelled Cheque')
-                                ->helperText('Upload Aadhar, PAN, Cancelled Cheque, etc.')
-                                ->required(),
+                            \Filament\Schemas\Components\Grid::make(3)
+                                ->schema([
+                                    \Filament\Forms\Components\SpatieMediaLibraryFileUpload::make('owner_aadhaar')
+                                        ->collection('owner_aadhaar')
+                                        ->label('Owner Aadhaar Card')
+                                        ->helperText('Front & Back image or PDF')
+                                        ->required(),
+
+                                    \Filament\Forms\Components\SpatieMediaLibraryFileUpload::make('owner_pan')
+                                        ->collection('owner_pan')
+                                        ->label('Owner PAN Card')
+                                        ->helperText('Clear image or PDF')
+                                        ->required(),
+
+                                    \Filament\Forms\Components\SpatieMediaLibraryFileUpload::make('cancelled_cheque')
+                                        ->collection('cancelled_cheque')
+                                        ->label('Cancelled Cheque / Bank Proof')
+                                        ->helperText('Cancelled Cheque or Passbook')
+                                        ->required(),
+                                ]),
+
+                            \Filament\Schemas\Components\Actions::make([
+                                \Filament\Actions\Action::make('uploadDocumentModal')
+                                    ->label('Upload additional documents')
+                                    ->icon('heroicon-o-arrow-up-tray')
+                                    ->color('primary')
+                                    ->button()
+                                    ->modalHeading('Upload Document (Select Type & File)')
+                                    ->modalDescription('Select document type (Passport, Voter ID, MGNREGA Card, Sale Deed, etc.) and attach file.')
+                                    ->form([
+                                        Forms\Components\Select::make('document_type')
+                                            ->label('Document Type')
+                                            ->options(\App\Domain\Shared\Enums\DocumentType::class)
+                                            ->required()
+                                            ->searchable(),
+                                        Forms\Components\FileUpload::make('files')
+                                            ->label('Files (Images / PDF)')
+                                            ->multiple()
+                                            ->preserveFilenames()
+                                            ->required(),
+                                    ])
+                                    ->action(function (array $data, ?Mou $record, \Filament\Schemas\Components\Utilities\Set $set, \Filament\Schemas\Components\Utilities\Get $get) {
+                                        $collection = match($data['document_type']) {
+                                            'aadhaar', 'owner_aadhaar' => 'owner_aadhaar',
+                                            'pan', 'owner_pan' => 'owner_pan',
+                                            'cancelled_cheque' => 'cancelled_cheque',
+                                            'power_of_attorney' => 'signatory_poa',
+                                            default => 'mou_attachments',
+                                        };
+
+                                        if ($record && $record->exists) {
+                                            foreach ($data['files'] as $path) {
+                                                $fullPath = \Illuminate\Support\Facades\Storage::disk(config('filament.default_filesystem_disk'))->path($path);
+                                                if (!file_exists($fullPath)) {
+                                                    $fullPath = \Illuminate\Support\Facades\Storage::disk('public')->path($path);
+                                                }
+
+                                                $record->addMedia($fullPath)
+                                                    ->withCustomProperties([
+                                                        'document_type' => $data['document_type'],
+                                                    ])
+                                                    ->toMediaCollection($collection);
+                                            }
+                                            $record->refresh();
+                                            \Filament\Notifications\Notification::make()->title('Document Uploaded Successfully')->success()->send();
+                                        } else {
+                                            $existing = $get($collection) ?? [];
+                                            if (is_string($existing)) {
+                                                $existing = [$existing];
+                                            }
+                                            $merged = array_values(array_unique(array_merge((array)$existing, (array)$data['files'])));
+                                            $set($collection, $merged);
+                                            \Filament\Notifications\Notification::make()
+                                                ->title('Document Attached')
+                                                ->body('File added to form. It will be saved when you submit the MOU.')
+                                                ->success()
+                                                ->send();
+                                        }
+                                    }),
+                            ]),
 
                             Forms\Components\Toggle::make('is_signatory_different')
                                 ->label('Is Signatory Authority different from Property Owner?')
@@ -273,13 +353,85 @@ class MOUResource extends Resource
                                 ])
                                 ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
 
-                            \Filament\Forms\Components\SpatieMediaLibraryFileUpload::make('signatory_documents')
-                                ->collection('signatory_documents')
-                                ->multiple()
-                                ->label('Signatory Authorization & KYC')
-                                ->helperText('Upload Power of Attorney, Signatory Aadhar, PAN, etc.')
-                                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different'))
+                            \Filament\Schemas\Components\Grid::make(3)
+                                ->schema([
+                                    \Filament\Forms\Components\SpatieMediaLibraryFileUpload::make('signatory_aadhaar')
+                                        ->collection('signatory_aadhaar')
+                                        ->label('Signatory Aadhaar Card')
+                                        ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
+
+                                    \Filament\Forms\Components\SpatieMediaLibraryFileUpload::make('signatory_pan')
+                                        ->collection('signatory_pan')
+                                        ->label('Signatory PAN Card')
+                                        ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
+
+                                    \Filament\Forms\Components\SpatieMediaLibraryFileUpload::make('signatory_poa')
+                                        ->collection('signatory_poa')
+                                        ->label('Power of Attorney (POA)')
+                                        ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
+                                ])
                                 ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
+
+                            \Filament\Schemas\Components\Actions::make([
+                                \Filament\Actions\Action::make('uploadSignatoryDocumentModal')
+                                    ->label('Upload additional documents')
+                                    ->icon('heroicon-o-arrow-up-tray')
+                                    ->color('primary')
+                                    ->button()
+                                    ->modalHeading('Upload Signatory Document (Select Type & File)')
+                                    ->modalDescription('Select document type (Passport, Voter ID, Power of Attorney, etc.) and attach file for Signatory Authority.')
+                                    ->form([
+                                        Forms\Components\Select::make('document_type')
+                                            ->label('Document Type')
+                                            ->options(\App\Domain\Shared\Enums\DocumentType::class)
+                                            ->required()
+                                            ->searchable(),
+                                        Forms\Components\FileUpload::make('files')
+                                            ->label('Files (Images / PDF)')
+                                            ->multiple()
+                                            ->preserveFilenames()
+                                            ->required(),
+                                    ])
+                                    ->action(function (array $data, ?Mou $record, \Filament\Schemas\Components\Utilities\Set $set, \Filament\Schemas\Components\Utilities\Get $get) {
+                                        $collection = match($data['document_type']) {
+                                            'aadhaar' => 'signatory_aadhaar',
+                                            'pan' => 'signatory_pan',
+                                            'power_of_attorney' => 'signatory_poa',
+                                            default => 'signatory_documents',
+                                        };
+
+                                        if ($record && $record->exists) {
+                                            foreach ($data['files'] as $path) {
+                                                $fullPath = \Illuminate\Support\Facades\Storage::disk(config('filament.default_filesystem_disk'))->path($path);
+                                                if (!file_exists($fullPath)) {
+                                                    $fullPath = \Illuminate\Support\Facades\Storage::disk('public')->path($path);
+                                                }
+
+                                                $record->addMedia($fullPath)
+                                                    ->withCustomProperties([
+                                                        'document_type' => $data['document_type'],
+                                                        'entity_type' => 'signatory',
+                                                    ])
+                                                    ->toMediaCollection($collection);
+                                            }
+                                            $record->refresh();
+                                            \Filament\Notifications\Notification::make()->title('Signatory Document Uploaded Successfully')->success()->send();
+                                        } else {
+                                            $existing = $get($collection) ?? [];
+                                            if (is_string($existing)) {
+                                                $existing = [$existing];
+                                            }
+                                            $merged = array_values(array_unique(array_merge((array)$existing, (array)$data['files'])));
+                                            $set($collection, $merged);
+                                            \Filament\Notifications\Notification::make()
+                                                ->title('Signatory Document Attached')
+                                                ->body('File added to form. It will be saved when you submit the MOU.')
+                                                ->success()
+                                                ->send();
+                                        }
+                                    }),
+                            ])
+                            ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
                         ])->columns(1)
                         ->collapsible(),
 
@@ -294,6 +446,13 @@ class MOUResource extends Resource
                             Forms\Components\TextInput::make('bank_details.account_number')
                                 ->label('Account Number')
                                 ->required(),
+                            Forms\Components\Select::make('bank_details.account_type')
+                                ->label('Account Type')
+                                ->options([
+                                    'Saving' => 'Savings Account',
+                                    'Current' => 'Current Account',
+                                ])
+                                ->default('Current'),
                             Forms\Components\TextInput::make('bank_details.ifsc_code')
                                 ->label('IFSC Code')
                                 ->required(),
@@ -325,6 +484,10 @@ class MOUResource extends Resource
                 Tables\Columns\TextColumn::make('number')
                     ->searchable()
                     ->sortable(),
+                Tables\Columns\TextColumn::make('type')
+                    ->label('Type')
+                    ->badge()
+                    ->sortable(),
                 Tables\Columns\TextColumn::make('opportunity.title')
                     ->label('Opportunity')
                     ->searchable(),
@@ -340,6 +503,8 @@ class MOUResource extends Resource
             ])
             ->filters([
                 Tables\Filters\TrashedFilter::make(),
+                Tables\Filters\SelectFilter::make('type')
+                    ->options(\App\Domain\Mou\Enums\MouType::class),
                 Tables\Filters\SelectFilter::make('status')
                     ->options(MouStatus::class),
             ])
@@ -348,6 +513,48 @@ class MOUResource extends Resource
                 \Filament\Actions\EditAction::make()
                     ->visible(fn ($record) => static::canEdit($record)),
                 \Filament\Actions\ActionGroup::make([
+                    \Filament\Actions\Action::make('uploadDocument')
+                        ->label('Upload additional documents')
+                        ->icon('heroicon-o-arrow-up-tray')
+                        ->color('primary')
+                        ->visible(fn (Mou $record) => static::canEdit($record))
+                        ->form([
+                            Forms\Components\Select::make('document_type')
+                                ->label('Document Type')
+                                ->options(\App\Domain\Shared\Enums\DocumentType::class)
+                                ->required()
+                                ->searchable(),
+                            Forms\Components\FileUpload::make('files')
+                                ->label('Files (Images / PDF)')
+                                ->multiple()
+                                ->preserveFilenames()
+                                ->required(),
+                        ])
+                        ->action(function (Mou $record, array $data) {
+                            $collection = match($data['document_type']) {
+                                'aadhaar', 'owner_aadhaar' => 'owner_aadhaar',
+                                'pan', 'owner_pan' => 'owner_pan',
+                                'cancelled_cheque' => 'cancelled_cheque',
+                                'power_of_attorney' => 'signatory_poa',
+                                default => 'mou_attachments',
+                            };
+
+                            foreach ($data['files'] as $path) {
+                                $fullPath = \Illuminate\Support\Facades\Storage::disk(config('filament.default_filesystem_disk'))->path($path);
+                                if (!file_exists($fullPath)) {
+                                    $fullPath = \Illuminate\Support\Facades\Storage::disk('public')->path($path);
+                                }
+
+                                $record->addMedia($fullPath)
+                                    ->withCustomProperties([
+                                        'document_type' => $data['document_type'],
+                                    ])
+                                    ->toMediaCollection($collection);
+                            }
+
+                            $record->refresh();
+                            \Filament\Notifications\Notification::make()->title('Document Uploaded Successfully')->success()->send();
+                        }),
                     \Filament\Actions\Action::make('resolveParty')
                         ->label('Resolve Party')
                         ->icon('heroicon-o-users')
@@ -470,6 +677,14 @@ class MOUResource extends Resource
                             Forms\Components\TextInput::make('bank_name')->required(),
                             Forms\Components\TextInput::make('account_holder_name')->required(),
                             Forms\Components\TextInput::make('account_number')->required(),
+                            Forms\Components\Select::make('account_type')
+                                ->label('Account Type')
+                                ->options([
+                                    'Saving' => 'Savings Account',
+                                    'Current' => 'Current Account',
+                                ])
+                                ->default('Current')
+                                ->required(),
                             Forms\Components\TextInput::make('ifsc_code')->required(),
                             Forms\Components\Textarea::make('bank_address')->label('Address of the Bank')->required()->columnSpanFull(),
                         ])
@@ -540,7 +755,7 @@ class MOUResource extends Resource
                         ->label('Convert to Property')
                         ->icon('heroicon-o-building-office')
                         ->color('success')
-                        ->visible(fn (Mou $record) => $record->status === MouStatus::VERIFIED)
+                        ->visible(fn (Mou $record) => $record->status === MouStatus::VERIFIED && ($record->type === \App\Domain\Mou\Enums\MouType::ONBOARDING || $record->type === null))
                         ->requiresConfirmation()
                         ->action(function (Mou $record) {
                             $property = app(\App\Domain\Property\Services\PropertyOnboardingService::class)->createPropertyFromMou($record);

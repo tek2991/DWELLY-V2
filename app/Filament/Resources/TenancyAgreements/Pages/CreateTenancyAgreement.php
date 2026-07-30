@@ -3,12 +3,12 @@
 namespace App\Filament\Resources\TenancyAgreements\Pages;
 
 use App\Filament\Resources\TenancyAgreements\TenancyAgreementResource;
-use Filament\Actions;
-use Filament\Resources\Pages\CreateRecord;
 use App\Domain\Agreement\Actions\DraftTenancyAgreementAction;
 use App\Domain\Property\Models\Property;
+use App\Domain\Party\Models\Party;
+use App\Domain\Party\Enums\BusinessRole;
 use Illuminate\Database\Eloquent\Model;
-use Filament\Forms\Form;
+use Filament\Resources\Pages\CreateRecord;
 
 class CreateTenancyAgreement extends CreateRecord
 {
@@ -18,8 +18,39 @@ class CreateTenancyAgreement extends CreateRecord
     {
         $property = Property::findOrFail($data['property_id']);
         
-        $primaryTenantId = $data['primary_tenant_id'];
-        unset($data['primary_tenant_id']);
+        $primaryTenantId = null;
+
+        if (!empty($data['create_new_tenant']) && !empty($data['new_tenant'])) {
+            $tenantData = $data['new_tenant'];
+
+            $party = Party::create([
+                'display_name' => $tenantData['display_name'],
+                'phone' => $tenantData['phone'] ?? null,
+                'email' => $tenantData['email'] ?? null,
+                'party_type' => 'individual',
+            ]);
+
+            $party->individual()->create([
+                'name' => $tenantData['display_name'],
+                'parent_name' => $tenantData['parent_name'] ?? null,
+                'aadhaar_number' => $tenantData['aadhaar_number'] ?? null,
+                'pan_number' => $tenantData['pan_number'] ?? null,
+            ]);
+
+            if (!empty($tenantData['address_line_1'])) {
+                $party->addresses()->create([
+                    'address_line_1' => $tenantData['address_line_1'],
+                    'is_primary' => true,
+                ]);
+            }
+
+            $party->enableRole(BusinessRole::TENANT);
+            $primaryTenantId = $party->id;
+        } else {
+            $primaryTenantId = $data['primary_tenant_id'] ?? null;
+        }
+
+        unset($data['create_new_tenant'], $data['new_tenant'], $data['primary_tenant_id']);
         
         $roles = [
             [
@@ -35,6 +66,6 @@ class CreateTenancyAgreement extends CreateRecord
 
     protected function getRedirectUrl(): string
     {
-        return $this->getResource()::getUrl('index');
+        return $this->getResource()::getUrl('edit', ['record' => $this->getRecord()]);
     }
 }

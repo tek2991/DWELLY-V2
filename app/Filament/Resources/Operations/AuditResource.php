@@ -73,6 +73,13 @@ class AuditResource extends Resource
                                 ->default(request()->query('audit_type'))
                                 ->disabled(fn (string $operation): bool => $operation === 'edit'),
 
+                            Forms\Components\Select::make('tenant_id')
+                                ->label('Linked Tenant')
+                                ->relationship('tenant', 'display_name')
+                                ->searchable()
+                                ->preload()
+                                ->placeholder('Select tenant (if applicable)'),
+
                             Forms\Components\Select::make('reference_audit_id')
                                 ->label('Reference Audit')
                                 ->options(function (Get $get, ?Audit $record) {
@@ -95,14 +102,26 @@ class AuditResource extends Resource
                                 ->hint('Used for comparisons and preloading in Phase 2'),
                                 
                             Forms\Components\Select::make('inspector_id')
+                                ->label('Assigned Inspector')
                                 ->relationship('inspector', 'name')
                                 ->searchable()
                                 ->preload()
+                                ->required()
                                 ->default(fn () => auth()->id()),
                                 
                             Forms\Components\DatePicker::make('scheduled_at')
                                 ->label('Scheduled Date'),
                         ])->columns(2),
+
+                    \Filament\Schemas\Components\Section::make('Property Layout Video')
+                        ->schema([
+                            \Filament\Forms\Components\SpatieMediaLibraryFileUpload::make('layout_video')
+                                ->collection('layout_video')
+                                ->label('Overall Layout Video')
+                                ->acceptedFileTypes(['video/mp4', 'video/quicktime', 'video/webm', 'video/x-msvideo', 'video/avi'])
+                                ->maxSize(512000) // 500 MB
+                                ->hint('Upload overall video walkthrough of the property for layout context'),
+                        ]),
 
                     \Filament\Schemas\Components\Section::make('Notes')
                         ->schema([
@@ -155,10 +174,18 @@ class AuditResource extends Resource
                     ->sortable(),
                 Tables\Columns\TextColumn::make('property.code')
                     ->searchable(),
+                Tables\Columns\TextColumn::make('tenant.display_name')
+                    ->label('Tenant')
+                    ->searchable()
+                    ->placeholder('N/A'),
                 Tables\Columns\TextColumn::make('audit_type')
                     ->badge(),
                 Tables\Columns\TextColumn::make('status')
                     ->badge(),
+                Tables\Columns\IconColumn::make('is_locked')
+                    ->label('Locked')
+                    ->boolean()
+                    ->sortable(),
                 Tables\Columns\TextColumn::make('inspector.name')
                     ->label('Inspector'),
                 Tables\Columns\TextColumn::make('scheduled_at')
@@ -175,6 +202,8 @@ class AuditResource extends Resource
                     ->options(AuditStatus::class),
                 Tables\Filters\SelectFilter::make('audit_type')
                     ->options(AuditType::class),
+                Tables\Filters\TernaryFilter::make('is_locked')
+                    ->label('Locked Status'),
             ])
             ->actions([
                 \Filament\Actions\Action::make('inspect')
@@ -191,8 +220,9 @@ class AuditResource extends Resource
                         ->label('Start Audit')
                         ->icon('heroicon-o-play')
                         ->color('info')
-                        ->visible(fn (Audit $record) => $record->status === AuditStatus::DRAFT)
+                        ->visible(fn (Audit $record) => $record->canStart())
                         ->action(function (Audit $record) {
+                            if (!$record->canStart()) return;
                             $record->update(['status' => AuditStatus::IN_PROGRESS]);
                         }),
                         
@@ -204,6 +234,7 @@ class AuditResource extends Resource
                         ->action(function (Audit $record) {
                             app(\App\Domain\Audit\Services\AuditReviewService::class)->submitForReview($record);
                         }),
+
                 ])->label('Transitions'),
             ])
             ->bulkActions([

@@ -26,21 +26,6 @@
                         <x-filament::button tag="a" color="info" size="sm" href="{{ \App\Filament\Resources\Operations\AuditResource::getUrl('edit', ['record' => $latest->id]) }}">
                             {{ $actionLabel }}
                         </x-filament::button>
-                    @else
-                        @php
-                            $isDisabled = empty($this->record->code) || $this->record->onboardingProject?->status !== 'Activated';
-                        @endphp
-                        @if($isDisabled)
-                            <span x-data="{}" x-tooltip="'Complete onboarding and generate property code first.'">
-                                <x-filament::button tag="button" color="primary" size="sm" disabled>
-                                    @if($stats['total'] === 0) Start Move-In Audit @else Start New Audit @endif
-                                </x-filament::button>
-                            </span>
-                        @else
-                            <x-filament::button tag="a" color="primary" size="sm" href="{{ \App\Filament\Resources\Operations\AuditResource::getUrl('create', ['property_id' => $this->record->id, 'audit_type' => $stats['total'] === 0 ? 'move_in' : null]) }}">
-                                @if($stats['total'] === 0) Start Move-In Audit @else Start New Audit @endif
-                            </x-filament::button>
-                        @endif
                     @endif
                     
                     @if($stats['total'] > 0)

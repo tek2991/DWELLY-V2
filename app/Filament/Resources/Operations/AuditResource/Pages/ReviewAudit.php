@@ -18,7 +18,7 @@ class ReviewAudit extends Page
 
     public function mount(Audit $record): void
     {
-        $this->record = $record->load('categories.items.evidence', 'reviewer');
+        $this->record = $record->load('categories.items.evidence', 'reviewer', 'inspector', 'completedBy', 'property');
         
         // Let's use the service to make sure if we need to set in review, we do it properly
         app(\App\Domain\Audit\Services\AuditReviewService::class)->evaluateWorkflowState($this->record);
@@ -29,43 +29,24 @@ class ReviewAudit extends Page
         return 'Review Audit: ' . ($this->record->property->code ?? $this->record->id);
     }
 
+    public function getSubheading(): string | \Illuminate\Contracts\Support\Htmlable | null
+    {
+        $inspectorName = $this->record->inspector?->name ?? $this->record->completedBy?->name ?? 'Unassigned';
+        $property = $this->record->property;
+        $propertyName = $property?->building_name ?? $property?->address_line_1 ?? 'Property #' . $property?->id;
+
+        return new \Illuminate\Support\HtmlString(
+            '<div style="font-size: 0.875rem; color: rgba(107, 114, 128, 1); display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-top: 0.25rem;">' .
+                '<span>🏢 Property: <strong>' . e($propertyName) . '</strong></span>' .
+                '<span>👤 Inspector: <strong>' . e($inspectorName) . '</strong></span>' .
+                '<span>📋 Audit #: <strong>' . e($this->record->audit_number) . '</strong></span>' .
+            '</div>'
+        );
+    }
+
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('acceptAll')
-                ->label('Accept All Items')
-                ->color('success')
-                ->icon('heroicon-o-check-badge')
-                ->requiresConfirmation()
-                ->modalHeading('Accept All Items')
-                ->modalDescription('Are you sure you want to accept all remaining items in this audit?')
-                ->visible(fn () => $this->record->canReview())
-                ->action(function () {
-                    app(\App\Domain\Audit\Services\AuditReviewService::class)->acceptAllItems($this->record, auth()->user());
-                    $this->record->refresh();
-                    
-                    \Filament\Notifications\Notification::make()
-                        ->title('All items accepted successfully.')
-                        ->success()
-                        ->send();
-                }),
-
-            Action::make('requestChanges')
-                ->label('Request Changes')
-                ->color('danger')
-                ->icon('heroicon-o-arrow-uturn-left')
-                ->visible(fn () => $this->record->canRequestChanges() && $this->record->items()->where('status', \App\Domain\Audit\Enums\ItemStatus::REJECTED)->exists())
-                ->action(function () {
-                    app(\App\Domain\Audit\Services\AuditReviewService::class)->requestChanges($this->record);
-                    
-                    \Filament\Notifications\Notification::make()
-                        ->title('Changes requested from inspector')
-                        ->success()
-                        ->send();
-                        
-                    return redirect(route('filament.operations.pages.review-queue'));
-                }),
-
             Action::make('backToInspection')
                 ->label('Inspection Page')
                 ->color('gray')

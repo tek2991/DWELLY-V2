@@ -42,21 +42,44 @@ class AdditionalDocumentsRelationManager extends Component implements HasActions
                 return Media::query()
                     ->where('model_type', get_class($targetModel))
                     ->where('model_id', $targetModel->id)
-                    ->whereIn('collection_name', ['mou_attachments', 'signatory_documents']);
+                    ->whereIn('collection_name', [
+                        'owner_aadhaar',
+                        'owner_pan',
+                        'cancelled_cheque',
+                        'signatory_aadhaar',
+                        'signatory_pan',
+                        'signatory_poa',
+                        'mou_attachments',
+                        'signatory_documents',
+                    ]);
             })
             ->columns([
                 TextColumn::make('collection_name')
                     ->label('Document Category')
-                    ->formatStateUsing(fn (string $state) => match($state) {
-                        'mou_attachments' => 'Owner KYC & Cancelled Cheque',
-                        'signatory_documents' => 'Signatory Authorization & KYC',
-                        default => str($state)->headline(),
+                    ->formatStateUsing(function (string $state, Media $record) {
+                        $docTypeVal = $record->getCustomProperty('document_type');
+                        if ($docTypeVal) {
+                            $enumLabel = \App\Domain\Shared\Enums\DocumentType::tryFrom($docTypeVal)?->getLabel();
+                            if ($enumLabel) return $enumLabel;
+                        }
+                        return match($state) {
+                            'owner_aadhaar' => 'Owner Aadhaar Card',
+                            'owner_pan' => 'Owner PAN Card',
+                            'cancelled_cheque' => 'Cancelled Cheque',
+                            'signatory_aadhaar' => 'Signatory Aadhaar Card',
+                            'signatory_pan' => 'Signatory PAN Card',
+                            'signatory_poa' => 'Power of Attorney',
+                            'mou_attachments' => 'Owner Attachments',
+                            'signatory_documents' => 'Signatory Attachments',
+                            default => str($state)->headline(),
+                        };
                     })
                     ->badge()
                     ->color(fn (string $state) => match($state) {
-                        'mou_attachments' => 'primary',
-                        'signatory_documents' => 'warning',
-                        default => 'gray',
+                        'owner_aadhaar', 'owner_pan' => 'success',
+                        'cancelled_cheque' => 'info',
+                        'signatory_aadhaar', 'signatory_pan', 'signatory_poa' => 'warning',
+                        default => 'primary',
                     }),
                 TextColumn::make('file_name')
                     ->label('Name')
@@ -71,13 +94,11 @@ class AdditionalDocumentsRelationManager extends Component implements HasActions
                     ->label('Upload Document')
                     ->icon('heroicon-o-arrow-up-tray')
                     ->form([
-                        \Filament\Forms\Components\Select::make('collection_name')
-                            ->label('Document Category')
-                            ->options([
-                                'mou_attachments' => 'Owner KYC & Cancelled Cheque',
-                                'signatory_documents' => 'Signatory Authorization & KYC',
-                            ])
-                            ->required(),
+                        \Filament\Forms\Components\Select::make('document_type')
+                            ->label('Document Type')
+                            ->options(\App\Domain\Shared\Enums\DocumentType::class)
+                            ->required()
+                            ->searchable(),
                         \Filament\Forms\Components\FileUpload::make('files')
                             ->label('Files (Images/PDFs)')
                             ->multiple()
@@ -94,10 +115,19 @@ class AdditionalDocumentsRelationManager extends Component implements HasActions
                             ->latest()
                             ->first();
                         $targetModel = $relevantMou ?? $this->ownerRecord;
-                        
+
+                        $collection = match($data['document_type']) {
+                            'aadhaar' => 'owner_aadhaar',
+                            'pan' => 'owner_pan',
+                            'cancelled_cheque' => 'cancelled_cheque',
+                            'power_of_attorney' => 'signatory_poa',
+                            default => 'mou_attachments',
+                        };
+
                         foreach ($data['files'] as $path) {
                             $targetModel->addMedia(Storage::disk('public')->path($path))
-                                ->toMediaCollection($data['collection_name']);
+                                ->withCustomProperties(['document_type' => $data['document_type']])
+                                ->toMediaCollection($collection);
                         }
                     })
             ])

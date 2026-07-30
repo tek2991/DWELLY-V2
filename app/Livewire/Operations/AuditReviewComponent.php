@@ -24,7 +24,7 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
 
     public function mount(Audit $audit)
     {
-        $this->audit = $audit;
+        $this->audit = $audit->load('media');
         if ($this->audit->categories->isNotEmpty()) {
             $this->activeCategoryId = $this->audit->categories->first()->id;
         }
@@ -39,19 +39,49 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
     {
         $this->audit->unsetRelation('categories');
         $this->audit->unsetRelation('items');
-        $this->audit->load('categories.items.evidence', 'categories.items.reviews', 'items');
+        $this->audit->load('categories.items.evidence', 'categories.items.reviews', 'categories.items.category', 'items.category', 'media');
     }
 
     public function acceptAllAction(): Action
     {
         return Action::make('acceptAll')
             ->label('Accept All Items')
-            ->icon('heroicon-o-check-badge')
             ->color('success')
+            ->icon('heroicon-o-check-badge')
             ->button()
             ->requiresConfirmation()
-            ->modalHeading('Accept All Items')
-            ->modalDescription('Are you sure you want to accept all remaining items in this audit?')
+            ->modalHeading('Accept All Items & Review Sync Flags')
+            ->modalDescription(function () {
+                $this->refreshAuditRelations();
+                $newItems = $this->audit->items->filter(fn ($item) => !empty($item->snapshot_data['is_new']));
+
+                if ($newItems->isEmpty()) {
+                    return new \Illuminate\Support\HtmlString('Are you sure you want to accept all remaining items in this audit? No new items were added by the inspector.');
+                }
+
+                $html = '<div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: 0.5rem; text-align: left;">';
+                $html .= '<p style="margin: 0; font-weight: 500; font-size: 0.875rem; color: #374151;">Review the items added by the inspector and their property sync flags before accepting:</p>';
+                $html .= '<div style="max-height: 220px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 0.375rem; padding: 0.5rem; background: #f9fafb; display: flex; flex-direction: column; gap: 0.5rem;">';
+
+                foreach ($newItems as $item) {
+                    $isExcluded = !empty($item->snapshot_data['exclude_from_sync']);
+                    $syncStatus = $isExcluded 
+                        ? '<span style="background: #f3f4f6; color: #4b5563; padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; font-weight: 600; border: 1px solid #d1d5db;">🚫 Excluded</span>'
+                        : '<span style="background: #dcfce7; color: #15803d; padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; font-weight: 600; border: 1px solid #bbf7d0;">⚡ Will Sync</span>';
+
+                    $categoryName = e($item->category?->name ?? 'General');
+                    $itemName = e($item->name);
+
+                    $html .= "<div style=\"display: flex; align-items: center; justify-content: space-between; font-size: 0.875rem; padding: 0.5rem; background: white; border-radius: 0.375rem; border: 1px solid #e5e7eb; gap: 0.5rem;\">";
+                    $html .= "<div><strong>{$itemName}</strong> <span style=\"color: #6b7280; font-size: 0.75rem;\">({$categoryName})</span></div>";
+                    $html .= "<div>{$syncStatus}</div>";
+                    $html .= "</div>";
+                }
+
+                $html .= '</div></div>';
+
+                return new \Illuminate\Support\HtmlString($html);
+            })
             ->visible(fn () => $this->audit->canReview())
             ->action(function () {
                 app(\App\Domain\Audit\Services\AuditReviewService::class)->acceptAllItems($this->audit, auth()->user());
@@ -63,6 +93,55 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
             });
     }
 
+    public function requestChangesAction(): Action
+    {
+        return Action::make('requestChanges')
+            ->label('Request Changes')
+            ->color('danger')
+            ->icon('heroicon-o-arrow-uturn-left')
+            ->button()
+            ->requiresConfirmation()
+            ->modalHeading('Send Back to Inspector')
+            ->modalDescription('Are you sure you want to send this audit back to the inspector for updates or additional items?')
+            ->form([
+                Textarea::make('notes')
+                    ->label('Notes for Inspector (Optional)')
+                    ->placeholder('Specify any additional details or items required...'),
+            ])
+            ->visible(fn () => $this->audit->canRequestChanges())
+            ->action(function (array $data) {
+                if (!empty($data['notes'])) {
+                    $this->audit->update(['notes' => $data['notes']]);
+                }
+                app(\App\Domain\Audit\Services\AuditReviewService::class)->requestChanges($this->audit);
+                $this->refreshAuditRelations();
+                \Filament\Notifications\Notification::make()
+                    ->title('Audit sent back to inspector')
+                    ->success()
+                    ->send();
+            });
+    }
+
+    public function reopenAuditAction(): Action
+    {
+        return Action::make('reopenAudit')
+            ->label('Reopen Audit')
+            ->color('warning')
+            ->icon('heroicon-o-arrow-path')
+            ->button()
+            ->requiresConfirmation()
+            ->modalHeading('Reopen Approved Audit')
+            ->modalDescription('Are you sure you want to reopen this approved audit? It will return to in-review status so findings can be updated.')
+            ->visible(fn () => $this->audit->canReopen())
+            ->action(function () {
+                app(\App\Domain\Audit\Services\AuditReviewService::class)->reopenAudit($this->audit, auth()->user());
+                $this->refreshAuditRelations();
+                \Filament\Notifications\Notification::make()
+                    ->title('Audit reopened successfully')
+                    ->success()
+                    ->send();
+            });
+    }
     public function approveItemAction(): Action
     {
         return Action::make('approveItem')
@@ -104,6 +183,58 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
                 if ($item) {
                     app(\App\Domain\Audit\Services\AuditReviewService::class)->rejectItem($item, auth()->user(), $data['reason'], $data['comment_type']);
                     $this->refreshAuditRelations();
+                }
+            });
+    }
+
+    public function resetItemAction(): Action
+    {
+        return Action::make('resetItem')
+            ->label('Reset Decision')
+            ->color('gray')
+            ->icon('heroicon-o-arrow-path')
+            ->button()
+            ->action(function (array $arguments) {
+                $item = AuditItem::find($arguments['item_id']);
+                if ($item) {
+                    app(\App\Domain\Audit\Services\AuditReviewService::class)->resetItem($item, auth()->user());
+                    $this->refreshAuditRelations();
+                }
+            });
+    }
+
+    public function toggleExcludeFromSyncAction(): Action
+    {
+        return Action::make('toggleExcludeFromSync')
+            ->label(function (array $arguments) {
+                $item = AuditItem::find($arguments['item_id'] ?? null);
+                return !empty($item?->snapshot_data['exclude_from_sync']) ? 'Include in Sync' : 'Exclude from Sync';
+            })
+            ->color(function (array $arguments) {
+                $item = AuditItem::find($arguments['item_id'] ?? null);
+                return !empty($item?->snapshot_data['exclude_from_sync']) ? 'success' : 'warning';
+            })
+            ->icon(function (array $arguments) {
+                $item = AuditItem::find($arguments['item_id'] ?? null);
+                return !empty($item?->snapshot_data['exclude_from_sync']) ? 'heroicon-o-check-circle' : 'heroicon-o-minus-circle';
+            })
+            ->button()
+            ->action(function (array $arguments) {
+                $item = AuditItem::find($arguments['item_id']);
+                if ($item) {
+                    $snapshot = $item->snapshot_data ?? [];
+                    $snapshot['exclude_from_sync'] = empty($snapshot['exclude_from_sync']);
+                    $item->update(['snapshot_data' => $snapshot]);
+                    $this->refreshAuditRelations();
+
+                    $msg = !empty($snapshot['exclude_from_sync'])
+                        ? "Item '{$item->name}' will be excluded from property sync."
+                        : "Item '{$item->name}' will be included in property sync.";
+
+                    \Filament\Notifications\Notification::make()
+                        ->title($msg)
+                        ->info()
+                        ->send();
                 }
             });
     }

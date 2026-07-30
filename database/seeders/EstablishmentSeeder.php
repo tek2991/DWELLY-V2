@@ -6,6 +6,8 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use App\Domain\Property\Models\EstablishmentType;
+use App\Domain\Geographic\Models\City;
+use App\Domain\Geographic\Models\District;
 
 class EstablishmentSeeder extends Seeder
 {
@@ -17,6 +19,13 @@ class EstablishmentSeeder extends Seeder
             $this->command->warn('Establishment types not found. Run ReferenceDataSeeder first.');
             return;
         }
+
+        $defaultDistrict = District::first() ?? District::create([
+            'state_id' => \Tek2991\Accounting\Models\State::first()?->id ?? 1,
+            'name' => 'General District',
+            'slug' => 'general-district',
+            'is_active' => true,
+        ]);
 
         $establishments = [
             [
@@ -67,6 +76,22 @@ class EstablishmentSeeder extends Seeder
                 'latitude' => 13.1989,
                 'longitude' => 77.7068,
             ],
+            [
+                'name' => 'Gauhati Medical College & Hospital',
+                'type' => 'Hospital',
+                'address' => 'Bhangagarh',
+                'city' => 'Guwahati',
+                'latitude' => 26.1554,
+                'longitude' => 91.7686,
+            ],
+            [
+                'name' => 'Lokpriya Gopinath Bordoloi International Airport',
+                'type' => 'Airport',
+                'address' => 'Borjhar',
+                'city' => 'Guwahati',
+                'latitude' => 26.1061,
+                'longitude' => 91.5859,
+            ],
         ];
 
         $now = now();
@@ -79,12 +104,21 @@ class EstablishmentSeeder extends Seeder
                 continue;
             }
 
+            $city = City::firstOrCreate(
+                ['name' => $est['city']],
+                [
+                    'slug' => Str::slug($est['city']),
+                    'district_id' => $defaultDistrict->id,
+                    'is_active' => true,
+                ]
+            );
+
             $data[] = [
                 'id' => (string) Str::ulid(),
                 'name' => $est['name'],
                 'establishment_type_id' => $typeId,
                 'address' => $est['address'],
-                'city' => $est['city'],
+                'city_id' => $city->id,
                 'latitude' => $est['latitude'],
                 'longitude' => $est['longitude'],
                 'created_at' => $now,

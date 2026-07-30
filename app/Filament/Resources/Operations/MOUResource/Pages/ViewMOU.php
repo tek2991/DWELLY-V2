@@ -247,7 +247,7 @@ class ViewMOU extends ViewRecord
                 ->label('Convert to Property')
                 ->icon('heroicon-o-building-office')
                 ->color('success')
-                ->visible(fn (?Mou $record) => $record?->status === MouStatus::VERIFIED)
+                ->visible(fn (?Mou $record) => $record?->status === MouStatus::VERIFIED && ($record?->type === \App\Domain\Mou\Enums\MouType::ONBOARDING || $record?->type === null))
                 ->requiresConfirmation()
                 ->action(function (?Mou $record = null) {
                     $property = app(\App\Domain\Property\Services\PropertyOnboardingService::class)->createPropertyFromMou($record);

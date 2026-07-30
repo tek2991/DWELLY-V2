@@ -32,7 +32,7 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
 
     public function mount(Audit $audit)
     {
-        $this->audit = $audit->load(['categories.items.source']);
+        $this->audit = $audit->load(['categories.items.source', 'media']);
         if ($this->audit->categories->isNotEmpty()) {
             $this->activeCategoryId = $this->audit->categories->first()->id;
         }
@@ -56,8 +56,17 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
 
     public function isAuditEditable(): bool
     {
-        return $this->audit->status === \App\Domain\Audit\Enums\AuditStatus::IN_PROGRESS;
+        return !$this->audit->is_locked 
+            && in_array($this->audit->status, [
+                \App\Domain\Audit\Enums\AuditStatus::IN_PROGRESS,
+                \App\Domain\Audit\Enums\AuditStatus::PARTIALLY_APPROVED
+            ]) 
+            && $this->audit->isInspector();
     }
+
+
+
+
 
     public function startAuditAction(): Action
     {
@@ -66,8 +75,16 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
             ->icon('heroicon-o-play')
             ->color('info')
             ->button()
-            ->visible(fn () => $this->audit->status === \App\Domain\Audit\Enums\AuditStatus::DRAFT)
+            ->visible(fn () => $this->audit->canStart())
             ->action(function () {
+                if (!$this->audit->canStart()) {
+                    \Filament\Notifications\Notification::make()
+                        ->title('Unauthorized')
+                        ->body('Only the assigned inspector can start this audit.')
+                        ->danger()
+                        ->send();
+                    return;
+                }
                 $this->audit->update(['status' => \App\Domain\Audit\Enums\AuditStatus::IN_PROGRESS]);
                 $this->audit->refresh();
                 \Filament\Notifications\Notification::make()
@@ -80,21 +97,48 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
 
     public function submitForReviewAction(): Action
     {
+        $pendingCount = $this->audit->items()->where('status', \App\Domain\Audit\Enums\ItemStatus::PENDING)->count();
+        $totalItems = $this->audit->items()->count();
+        $hasVideo = $this->audit->getFirstMedia('layout_video') !== null;
+        $isComplete = ($pendingCount === 0) && ($totalItems > 0) && $hasVideo;
+
+        $tooltip = null;
+        if (!$isComplete) {
+            if ($totalItems === 0) {
+                $tooltip = 'No items in audit to inspect.';
+            } elseif (!$hasVideo && $pendingCount > 0) {
+                $tooltip = "Property layout video must be uploaded and {$pendingCount} item(s) pending inspection.";
+            } elseif (!$hasVideo) {
+                $tooltip = 'Property layout video must be uploaded before submitting for approval.';
+            } else {
+                $tooltip = "All items must be inspected (100% progress) before submitting for approval. ({$pendingCount} item(s) pending)";
+            }
+        }
+
         return Action::make('submitForReview')
             ->label('Submit Audit for Approval')
             ->icon('heroicon-o-paper-airplane')
             ->color('success')
             ->button()
+            ->disabled(!$isComplete)
+            ->tooltip($tooltip)
             ->requiresConfirmation()
             ->modalHeading('Submit Audit for Review')
             ->modalDescription('Once submitted, you will not be able to edit items until the reviewer reviews them or requests changes.')
             ->visible(fn () => $this->audit->canSubmit())
             ->action(function () {
                 $pendingCount = $this->audit->items()->where('status', \App\Domain\Audit\Enums\ItemStatus::PENDING)->count();
-                if ($pendingCount > 0) {
+                $totalItems = $this->audit->items()->count();
+                $hasVideo = $this->audit->getFirstMedia('layout_video') !== null;
+
+                if ($pendingCount > 0 || $totalItems === 0 || !$hasVideo) {
+                    $msg = !$hasVideo 
+                        ? "Property layout video must be uploaded before submitting for review." 
+                        : "All audit items have to be inspected before submitting for review.";
+
                     \Filament\Notifications\Notification::make()
                         ->title('Cannot Submit Audit')
-                        ->body("All audit items have to be inspected before submitting for review. ({$pendingCount} item(s) pending inspection)")
+                        ->body($msg)
                         ->warning()
                         ->send();
                     return;
@@ -617,6 +661,42 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
     public ?string $editingEvidenceId = null;
     public ?string $currentItemId = null;
     public $uploads = [];
+    public $videoUpload = null;
+
+    public function updatedVideoUpload()
+    {
+        if (!$this->videoUpload || !$this->isAuditEditable()) {
+            $this->videoUpload = null;
+            return;
+        }
+
+        $this->audit->addMedia($this->videoUpload->getRealPath())
+            ->usingFileName($this->videoUpload->getClientOriginalName())
+            ->toMediaCollection('layout_video');
+
+        $this->videoUpload = null;
+        $this->audit->refresh();
+
+        \Filament\Notifications\Notification::make()
+            ->title('Property layout video uploaded successfully.')
+            ->success()
+            ->send();
+    }
+
+    public function deleteLayoutVideo()
+    {
+        if (!$this->isAuditEditable()) {
+            return;
+        }
+
+        $this->audit->clearMediaCollection('layout_video');
+        $this->audit->refresh();
+
+        \Filament\Notifications\Notification::make()
+            ->title('Property layout video removed.')
+            ->success()
+            ->send();
+    }
 
     public function updatedUploads()
     {
@@ -646,6 +726,15 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
     public function openEditor(string $evidenceId)
     {
         Log::info('openEditor called: ' . $evidenceId);
+        $evidence = \App\Domain\Audit\Models\AuditEvidence::with('auditItem')->find($evidenceId);
+        if (!$evidence || !$evidence->auditItem?->isEditable()) {
+            \Filament\Notifications\Notification::make()
+                ->title('Cannot edit photo annotations')
+                ->body('Annotations can only be modified for items that require changes.')
+                ->warning()
+                ->send();
+            return;
+        }
         $this->editingEvidenceId = $evidenceId;
         $this->unmountAction(false);
     }

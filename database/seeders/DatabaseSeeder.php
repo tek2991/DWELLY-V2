@@ -28,6 +28,7 @@ class DatabaseSeeder extends Seeder
             RegionsSeeder::class,
             \Tek2991\Accounting\Database\Seeders\DefaultChartOfAccountsSeeder::class,
             \Tek2991\Accounting\Database\Seeders\DemoDataSeeder::class,
+            EstablishmentSeeder::class,
         ]);
 
         $user->assignRole('Business Owner');

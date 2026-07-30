@@ -18,6 +18,17 @@ class InspectAudit extends Page
 
     public function mount(Audit $record): void
     {
+        if (empty($record->inspector_id)) {
+            \Filament\Notifications\Notification::make()
+                ->title('Inspector Required')
+                ->body('An inspector must be assigned before performing or inspecting this audit.')
+                ->warning()
+                ->send();
+
+            $this->redirect(AuditResource::getUrl('edit', ['record' => $record]));
+            return;
+        }
+
         $this->record = $record->load('categories.items.source', 'property');
     }
 

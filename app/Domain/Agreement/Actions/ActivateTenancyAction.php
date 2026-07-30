@@ -21,8 +21,10 @@ class ActivateTenancyAction
             $agreement->status = 'active';
             $agreement->save();
 
-            // 2. Transition Workflow to Active
-            // Legacy workflow engine removed
+            // 2. Lock linked Move-In Audit permanently
+            if ($agreement->audit) {
+                app(\App\Domain\Audit\Services\AuditReviewService::class)->lockAudit($agreement->audit, $actor);
+            }
 
             // 3. Mark property as occupied
             $property = $agreement->property;

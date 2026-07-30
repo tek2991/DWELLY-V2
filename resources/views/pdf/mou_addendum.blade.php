@@ -135,6 +135,10 @@
                 <td><strong>{{ $mou->bank_details['account_number'] ?? 'N/A' }}</strong></td>
             </tr>
             <tr>
+                <td class="info-label">Account Type:</td>
+                <td>{{ $mou->bank_details['account_type'] ?? 'Current' }}</td>
+            </tr>
+            <tr>
                 <td class="info-label">IFSC Code:</td>
                 <td>{{ $mou->bank_details['ifsc_code'] ?? 'N/A' }}</td>
             </tr>

@@ -17,7 +17,21 @@ class NumberingService
             $sequence = NumberingSequence::where('entity_type', $entityType)->lockForUpdate()->first();
             
             if (!$sequence) {
-                throw new \Exception("Numbering sequence not configured for entity: {$entityType}");
+                $prefix = match($entityType) {
+                    'tenancy' => 'TNC',
+                    'mou' => 'MOU',
+                    'audit' => 'AUD',
+                    default => strtoupper(substr($entityType, 0, 3)),
+                };
+
+                $sequence = NumberingSequence::create([
+                    'entity_type' => $entityType,
+                    'prefix' => $prefix,
+                    'pad_length' => 5,
+                    'include_year' => true,
+                    'year' => Carbon::now()->year,
+                    'last_sequence' => 0,
+                ]);
             }
 
             $currentYear = Carbon::now()->year;

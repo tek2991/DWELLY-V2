@@ -270,6 +270,7 @@
         <strong>Name of the Bank:</strong> <span class="form-line" style="width: 300px;">{{ $mou->bank_details['bank_name'] ?? '_______________________' }}</span><br>
         <strong>Address of the Bank:</strong> <span class="form-line" style="width: 300px;">{{ $mou->bank_details['bank_address'] ?? '_______________________' }}</span><br>
         <strong>Bank Account No.:</strong> <span class="form-line" style="width: 300px;">{{ $mou->bank_details['account_number'] ?? '_______________________' }}</span><br>
+        <strong>Account Type:</strong> <span class="form-line" style="width: 300px;">{{ $mou->bank_details['account_type'] ?? 'Current' }}</span><br>
         <strong>IFSC Code:</strong> <span class="form-line" style="width: 300px;">{{ $mou->bank_details['ifsc_code'] ?? '_______________________' }}</span>
     </p>
 
