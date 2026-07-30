@@ -9,18 +9,9 @@
     <!-- Audit Summary -->
     <x-filament::section>
         <x-slot name="heading">
-            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; flex-wrap: wrap; gap: 0.5rem;">
-                <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-                    <span style="font-size: 1.125rem; font-weight: 600;">Audit Summary</span>
-                    <span style="font-size: 0.875rem; font-weight: 500; color: #374151; background: #f3f4f6; padding: 0.25rem 0.75rem; border-radius: 0.375rem; border: 1px solid #e5e7eb;">
-                        📋 Type: <strong>{{ $audit->audit_type?->getLabel() ?? 'Audit' }}</strong>
-                    </span>
-                    <span style="font-size: 0.875rem; font-weight: 500; color: #374151; background: #f3f4f6; padding: 0.25rem 0.75rem; border-radius: 0.375rem; border: 1px solid #e5e7eb;">
-                        👤 Inspector: <strong>{{ $audit->inspector?->name ?? $audit->completedBy?->name ?? 'Unassigned' }}</strong>
-                    </span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                    <span style="font-size: 0.875rem; color: rgba(107, 114, 128, 1); background: rgba(243, 244, 246, 1); padding: 0.25rem 0.75rem; border-radius: 9999px; margin-right: 0.5rem;">
+            <x-audit-header :audit="$audit">
+                <x-slot name="actions">
+                    <span style="font-size: 0.875rem; color: rgba(107, 114, 128, 1); background: rgba(243, 244, 246, 1); padding: 0.25rem 0.75rem; border-radius: 9999px;">
                         Review Round: <strong>{{ $audit->review_round }}</strong>
                     </span>
 
@@ -31,8 +22,8 @@
                     @if($audit->canReopen())
                         {{ $this->reopenAuditAction }}
                     @endif
-                </div>
-            </div>
+                </x-slot>
+            </x-audit-header>
         </x-slot>
         
         <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin-top: 1rem;">

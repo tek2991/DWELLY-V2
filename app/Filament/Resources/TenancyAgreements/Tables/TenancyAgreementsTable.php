@@ -9,6 +9,7 @@ use Filament\Actions\Action;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Table;
+use App\Domain\Agreement\Models\TenancyAgreement;
 use App\Domain\Agreement\Services\TenancyAgreementPdfService;
 use App\Domain\Agreement\Services\TenancyAgreementDocxService;
 
@@ -24,10 +25,11 @@ class TenancyAgreementsTable
                     ->sortable()
                     ->weight('bold'),
 
-                TextColumn::make('property.building_name')
+                TextColumn::make('property.code')
                     ->label('Property')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->placeholder('-'),
 
                 TextColumn::make('audit.audit_number')
                     ->label('Linked Audit')
@@ -45,20 +47,37 @@ class TenancyAgreementsTable
                     ->sortable(),
 
                 TextColumn::make('status')
-                    ->badge()
-                    ->color(fn(string $state): string => match ($state) {
-                        'draft' => 'gray',
-                        'signed' => 'info',
-                        'active' => 'success',
-                        'terminated' => 'danger',
-                        default => 'primary',
-                    })
-                    ->sortable(),
+                    ->label('Status & Keys')
+                    ->html()
+                    ->formatStateUsing(function ($state, TenancyAgreement $record) {
+                        $statusState = strtolower((string)$state);
+                        $statusLabel = ucfirst($statusState);
 
-                IconColumn::make('keys_handed_over')
-                    ->label('Keys Handed Over')
-                    ->boolean()
-                    ->sortable(),
+                        $statusStyle = match ($statusState) {
+                            'draft' => 'background-color: #f1f5f9; color: #334155; border: 1px solid #cbd5e1;',
+                            'signed' => 'background-color: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;',
+                            'active' => 'background-color: #dcfce7; color: #15803d; border: 1px solid #bbf7d0;',
+                            'terminated' => 'background-color: #fee2e2; color: #b91c1c; border: 1px solid #fecaca;',
+                            default => 'background-color: #e0e7ff; color: #4338ca; border: 1px solid #c7d2fe;',
+                        };
+
+                        $baseStyle = 'display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; line-height: 1.25;';
+
+                        $statusBadge = '<span style="' . $baseStyle . ' ' . $statusStyle . '">' . e($statusLabel) . '</span>';
+
+                        if ($record->keys_handed_over) {
+                            $keyStyle = 'background-color: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; gap: 4px;';
+                            $keyBadge = '<span style="' . $baseStyle . ' ' . $keyStyle . '" title="Keys Handed Over"><svg style="width: 0.75rem; height: 0.75rem; color: #15803d;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>Keys Handed Over</span>';
+                        } else {
+                            $keyStyle = 'background-color: #fef3c7; color: #b45309; border: 1px solid #fde68a; gap: 4px;';
+                            $keyBadge = '<span style="' . $baseStyle . ' ' . $keyStyle . '" title="Keys Pending"><svg style="width: 0.75rem; height: 0.75rem; color: #b45309;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>Keys Pending</span>';
+                        }
+
+                        return '<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px;">' .
+                                    $statusBadge .
+                                    $keyBadge .
+                               '</div>';
+                    }),
 
                 TextColumn::make('start_date')
                     ->label('Start Date')
@@ -73,33 +92,7 @@ class TenancyAgreementsTable
             ->filters([
                 //
             ])
-            ->recordActions([
-                Action::make('download_pdf')
-                    ->label('Draft PDF')
-                    ->icon('heroicon-o-arrow-down-tray')
-                    ->color('primary')
-                    ->action(function ($record, TenancyAgreementPdfService $pdfService) {
-                        $binary = $pdfService->generatePdf($record);
-                        $filename = 'Tenancy_Agreement_Draft_' . ($record->code ?? $record->id) . '.pdf';
-                        return response()->streamDownload(fn() => print($binary), $filename, [
-                            'Content-Type' => 'application/pdf',
-                        ]);
-                    }),
-
-                Action::make('download_docx')
-                    ->label('Draft Word')
-                    ->icon('heroicon-o-document-text')
-                    ->color('success')
-                    ->action(function ($record, TenancyAgreementDocxService $docxService) {
-                        $binary = $docxService->generateDocx($record);
-                        $filename = 'Tenancy_Agreement_Draft_' . ($record->code ?? $record->id) . '.docx';
-                        return response()->streamDownload(fn() => print($binary), $filename, [
-                            'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                        ]);
-                    }),
-
-                EditAction::make(),
-            ])
+            ->recordActions([])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),

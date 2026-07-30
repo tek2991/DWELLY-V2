@@ -8,14 +8,13 @@ class PropertyOnboardingValidator
 {
     public function validate(Property $property): array
     {
-        $property->loadMissing(['rooms', 'inventories', 'furnishingType', 'photos', 'documents', 'utilities', 'pricingVersions', 'establishments']);
+        $property->loadMissing(['rooms', 'inventories', 'furnishingType', 'photos', 'utilities', 'pricingVersions', 'establishments']);
 
         $steps = [
             'property_info' => $this->validatePropertyInfo($property),
             'rooms' => $this->validateRooms($property),
             'inventory' => $this->validateInventory($property),
             'photos' => $this->validatePhotos($property),
-            'documents' => $this->validateDocuments($property),
             'utilities' => $this->validateUtilities($property),
             'financials' => $this->validateFinancials($property),
             'establishments' => $this->validateEstablishments($property),
@@ -102,36 +101,6 @@ class PropertyOnboardingValidator
             'is_valid' => $hasGeneralPhotos,
             'missing' => $hasGeneralPhotos ? [] : ['At least one general (non-room) photo is required for marketing.'],
             'tab' => 'photos',
-        ];
-    }
-
-    protected function validateDocuments(Property $property): array
-    {
-        $hasPropertyDocs = $property->documents->count() > 0;
-
-        $relevantMou = $property->mous()
-            ->whereIn('type', [
-                \App\Domain\Mou\Enums\MouType::ONBOARDING,
-                \App\Domain\Mou\Enums\MouType::KYC_UPDATE,
-                \App\Domain\Mou\Enums\MouType::BANK_DETAILS_UPDATE,
-            ])
-            ->latest()
-            ->first();
-        $targetModel = $relevantMou ?? $property;
-
-        $hasMediaDocs = \Spatie\MediaLibrary\MediaCollections\Models\Media::query()
-            ->where('model_type', get_class($targetModel))
-            ->where('model_id', $targetModel->id)
-            ->whereIn('collection_name', ['owner_aadhaar', 'owner_pan', 'cancelled_cheque', 'signatory_aadhaar', 'signatory_pan', 'signatory_poa', 'mou_attachments', 'signatory_documents', 'signed_pdf', 'draft_pdf'])
-            ->exists();
-
-        $isValid = $hasPropertyDocs || $hasMediaDocs;
-
-        return [
-            'name' => 'Documents',
-            'is_valid' => $isValid,
-            'missing' => $isValid ? [] : ['At least one document (Owner KYC / MOU Attachment) must be uploaded under Financial Terms & MOU.'],
-            'tab' => 'financials',
         ];
     }
 

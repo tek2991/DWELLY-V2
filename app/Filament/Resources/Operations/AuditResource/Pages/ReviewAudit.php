@@ -29,21 +29,6 @@ class ReviewAudit extends Page
         return 'Review Audit: ' . ($this->record->property->code ?? $this->record->id);
     }
 
-    public function getSubheading(): string | \Illuminate\Contracts\Support\Htmlable | null
-    {
-        $inspectorName = $this->record->inspector?->name ?? $this->record->completedBy?->name ?? 'Unassigned';
-        $property = $this->record->property;
-        $propertyName = $property?->building_name ?? $property?->address_line_1 ?? 'Property #' . $property?->id;
-
-        return new \Illuminate\Support\HtmlString(
-            '<div style="font-size: 0.875rem; color: rgba(107, 114, 128, 1); display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-top: 0.25rem;">' .
-                '<span>🏢 Property: <strong>' . e($propertyName) . '</strong></span>' .
-                '<span>👤 Inspector: <strong>' . e($inspectorName) . '</strong></span>' .
-                '<span>📋 Audit #: <strong>' . e($this->record->audit_number) . '</strong></span>' .
-            '</div>'
-        );
-    }
-
     protected function getHeaderActions(): array
     {
         return [

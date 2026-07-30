@@ -3,14 +3,14 @@
 namespace App\Domain\Agreement\Actions;
 
 use App\Domain\Agreement\Models\TenancyAgreement;
-use App\Domain\Finance\Services\AccountingBridgeService;
+use App\Domain\Finance\Services\AccountingProvisioningService;
 use Illuminate\Support\Facades\DB;
 use App\Models\User;
 
 class ActivateTenancyAction
 {
     public function __construct(
-        private AccountingBridgeService $accounting
+        private AccountingProvisioningService $accounting
     ) {}
 
     public function execute(TenancyAgreement $agreement, User $actor): TenancyAgreement

@@ -6,6 +6,7 @@ use App\Filament\Resources\TenancyAgreements\TenancyAgreementResource;
 use App\Domain\Agreement\Services\TenancyAgreementPdfService;
 use App\Domain\Agreement\Services\TenancyAgreementDocxService;
 use App\Domain\Agreement\Actions\ActivateTenancyAction;
+use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
@@ -97,12 +98,35 @@ class EditTenancyAgreement extends EditRecord
     public function activateTenancy(): void
     {
         $record = $this->getRecord();
+
+        if ($record->status === 'active') {
+            Notification::make()
+                ->title('Tenancy Already Active')
+                ->body('This tenancy agreement is already active.')
+                ->info()
+                ->send();
+            return;
+        }
+
+        $pending = \App\Filament\Resources\TenancyAgreements\Schemas\TenancyAgreementForm::getPendingActivationRequirements($record);
+
+        if (!empty($pending)) {
+            $formatted = implode('<br>• ', $pending);
+            Notification::make()
+                ->title('Cannot Activate Tenancy')
+                ->body('Please complete all onboarding requirements first:<br>• ' . $formatted)
+                ->danger()
+                ->persistent()
+                ->send();
+            return;
+        }
+
         try {
             app(ActivateTenancyAction::class)->execute($record, auth()->user());
 
             Notification::make()
                 ->title('Tenancy Activated Successfully')
-                ->body('Tenancy agreement is now active and property status has been set to occupied.')
+                ->body('Tenancy agreement is now active and property status set to occupied. The linked Move-In Audit is permanently locked.')
                 ->success()
                 ->send();
 
@@ -119,6 +143,16 @@ class EditTenancyAgreement extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('activateTenancyHeader')
+                ->label('Activate Tenancy')
+                ->icon('heroicon-o-bolt')
+                ->color('success')
+                ->requiresConfirmation()
+                ->modalHeading('Activate Tenancy Agreement')
+                ->modalDescription('Are you sure you want to activate this tenancy agreement? This will mark the property as Occupied, post initial accounting invoices, and permanently lock the linked Move-In Audit.')
+                ->visible(fn() => $this->getRecord()?->status !== 'active')
+                ->disabled(fn() => !\App\Filament\Resources\TenancyAgreements\Schemas\TenancyAgreementForm::canActivateTenancy($this->getRecord()))
+                ->action(fn() => $this->activateTenancy()),
             DeleteAction::make(),
         ];
     }

@@ -43,8 +43,17 @@ class DraftTenancyAgreementAction
             if (empty($agreementData['rent_amount'])) {
                 $agreementData['rent_amount'] = $latestPricing?->rent ?? 0.00;
             }
+            if (!isset($agreementData['first_month_rent']) || $agreementData['first_month_rent'] === '') {
+                $agreementData['first_month_rent'] = \App\Filament\Resources\TenancyAgreements\Schemas\TenancyAgreementForm::calculateProRatedFirstMonthRent(
+                    $agreementData['start_date'] ?? null,
+                    $agreementData['rent_amount'] ?? 0
+                );
+            }
             if (empty($agreementData['security_deposit'])) {
                 $agreementData['security_deposit'] = $latestPricing?->security_deposit ?? (($agreementData['rent_amount'] ?? 0) * 2);
+            }
+            if (!isset($agreementData['booking_amount'])) {
+                $agreementData['booking_amount'] = $latestPricing?->booking_amount ?? 0.00;
             }
             if (empty($agreementData['pricing_version_id']) && $latestPricing) {
                 $agreementData['pricing_version_id'] = $latestPricing->id;

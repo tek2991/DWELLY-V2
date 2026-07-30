@@ -20,23 +20,6 @@ class EditAudit extends EditRecord
                 ->color('primary')
                 ->url(fn () => AuditResource::getUrl('inspect', ['record' => $this->getRecord()])),
 
-            Action::make('startAudit')
-                ->label('Start Audit')
-                ->icon('heroicon-o-play')
-                ->color('info')
-                ->visible(fn () => $this->getRecord()->status === \App\Domain\Audit\Enums\AuditStatus::DRAFT)
-                ->action(function () {
-                    $this->getRecord()->update(['status' => \App\Domain\Audit\Enums\AuditStatus::IN_PROGRESS]);
-                    
-                    \Filament\Notifications\Notification::make()
-                        ->title('Audit started successfully')
-                        ->body('You can now inspect items and submit for review once all items are inspected.')
-                        ->success()
-                        ->send();
-
-                    $this->refreshFormData(['status']);
-                }),
-
             Action::make('review')
                 ->label('Open Review Page')
                 ->icon('heroicon-o-clipboard-document-check')
@@ -46,5 +29,17 @@ class EditAudit extends EditRecord
 
             Actions\DeleteAction::make(),
         ];
+    }
+
+    public function getSubheading(): string | \Illuminate\Support\HtmlString | null
+    {
+        $record = $this->getRecord();
+        if (!$record) {
+            return null;
+        }
+
+        return new \Illuminate\Support\HtmlString(
+            view('components.audit-header', ['audit' => $record->loadMissing(['property', 'inspector'])])->render()
+        );
     }
 }

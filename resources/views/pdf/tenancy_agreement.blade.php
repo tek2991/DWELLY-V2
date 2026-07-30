@@ -282,6 +282,8 @@
         </tr>
     </table>
 
+    <div class="page-break"></div>
+
     <!-- ANNEXURE II -->
     <div class="header" style="margin-top: 40px;">
         <h2>Annexure II – Security Deposit Refund Account Information</h2>
@@ -325,11 +327,51 @@
     <!-- ANNEXURE III -->
     <div class="header">
         <h2>Annexure III – Furnishing / Electrical / Electronic Items Information</h2>
-        <p style="font-size: 12px; color: #555;">(Pulled from Audit Reference: {{ $audit->audit_number ?? 'N/A' }})</p>
+        <p style="font-size: 12px; color: #555;">(Pulled from Move-In Audit Reference: {{ $audit->audit_number ?? 'N/A' }})</p>
     </div>
-    <p>Sub: List of furnishing/electrical/electronic items equipped in the licensed premise.</p>
+    <p>Sub: List of rooms, inventory, furnishing, and electrical/electronic items equipped in the licensed premise, organized by room.</p>
 
-    @if(isset($auditCategories) && count($auditCategories) > 0)
+    @if(isset($roomGroupedItems) && count($roomGroupedItems) > 0)
+        @foreach($roomGroupedItems as $group)
+            <div style="margin-top: 18px; page-break-inside: avoid;">
+                <div style="background-color: #f1f5f9; border-left: 4px solid #2563eb; padding: 6px 10px; margin-bottom: 6px; border-radius: 2px;">
+                    <strong style="font-size: 13px; color: #1e3a8a;">{{ $group['room_name'] }}</strong>
+                    @if(!empty($group['room_item']))
+                        <span style="font-size: 11px; color: #475569; margin-left: 8px;">
+                            (Room Condition: <strong>{{ $group['room_item']->condition->value ?? $group['room_item']->condition ?? 'Good' }}</strong>)
+                        </span>
+                    @endif
+                </div>
+
+                @if(!empty($group['items']) && count($group['items']) > 0)
+                    <table class="audit-table">
+                        <thead>
+                            <tr>
+                                <th width="6%">#</th>
+                                <th width="44%">Item / Fitting Name</th>
+                                <th width="15%">Condition</th>
+                                <th width="35%">Notes / Remarks</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($group['items'] as $index => $item)
+                                <tr>
+                                    <td>{{ $index + 1 }}</td>
+                                    <td><strong>{{ $item->display_name ?? $item->name }}</strong></td>
+                                    <td>{{ $item->condition->value ?? $item->condition ?? 'Good' }}</td>
+                                    <td>{{ $item->remarks ?? $item->snapshot_data['notes'] ?? '-' }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                @else
+                    <p style="font-size: 11px; font-style: italic; color: #64748b; margin: 4px 0 10px 10px;">
+                        No specific inventory or fittings listed for this room.
+                    </p>
+                @endif
+            </div>
+        @endforeach
+    @elseif(isset($auditCategories) && count($auditCategories) > 0)
         @foreach($auditCategories as $category)
             <div style="margin-top: 15px;">
                 <h4 style="background: #eef2f7; padding: 4px 8px; margin-bottom: 4px; border-left: 4px solid #3b82f6;">

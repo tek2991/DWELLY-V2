@@ -20,4 +20,15 @@ enum AuditType: string
             self::SAFETY => 'Safety Inspection',
         };
     }
+
+    public function getColor(): string
+    {
+        return match ($this) {
+            self::MOVE_IN => 'info',
+            self::MOVE_OUT => 'purple',
+            self::PERIODIC => 'teal',
+            self::MAINTENANCE => 'warning',
+            self::SAFETY => 'success',
+        };
+    }
 }

@@ -313,6 +313,7 @@ class AuditReviewService
 
         $audit->update([
             'is_locked' => true,
+            'status' => AuditStatus::COMPLETED,
             'locked_at' => now(),
             'locked_by_id' => $actor?->id ?? auth()->id(),
         ]);

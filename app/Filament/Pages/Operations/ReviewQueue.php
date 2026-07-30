@@ -18,27 +18,13 @@ class ReviewQueue extends Page implements HasTable
 
     protected string $view = 'filament.pages.operations.review-queue';
 
-    public static function getNavigationIcon(): string|\Illuminate\Contracts\Support\Htmlable|null
-    {
-        return 'heroicon-o-inbox-stack';
-    }
+    protected static ?string $cluster = \App\Filament\Clusters\AuditsCluster::class;
 
-    public static function getNavigationSort(): ?int
-    {
-        return 3;
-    }
+    protected static ?string $navigationLabel = 'Review Queue';
+
+    protected static ?int $navigationSort = 3;
 
     public function getTitle(): string|\Illuminate\Contracts\Support\Htmlable
-    {
-        return 'Review Queue';
-    }
-
-    public static function getNavigationGroup(): ?string
-    {
-        return 'Operations';
-    }
-
-    public static function getNavigationLabel(): string
     {
         return 'Review Queue';
     }
@@ -63,12 +49,9 @@ class ReviewQueue extends Page implements HasTable
             ])
             ->actions([
                 Action::make('review')
-                    ->label(fn (Audit $record) => $record->reviewer_id === auth()->id() ? 'Continue Review' : ($record->reviewer_id ? 'View' : 'Claim & Review'))
+                    ->label(fn (Audit $record) => $record->reviewer_id === auth()->id() ? 'Review Audit' : 'View Audit')
                     ->icon('heroicon-o-magnifying-glass')
                     ->action(function (Audit $record) {
-                        if (!$record->reviewer_id && (auth()->user()->can('audit.review') || auth()->user()->can('audit.approve'))) {
-                            $record->update(['reviewer_id' => auth()->id()]);
-                        }
                         return redirect(AuditResource::getUrl('review', ['record' => $record]));
                     }),
             ])

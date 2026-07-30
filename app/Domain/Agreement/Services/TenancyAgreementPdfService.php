@@ -13,8 +13,10 @@ class TenancyAgreementPdfService
         $agreement->load([
             'property',
             'property.owner',
+            'property.rooms.roomDefinition',
+            'property.inventories.inventoryType',
             'audit',
-            'audit.categories.items',
+            'audit.categories.items.source',
             'roles.party',
             'roles.party.individual',
             'roles.party.addresses',
@@ -52,6 +54,7 @@ class TenancyAgreementPdfService
         ];
 
         $auditCategories = $agreement->audit ? $agreement->audit->categories : collect();
+        $roomGroupedItems = $this->organizeAuditByRoom($agreement);
 
         $pdf = Pdf::loadView('pdf.tenancy_agreement', [
             'agreement' => $agreement,
@@ -67,6 +70,7 @@ class TenancyAgreementPdfService
             'tenantBankDetails' => $tenantBankDetails,
             'audit' => $agreement->audit,
             'auditCategories' => $auditCategories,
+            'roomGroupedItems' => $roomGroupedItems,
         ]);
 
         return $pdf->output();
@@ -82,6 +86,128 @@ class TenancyAgreementPdfService
 
         $agreement->clearMediaCollection('draft_pdf');
         $agreement->addMedia($tempPath)->toMediaCollection('draft_pdf');
+    }
+
+    public function organizeAuditByRoom(TenancyAgreement $agreement): array
+    {
+        $audit = $agreement->audit;
+        if (!$audit || !$audit->categories || $audit->categories->isEmpty()) {
+            return [];
+        }
+
+        $allCategories = $audit->categories;
+        
+        $categoryNames = $allCategories->pluck('name')->map(fn($n) => strtolower(trim($n)))->toArray();
+        $hasStandardCategories = in_array('rooms', $categoryNames) || in_array('inventory', $categoryNames);
+
+        if (!$hasStandardCategories) {
+            $grouped = [];
+            foreach ($allCategories as $category) {
+                $grouped[] = [
+                    'room_name' => $category->name,
+                    'room_item' => null,
+                    'items' => $category->items->all(),
+                ];
+            }
+            return $grouped;
+        }
+
+        $allItems = $allCategories->flatMap->items;
+        $roomMap = [];
+        $grouped = [];
+
+        // Identify Room items
+        $roomCategory = $allCategories->firstWhere(fn($c) => strtolower(trim($c->name)) === 'rooms');
+        $roomItems = $roomCategory ? $roomCategory->items : $allItems->filter(function ($item) {
+            $stagedType = $item->snapshot_data['staged_type'] ?? null;
+            return $item->source_type === \App\Domain\Property\Models\PropertyRoom::class || $stagedType === 'room';
+        });
+
+        foreach ($roomItems as $roomItem) {
+            $roomName = $roomItem->name;
+            $roomKey = 'room_' . ($roomItem->source_id ?? $roomItem->id);
+
+            $grouped[$roomKey] = [
+                'room_name' => $roomName,
+                'room_item' => $roomItem,
+                'items' => [],
+            ];
+
+            if ($roomItem->source_id) {
+                $roomMap['prop_room_' . $roomItem->source_id] = $roomKey;
+            }
+            $roomMap['audit_item_' . $roomItem->id] = $roomKey;
+            $roomMap['name_' . strtolower(trim($roomName))] = $roomKey;
+        }
+
+        if ($agreement->property && $agreement->property->rooms) {
+            foreach ($agreement->property->rooms as $pRoom) {
+                $name = $pRoom->custom_name ?: ($pRoom->roomDefinition->name ?? 'Room');
+                $matchedKey = 'name_' . strtolower(trim($name));
+                if (isset($roomMap[$matchedKey])) {
+                    $roomMap['prop_room_' . $pRoom->id] = $roomMap[$matchedKey];
+                } else {
+                    $roomKey = 'prop_room_' . $pRoom->id;
+                    if (!isset($grouped[$roomKey])) {
+                        $grouped[$roomKey] = [
+                            'room_name' => $name,
+                            'room_item' => null,
+                            'items' => [],
+                        ];
+                        $roomMap['prop_room_' . $pRoom->id] = $roomKey;
+                        $roomMap['name_' . strtolower(trim($name))] = $roomKey;
+                    }
+                }
+            }
+        }
+
+        // Assign Inventory & Other items to Rooms
+        $nonRoomItems = $allItems->reject(fn($item) => $roomItems->contains('id', $item->id));
+
+        foreach ($nonRoomItems as $item) {
+            $assignedRoomKey = null;
+
+            $propRoomId = $item->snapshot_data['room_id'] 
+                ?? $item->snapshot_data['property_room_id'] 
+                ?? ($item->source instanceof \App\Domain\Property\Models\PropertyInventory ? $item->source->property_room_id : null);
+
+            if ($propRoomId && isset($roomMap['prop_room_' . $propRoomId])) {
+                $assignedRoomKey = $roomMap['prop_room_' . $propRoomId];
+            }
+
+            if (!$assignedRoomKey && !empty($item->snapshot_data['staged_room_item_id'])) {
+                $stagedId = $item->snapshot_data['staged_room_item_id'];
+                if (isset($roomMap['audit_item_' . $stagedId])) {
+                    $assignedRoomKey = $roomMap['audit_item_' . $stagedId];
+                }
+            }
+
+            if (!$assignedRoomKey && preg_match('/\(([^)]+)\)$/', $item->name, $matches)) {
+                $extractedRoomName = strtolower(trim($matches[1]));
+                if (isset($roomMap['name_' . $extractedRoomName])) {
+                    $assignedRoomKey = $roomMap['name_' . $extractedRoomName];
+                }
+            }
+
+            $clonedItem = clone $item;
+            if ($assignedRoomKey && isset($grouped[$assignedRoomKey])) {
+                $clonedItem->display_name = trim(preg_replace('/\s*\([^)]+\)$/', '', $item->name));
+                $grouped[$assignedRoomKey]['items'][] = $clonedItem;
+            } else {
+                $generalKey = 'general';
+                if (!isset($grouped[$generalKey])) {
+                    $grouped[$generalKey] = [
+                        'room_name' => 'General Premises & Utilities',
+                        'room_item' => null,
+                        'items' => [],
+                    ];
+                }
+                $clonedItem->display_name = $item->name;
+                $grouped[$generalKey]['items'][] = $clonedItem;
+            }
+        }
+
+        return array_values(array_filter($grouped, fn($g) => !empty($g['room_item']) || !empty($g['items'])));
     }
 
     private function numberToWords(int $number): string

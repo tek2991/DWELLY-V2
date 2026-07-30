@@ -14,8 +14,10 @@ class TenancyAgreementDocxService
         $agreement->load([
             'property',
             'property.owner',
+            'property.rooms.roomDefinition',
+            'property.inventories.inventoryType',
             'audit',
-            'audit.categories.items',
+            'audit.categories.items.source',
             'roles.party',
             'roles.party.individual',
             'roles.party.addresses',
@@ -117,7 +119,7 @@ class TenancyAgreementDocxService
         $this->addTableRow($table1, 'Account Type', 'Current');
         $this->addTableRow($table1, 'IFSC Code', 'INDB0000662');
 
-        $section->addTextBreak(1);
+        $section->addPageBreak();
 
         // Annexure II
         $section->addText('Annexure II – Security Deposit Refund Account Information', $titleStyle, $paraStyle);
@@ -135,24 +137,36 @@ class TenancyAgreementDocxService
         // Annexure III
         $section->addText('Annexure III – Furnishing / Electrical / Electronic Items Information', $titleStyle, $paraStyle);
         $auditNumber = $agreement->audit ? $agreement->audit->audit_number : 'N/A';
-        $section->addText("List of items equipped in licensed premise (Ref: {$auditNumber}):", ['italic' => true], $paraStyle);
+        $section->addText("List of rooms, inventory, furnishing, and electrical/electronic items equipped in the licensed premise (Ref: {$auditNumber}), organized by room:", ['italic' => true], $paraStyle);
 
-        if ($agreement->audit && $agreement->audit->categories) {
-            foreach ($agreement->audit->categories as $category) {
-                $section->addText($category->name, ['bold' => true, 'size' => 12], ['spaceBefore' => 120, 'spaceAfter' => 60]);
-                $table3 = $section->addTable(['borderSize' => 6, 'borderColor' => 'CCCCCC', 'cellMargin' => 60]);
-                $table3->addRow();
-                $table3->addCell(800)->addText('#', ['bold' => true]);
-                $table3->addCell(3500)->addText('Item Name', ['bold' => true]);
-                $table3->addCell(2000)->addText('Condition', ['bold' => true]);
-                $table3->addCell(3500)->addText('Notes', ['bold' => true]);
+        $roomGroupedItems = app(TenancyAgreementPdfService::class)->organizeAuditByRoom($agreement);
 
-                foreach ($category->items as $idx => $item) {
+        if (!empty($roomGroupedItems)) {
+            foreach ($roomGroupedItems as $group) {
+                $roomTitle = $group['room_name'];
+                if (!empty($group['room_item'])) {
+                    $cond = $group['room_item']->condition->value ?? $group['room_item']->condition ?? 'Good';
+                    $roomTitle .= " (Room Condition: {$cond})";
+                }
+                $section->addText($roomTitle, ['bold' => true, 'size' => 12], ['spaceBefore' => 140, 'spaceAfter' => 60]);
+
+                if (!empty($group['items'])) {
+                    $table3 = $section->addTable(['borderSize' => 6, 'borderColor' => 'CCCCCC', 'cellMargin' => 60]);
                     $table3->addRow();
-                    $table3->addCell(800)->addText($idx + 1);
-                    $table3->addCell(3500)->addText($item->name ?? '');
-                    $table3->addCell(2000)->addText($item->condition->value ?? $item->condition ?? 'Good');
-                    $table3->addCell(3500)->addText($item->remarks ?? $item->snapshot_data['notes'] ?? '-');
+                    $table3->addCell(800)->addText('#', ['bold' => true]);
+                    $table3->addCell(4000)->addText('Item / Fitting Name', ['bold' => true]);
+                    $table3->addCell(2000)->addText('Condition', ['bold' => true]);
+                    $table3->addCell(3000)->addText('Notes / Remarks', ['bold' => true]);
+
+                    foreach ($group['items'] as $idx => $item) {
+                        $table3->addRow();
+                        $table3->addCell(800)->addText($idx + 1);
+                        $table3->addCell(4000)->addText($item->display_name ?? $item->name ?? '');
+                        $table3->addCell(2000)->addText($item->condition->value ?? $item->condition ?? 'Good');
+                        $table3->addCell(3000)->addText($item->remarks ?? $item->snapshot_data['notes'] ?? '-');
+                    }
+                } else {
+                    $section->addText('No specific inventory or fittings listed for this room.', ['italic' => true]);
                 }
             }
         } else {

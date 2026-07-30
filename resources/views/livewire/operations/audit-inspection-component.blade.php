@@ -15,43 +15,15 @@
         <div style="display: flex; flex-direction: column; gap: 1.25rem; width: 100%;">
             
             <!-- Row 1: Audit Info & Single Primary Action Button at Top Right -->
-            <div style="display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
-                <div>
-                    <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-                        <h3 style="font-size: 1.25rem; font-weight: 700; margin: 0; color: rgba(17, 24, 39, 1);">
-                            {{ $audit->property->building_name ?? 'Property' }}
-                            @if($audit->property?->code)
-                                <span style="font-size: 1rem; font-weight: 500; color: rgba(107, 114, 128, 1);">({{ $audit->property->code }})</span>
-                            @endif
-                        </h3>
-                        <x-filament::badge :color="$audit->status?->getColor() ?? 'gray'" size="md">
-                            {{ $audit->status?->getLabel() ?? 'Draft' }}
-                        </x-filament::badge>
-                        @if($audit->is_locked)
-                            <x-filament::badge color="danger" size="md" icon="heroicon-o-lock-closed">
-                                Permanently Locked
-                            </x-filament::badge>
-                        @endif
-                    </div>
-
-                    <div style="font-size: 0.875rem; color: rgba(107, 114, 128, 1); margin-top: 0.375rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                        <span>Audit: <strong>{{ $audit->audit_number }}</strong></span>
-                        <span>&bull;</span>
-                        <span>Type: <strong>{{ $audit->audit_type?->getLabel() }}</strong></span>
-                        <span>&bull;</span>
-                        <span>Inspector: <strong>{{ $audit->inspector?->name ?? 'Unassigned' }}</strong></span>
-                    </div>
-                </div>
-
-                <!-- Action Buttons (Top Right) -->
-                <div style="display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; flex-wrap: wrap;">
+            <x-audit-header :audit="$audit">
+                <x-slot name="actions">
                     @if($audit->status === \App\Domain\Audit\Enums\AuditStatus::DRAFT)
                         {{ $this->startAuditAction }}
                     @elseif($audit->canSubmit())
                         {{ $this->submitForReviewAction }}
                     @endif
-                </div>
-            </div>
+                </x-slot>
+            </x-audit-header>
 
             <!-- Row 2: Status & Permission Notice Banners -->
             @if(!$audit->isInspector())

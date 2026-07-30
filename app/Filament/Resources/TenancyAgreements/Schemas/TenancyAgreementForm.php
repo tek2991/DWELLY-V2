@@ -123,6 +123,25 @@ class TenancyAgreementForm
                             })
                             ->searchable()
                             ->required()
+                            ->live()
+                            ->afterStateUpdated(function (?string $state, Set $set) {
+                                if ($state) {
+                                    $property = \App\Domain\Property\Models\Property::find($state);
+                                    $pricing = $property?->pricingVersions()->latest('effective_from')->first();
+                                    if ($pricing && !empty($pricing->booking_amount)) {
+                                        $set('booking_amount', $pricing->booking_amount);
+                                    }
+                                }
+                            })
+                            ->columnSpanFull(),
+
+                        TextInput::make('booking_amount')
+                            ->label('Booking Token Amount')
+                            ->numeric()
+                            ->prefix('₹')
+                            ->placeholder('e.g. 5000')
+                            ->required()
+                            ->helperText('Advance token/booking amount collected at onboarding initiation')
                             ->columnSpanFull(),
 
                         DatePicker::make('start_date')
@@ -130,12 +149,21 @@ class TenancyAgreementForm
                             ->required()
                             ->live(onBlur: true)
                             ->afterStateUpdated(function (Get $get, Set $set, ?string $state) {
-                                if ($state && !$get('end_date')) {
-                                    try {
-                                        $startDate = \Illuminate\Support\Carbon::parse($state);
-                                        $set('end_date', $startDate->copy()->addMonths(11)->subDay()->format('Y-m-d'));
-                                    } catch (\Throwable $e) {
-                                        // ignore
+                                if ($state) {
+                                    if (!$get('end_date')) {
+                                        try {
+                                            $startDate = \Illuminate\Support\Carbon::parse($state);
+                                            $set('end_date', $startDate->copy()->addMonths(11)->subDay()->format('Y-m-d'));
+                                        } catch (\Throwable $e) {
+                                            // ignore
+                                        }
+                                    }
+                                    $propertyId = $get('property_id');
+                                    if ($propertyId) {
+                                        $property = \App\Domain\Property\Models\Property::find($propertyId);
+                                        $pricing = $property?->pricingVersions()->latest('effective_from')->first();
+                                        $rent = $pricing?->rent ?? 0;
+                                        $set('first_month_rent', static::calculateProRatedFirstMonthRent($state, $rent));
                                     }
                                 }
                             }),
@@ -143,6 +171,15 @@ class TenancyAgreementForm
                         DatePicker::make('end_date')
                             ->label('Agreement End Date')
                             ->required(),
+
+                        TextInput::make('first_month_rent')
+                            ->label("First Month Rent (Pro-rated / Custom)")
+                            ->numeric()
+                            ->prefix('₹')
+                            ->placeholder('e.g. 15000')
+                            ->required()
+                            ->helperText('Supports manual input for proportional mid-month move-in dates.')
+                            ->columnSpanFull(),
                     ])->columns(2),
 
                 Section::make('3. Tenant KYC & Document Collection')
@@ -282,7 +319,7 @@ class TenancyAgreementForm
                             : (string) ($audit?->status ?? '');
                         $s1 = (bool) ($audit && in_array($auditStatusValue, ['approved', 'completed']));
                         $s2 = static::areTermsComplete($record);
-                        $s3 = (bool) $record->signed_by_tenant;
+                        $s3 = (bool) ($record->signed_by_tenant && $record->hasMedia('signed_agreement'));
                         $s4 = (bool) $record->keys_handed_over || $status === 'active';
 
                         $completedCount = ($s1 ? 1 : 0) + ($s2 ? 1 : 0) + ($s3 ? 1 : 0) + ($s4 ? 1 : 0);
@@ -308,10 +345,35 @@ class TenancyAgreementForm
 
                         $card1 = $getStepStyle($s1, '1. Move-In Audit', $s1 ? 'Audit approved' : 'Pending audit approval');
                         $card2 = $getStepStyle($s2, '2. Terms & Drafts', $s2 ? 'Terms set & drafts ready' : 'Fill all agreement terms & bank details');
-                        $card3 = $getStepStyle($s3, '3. Signed & KYC', $s3 ? 'Agreement executed & KYC uploaded' : 'Upload signed PDF & KYC');
+                        $card3 = $getStepStyle($s3, '3. Signed Agreement', $s3 ? 'Agreement executed & signed' : 'Upload signed agreement PDF');
                         $card4 = $getStepStyle($s4, '4. Keys & Active', $s4 ? 'Keys handed over & tenancy active' : 'Handover keys & activate');
 
                         $badgeBg = $status === 'active' ? '#10b981' : '#3b82f6';
+
+                        $pendingList = static::getPendingActivationRequirements($record);
+                        $canActivate = empty($pendingList) && $status !== 'active';
+
+                        if ($status === 'active') {
+                            $activationBannerHtml = '<div style="margin-top: 1rem; padding: 0.85rem 1.25rem; background-color: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 0.5rem; display: flex; align-items: center; justify-content: space-between;">' .
+                                '<div style="display: flex; align-items: center; gap: 8px; color: #047857; font-weight: 700; font-size: 14px;">' .
+                                '<span>✓ Tenancy Agreement is Active</span>' .
+                                '<span style="font-size: 12px; font-weight: 500; color: #059669;">&bull; Move-In Audit is permanently locked</span>' .
+                                '</div>' .
+                                '</div>';
+                        } elseif ($canActivate) {
+                            $activationBannerHtml = '<div style="margin-top: 1rem; padding: 0.85rem 1.25rem; background-color: rgba(22, 163, 74, 0.08); border: 1px solid rgba(22, 163, 74, 0.3); border-radius: 0.5rem; display: flex; align-items: center; justify-content: space-between;">' .
+                                '<div>' .
+                                '<div style="font-weight: 700; font-size: 14px; color: #15803d;">⚡ All Onboarding Checks Complete!</div>' .
+                                '<div style="font-size: 12px; color: rgba(128, 128, 128, 0.9); margin-top: 2px;">Click the <strong>Activate Tenancy</strong> button at the top right to activate tenancy and lock the Move-In Audit.</div>' .
+                                '</div>' .
+                                '</div>';
+                        } else {
+                            $pendingText = 'Pending checks: ' . implode(', ', array_map('lcfirst', $pendingList));
+                            $activationBannerHtml = '<div style="margin-top: 1rem; padding: 0.85rem 1.25rem; background-color: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 0.5rem;">' .
+                                '<div style="font-weight: 700; font-size: 13px; color: #b45309;">⚠️ Tenancy Activation Pending</div>' .
+                                '<div style="font-size: 12px; color: rgba(128, 128, 128, 0.85); margin-top: 2px;">' . e($pendingText) . '</div>' .
+                                '</div>';
+                        }
 
                         return new HtmlString(
                             '<div style="background-color: rgba(128, 128, 128, 0.03); border: 1px solid rgba(128, 128, 128, 0.2); border-radius: 0.75rem; padding: 1.25rem; margin-bottom: 1.5rem; font-family: ui-sans-serif, system-ui, sans-serif; color: inherit;">' .
@@ -350,6 +412,9 @@ class TenancyAgreementForm
                                 '<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.75rem;">' .
                                 $card1 . $card2 . $card3 . $card4 .
                                 '</div>' .
+
+                                '<!-- Top Activation Banner -->' .
+                                $activationBannerHtml .
                                 '</div>'
                         );
                     })
@@ -455,6 +520,10 @@ class TenancyAgreementForm
                                         if ($state && !$get('security_deposit')) {
                                             $set('security_deposit', (float)$state * 2);
                                         }
+                                        $startDate = $get('start_date');
+                                        if ($startDate && $state) {
+                                            $set('first_month_rent', static::calculateProRatedFirstMonthRent($startDate, $state));
+                                        }
                                     }),
 
                                 TextInput::make('security_deposit')
@@ -470,6 +539,19 @@ class TenancyAgreementForm
                                         return $pricing?->security_deposit ?? ($pricing?->rent ? $pricing->rent * 2 : null);
                                     })
                                     ->helperText('Defaults to property pricing model terms or 2 months rent'),
+
+                                TextInput::make('booking_amount')
+                                    ->label('Booking Token Amount')
+                                    ->numeric()
+                                    ->prefix('₹')
+                                    ->required()
+                                    ->default(function ($record) {
+                                        if ($record && !is_null($record->booking_amount)) {
+                                            return $record->booking_amount;
+                                        }
+                                        return $record?->property?->pricingVersions()?->latest('effective_from')?->first()?->booking_amount ?? 0.00;
+                                    })
+                                    ->helperText('Advance token/booking amount collected at onboarding initiation'),
 
                                 DatePicker::make('start_date')->required(),
                                 DatePicker::make('end_date')->required(),
@@ -576,9 +658,105 @@ class TenancyAgreementForm
                                             '</div>'
                                     ))
                                     ->columnSpanFull(),
+
+                                Section::make('Tenant KYC & Verification Documents')
+                                    ->description('View, upload, or update tenant identity, address, and bank verification documents.')
+                                    ->schema([
+                                        Grid::make(3)
+                                            ->schema([
+                                                SpatieMediaLibraryFileUpload::make('tenant_aadhaar')
+                                                    ->collection('tenant_aadhaar')
+                                                    ->label('Tenant Aadhaar Card')
+                                                    ->helperText('Front & Back image or PDF')
+                                                    ->downloadable()
+                                                    ->openable(),
+
+                                                SpatieMediaLibraryFileUpload::make('tenant_pan')
+                                                    ->collection('tenant_pan')
+                                                    ->label('Tenant PAN Card')
+                                                    ->helperText('Clear image or PDF')
+                                                    ->downloadable()
+                                                    ->openable(),
+
+                                                SpatieMediaLibraryFileUpload::make('cancelled_cheque')
+                                                    ->collection('cancelled_cheque')
+                                                    ->label('Cancelled Cheque / Bank Proof')
+                                                    ->helperText('Cancelled Cheque or Passbook')
+                                                    ->downloadable()
+                                                    ->openable(),
+                                            ]),
+
+                                        SpatieMediaLibraryFileUpload::make('kyc_documents')
+                                            ->label('Additional Tenant KYC Attachments')
+                                            ->collection('kyc_documents')
+                                            ->multiple()
+                                            ->reorderable()
+                                            ->downloadable()
+                                            ->openable()
+                                            ->columnSpanFull(),
+
+                                        \Filament\Schemas\Components\Actions::make([
+                                            \Filament\Actions\Action::make('uploadDocumentModal')
+                                                ->label('Upload additional document')
+                                                ->icon('heroicon-o-arrow-up-tray')
+                                                ->color('primary')
+                                                ->button()
+                                                ->modalHeading('Upload Document (Select Type & File)')
+                                                ->modalDescription('Select document type (Passport, Voter ID, Police Verification, Income Proof, Sale Deed, etc.) and attach file.')
+                                                ->form([
+                                                    Select::make('document_type')
+                                                        ->label('Document Type')
+                                                        ->options(\App\Domain\Shared\Enums\DocumentType::class)
+                                                        ->required()
+                                                        ->searchable(),
+                                                    \Filament\Forms\Components\FileUpload::make('files')
+                                                        ->label('Files (Images / PDF)')
+                                                        ->multiple()
+                                                        ->preserveFilenames()
+                                                        ->required(),
+                                                ])
+                                                ->action(function (array $data, ?\App\Domain\Agreement\Models\TenancyAgreement $record, Set $set, Get $get) {
+                                                    $collection = match ($data['document_type']) {
+                                                        'aadhaar', 'tenant_aadhaar' => 'tenant_aadhaar',
+                                                        'pan', 'tenant_pan' => 'tenant_pan',
+                                                        'cancelled_cheque' => 'cancelled_cheque',
+                                                        default => 'kyc_documents',
+                                                    };
+
+                                                    if ($record && $record->exists) {
+                                                        foreach ($data['files'] as $path) {
+                                                            $fullPath = \Illuminate\Support\Facades\Storage::disk(config('filament.default_filesystem_disk'))->path($path);
+                                                            if (!file_exists($fullPath)) {
+                                                                $fullPath = \Illuminate\Support\Facades\Storage::disk('public')->path($path);
+                                                            }
+
+                                                            $record->addMedia($fullPath)
+                                                                ->withCustomProperties([
+                                                                    'document_type' => $data['document_type'],
+                                                                ])
+                                                                ->toMediaCollection($collection);
+                                                        }
+                                                        $record->refresh();
+                                                        \Filament\Notifications\Notification::make()->title('Document Uploaded Successfully')->success()->send();
+                                                    } else {
+                                                        $existing = $get($collection) ?? [];
+                                                        if (is_string($existing)) {
+                                                            $existing = [$existing];
+                                                        }
+                                                        $merged = array_values(array_unique(array_merge((array)$existing, (array)$data['files'])));
+                                                        $set($collection, $merged);
+                                                        \Filament\Notifications\Notification::make()
+                                                            ->title('Document Attached')
+                                                            ->body('File added to form. It will be saved when you submit the Tenancy Agreement.')
+                                                            ->success()
+                                                            ->send();
+                                                    }
+                                                }),
+                                        ]),
+                                    ])->columnSpanFull(),
                             ])->columns(2),
 
-                        Tabs\Tab::make('4. Signed Agreement & KYC')
+                        Tabs\Tab::make('4. Signed Agreement')
                             ->icon('heroicon-o-identification')
                             ->schema([
                                 DateTimePicker::make('signed_at')
@@ -594,25 +772,27 @@ class TenancyAgreementForm
                                     ->downloadable()
                                     ->openable()
                                     ->columnSpanFull(),
-
-                                Placeholder::make('kyc_info')
-                                    ->label('Tenant Identity & Address Proofs')
-                                    ->content(new HtmlString('<p style="font-size: 13px; color: rgba(128,128,128,0.85);">Upload tenant KYC documents (Aadhaar, PAN, Passport, Income Proof, Tenant Police Verification Report).</p>'))
-                                    ->columnSpanFull(),
-
-                                SpatieMediaLibraryFileUpload::make('kyc_documents')
-                                    ->label('Tenant KYC Attachments')
-                                    ->collection('kyc_documents')
-                                    ->multiple()
-                                    ->reorderable()
-                                    ->downloadable()
-                                    ->openable()
-                                    ->columnSpanFull(),
                             ])->columns(2),
 
                         Tabs\Tab::make('5. Key Handover & Activation')
                             ->icon('heroicon-o-key')
                             ->schema([
+                                TextInput::make('first_month_rent')
+                                    ->label("First Month Rent (Pro-rated / Custom)")
+                                    ->numeric()
+                                    ->prefix('₹')
+                                    ->required()
+                                    ->default(function ($record, Get $get) {
+                                        if ($record && !is_null($record->first_month_rent)) {
+                                            return $record->first_month_rent;
+                                        }
+                                        $startDate = $get('start_date') ?? $record?->start_date?->format('Y-m-d');
+                                        $rent = $get('rent_amount') ?? $record?->rent_amount;
+                                        return static::calculateProRatedFirstMonthRent($startDate, $rent);
+                                    })
+                                    ->helperText('Supports manual input for proportional mid-month move-in dates.')
+                                    ->columnSpanFull(),
+
                                 Toggle::make('keys_handed_over')
                                     ->label('Keys Handed Over to Tenant')
                                     ->live(),
@@ -634,25 +814,29 @@ class TenancyAgreementForm
                                     ->columnSpanFull(),
 
                                 Placeholder::make('activation_actions_card')
-                                    ->label('Tenancy Activation Action')
+                                    ->label('Tenancy Activation Status')
                                     ->content(function ($record) {
                                         if (!$record) return '';
                                         if ($record->status === 'active') {
                                             return new HtmlString(
                                                 '<div style="padding: 14px; background-color: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; color: #047857; font-weight: 600; font-size: 14px;">' .
-                                                    '✓ Tenancy Agreement is Active' .
+                                                    '✓ Tenancy Agreement is Active (Move-In Audit is permanently locked)' .
                                                     '</div>'
                                             );
                                         }
+                                        $canActivate = static::canActivateTenancy($record);
+                                        if ($canActivate) {
+                                            return new HtmlString(
+                                                '<div style="padding: 14px; background-color: rgba(22, 163, 74, 0.08); border: 1px solid rgba(22, 163, 74, 0.3); border-radius: 8px; color: #15803d; font-weight: 600; font-size: 14px;">' .
+                                                    '⚡ All onboarding checks complete. Click the <strong>Activate Tenancy</strong> button at the top right of the page to activate.' .
+                                                    '</div>'
+                                            );
+                                        }
+                                        $pending = static::getPendingActivationRequirements($record);
+                                        $pendingText = implode('<br>• ', $pending);
                                         return new HtmlString(
-                                            '<div style="background-color: rgba(128, 128, 128, 0.04); border: 1px solid rgba(128, 128, 128, 0.2); border-radius: 0.75rem; padding: 1.25rem; display: flex; align-items: center; justify-content: space-between;">' .
-                                                '<div>' .
-                                                '<div style="font-weight: 700; font-size: 15px; color: inherit;">Activate Tenancy</div>' .
-                                                '<div style="font-size: 13px; color: rgba(128, 128, 128, 0.85); margin-top: 2px;">Mark tenancy active, set property status to Occupied, and post initial invoices.</div>' .
-                                                '</div>' .
-                                                '<button type="button" wire:click="activateTenancy" wire:confirm="Are you sure you want to activate this tenancy agreement?" style="display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; background-color: #16a34a; color: #ffffff; font-weight: 600; font-size: 13px; border-radius: 6px; border: none; cursor: pointer;">' .
-                                                'Activate Tenancy &rarr;' .
-                                                '</button>' .
+                                            '<div style="padding: 14px; background-color: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 8px; color: #b45309; font-size: 13px;">' .
+                                                '<strong>Tenancy Activation Pending:</strong><br>• ' . $pendingText .
                                                 '</div>'
                                         );
                                     })
@@ -660,6 +844,54 @@ class TenancyAgreementForm
                             ])->columns(2),
                     ])->columnSpanFull(),
             ]);
+    }
+
+    public static function canActivateTenancy(?\App\Domain\Agreement\Models\TenancyAgreement $record): bool
+    {
+        return empty(static::getPendingActivationRequirements($record));
+    }
+
+    public static function getPendingActivationRequirements(?\App\Domain\Agreement\Models\TenancyAgreement $record): array
+    {
+        if (!$record) {
+            return ['No tenancy agreement record found.'];
+        }
+
+        if ($record->status === 'active') {
+            return [];
+        }
+
+        $pending = [];
+
+        $audit = $record->audit;
+        $auditStatusValue = $audit?->status instanceof \App\Domain\Audit\Enums\AuditStatus
+            ? $audit->status->value
+            : (string) ($audit?->status ?? '');
+        $s1 = (bool) ($audit && in_array($auditStatusValue, ['approved', 'completed']));
+        if (!$s1) {
+            $pending[] = 'Move-In Audit must be approved or completed.';
+        }
+
+        if (!static::areTermsComplete($record)) {
+            $pending[] = 'Agreement terms and tenant bank details must be fully filled.';
+        }
+
+        $hasSignedPdf = $record->hasMedia('signed_agreement');
+        if (!$record->signed_by_tenant || !$hasSignedPdf) {
+            if (!$record->signed_by_tenant && !$hasSignedPdf) {
+                $pending[] = 'Agreement must be marked as signed/executed AND executed agreement PDF uploaded.';
+            } elseif (!$record->signed_by_tenant) {
+                $pending[] = 'Agreement must be marked as signed/executed by tenant and owner.';
+            } else {
+                $pending[] = 'Executed Leave & License Agreement (PDF) must be uploaded.';
+            }
+        }
+
+        if (!$record->keys_handed_over) {
+            $pending[] = 'Keys must be marked as handed over to tenant.';
+        }
+
+        return $pending;
     }
 
     public static function areTermsComplete(?\App\Domain\Agreement\Models\TenancyAgreement $record): bool
@@ -671,7 +903,9 @@ class TenancyAgreementForm
         $bankDetails = $record->tenant_bank_details ?? [];
 
         return (float) ($record->rent_amount ?? 0) > 0
+            && !is_null($record->first_month_rent) && (float) $record->first_month_rent >= 0
             && (float) ($record->security_deposit ?? 0) > 0
+            && !is_null($record->booking_amount) && (float) $record->booking_amount >= 0
             && !empty($record->start_date)
             && !empty($record->end_date)
             && !is_null($record->lock_in_period_months) && $record->lock_in_period_months !== ''
@@ -685,6 +919,29 @@ class TenancyAgreementForm
             && !empty($bankDetails['account_type'] ?? null)
             && !empty($bankDetails['ifsc_code'] ?? null)
             && !empty($bankDetails['pan_number'] ?? null);
+    }
+
+    public static function calculateProRatedFirstMonthRent(?string $startDate, float|int|string|null $monthlyRent): float
+    {
+        if (!$startDate || !(float)$monthlyRent) {
+            return (float) ($monthlyRent ?? 0);
+        }
+
+        try {
+            $carbonStart = \Illuminate\Support\Carbon::parse($startDate);
+            $dayOfMonth = $carbonStart->day;
+            $totalDaysInMonth = $carbonStart->daysInMonth;
+
+            if ($dayOfMonth === 1) {
+                return round((float)$monthlyRent, 2);
+            }
+
+            $daysActive = $totalDaysInMonth - $dayOfMonth + 1;
+            $proRated = ((float)$monthlyRent / $totalDaysInMonth) * $daysActive;
+            return round($proRated, 2);
+        } catch (\Throwable $e) {
+            return round((float)($monthlyRent ?? 0), 2);
+        }
     }
 
     public static function getAnnexureIBankDetails($record, ?string $propertyId): array
