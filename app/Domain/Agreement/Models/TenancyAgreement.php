@@ -42,6 +42,17 @@ class TenancyAgreement extends DomainModel implements HasMedia
         'keys_handed_over_at',
         'key_handover_notes',
         'key_details',
+        'deboarded_at',
+        'vacating_date',
+        'notice_date',
+        'deboarding_reason',
+        'deboarding_notes',
+        'move_out_audit_id',
+        'keys_returned',
+        'keys_returned_at',
+        'deposit_deductions_breakdown',
+        'net_deposit_refund',
+        'deposit_settlement_status',
     ];
 
     protected $casts = [
@@ -49,14 +60,21 @@ class TenancyAgreement extends DomainModel implements HasMedia
         'end_date' => 'date',
         'signed_at' => 'datetime',
         'keys_handed_over_at' => 'datetime',
+        'deboarded_at' => 'datetime',
+        'vacating_date' => 'date',
+        'notice_date' => 'date',
+        'keys_returned_at' => 'datetime',
         'rent_amount' => 'decimal:2',
         'first_month_rent' => 'decimal:2',
         'security_deposit' => 'decimal:2',
         'booking_amount' => 'decimal:2',
+        'net_deposit_refund' => 'decimal:2',
         'signed_by_tenant' => 'boolean',
         'keys_handed_over' => 'boolean',
+        'keys_returned' => 'boolean',
         'tenant_bank_details' => 'array',
         'key_details' => 'array',
+        'deposit_deductions_breakdown' => 'array',
     ];
 
     public function registerMediaCollections(): void
@@ -69,6 +87,7 @@ class TenancyAgreement extends DomainModel implements HasMedia
         $this->addMediaCollection('cancelled_cheque');
         $this->addMediaCollection('kyc_documents');
         $this->addMediaCollection('key_handover_attachments');
+        $this->addMediaCollection('key_return_attachments');
     }
 
     public function property(): BelongsTo
@@ -79,6 +98,11 @@ class TenancyAgreement extends DomainModel implements HasMedia
     public function audit(): BelongsTo
     {
         return $this->belongsTo(Audit::class);
+    }
+
+    public function moveOutAudit(): BelongsTo
+    {
+        return $this->belongsTo(Audit::class, 'move_out_audit_id');
     }
 
     public function roles(): HasMany

@@ -26,6 +26,8 @@
             </x-audit-header>
         </x-slot>
         
+
+        
         <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; margin-top: 1rem;">
             <div style="background: rgba(243, 244, 246, 1); padding: 1rem; border-radius: 0.5rem; text-align: center;">
                 <div style="font-size: 2rem; font-weight: 700; color: rgba(17, 24, 39, 1);">{{ $totalItems }}</div>
@@ -90,9 +92,43 @@
         <div style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem;">
             @if($activeCategoryId === 'layout_video')
                 @php
+                    $refAuditForVideo = $audit->reference_audit_id ? \App\Domain\Audit\Models\Audit::find($audit->reference_audit_id) : null;
+                    $refVideoMedia = $refAuditForVideo?->getFirstMedia('layout_video');
+                    $refVideoUrl = $refVideoMedia?->getUrl();
                     $layoutVideoMedia = $audit->getFirstMedia('layout_video');
                     $layoutVideoUrl = $layoutVideoMedia?->getUrl();
                 @endphp
+
+                @if($refVideoUrl)
+                    <x-filament::section style="border: 1px solid #fcd34d; background: #fffbeb;">
+                        <x-slot name="heading">
+                            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; flex-wrap: wrap; gap: 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <x-filament::icon icon="heroicon-o-document-duplicate" style="width: 1.25rem; height: 1.25rem; color: #d97706;" />
+                                    <span style="font-size: 1.125rem; font-weight: 600; color: #92400e;">
+                                        Previous Baseline Layout Video (Audit #{{ $refAuditForVideo->audit_number ?? $refAuditForVideo->id }})
+                                    </span>
+                                </div>
+                                <span style="font-size: 0.75rem; color: #b45309; background: #fef3c7; padding: 0.25rem 0.625rem; border-radius: 0.375rem; font-weight: 600;">
+                                    Reference Baseline
+                                </span>
+                            </div>
+                        </x-slot>
+
+                        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                            <div style="position: relative; width: 100%; max-height: 450px; background-color: #000; border-radius: 0.5rem; overflow: hidden; display: flex; align-items: center; justify-content: center; border: 1px solid #fcd34d;">
+                                <video controls preload="metadata" style="max-height: 450px; width: 100%; object-fit: contain;">
+                                    <source src="{{ $refVideoUrl }}" type="{{ $refVideoMedia->mime_type ?? 'video/mp4' }}">
+                                    Your browser does not support the video tag.
+                                </video>
+                            </div>
+                            <div style="font-size: 0.875rem; color: #78350f; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+                                <span>📹 Walkthrough video recorded during baseline Audit <strong>#{{ $refAuditForVideo->audit_number ?? $refAuditForVideo->id }}</strong>.</span>
+                                <span>File: <strong>{{ $refVideoMedia->file_name }}</strong> ({{ number_format($refVideoMedia->size / (1024 * 1024), 2) }} MB)</span>
+                            </div>
+                        </div>
+                    </x-filament::section>
+                @endif
 
                 @if($layoutVideoUrl)
                     <x-filament::section>
@@ -160,14 +196,36 @@
                                         @endif
                                     </div>
                                     
+                                    @php
+                                        $refKey = ($item->source_type && $item->source_id) 
+                                            ? ($item->source_type . '_' . $item->source_id) 
+                                            : ('name_' . mb_strtolower(trim($item->name)));
+                                        $refData = $referenceItems[$refKey] ?? null;
+                                    @endphp
+
                                     <div style="font-size: 0.875rem; color: rgba(107, 114, 128, 1); display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                                         <span>{{ $item->snapshot_data['display_name'] ?? ($item->snapshot_data['brand'] ?? 'Item Details') }}</span>
+
+                                        @if(!empty($refData['condition']))
+                                            <span>&bull;</span>
+                                            <span style="font-size: 0.75rem; font-weight: 600; color: #4b5563; display: inline-flex; align-items: center; gap: 0.25rem;">
+                                                Baseline:
+                                                <x-filament::badge :color="$refData['condition_color'] ?? 'gray'" size="sm">
+                                                    {{ $refData['condition'] }}
+                                                </x-filament::badge>
+                                            </span>
+                                        @endif
+
                                         @if($item->condition)
                                             <span>&bull;</span>
-                                            <x-filament::badge :color="$item->condition->getColor()" size="sm">
-                                                {{ $item->condition->getLabel() }}
-                                            </x-filament::badge>
+                                            <span style="font-size: 0.75rem; font-weight: 600; color: #4b5563; display: inline-flex; align-items: center; gap: 0.25rem;">
+                                                Current:
+                                                <x-filament::badge :color="$item->condition->getColor()" size="sm">
+                                                    {{ $item->condition->getLabel() }}
+                                                </x-filament::badge>
+                                            </span>
                                         @endif
+
                                         @if($item->status === \App\Domain\Audit\Enums\ItemStatus::APPROVED)
                                             <span>&bull;</span>
                                             <x-filament::badge color="success" size="sm">
@@ -186,8 +244,14 @@
                                         @endif
                                     </div>
 
+                                    @if(!empty($refData['remarks']))
+                                        <div style="font-size: 0.8125rem; color: #374151; background: #f3f4f6; padding: 0.375rem 0.625rem; border-radius: 0.375rem; border-left: 3px solid #9ca3af; margin-top: 0.25rem;">
+                                            <strong>Previous Remarks:</strong> {{ $refData['remarks'] }}
+                                        </div>
+                                    @endif
+
                                     @if($item->remarks)
-                                        <div style="font-size: 0.875rem; color: rgba(75, 85, 99, 1); background: rgba(243, 244, 246, 1); padding: 0.5rem 0.75rem; border-radius: 0.25rem;">
+                                        <div style="font-size: 0.875rem; color: rgba(75, 85, 99, 1); background: rgba(243, 244, 246, 1); padding: 0.5rem 0.75rem; border-radius: 0.25rem; margin-top: 0.25rem;">
                                             <strong>Inspector Remarks ({{ $audit->inspector?->name ?? $audit->completedBy?->name ?? 'Inspector' }}):</strong> {{ $item->remarks }}
                                         </div>
                                     @endif
@@ -200,6 +264,8 @@
                                             <strong>Reviewer Rejected ({{ $lastReview->comment_type ?? 'Issue' }}):</strong> {{ $lastReview->comments }}
                                         </div>
                                     @endif
+
+
                                 </div>
 
                                 <div style="display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; flex-wrap: wrap;">
@@ -223,11 +289,44 @@
                                         {{ ($this->syncToPropertyAction)(['item_id' => $item->id]) }}
                                     @endif
                                 </div>
-                            </div>
+                            @if(!empty($refData['evidence']) && count($refData['evidence']) > 0)
+                                <div style="border-top: 1px dashed rgba(209, 213, 219, 1); padding-top: 0.875rem; margin-top: 0.5rem;">
+                                    <div style="font-size: 0.875rem; font-weight: 600; color: #d97706; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.375rem;">
+                                        <x-filament::icon icon="heroicon-o-document-duplicate" style="width: 1rem; height: 1rem; color: #d97706;" />
+                                        <span>Reference Baseline Photos ({{ count($refData['evidence']) }})</span>
+                                    </div>
+                                    <div style="display: flex; gap: 0.75rem; overflow-x: auto; padding-bottom: 0.375rem;">
+                                        @foreach($refData['evidence'] as $ev)
+                                            <div 
+                                                x-data
+                                                data-image-url="{{ $ev['url'] }}"
+                                                data-annotation-json="{{ json_encode($ev['annotation_json'] ?? null) }}"
+                                                data-item-name="{{ $item->name }} (Baseline)"
+                                                @click="$dispatch('open-evidence-modal', {
+                                                    imageUrl: $el.dataset.imageUrl,
+                                                    annotationJson: JSON.parse($el.dataset.annotationJson || 'null'),
+                                                    itemName: $el.dataset.itemName
+                                                })"
+                                                style="position: relative; flex-shrink: 0; cursor: pointer; border-radius: 0.375rem; overflow: hidden; border: 1px solid #d1d5db;"
+                                            >
+                                                <img src="{{ $ev['url'] }}" style="height: 100px; width: 140px; object-fit: cover; display: block;">
+                                                <span style="position: absolute; bottom: 0.25rem; left: 0.25rem; background: rgba(31, 41, 55, 0.85); color: white; padding: 0.125rem 0.375rem; border-radius: 0.25rem; font-size: 0.6875rem; font-weight: 600;">
+                                                    Baseline
+                                                </span>
+                                                @if(!empty($ev['has_annotations']))
+                                                    <span style="position: absolute; top: 0.25rem; right: 0.25rem; background: rgba(79, 70, 229, 0.95); color: white; padding: 0.125rem 0.375rem; border-radius: 0.25rem; font-size: 0.6875rem; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.3);">
+                                                        🎨 Annotated
+                                                    </span>
+                                                @endif
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            @endif
 
                             @if($item->evidence->isNotEmpty())
                                 <div style="border-top: 1px solid rgba(229, 231, 235, 1); padding-top: 1rem; margin-top: 0.5rem;">
-                                    <div style="font-size: 0.875rem; font-weight: 600; color: rgba(55, 65, 81, 1); margin-bottom: 0.75rem;">Evidence ({{ $item->evidence->count() }})</div>
+                                    <div style="font-size: 0.875rem; font-weight: 600; color: rgba(55, 65, 81, 1); margin-bottom: 0.75rem;">Current Evidence ({{ $item->evidence->count() }})</div>
                                     <div style="display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 0.5rem;">
                                         @foreach($item->evidence as $ev)
                                             @php
@@ -239,7 +338,14 @@
                                             @if($url)
                                                 <div 
                                                     x-data
-                                                    @click="$dispatch('open-evidence-modal', { imageUrl: '{{ $url }}', annotationJson: {{ json_encode($ev->annotation_json ?? null) }}, itemName: '{{ addslashes($item->name) }}' })"
+                                                    data-image-url="{{ $url }}"
+                                                    data-annotation-json="{{ json_encode($ev->annotation_json ?? null) }}"
+                                                    data-item-name="{{ $item->name }}"
+                                                    @click="$dispatch('open-evidence-modal', {
+                                                        imageUrl: $el.dataset.imageUrl,
+                                                        annotationJson: JSON.parse($el.dataset.annotationJson || 'null'),
+                                                        itemName: $el.dataset.itemName
+                                                    })"
                                                     style="position: relative; flex-shrink: 0; cursor: pointer;"
                                                 >
                                                     <img src="{{ $url }}" style="height: 120px; width: 160px; object-fit: cover; border-radius: 0.5rem; border: 1px solid rgba(229, 231, 235, 1);">
@@ -266,6 +372,7 @@
     <div
         x-data="evidenceReviewModal"
         @open-evidence-modal.window="openModal($event.detail)"
+        @open-evidence-review-modal.window="openModal($event.detail)"
         x-show="isOpen"
         x-cloak
         style="position: fixed; inset: 0; z-index: 99999; display: flex; align-items: center; justify-content: center; background-color: rgba(17, 24, 39, 0.85); backdrop-filter: blur(4px); padding: 1.5rem;"

@@ -35,6 +35,7 @@ class OperationsPanelProvider extends PanelProvider
             ->discoverClusters(in: app_path('Filament/Clusters'), for: 'App\Filament\Clusters')
             ->navigationGroups([
                 'Portfolio & Operations',
+                'Billing & Finance',
                 'Sales & CRM',
                 'Leasing & Finance',
                 'Settings',
@@ -43,10 +44,14 @@ class OperationsPanelProvider extends PanelProvider
             ->pages([
                 Dashboard::class,
             ])
-            ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
             ->widgets([
-                AccountWidget::class,
-                FilamentInfoWidget::class,
+                \App\Filament\Widgets\PropertyStatsOverview::class,
+                \App\Filament\Widgets\OpportunityStatsOverview::class,
+                \App\Filament\Widgets\OperationsQuickActionsWidget::class,
+                \App\Filament\Widgets\PendingAuditsWidget::class,
+                \App\Filament\Widgets\UrgentMaintenanceWidget::class,
+                \App\Filament\Widgets\OnboardingPropertiesWidget::class,
+                \App\Filament\Widgets\RecentOpportunities::class,
             ])
             ->middleware([
                 EncryptCookies::class,

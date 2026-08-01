@@ -92,7 +92,15 @@ class TenancyAgreementsTable
             ->filters([
                 //
             ])
-            ->recordActions([])
+            ->recordActions([
+                EditAction::make(),
+                Action::make('deboardTenancy')
+                    ->label('Deboarding')
+                    ->icon('heroicon-o-arrow-left-on-rectangle')
+                    ->color('warning')
+                    ->url(fn ($record) => \App\Filament\Resources\TenancyAgreements\TenancyAgreementResource::getUrl('deboard', ['record' => $record->id]))
+                    ->visible(fn ($record) => in_array($record->status, ['active', 'deboarding_initiated', 'vacated'])),
+            ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),

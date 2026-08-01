@@ -816,6 +816,15 @@ class PropertyFinancials extends Page implements HasForms
                                     ['ownerRecord' => $this->record, 'pageClass' => static::class]
                                 )->key('mapped-documents-relation-manager'),
                             ]),
+
+                        Tabs\Tab::make('Tenancy Agreements')
+                            ->icon('heroicon-o-document-text')
+                            ->schema([
+                                \Filament\Schemas\Components\Livewire::make(
+                                    \App\Filament\Resources\Properties\RelationManagers\TenancyAgreementsRelationManager::class,
+                                    ['ownerRecord' => $this->record, 'pageClass' => static::class]
+                                )->key('tenancy-agreements-relation-manager'),
+                            ]),
                     ]),
             ])
             ->statePath('data');

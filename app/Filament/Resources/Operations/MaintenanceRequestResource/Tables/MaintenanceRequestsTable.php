@@ -121,6 +121,71 @@ class MaintenanceRequestsTable
                             ->send();
                     }),
 
+                Action::make('raiseInvoice')
+                    ->label('Raise Invoice/Bill')
+                    ->icon('heroicon-o-currency-rupee')
+                    ->color('warning')
+                    ->form([
+                        \Filament\Forms\Components\Select::make('bill_type')
+                            ->label('Bill Type')
+                            ->options([
+                                'tenant_invoice' => 'Invoice to Tenant',
+                                'owner_invoice' => 'Invoice to Owner',
+                                'vendor_bill' => 'Vendor Bill',
+                            ])
+                            ->default('tenant_invoice')
+                            ->required(),
+
+                        \Filament\Forms\Components\TextInput::make('cost')
+                            ->label('Cost Amount (₹)')
+                            ->numeric()
+                            ->prefix('₹')
+                            ->default(fn ($record) => $record->total_cost > 0 ? $record->total_cost : 0)
+                            ->required(),
+
+                        \Filament\Forms\Components\DatePicker::make('due_date')
+                            ->label('Due Date')
+                            ->default(now()->addDays(7)),
+
+                        \Filament\Forms\Components\Textarea::make('notes')
+                            ->label('Billing Remarks'),
+                    ])
+                    ->action(function ($record, array $data) {
+                        $service = app(\App\Domain\Maintenance\Services\MaintenanceBillingService::class);
+
+                        if ($data['bill_type'] === 'vendor_bill') {
+                            $bill = $service->createVendorBill($record, [
+                                [
+                                    'description' => "Vendor Work: {$record->title} ({$record->ticket_number})",
+                                    'quantity' => 1,
+                                    'unit_price' => (float) $data['cost'],
+                                    'total' => (float) $data['cost'],
+                                ]
+                            ], ['notes' => $data['notes'] ?? null, 'due_date' => $data['due_date'] ?? null]);
+
+                            Notification::make()
+                                ->title('Vendor Bill Created')
+                                ->body("Vendor Bill {$bill->bill_number} generated for Ticket #{$record->ticket_number}")
+                                ->success()
+                                ->send();
+                        } else {
+                            $invoice = $service->createMaintenanceInvoice($record, $data['bill_type'], [
+                                [
+                                    'description' => "Maintenance Service: {$record->title} ({$record->ticket_number})",
+                                    'quantity' => 1,
+                                    'unit_price' => (float) $data['cost'],
+                                    'total' => (float) $data['cost'],
+                                ]
+                            ], ['notes' => $data['notes'] ?? null, 'due_date' => $data['due_date'] ?? null]);
+
+                            Notification::make()
+                                ->title('Maintenance Invoice Raised')
+                                ->body("Invoice {$invoice->invoice_number} raised for Ticket #{$record->ticket_number}")
+                                ->success()
+                                ->send();
+                        }
+                    }),
+
                 Action::make('closeTicket')
                     ->label('Close Ticket')
                     ->icon('heroicon-o-check-badge')

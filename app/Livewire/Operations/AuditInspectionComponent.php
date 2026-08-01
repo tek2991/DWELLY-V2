@@ -28,22 +28,72 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
 
     public Audit $audit;
     public $referenceItems = [];
+    public ?string $referenceAuditNumber = null;
     public $activeCategoryId = null;
 
     public function mount(Audit $audit)
     {
-        $this->audit = $audit->load(['categories.items.source', 'media']);
+        $this->audit = $audit->load(['media', 'categories.items.evidence']);
         if ($this->audit->categories->isNotEmpty()) {
             $this->activeCategoryId = $this->audit->categories->first()->id;
         }
+        $this->loadReferenceItems();
+    }
+
+    public function loadReferenceItems(): void
+    {
+        $this->referenceItems = [];
+        $this->referenceAuditNumber = null;
 
         if ($this->audit->reference_audit_id) {
-            // Load the previous conditions to display side-by-side
-            $referenceAudit = Audit::with('items')->find($this->audit->reference_audit_id);
+            $referenceAudit = Audit::with(['items.evidence.media'])->find($this->audit->reference_audit_id);
             if ($referenceAudit) {
+                $this->referenceAuditNumber = $referenceAudit->audit_number ?? $referenceAudit->id;
+
                 foreach ($referenceAudit->items as $refItem) {
-                    $key = $refItem->source_type . '_' . $refItem->source_id;
-                    $this->referenceItems[$key] = $refItem->condition?->getLabel();
+                    $key = ($refItem->source_type && $refItem->source_id)
+                        ? ($refItem->source_type . '_' . $refItem->source_id)
+                        : ('name_' . mb_strtolower(trim($refItem->name)));
+
+                    $evidenceList = [];
+                    foreach ($refItem->evidence as $ev) {
+                        $media = $ev->getFirstMedia('images');
+                        $url = '';
+                        if ($media) {
+                            $url = $media->getUrl();
+                            $appUrl = rtrim(config('app.url'), '/');
+                            if (str_starts_with($url, $appUrl)) {
+                                $url = substr($url, strlen($appUrl));
+                                if (!str_starts_with($url, '/')) {
+                                    $url = '/' . $url;
+                                }
+                            }
+                        } else {
+                            $url = $ev->getFirstMediaUrl();
+                        }
+
+                        if ($url) {
+                            $hasAnnotations = !empty($ev->annotation_json) 
+                                && isset($ev->annotation_json['canvas']['objects']) 
+                                && count($ev->annotation_json['canvas']['objects']) > 0;
+
+                            $evidenceList[] = [
+                                'id' => $ev->id,
+                                'url' => $url,
+                                'annotation_json' => $ev->annotation_json,
+                                'has_annotations' => $hasAnnotations,
+                            ];
+                        }
+                    }
+
+                    $this->referenceItems[$key] = [
+                        'id' => $refItem->id,
+                        'name' => $refItem->name,
+                        'condition' => $refItem->condition ? $refItem->condition->getLabel() : 'Not Set',
+                        'condition_color' => $refItem->condition?->getColor() ?? 'gray',
+                        'remarks' => $refItem->remarks,
+                        'evidence' => $evidenceList,
+                    ];
                 }
             }
         }
@@ -505,7 +555,7 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
             ->label('Inspect')
             ->button()
             ->slideOver()
-            ->modalHeading(function (AuditItem $record) {
+            ->modalHeading(function (?AuditItem $record = null) {
                 $item = $this->currentItemId ? AuditItem::find($this->currentItemId) : $record;
                 $items = $item ? $this->getCategoryItems($item)->values() : collect();
                 $currentIndex = $item ? $items->search(fn ($i) => (string)$i->id === (string)$item->id) : false;
@@ -515,47 +565,130 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
 
                 return 'Inspect: ' . ($item?->name ?? '') . $positionText;
             })
-            ->modalDescription(function (AuditItem $record) {
+            ->modalDescription(function (?AuditItem $record = null) {
                 $code = $this->audit->property->code ?? 'N/A';
                 return 'Property Code: ' . $code;
             })
             ->record(function (array $arguments) {
-                $this->currentItemId = $arguments['item_id'];
-                return AuditItem::find($arguments['item_id']);
+                $id = $arguments['item_id'] ?? $arguments['record'] ?? null;
+                if ($id) {
+                    $this->currentItemId = (string) $id;
+                }
+                return $this->currentItemId ? AuditItem::find($this->currentItemId) : null;
             })
             ->form([
+                \Filament\Schemas\Components\Section::make('Reference Baseline')
+                    ->icon('heroicon-o-document-duplicate')
+                    ->collapsible()
+                    ->visible(function (?AuditItem $record = null) {
+                        $item = $this->currentItemId ? AuditItem::find($this->currentItemId) : $record;
+                        if (!$item) return false;
+                        $refKey = ($item->source_type && $item->source_id)
+                            ? ($item->source_type . '_' . $item->source_id)
+                            : ('name_' . mb_strtolower(trim($item->name)));
+                        return !empty($this->referenceItems[$refKey]);
+                    })
+                    ->schema([
+                        \Filament\Forms\Components\Placeholder::make('ref_baseline_info')
+                            ->hiddenLabel()
+                            ->content(function (?AuditItem $record = null) {
+                                $item = $this->currentItemId ? AuditItem::find($this->currentItemId) : $record;
+                                if (!$item) return 'N/A';
+                                $refKey = ($item->source_type && $item->source_id)
+                                    ? ($item->source_type . '_' . $item->source_id)
+                                    : ('name_' . mb_strtolower(trim($item->name)));
+                                $ref = $this->referenceItems[$refKey] ?? null;
+                                if (!$ref) return 'No reference data';
+
+                                $condLabel = e($ref['condition'] ?? 'N/A');
+                                $remarksText = !empty($ref['remarks']) ? e($ref['remarks']) : '<span style="color: #9ca3af; font-style: italic;">No previous remarks</span>';
+
+                                $photosHtml = '';
+                                if (!empty($ref['evidence']) && count($ref['evidence']) > 0) {
+                                    $count = count($ref['evidence']);
+                                    $itemName = htmlspecialchars($item->name, ENT_QUOTES, 'UTF-8');
+
+                                    $photosHtml = "<div style=\"margin-top: 0.625rem; border-top: 1px dashed #d1d5db; padding-top: 0.625rem;\">
+                                        <div style=\"display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.375rem;\">
+                                            <strong style=\"font-size: 0.8125rem; color: #374151;\">Previous Baseline Photos ({$count}):</strong>
+                                        </div>
+                                        <div style=\"display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.25rem;\">";
+
+                                    foreach ($ref['evidence'] as $photo) {
+                                        $url = e($photo['url']);
+                                        $jsonAnnotation = htmlspecialchars(json_encode($photo['annotation_json'] ?? null), ENT_QUOTES, 'UTF-8');
+                                        $annotatedBadge = !empty($photo['has_annotations']) 
+                                            ? '<span style="position: absolute; top: 3px; right: 3px; background: rgba(79, 70, 229, 0.95); color: white; padding: 2px 5px; border-radius: 4px; font-size: 10px; font-weight: 700; box-shadow: 0 1px 2px rgba(0,0,0,0.2);">🎨 Annotated</span>' 
+                                            : '';
+
+                                        $photosHtml .= '<div data-url="' . $url . '" data-json="' . $jsonAnnotation . '" data-item="' . $itemName . '" @click.stop="$dispatch(\'open-evidence-review-modal\', { imageUrl: $el.dataset.url, annotationJson: JSON.parse($el.dataset.json || \'null\'), itemName: $el.dataset.item + \' (Baseline)\' })" style="position: relative; flex-shrink: 0; cursor: pointer; border-radius: 0.375rem; overflow: hidden; border: 1px solid #d1d5db; transition: transform 0.15s ease;" onmouseover="this.style.transform=\'scale(1.03)\'" onmouseout="this.style.transform=\'scale(1)\'">';
+                                        $photosHtml .= '<img src="' . $url . '" style="height: 80px; width: 110px; object-fit: cover; display: block;">';
+                                        $photosHtml .= $annotatedBadge;
+                                        $photosHtml .= '</div>';
+                                    }
+
+                                    $photosHtml .= '</div></div>';
+                                }
+
+                                return new \Illuminate\Support\HtmlString("
+                                    <div style=\"display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.875rem;\">
+                                        <div style=\"display: flex; align-items: center; gap: 0.5rem;\">
+                                            <span style=\"font-weight: 600; color: #4b5563;\">Previous Baseline Condition:</span>
+                                            <span style=\"font-weight: 600; color: #1f2937; background: #e5e7eb; padding: 0.125rem 0.5rem; border-radius: 0.25rem;\">{$condLabel}</span>
+                                        </div>
+                                        <div>
+                                            <span style=\"font-weight: 600; color: #4b5563;\">Previous Baseline Remarks:</span>
+                                            <div style=\"margin-top: 0.25rem; background: #f3f4f6; padding: 0.5rem 0.75rem; border-radius: 0.375rem; border-left: 3px solid #6b7280; color: #374151;\">{$remarksText}</div>
+                                        </div>
+                                        {$photosHtml}
+                                    </div>
+                                ");
+                            })
+                    ]),
                 \Filament\Schemas\Components\Section::make('Inspection Details')
                     ->schema([
                         Select::make('condition')
                             ->options(ItemCondition::class)
                             ->required()
-                            ->disabled(fn (AuditItem $record) => !$record->isEditable()),
+                            ->disabled(function (?AuditItem $record = null) {
+                                $item = $this->currentItemId ? AuditItem::find($this->currentItemId) : $record;
+                                return !$item || !$item->isEditable();
+                            }),
                         Textarea::make('remarks')
+                            ->label('Fresh Inspection Remarks')
                             ->maxLength(65535)
-                            ->disabled(fn (AuditItem $record) => !$record->isEditable()),
+                            ->disabled(function (?AuditItem $record = null) {
+                                $item = $this->currentItemId ? AuditItem::find($this->currentItemId) : $record;
+                                return !$item || !$item->isEditable();
+                            }),
                     ]),
                 \Filament\Schemas\Components\Section::make('Evidence')
-                    ->heading(function (AuditItem $record) {
-                        $count = $this->currentItemId ? \App\Domain\Audit\Models\AuditItem::find($this->currentItemId)?->evidence()->count() ?? 0 : 0;
-                        return new \Illuminate\Support\HtmlString(view('livewire.operations.evidence-section-heading', ['count' => $count, 'isEditable' => $record->isEditable()])->render());
+                    ->heading(function (?AuditItem $record = null) {
+                        $item = $this->currentItemId ? AuditItem::find($this->currentItemId) : $record;
+                        $count = $item ? $item->evidence()->count() : 0;
+                        $isEditable = $item ? $item->isEditable() : false;
+                        return new \Illuminate\Support\HtmlString(view('livewire.operations.evidence-section-heading', ['count' => $count, 'isEditable' => $isEditable])->render());
                     })
                     ->schema([
                         \Filament\Schemas\Components\View::make('livewire.operations.evidence-gallery-form-field')
                     ])
             ])
-            ->modalSubmitAction(fn ($action, AuditItem $record) => $record->isEditable() ? $action : $action->hidden())
-            ->extraModalFooterActions(function (AuditItem $record) {
+            ->modalSubmitAction(function ($action, ?AuditItem $record = null) {
+                $item = $this->currentItemId ? AuditItem::find($this->currentItemId) : $record;
+                return ($item && $item->isEditable()) ? $action : $action->hidden();
+            })
+            ->extraModalFooterActions(function (?AuditItem $record = null) {
                 return [
                     Action::make('prevItem')
                         ->label('Previous')
                         ->icon('heroicon-o-chevron-left')
                         ->color('gray')
                         ->button()
-                        ->disabled(function () use ($record) {
-                            $item = $this->currentItemId ? AuditItem::find($this->currentItemId) : $record;
+                        ->disabled(function () {
+                            $item = $this->currentItemId ? AuditItem::find($this->currentItemId) : null;
                             return !$item || !$this->getPreviousItemId($item);
                         })
-                        ->action(function (AuditItem $record) {
+                        ->action(function (?AuditItem $record = null) {
                             $item = $this->currentItemId ? AuditItem::find($this->currentItemId) : $record;
                             if (!$item) return;
 
@@ -589,11 +722,11 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
                         ->iconPosition('after')
                         ->color('gray')
                         ->button()
-                        ->disabled(function () use ($record) {
-                            $item = $this->currentItemId ? AuditItem::find($this->currentItemId) : $record;
+                        ->disabled(function () {
+                            $item = $this->currentItemId ? AuditItem::find($this->currentItemId) : null;
                             return !$item || !$this->getNextItemId($item);
                         })
-                        ->action(function (AuditItem $record) {
+                        ->action(function (?AuditItem $record = null) {
                             $item = $this->currentItemId ? AuditItem::find($this->currentItemId) : $record;
                             if (!$item) return;
 
@@ -622,9 +755,10 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
                         }),
                 ];
             })
-            ->using(function (AuditItem $record, array $data, Action $action): AuditItem {
-                if (!$record->isEditable()) {
-                    return $record;
+            ->using(function (?AuditItem $record = null, array $data = [], ?Action $action = null): AuditItem {
+                $record = $record ?? ($this->currentItemId ? AuditItem::find($this->currentItemId) : null);
+                if (!$record || !$record->isEditable()) {
+                    return $record ?? new AuditItem();
                 }
 
                 $data['status'] = ItemStatus::INSPECTED;
@@ -651,7 +785,9 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
 
                 $this->audit->load('categories.items');
 
-                $action->halt();
+                if ($action) {
+                    $action->halt();
+                }
 
                 return $record;
             })

@@ -10,7 +10,7 @@ use App\Domain\Opportunity\Enums\OpportunityStatus;
 
 class RecentOpportunities extends BaseWidget
 {
-    protected static ?int $sort = 2;
+    protected static ?int $sort = 7;
     
     protected int | string | array $columnSpan = 'full';
 

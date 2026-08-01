@@ -150,16 +150,69 @@ class EditTenancyAgreement extends EditRecord
                 ->requiresConfirmation()
                 ->modalHeading('Activate Tenancy Agreement')
                 ->modalDescription('Are you sure you want to activate this tenancy agreement? This will mark the property as Occupied, post initial accounting invoices, and permanently lock the linked Move-In Audit.')
-                ->visible(fn() => $this->getRecord()?->status !== 'active')
+                ->visible(fn() => $this->getRecord()?->status !== 'active' && $this->getRecord()?->status !== 'deboarding_initiated' && $this->getRecord()?->status !== 'vacated')
                 ->disabled(fn() => !\App\Filament\Resources\TenancyAgreements\Schemas\TenancyAgreementForm::canActivateTenancy($this->getRecord()))
                 ->action(fn() => $this->activateTenancy()),
+
+            Action::make('initiateDeboardingHeader')
+                ->label('Initiate Deboarding & Exit Audit')
+                ->icon('heroicon-o-arrow-left-on-rectangle')
+                ->color('warning')
+                ->modalHeading('Initiate Tenant Deboarding & Trigger Exit Audit')
+                ->modalDescription('Record notice dates, reason for exit, and automatically trigger the Move-Out Verification Audit.')
+                ->visible(fn() => $this->getRecord()?->status === 'active')
+                ->form([
+                    \Filament\Forms\Components\DatePicker::make('notice_date')
+                        ->label('Notice Date')
+                        ->default(now()->toDateString())
+                        ->required(),
+                    \Filament\Forms\Components\DatePicker::make('vacating_date')
+                        ->label('Target Vacating Date')
+                        ->required(),
+                    \Filament\Forms\Components\Select::make('deboarding_reason')
+                        ->label('Reason for Deboarding')
+                        ->options([
+                            'Agreement Expiry' => 'Agreement Expiry',
+                            'Tenant Early Termination' => 'Tenant Early Termination',
+                            'Owner Request' => 'Owner Request / Non-renewal',
+                            'Eviction' => 'Eviction',
+                            'Mutual Agreement' => 'Mutual Agreement',
+                        ])
+                        ->default('Agreement Expiry')
+                        ->required(),
+                    \Filament\Forms\Components\Textarea::make('deboarding_notes')
+                        ->label('Notes & Special Exit Remarks')
+                        ->rows(2),
+                ])
+                ->action(function (array $data) {
+                    $record = $this->getRecord();
+                    $service = app(\App\Domain\Agreement\Services\TenancyDeboardingService::class);
+                    $service->initiateDeboarding($record, $data);
+                    $audit = $service->triggerMoveOutAudit($record, auth()->user());
+
+                    Notification::make()
+                        ->title('Deboarding Initiated & Exit Audit Triggered')
+                        ->body("Notice recorded. Move-Out Verification Audit #{$audit->audit_number} created.")
+                        ->success()
+                        ->send();
+
+                    $this->redirect(TenancyAgreementResource::getUrl('deboard', ['record' => $record]));
+                }),
+
+            Action::make('deboardTenancyHeader')
+                ->label('Deboarding Dashboard')
+                ->icon('heroicon-o-arrow-left-on-rectangle')
+                ->color('info')
+                ->url(fn() => TenancyAgreementResource::getUrl('deboard', ['record' => $this->getRecord()]))
+                ->visible(fn() => in_array($this->getRecord()?->status, ['deboarding_initiated', 'vacated'])),
+
             DeleteAction::make(),
         ];
     }
 
     protected function getFormActions(): array
     {
-        if ($this->getRecord()?->status === 'active') {
+        if (in_array($this->getRecord()?->status, ['active', 'vacated'])) {
             return [];
         }
 

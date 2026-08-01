@@ -56,6 +56,11 @@ class Property extends DomainModel
         return $this->hasMany(\App\Domain\Agreement\Models\TenancyAgreement::class);
     }
 
+    public function tenancyAgreements(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->agreements();
+    }
+
     public function rooms(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(PropertyRoom::class);

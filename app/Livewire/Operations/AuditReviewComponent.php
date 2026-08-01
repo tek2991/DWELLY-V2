@@ -20,6 +20,8 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
     use InteractsWithActions;
 
     public Audit $audit;
+    public $referenceItems = [];
+    public ?string $referenceAuditNumber = null;
     public $activeCategoryId = null;
 
     public function mount(Audit $audit)
@@ -27,6 +29,66 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
         $this->audit = $audit->load('media');
         if ($this->audit->categories->isNotEmpty()) {
             $this->activeCategoryId = $this->audit->categories->first()->id;
+        }
+        $this->loadReferenceItems();
+    }
+
+    public function loadReferenceItems(): void
+    {
+        $this->referenceItems = [];
+        $this->referenceAuditNumber = null;
+
+        if ($this->audit->reference_audit_id) {
+            $referenceAudit = Audit::with(['items.evidence.media'])->find($this->audit->reference_audit_id);
+            if ($referenceAudit) {
+                $this->referenceAuditNumber = $referenceAudit->audit_number ?? $referenceAudit->id;
+
+                foreach ($referenceAudit->items as $refItem) {
+                    $key = ($refItem->source_type && $refItem->source_id)
+                        ? ($refItem->source_type . '_' . $refItem->source_id)
+                        : ('name_' . mb_strtolower(trim($refItem->name)));
+
+                    $evidenceList = [];
+                    foreach ($refItem->evidence as $ev) {
+                        $media = $ev->getFirstMedia('images');
+                        $url = '';
+                        if ($media) {
+                            $url = $media->getUrl();
+                            $appUrl = rtrim(config('app.url'), '/');
+                            if (str_starts_with($url, $appUrl)) {
+                                $url = substr($url, strlen($appUrl));
+                                if (!str_starts_with($url, '/')) {
+                                    $url = '/' . $url;
+                                }
+                            }
+                        } else {
+                            $url = $ev->getFirstMediaUrl();
+                        }
+
+                        if ($url) {
+                            $hasAnnotations = !empty($ev->annotation_json) 
+                                && isset($ev->annotation_json['canvas']['objects']) 
+                                && count($ev->annotation_json['canvas']['objects']) > 0;
+
+                            $evidenceList[] = [
+                                'id' => $ev->id,
+                                'url' => $url,
+                                'annotation_json' => $ev->annotation_json,
+                                'has_annotations' => $hasAnnotations,
+                            ];
+                        }
+                    }
+
+                    $this->referenceItems[$key] = [
+                        'id' => $refItem->id,
+                        'name' => $refItem->name,
+                        'condition' => $refItem->condition ? $refItem->condition->getLabel() : 'Not Set',
+                        'condition_color' => $refItem->condition?->getColor() ?? 'gray',
+                        'remarks' => $refItem->remarks,
+                        'evidence' => $evidenceList,
+                    ];
+                }
+            }
         }
     }
 
@@ -40,6 +102,7 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
         $this->audit->unsetRelation('categories');
         $this->audit->unsetRelation('items');
         $this->audit->load('categories.items.evidence', 'categories.items.reviews', 'categories.items.category', 'items.category', 'media');
+        $this->loadReferenceItems();
     }
 
     public function acceptAllAction(): Action

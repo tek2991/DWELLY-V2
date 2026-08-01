@@ -47,6 +47,7 @@ class TenancyAgreementResource extends Resource
             'index' => ListTenancyAgreements::route('/'),
             'create' => CreateTenancyAgreement::route('/create'),
             'edit' => EditTenancyAgreement::route('/{record}/edit'),
+            'deboard' => Pages\DeboardTenancy::route('/{record}/deboard'),
         ];
     }
 }
