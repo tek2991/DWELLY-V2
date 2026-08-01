@@ -157,6 +157,15 @@ class EditTenancyAgreement extends EditRecord
         ];
     }
 
+    protected function getFormActions(): array
+    {
+        if ($this->getRecord()?->status === 'active') {
+            return [];
+        }
+
+        return parent::getFormActions();
+    }
+
     protected function getRedirectUrl(): ?string
     {
         return null;

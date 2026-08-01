@@ -239,8 +239,29 @@ class PartyForm
                                 'vendor' => 'Vendor',
                             ])
                             ->required()
+                            ->live()
                             ->helperText('Select one or more profiles for this party.'),
-                    ])
+                    ]),
+
+                Section::make('Vendor Onboarding & Trade Profile')
+                    ->visible(fn (Get $get) => is_array($get('roles')) && in_array('vendor', $get('roles')))
+                    ->columns(2)
+                    ->schema([
+                        Select::make('vendor_data.vendor_trade_id')
+                            ->label('Vendor Trade / Specialty')
+                            ->options(fn () => \App\Domain\Party\Models\VendorTrade::pluck('name', 'id'))
+                            ->searchable(),
+                        Select::make('vendor_data.onboarding_status')
+                            ->label('Vendor Onboarding Status')
+                            ->options(\App\Domain\Party\Enums\VendorOnboardingStatus::class)
+                            ->default('draft'),
+                        Toggle::make('vendor_data.is_preferred')
+                            ->label('Preferred Vendor')
+                            ->default(false),
+                        Textarea::make('vendor_data.verification_notes')
+                            ->label('Verification Notes / Credentials')
+                            ->columnSpanFull(),
+                    ]),
             ]);
     }
 }

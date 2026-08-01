@@ -51,21 +51,27 @@
 
 
 
-    @if($audit->categories->isEmpty() && !$audit->getFirstMedia('layout_video'))
+    @php
+        $requiresVideo = $audit->audit_type !== \App\Domain\Audit\Enums\AuditType::MAINTENANCE;
+    @endphp
+
+    @if($audit->categories->isEmpty() && (!$requiresVideo || !$audit->getFirstMedia('layout_video')))
         <div style="text-align: center; padding: 2rem 0; color: rgba(107, 114, 128, 1);">No categories found in this audit.</div>
     @else
         <!-- Tabs -->
         <x-filament::tabs label="Audit Categories">
-            <x-filament::tabs.item
-                :active="$activeCategoryId === 'layout_video'"
-                wire:click="setActiveCategory('layout_video')"
-                icon="heroicon-o-video-camera"
-            >
-                Property Video
-                <x-slot name="badge">
-                    {{ $audit->getFirstMedia('layout_video') ? '1 / 1' : '0 / 1' }}
-                </x-slot>
-            </x-filament::tabs.item>
+            @if($requiresVideo)
+                <x-filament::tabs.item
+                    :active="$activeCategoryId === 'layout_video'"
+                    wire:click="setActiveCategory('layout_video')"
+                    icon="heroicon-o-video-camera"
+                >
+                    Property Video
+                    <x-slot name="badge">
+                        {{ $audit->getFirstMedia('layout_video') ? '1 / 1' : '0 / 1' }}
+                    </x-slot>
+                </x-filament::tabs.item>
+            @endif
 
             @foreach($audit->categories as $category)
                 <x-filament::tabs.item

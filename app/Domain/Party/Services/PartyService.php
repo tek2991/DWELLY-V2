@@ -163,6 +163,8 @@ class PartyService
 
             // Handle roles synchronization
             if ($roles !== null) {
+                $vendorData = $data['vendor_data'] ?? [];
+                
                 // Determine roles to add
                 if (in_array('owner', $roles) && !$party->ownerProfile()->exists()) {
                     OwnerProfile::create(['party_id' => $party->id]);
@@ -170,8 +172,15 @@ class PartyService
                 if (in_array('tenant', $roles) && !$party->tenantProfile()->exists()) {
                     TenantProfile::create(['party_id' => $party->id]);
                 }
-                if (in_array('vendor', $roles) && !$party->vendorProfile()->exists()) {
-                    VendorProfile::create(['party_id' => $party->id]);
+                if (in_array('vendor', $roles)) {
+                    $vendorProfile = $party->vendorProfile()->first();
+                    if (!$vendorProfile) {
+                        $vendorProfile = VendorProfile::create(array_merge(['party_id' => $party->id], array_filter($vendorData)));
+                    } else if (!empty($vendorData)) {
+                        $vendorProfile->update(array_filter($vendorData));
+                    }
+                } else if ($party->vendorProfile()->exists()) {
+                    $party->vendorProfile()->delete();
                 }
                 
                 // Determine roles to remove (optional: typically we don't delete roles silently, but for UI sync we should)
@@ -180,9 +189,6 @@ class PartyService
                 }
                 if (!in_array('tenant', $roles) && $party->tenantProfile()->exists()) {
                     $party->tenantProfile()->delete();
-                }
-                if (!in_array('vendor', $roles) && $party->vendorProfile()->exists()) {
-                    $party->vendorProfile()->delete();
                 }
             }
 

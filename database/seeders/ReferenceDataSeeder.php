@@ -19,6 +19,7 @@ class ReferenceDataSeeder extends Seeder
         $this->seedInventoryTypes();
         $this->seedEstablishmentTypes();
         $this->seedUtilityTypes();
+        $this->seedVendorTrades();
     }
 
     private function insertReferenceData(string $table, array $items)
@@ -149,16 +150,32 @@ class ReferenceDataSeeder extends Seeder
 
         $electricityType = DB::table('utility_types')->where('slug', 'electricity')->first();
         if ($electricityType) {
-            DB::table('utility_providers')->updateOrInsert(
-                ['name' => 'APDCL', 'utility_type_id' => $electricityType->id],
-                [
+            $existing = DB::table('utility_providers')->where('slug', 'apdcl')->first();
+            if (!$existing) {
+                DB::table('utility_providers')->insert([
                     'id' => (string) Str::ulid(),
+                    'name' => 'APDCL',
                     'slug' => 'apdcl',
+                    'utility_type_id' => $electricityType->id,
                     'is_active' => true,
                     'created_at' => now(),
                     'updated_at' => now(),
-                ]
-            );
+                ]);
+            }
         }
+    }
+
+    private function seedVendorTrades()
+    {
+        $this->insertReferenceData('vendor_trades', [
+            'Electrical',
+            'Plumbing',
+            'HVAC / Air Conditioning',
+            'Carpentry',
+            'Painting',
+            'Cleaning & Sanitization',
+            'Appliance Repair',
+            'General Civil Maintenance'
+        ]);
     }
 }

@@ -14,6 +14,11 @@ class AuditSnapshotService
      */
     public function generateSnapshot(Audit $audit, array $scopes = []): void
     {
+        // Skip full property baseline snapshot for maintenance verification audits
+        if ($audit->audit_type === \App\Domain\Audit\Enums\AuditType::MAINTENANCE) {
+            return;
+        }
+
         $property = $audit->property;
         if (!$property) {
             return;

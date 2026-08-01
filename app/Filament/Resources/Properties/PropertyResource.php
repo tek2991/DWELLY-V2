@@ -42,7 +42,10 @@ class PropertyResource extends Resource
             \App\Filament\Resources\Properties\RelationManagers\PhotosRelationManager::class,
             \App\Filament\Resources\Properties\RelationManagers\PricingVersionsRelationManager::class,
             \App\Filament\Resources\Properties\RelationManagers\UtilitiesRelationManager::class,
-            \App\Filament\Resources\Properties\RelationManagers\AuditsRelationManager::class,
+            \Filament\Resources\RelationManagers\RelationGroup::make('Maintenance & Audits', [
+                \App\Filament\Resources\Properties\RelationManagers\MaintenanceRequestsRelationManager::class,
+                \App\Filament\Resources\Properties\RelationManagers\AuditsRelationManager::class,
+            ]),
             \App\Filament\Resources\Properties\RelationManagers\ActivitiesRelationManager::class,
         ];
     }

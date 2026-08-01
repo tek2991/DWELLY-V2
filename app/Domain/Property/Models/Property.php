@@ -123,6 +123,11 @@ class Property extends DomainModel
         return $this->hasMany(\App\Domain\Audit\Models\Audit::class);
     }
 
+    public function maintenanceRequests(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(\App\Domain\Maintenance\Models\MaintenanceRequest::class);
+    }
+
     public function owner(): \Illuminate\Database\Eloquent\Relations\HasOneThrough
     {
         return $this->hasOneThrough(

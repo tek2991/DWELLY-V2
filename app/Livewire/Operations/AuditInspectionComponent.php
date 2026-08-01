@@ -99,7 +99,8 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
     {
         $pendingCount = $this->audit->items()->where('status', \App\Domain\Audit\Enums\ItemStatus::PENDING)->count();
         $totalItems = $this->audit->items()->count();
-        $hasVideo = $this->audit->getFirstMedia('layout_video') !== null;
+        $requiresVideo = $this->audit->audit_type !== \App\Domain\Audit\Enums\AuditType::MAINTENANCE;
+        $hasVideo = !$requiresVideo || ($this->audit->getFirstMedia('layout_video') !== null);
         $isComplete = ($pendingCount === 0) && ($totalItems > 0) && $hasVideo;
 
         $tooltip = null;
@@ -129,7 +130,8 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
             ->action(function () {
                 $pendingCount = $this->audit->items()->where('status', \App\Domain\Audit\Enums\ItemStatus::PENDING)->count();
                 $totalItems = $this->audit->items()->count();
-                $hasVideo = $this->audit->getFirstMedia('layout_video') !== null;
+                $requiresVideo = $this->audit->audit_type !== \App\Domain\Audit\Enums\AuditType::MAINTENANCE;
+                $hasVideo = !$requiresVideo || ($this->audit->getFirstMedia('layout_video') !== null);
 
                 if ($pendingCount > 0 || $totalItems === 0 || !$hasVideo) {
                     $msg = !$hasVideo 

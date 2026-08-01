@@ -3,10 +3,11 @@
         $totalItems = $audit->items->count();
         $pendingItems = $audit->items->where('status', \App\Domain\Audit\Enums\ItemStatus::PENDING)->count();
         $inspectedItems = $totalItems - $pendingItems;
-        $hasVideo = $audit->getFirstMedia('layout_video') !== null;
+        $requiresVideo = $audit->audit_type !== \App\Domain\Audit\Enums\AuditType::MAINTENANCE;
+        $hasVideo = !$requiresVideo || ($audit->getFirstMedia('layout_video') !== null);
         
-        $totalRequirements = $totalItems + 1; // +1 for mandatory layout video
-        $completedRequirements = $inspectedItems + ($hasVideo ? 1 : 0);
+        $totalRequirements = $totalItems + ($requiresVideo ? 1 : 0);
+        $completedRequirements = $inspectedItems + (($requiresVideo && $audit->getFirstMedia('layout_video') !== null) ? 1 : 0);
         $progress = $totalRequirements > 0 ? round(($completedRequirements / $totalRequirements) * 100) : 0;
     @endphp
 
@@ -61,13 +62,13 @@
                     @endif
                 </div>
             @elseif($audit->status === \App\Domain\Audit\Enums\AuditStatus::IN_PROGRESS)
-                @if(!$hasVideo || $pendingItems > 0)
+                @if(($requiresVideo && !$hasVideo) || $pendingItems > 0)
                     <div style="background-color: rgba(254, 249, 195, 1); border: 1px solid rgba(253, 224, 71, 1); color: rgba(133, 77, 14, 1); padding: 0.75rem 1rem; border-radius: 0.375rem; font-size: 0.875rem; display: flex; align-items: center; gap: 0.5rem;">
                         <x-filament::icon icon="heroicon-o-information-circle" style="width: 1.25rem; height: 1.25rem; flex-shrink: 0;" />
                         <span>
-                            @if(!$hasVideo && $pendingItems > 0)
+                            @if($requiresVideo && !$hasVideo && $pendingItems > 0)
                                 <strong>Property layout video</strong> must be uploaded and <strong>{{ $pendingItems }}</strong> item(s) pending inspection.
-                            @elseif(!$hasVideo)
+                            @elseif($requiresVideo && !$hasVideo)
                                 <strong>Property layout video</strong> must be uploaded before submitting for review.
                             @else
                                 All audit items have to be inspected before submitting for review. (<strong>{{ $pendingItems }}</strong> item(s) pending inspection)
@@ -101,21 +102,23 @@
         </div>
     </x-filament::section>
 
-    @if($audit->categories->isEmpty() && !$audit->getFirstMedia('layout_video'))
+    @if($audit->categories->isEmpty() && (!$requiresVideo || !$audit->getFirstMedia('layout_video')))
         <div style="text-align: center; padding: 2rem 0; color: rgba(107, 114, 128, 1);">No categories found in this audit.</div>
     @else
         <!-- Tabs -->
         <x-filament::tabs label="Audit Categories">
-            <x-filament::tabs.item
-                :active="$activeCategoryId === 'layout_video'"
-                wire:click="setActiveCategory('layout_video')"
-                icon="heroicon-o-video-camera"
-            >
-                Property Video
-                <x-slot name="badge">
-                    {{ $hasVideo ? '1 / 1' : '0 / 1' }}
-                </x-slot>
-            </x-filament::tabs.item>
+            @if($requiresVideo)
+                <x-filament::tabs.item
+                    :active="$activeCategoryId === 'layout_video'"
+                    wire:click="setActiveCategory('layout_video')"
+                    icon="heroicon-o-video-camera"
+                >
+                    Property Video
+                    <x-slot name="badge">
+                        {{ ($audit->getFirstMedia('layout_video') !== null) ? '1 / 1' : '0 / 1' }}
+                    </x-slot>
+                </x-filament::tabs.item>
+            @endif
 
             @foreach($audit->categories as $category)
                 <x-filament::tabs.item

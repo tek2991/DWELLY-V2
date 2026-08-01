@@ -37,6 +37,13 @@ class EditParty extends EditRecord
         }
         if ($this->record->vendorProfile()->exists()) {
             $roles[] = 'vendor';
+            $vProfile = $this->record->vendorProfile;
+            $data['vendor_data'] = [
+                'vendor_trade_id' => $vProfile->vendor_trade_id,
+                'onboarding_status' => $vProfile->onboarding_status?->value ?? $vProfile->onboarding_status,
+                'is_preferred' => $vProfile->is_preferred,
+                'verification_notes' => $vProfile->verification_notes,
+            ];
         }
         $data['roles'] = $roles;
 
