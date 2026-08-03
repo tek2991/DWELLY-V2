@@ -69,6 +69,7 @@ class Mou extends DomainModel implements HasMedia
         $this->addMediaCollection('owner_aadhaar');
         $this->addMediaCollection('owner_pan');
         $this->addMediaCollection('cancelled_cheque');
+        $this->addMediaCollection('electricity_bill');
         $this->addMediaCollection('signatory_aadhaar');
         $this->addMediaCollection('signatory_pan');
         $this->addMediaCollection('signatory_poa');

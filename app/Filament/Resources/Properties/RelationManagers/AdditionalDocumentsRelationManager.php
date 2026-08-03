@@ -46,6 +46,7 @@ class AdditionalDocumentsRelationManager extends Component implements HasActions
                         'owner_aadhaar',
                         'owner_pan',
                         'cancelled_cheque',
+                        'electricity_bill',
                         'signatory_aadhaar',
                         'signatory_pan',
                         'signatory_poa',
@@ -66,6 +67,7 @@ class AdditionalDocumentsRelationManager extends Component implements HasActions
                             'owner_aadhaar' => 'Owner Aadhaar Card',
                             'owner_pan' => 'Owner PAN Card',
                             'cancelled_cheque' => 'Cancelled Cheque',
+                            'electricity_bill' => 'Electricity Bill',
                             'signatory_aadhaar' => 'Signatory Aadhaar Card',
                             'signatory_pan' => 'Signatory PAN Card',
                             'signatory_poa' => 'Power of Attorney',
@@ -77,7 +79,7 @@ class AdditionalDocumentsRelationManager extends Component implements HasActions
                     ->badge()
                     ->color(fn (string $state) => match($state) {
                         'owner_aadhaar', 'owner_pan' => 'success',
-                        'cancelled_cheque' => 'info',
+                        'cancelled_cheque', 'electricity_bill' => 'info',
                         'signatory_aadhaar', 'signatory_pan', 'signatory_poa' => 'warning',
                         default => 'primary',
                     }),
@@ -120,6 +122,7 @@ class AdditionalDocumentsRelationManager extends Component implements HasActions
                             'aadhaar' => 'owner_aadhaar',
                             'pan' => 'owner_pan',
                             'cancelled_cheque' => 'cancelled_cheque',
+                            'electricity_bill' => 'electricity_bill',
                             'power_of_attorney' => 'signatory_poa',
                             default => 'mou_attachments',
                         };

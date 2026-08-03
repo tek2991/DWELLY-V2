@@ -78,6 +78,22 @@ class MouLegalTermsTest extends TestCase
             'is_active' => true,
         ]);
 
+        $state = \Tek2991\Accounting\Models\State::create([
+            'country_id' => 1,
+            'name' => 'Assam',
+            'code' => 'AS',
+        ]);
+        $district = \App\Domain\Geographic\Models\District::create([
+            'state_id' => $state->id,
+            'name' => 'Kamrup',
+            'slug' => 'kamrup',
+        ]);
+        $city = \App\Domain\Geographic\Models\City::create([
+            'district_id' => $district->id,
+            'name' => 'Guwahati',
+            'slug' => 'guwahati',
+        ]);
+
         $opportunity = Opportunity::create([
             'number' => 'OPP-601',
             'title' => 'Test Opportunity 601',
@@ -93,6 +109,7 @@ class MouLegalTermsTest extends TestCase
             'status' => \App\Domain\Opportunity\Enums\MouStatus::DRAFT,
             'start_date' => now()->format('Y-m-d'),
             'legal_terms' => [
+                'city_id' => $city->id,
                 'address' => 'Sample Address 123',
                 'rent_amount' => 12000,
                 'financial_model_id' => $financialModel->id,
@@ -109,6 +126,10 @@ class MouLegalTermsTest extends TestCase
             'record' => $mou->getKey(),
         ])
             ->fillForm([
+                'owner_aadhaar' => [$file],
+                'owner_pan' => [$file],
+                'cancelled_cheque' => [$file],
+                'electricity_bill' => [$file],
                 'mou_attachments' => [$file],
                 'bank_details' => [
                     'bank_name' => 'HDFC Bank',
@@ -118,6 +139,7 @@ class MouLegalTermsTest extends TestCase
                     'bank_address' => 'Guwahati Branch',
                 ],
                 'legal_terms' => [
+                    'city_id' => $city->id,
                     'address' => 'Sample Address 123 Updated',
                     'rent_amount' => 12000,
                     'fee_percentage' => 15,
@@ -137,5 +159,105 @@ class MouLegalTermsTest extends TestCase
         $this->assertEquals(15, $mou->legal_terms['fee_percentage']);
         
         $this->assertArrayNotHasKey('pricing_model', $mou->legal_terms);
+    }
+
+    public function test_electricity_bill_is_mandatory_in_mou_form()
+    {
+        \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'Business Owner', 'guard_name' => 'web']);
+        $user = User::factory()->create();
+        $user->assignRole('Business Owner');
+        $this->actingAs($user);
+
+        $state = \Tek2991\Accounting\Models\State::create([
+            'country_id' => 1,
+            'name' => 'Assam',
+            'code' => 'AS',
+        ]);
+        $district = \App\Domain\Geographic\Models\District::create([
+            'state_id' => $state->id,
+            'name' => 'Kamrup',
+            'slug' => 'kamrup',
+        ]);
+        $city = \App\Domain\Geographic\Models\City::create([
+            'district_id' => $district->id,
+            'name' => 'Guwahati',
+            'slug' => 'guwahati',
+        ]);
+
+        $financialModel = FinancialModel::create([
+            'slug' => 'rent-share-2',
+            'name' => 'Rent share 2',
+            'description' => 'Monthly % of rent',
+            'fee_collection' => 'Auto-deducted',
+            'is_active' => true,
+        ]);
+
+        $utilityType = UtilityType::create([
+            'name' => 'Electricity',
+            'slug' => 'electricity',
+            'category' => 'electricity',
+        ]);
+
+        $provider = UtilityProvider::create([
+            'utility_type_id' => $utilityType->id,
+            'slug' => 'apdcl-2',
+            'name' => 'APDCL',
+            'is_active' => true,
+        ]);
+
+        $opportunity = Opportunity::create([
+            'number' => 'OPP-602',
+            'title' => 'Test Opportunity 602',
+            'owner_name' => 'Test Owner',
+            'owner_phone' => '9876543210',
+            'assigned_user_id' => $user->id,
+            'status' => OpportunityStatus::READY_FOR_MOU,
+        ]);
+
+        $mou = \App\Domain\Mou\Models\Mou::create([
+            'number' => 'MOU-TEST-002',
+            'opportunity_id' => $opportunity->id,
+            'status' => \App\Domain\Opportunity\Enums\MouStatus::DRAFT,
+            'start_date' => now()->format('Y-m-d'),
+            'legal_terms' => [
+                'city_id' => $city->id,
+                'address' => 'Sample Address 123',
+                'rent_amount' => 12000,
+                'financial_model_id' => $financialModel->id,
+                'electricity_provider_id' => $provider->id,
+                'electricity_consumer_id' => '123456789',
+                'fee_percentage' => 10,
+            ],
+        ]);
+
+        $file = \Illuminate\Http\UploadedFile::fake()->create('document.pdf', 100, 'application/pdf');
+
+        Livewire::test(MOUResource\Pages\EditMOU::class, [
+            'record' => $mou->getKey(),
+        ])
+            ->fillForm([
+                'owner_aadhaar' => [$file],
+                'owner_pan' => [$file],
+                'cancelled_cheque' => [$file],
+                'electricity_bill' => [], // Empty electricity bill to trigger validation error
+                'bank_details' => [
+                    'bank_name' => 'HDFC Bank',
+                    'beneficiary_name' => 'Test Owner',
+                    'account_number' => '1234567890',
+                    'ifsc_code' => 'HDFC0001234',
+                    'bank_address' => 'Guwahati Branch',
+                ],
+                'legal_terms' => [
+                    'city_id' => $city->id,
+                    'address' => 'Sample Address 123 Updated',
+                    'rent_amount' => 12000,
+                    'fee_percentage' => 15,
+                    'financial_model_id' => $financialModel->id,
+                    'electricity_provider_id' => $provider->id,
+                    'electricity_consumer_id' => '123456789',
+                ],
+            ])
+            ->call('save')
+            ->assertHasFormErrors(['electricity_bill' => 'required']);
     }
 }

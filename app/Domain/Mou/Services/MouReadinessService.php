@@ -25,6 +25,11 @@ class MouReadinessService
                isset($mou->legal_terms['security_deposit']);
     }
 
+    public function hasElectricityBill(Mou $mou): bool
+    {
+        return $mou->hasMedia('electricity_bill');
+    }
+
     public function canGeneratePdf(Mou $mou): array
     {
         $errors = [];
@@ -35,6 +40,10 @@ class MouReadinessService
 
         if (!$this->hasBankDetails($mou)) {
             $errors[] = 'Bank details are required.';
+        }
+
+        if ((!$mou->type || $mou->type === \App\Domain\Mou\Enums\MouType::ONBOARDING) && !$this->hasElectricityBill($mou)) {
+            $errors[] = 'Electricity bill document is required.';
         }
 
         return [

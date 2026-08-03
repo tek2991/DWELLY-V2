@@ -9,6 +9,7 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -16,6 +17,7 @@ use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -114,105 +116,186 @@ class EstablishmentsRelationManager extends RelationManager
                     ->icon('heroicon-o-squares-plus')
                     ->form(function (RelationManager $livewire) {
                         $property = $livewire->getOwnerRecord();
-                        $propertyCityId = $property->city_id;
-                        $cities = \App\Domain\Geographic\Models\City::pluck('name', 'id');
+                        $cityId = $property->city_id;
+                        $cityName = null;
+                        if ($cityId) {
+                            $cityName = \App\Domain\Geographic\Models\City::find($cityId)?->name;
+                        }
+                        if (!$cityName && $property->city) {
+                            $cityName = $property->city;
+                        }
+
+                        $noticeHtml = $cityName
+                            ? "<div class=\"p-3 rounded-lg bg-primary-50 dark:bg-primary-950/40 border border-primary-200 dark:border-primary-800 text-sm text-primary-800 dark:text-primary-300 flex items-center gap-2\"><svg width=\"20\" height=\"20\" style=\"width:20px; height:20px; min-width:20px; min-height:20px; flex-shrink:0; display:inline-block;\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z\"/><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M15 11a3 3 0 11-6 0 3 3 0 016 0z\"/></svg><span>Suggestions filtered by city: <strong>{$cityName}</strong></span></div>"
+                            : "<div class=\"p-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-sm text-amber-800 dark:text-amber-300\">Showing suggestions across all cities (No city set on property).</div>";
+
+                        $types = \App\Domain\Property\Models\EstablishmentType::where('is_active', true)
+                            ->orderBy('name')
+                            ->get();
+
+                        $defaultItems = $types->map(fn ($type) => [
+                            'establishment_type_id' => $type->id,
+                            'establishment_name' => '',
+                            'distance_km' => null,
+                            'travel_time_minutes' => null,
+                        ])->toArray();
 
                         return [
-                            Select::make('filter_city_id')
-                                ->label('Filter Establishments by City')
-                                ->options($cities)
-                                ->default($propertyCityId)
-                                ->placeholder('All Cities')
-                                ->live()
-                                ->dehydrated(false),
+                            Placeholder::make('city_filter_notice')
+                                ->hiddenLabel()
+                                ->content(new \Illuminate\Support\HtmlString($noticeHtml)),
+                            Repeater::make('establishments')
+                                ->label('Establishments')
+                                ->default($defaultItems)
+                                ->addActionLabel('Add More')
+                                ->reorderable(false)
+                                ->itemHeaders(false)
+                                ->compact()
+                                ->schema([
+                                    Grid::make(12)
+                                        ->schema([
+                                             Select::make('establishment_type_id')
+                                                ->label('Establishment Type')
+                                                ->options(fn () => \App\Domain\Property\Models\EstablishmentType::orderBy('name')->pluck('name', 'id'))
+                                                ->required()
+                                                ->live()
+                                                ->columnSpan(3),
+                                            Select::make('establishment_id')
+                                                ->label('Establishment Name')
+                                                ->options(function (Get $get, RelationManager $livewire) {
+                                                    $typeId = $get('establishment_type_id');
+                                                    $cityId = $livewire->getOwnerRecord()->city_id;
 
-                            Group::make()
-                                ->schema(function (Get $get) use ($propertyCityId) {
-                                    $selectedCityId = $get('filter_city_id');
+                                                    $query = \App\Domain\Property\Models\Establishment::query();
+                                                    if ($typeId) {
+                                                        $query->where('establishment_type_id', $typeId);
+                                                    }
+                                                    if ($cityId) {
+                                                        $query->where(function ($q) use ($cityId) {
+                                                            $q->where('city_id', $cityId)
+                                                              ->orWhereNull('city_id');
+                                                        });
+                                                    }
+                                                    return $query->pluck('name', 'id');
+                                                })
+                                                ->searchable()
+                                                ->preload()
+                                                ->createOptionForm([
+                                                    TextInput::make('name')
+                                                        ->label('Establishment Name')
+                                                        ->required(),
+                                                ])
+                                                ->createOptionUsing(function (array $data, Get $get, RelationManager $livewire) {
+                                                    $typeId = $get('establishment_type_id');
+                                                    $cityId = $livewire->getOwnerRecord()->city_id;
 
-                                    $query = \App\Domain\Property\Models\Establishment::with(['establishmentType', 'city']);
-                                    if ($selectedCityId) {
-                                        $query->where('city_id', $selectedCityId);
-                                    }
-                                    $establishments = $query->orderBy('name')->get();
+                                                    $establishment = \App\Domain\Property\Models\Establishment::create([
+                                                        'name' => trim($data['name']),
+                                                        'establishment_type_id' => $typeId,
+                                                        'city_id' => $cityId,
+                                                    ]);
 
-                                    if ($establishments->isEmpty()) {
-                                        return [
-                                            Placeholder::make('no_est_notice')
-                                                ->hiddenLabel()
-                                                ->content(new \Illuminate\Support\HtmlString('<div class="py-4 text-center text-sm text-gray-500">No establishments found for the selected city.</div>')),
-                                        ];
-                                    }
+                                                    return $establishment->id;
+                                                })
+                                                ->columnSpan(4),
+                                            TextInput::make('distance_km')
+                                                ->label('Distance (KM)')
+                                                ->numeric()
+                                                ->columnSpan(2),
+                                            TextInput::make('travel_time_minutes')
+                                                ->label('Time (Mins)')
+                                                ->numeric()
+                                                ->columnSpan(2),
+                                            \Filament\Schemas\Components\Actions::make([
+                                                Action::make('deleteRow')
+                                                    ->hiddenLabel()
+                                                    ->icon('heroicon-m-trash')
+                                                    ->color('danger')
+                                                    ->iconButton()
+                                                    ->tooltip('Remove row')
+                                                    ->action(function (array $arguments, \Filament\Schemas\Components\Actions $component, Get $get, Set $set) {
+                                                        $statePath = $component->getContainer()->getStatePath();
+                                                        $key = last(explode('.', $statePath));
 
-                                    $gridSchema = [
-                                        Placeholder::make('h_name')->hiddenLabel()->content(new \Illuminate\Support\HtmlString('<strong>Establishment Name</strong>')),
-                                        Placeholder::make('h_type')->hiddenLabel()->content(new \Illuminate\Support\HtmlString('<strong>Type / City</strong>')),
-                                        Placeholder::make('h_dist')->hiddenLabel()->content(new \Illuminate\Support\HtmlString('<strong>Distance (KM) *</strong>')),
-                                        Placeholder::make('h_time')->hiddenLabel()->content(new \Illuminate\Support\HtmlString('<strong>Time (Mins)</strong>')),
-                                    ];
+                                                        $repeater = $component->getContainer()->getParentComponent();
+                                                        if ($repeater instanceof Repeater) {
+                                                            $items = $repeater->getRawState();
+                                                            if (isset($items[$key])) {
+                                                                unset($items[$key]);
+                                                                $repeater->rawState($items);
+                                                                $repeater->callAfterStateUpdated();
+                                                                $repeater->partiallyRender();
+                                                            }
+                                                        }
 
-                                    foreach ($establishments as $est) {
-                                        $gridSchema[] = Placeholder::make("label_{$est->id}")
-                                            ->hiddenLabel()
-                                            ->content($est->name);
-                                            
-                                        $gridSchema[] = Placeholder::make("type_{$est->id}")
-                                            ->hiddenLabel()
-                                            ->content(($est->establishmentType?->name ?? '-') . ($est->city ? " ({$est->city->name})" : ''));
-                                            
-                                        $gridSchema[] = TextInput::make("est_{$est->id}_dist")
-                                            ->hiddenLabel()
-                                            ->numeric()
-                                            ->placeholder("0.0");
-                                            
-                                        $gridSchema[] = TextInput::make("est_{$est->id}_time")
-                                            ->hiddenLabel()
-                                            ->numeric()
-                                            ->placeholder("0");
-                                    }
-
-                                    return [
-                                        Grid::make(4)->schema($gridSchema),
-                                    ];
-                                }),
+                                                        $state = $get('../../establishments');
+                                                        if (is_array($state) && isset($state[$key])) {
+                                                            unset($state[$key]);
+                                                            $set('../../establishments', $state);
+                                                        }
+                                                    }),
+                                            ])
+                                            ->columnSpan(1)
+                                            ->alignEnd(),
+                                        ]),
+                                ]),
                         ];
                     })
                     ->action(function (array $data, RelationManager $livewire) {
                         $property = $livewire->getOwnerRecord();
-                        $establishments = \App\Domain\Property\Models\Establishment::all();
-                        
+                        $items = $data['establishments'] ?? [];
+
                         $addedCount = 0;
-                        $skippedCount = 0;
-                        foreach ($establishments as $est) {
-                            $dist = $data["est_{$est->id}_dist"] ?? null;
-                            $time = $data["est_{$est->id}_time"] ?? null;
-                            
-                            // If user entered distance for this establishment
-                            if ($dist !== null && $dist !== '') {
-                                $existing = $property->establishments()->where('establishment_id', $est->id)->first();
-                                if (!$existing) {
-                                    $property->establishments()->create([
-                                        'establishment_id' => $est->id,
-                                        'distance_km' => $dist,
-                                        'travel_time_minutes' => $time,
-                                    ]);
-                                    $addedCount++;
-                                } else {
-                                    $existing->update([
-                                        'distance_km' => $dist,
-                                        'travel_time_minutes' => $time ?? $existing->travel_time_minutes,
-                                    ]);
-                                }
-                            } elseif ($time !== null && $time !== '') {
-                                $skippedCount++;
+
+                        foreach ($items as $item) {
+                            $typeId = $item['establishment_type_id'] ?? null;
+                            $estIdOrName = $item['establishment_id'] ?? $item['establishment_name'] ?? null;
+                            $dist = $item['distance_km'] ?? null;
+                            $time = $item['travel_time_minutes'] ?? null;
+
+                            if (empty($estIdOrName) || $dist === null || $dist === '') {
+                                continue;
+                            }
+
+                            $establishment = \App\Domain\Property\Models\Establishment::find($estIdOrName);
+                            if (!$establishment) {
+                                $establishment = \App\Domain\Property\Models\Establishment::firstOrCreate([
+                                    'name' => trim($estIdOrName),
+                                    'establishment_type_id' => $typeId,
+                                    'city_id' => $property->city_id,
+                                ]);
+                            }
+
+                            $existing = $property->establishments()
+                                ->where('establishment_id', $establishment->id)
+                                ->first();
+
+                            if (!$existing) {
+                                $property->establishments()->create([
+                                    'establishment_id' => $establishment->id,
+                                    'distance_km' => $dist,
+                                    'travel_time_minutes' => $time,
+                                ]);
+                                $addedCount++;
+                            } else {
+                                $existing->update([
+                                    'distance_km' => $dist,
+                                    'travel_time_minutes' => $time ?? $existing->travel_time_minutes,
+                                ]);
+                                $addedCount++;
                             }
                         }
+
                         if ($addedCount > 0) {
-                            \Filament\Notifications\Notification::make()->title("{$addedCount} Establishments mapped successfully")->success()->send();
-                        } elseif ($skippedCount > 0) {
-                            \Filament\Notifications\Notification::make()->title("Establishments require Distance (KM) to be saved")->warning()->send();
+                            \Filament\Notifications\Notification::make()
+                                ->title("{$addedCount} Establishments mapped successfully")
+                                ->success()
+                                ->send();
                         } else {
-                            \Filament\Notifications\Notification::make()->title("Establishment mappings updated")->success()->send();
+                            \Filament\Notifications\Notification::make()
+                                ->title("No establishment entries updated")
+                                ->warning()
+                                ->send();
                         }
                     }),
             ])

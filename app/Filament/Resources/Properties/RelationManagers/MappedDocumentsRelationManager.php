@@ -77,6 +77,7 @@ class MappedDocumentsRelationManager extends Component implements HasActions, Ha
                             'owner_aadhaar' => 'Owner Aadhaar Card',
                             'owner_pan' => 'Owner PAN Card',
                             'cancelled_cheque' => 'Cancelled Cheque',
+                            'electricity_bill' => 'Electricity Bill',
                             'signatory_aadhaar' => 'Signatory Aadhaar Card',
                             'signatory_pan' => 'Signatory PAN Card',
                             'signatory_poa' => 'Power of Attorney',
@@ -89,7 +90,7 @@ class MappedDocumentsRelationManager extends Component implements HasActions, Ha
                     ->color(fn (string $state) => match($state) {
                         'signed_pdf', 'owner_aadhaar', 'owner_pan' => 'success',
                         'draft_pdf', 'signatory_aadhaar', 'signatory_pan', 'signatory_poa' => 'warning',
-                        'cancelled_cheque' => 'info',
+                        'cancelled_cheque', 'electricity_bill' => 'info',
                         'archived_signed_pdf' => 'gray',
                         default => 'primary',
                     }),

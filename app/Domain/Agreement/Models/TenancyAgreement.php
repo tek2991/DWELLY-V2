@@ -34,6 +34,7 @@ class TenancyAgreement extends DomainModel implements HasMedia
         'special_terms',
         'apdcl_consumer_id',
         'electricity_provider_id',
+        'secondary_tenants',
         'tenant_bank_details',
         'pricing_version_id',
         'signed_at',
@@ -73,6 +74,7 @@ class TenancyAgreement extends DomainModel implements HasMedia
         'keys_handed_over' => 'boolean',
         'keys_returned' => 'boolean',
         'tenant_bank_details' => 'array',
+        'secondary_tenants' => 'array',
         'key_details' => 'array',
         'deposit_deductions_breakdown' => 'array',
     ];
@@ -84,8 +86,10 @@ class TenancyAgreement extends DomainModel implements HasMedia
         $this->addMediaCollection('signed_agreement')->singleFile();
         $this->addMediaCollection('tenant_aadhaar');
         $this->addMediaCollection('tenant_pan');
+        $this->addMediaCollection('tenant_photo')->singleFile();
         $this->addMediaCollection('cancelled_cheque');
         $this->addMediaCollection('kyc_documents');
+        $this->addMediaCollection('secondary_tenant_kyc');
         $this->addMediaCollection('key_handover_attachments');
         $this->addMediaCollection('key_return_attachments');
     }

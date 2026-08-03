@@ -242,7 +242,7 @@ class MOUResource extends Resource
                                 ->label('Start Date')
                                 ->required(),
                                 
-                            \Filament\Schemas\Components\Grid::make(3)
+                            \Filament\Schemas\Components\Grid::make(2)
                                 ->schema([
                                     \Filament\Forms\Components\SpatieMediaLibraryFileUpload::make('owner_aadhaar')
                                         ->collection('owner_aadhaar')
@@ -260,6 +260,12 @@ class MOUResource extends Resource
                                         ->collection('cancelled_cheque')
                                         ->label('Cancelled Cheque / Bank Proof')
                                         ->helperText('Cancelled Cheque or Passbook')
+                                        ->required(),
+
+                                    \Filament\Forms\Components\SpatieMediaLibraryFileUpload::make('electricity_bill')
+                                        ->collection('electricity_bill')
+                                        ->label('Electricity Bill')
+                                        ->helperText('Recent electricity bill image or PDF')
                                         ->required(),
                                 ]),
 
@@ -288,6 +294,7 @@ class MOUResource extends Resource
                                             'aadhaar', 'owner_aadhaar' => 'owner_aadhaar',
                                             'pan', 'owner_pan' => 'owner_pan',
                                             'cancelled_cheque' => 'cancelled_cheque',
+                                            'electricity_bill' => 'electricity_bill',
                                             'power_of_attorney' => 'signatory_poa',
                                             default => 'mou_attachments',
                                         };
@@ -535,6 +542,7 @@ class MOUResource extends Resource
                                 'aadhaar', 'owner_aadhaar' => 'owner_aadhaar',
                                 'pan', 'owner_pan' => 'owner_pan',
                                 'cancelled_cheque' => 'cancelled_cheque',
+                                'electricity_bill' => 'electricity_bill',
                                 'power_of_attorney' => 'signatory_poa',
                                 default => 'mou_attachments',
                             };

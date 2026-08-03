@@ -167,6 +167,7 @@ class MouPdfService
         $processMedia('owner_aadhaar', 'Property Owner (Aadhaar)', $ownerName);
         $processMedia('owner_pan', 'Property Owner (PAN)', $ownerName);
         $processMedia('cancelled_cheque', 'Property Owner (Cancelled Cheque)', $ownerName);
+        $processMedia('electricity_bill', 'Property Owner (Electricity Bill)', $ownerName);
         $processMedia('mou_attachments', 'Property Owner Attachments', $ownerName);
         
         // Process Signatory documents
