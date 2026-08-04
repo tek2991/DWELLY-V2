@@ -94,6 +94,7 @@ class DraftTenancyAgreementAction
                     'status' => AuditStatus::DRAFT,
                     'reference_audit_id' => $latestApprovedAudit?->id,
                     'notes' => 'Auto-triggered Move-In Audit for Tenancy Agreement ' . $agreement->code,
+                    'reviewer_id' => auth()->id(),
                 ]);
 
                 $agreement->audit_id = $moveInAudit->id;

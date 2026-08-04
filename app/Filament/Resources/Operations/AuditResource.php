@@ -45,12 +45,12 @@ class AuditResource extends Resource
                         ->schema([
                             Forms\Components\Select::make('property_id')
                                 ->relationship('property', 'code')
-                                ->getOptionLabelFromRecordUsing(fn ($record) => $record->building_name . ($record->code ? ' (' . $record->code . ')' : ''))
+                                ->getOptionLabelFromRecordUsing(fn($record) => $record->building_name . ($record->code ? ' (' . $record->code . ')' : ''))
                                 ->searchable()
                                 ->preload()
                                 ->required()
                                 ->default(request()->query('property_id'))
-                                ->disabled(fn (string $operation): bool => $operation === 'edit' || request()->has('property_id'))
+                                ->disabled(fn(string $operation): bool => $operation === 'edit' || request()->has('property_id'))
                                 ->dehydrated()
                                 ->live()
                                 ->afterStateUpdated(function (Set $set, $state) {
@@ -71,7 +71,7 @@ class AuditResource extends Resource
                                 ->options(AuditType::class)
                                 ->required()
                                 ->default(request()->query('audit_type'))
-                                ->disabled(fn (string $operation): bool => $operation === 'edit'),
+                                ->disabled(fn(string $operation): bool => $operation === 'edit'),
 
                             Forms\Components\Select::make('tenant_id')
                                 ->label('Linked Tenant')
@@ -85,36 +85,35 @@ class AuditResource extends Resource
                                 ->options(function (Get $get, ?Audit $record) {
                                     $propertyId = $get('property_id');
                                     if (!$propertyId) return [];
-                                    
+
                                     $query = Audit::where('property_id', $propertyId)
                                         ->whereIn('status', [AuditStatus::COMPLETED, AuditStatus::APPROVED]);
-                                        
+
                                     if ($record) {
                                         $query->where('created_at', '<', $record->created_at);
                                     }
-                                    
+
                                     return $query->get()->mapWithKeys(function ($audit) {
                                         return [$audit->id => $audit->audit_number . ' (' . $audit->audit_type->getLabel() . ')'];
                                     });
                                 })
                                 ->searchable()
-                                ->preload()
-                                ->hint('Used for comparisons and preloading in Phase 2'),
-                                
+                                ->preload(),
+
                             Forms\Components\Select::make('inspector_id')
                                 ->label('Assigned Inspector')
                                 ->relationship('inspector', 'name')
                                 ->searchable()
                                 ->preload()
                                 ->required()
-                                ->default(fn () => auth()->id()),
+                                ->default(fn() => auth()->id()),
 
                             Forms\Components\Select::make('reviewer_id')
                                 ->label('Assigned Reviewer')
                                 ->relationship('reviewer', 'name')
                                 ->searchable()
                                 ->preload()
-                                ->default(fn () => auth()->id()),
+                                ->default(fn() => auth()->id()),
 
                             Forms\Components\DatePicker::make('scheduled_at')
                                 ->label('Scheduled Date'),
@@ -133,8 +132,8 @@ class AuditResource extends Resource
                         ->schema([
                             Forms\Components\Placeholder::make('audit_number')
                                 ->label('Audit Number')
-                                ->content(fn (?Audit $record): string => $record?->audit_number ?? 'Auto-generated'),
-                                
+                                ->content(fn(?Audit $record): string => $record?->audit_number ?? 'Auto-generated'),
+
                             Forms\Components\Placeholder::make('status')
                                 ->content(function (?Audit $record): \Illuminate\Support\HtmlString {
                                     $label = $record?->status?->getLabel() ?? 'Draft';
@@ -146,16 +145,16 @@ class AuditResource extends Resource
                                     };
                                     return new \Illuminate\Support\HtmlString("<span class=\"font-medium {$color}\">{$label}</span>");
                                 }),
-                                
+
                             Forms\Components\Placeholder::make('completed_by_id')
                                 ->label('Completed By')
-                                ->content(fn (?Audit $record): ?string => $record?->completedBy?->name ?? '-')
-                                ->visible(fn (?Audit $record) => $record && $record->completed_at),
-                                
+                                ->content(fn(?Audit $record): ?string => $record?->completedBy?->name ?? '-')
+                                ->visible(fn(?Audit $record) => $record && $record->completed_at),
+
                             Forms\Components\Placeholder::make('approved_by_id')
                                 ->label('Approved By')
-                                ->content(fn (?Audit $record): ?string => $record?->approvedBy?->name ?? '-')
-                                ->visible(fn (?Audit $record) => $record && $record->approved_at),
+                                ->content(fn(?Audit $record): ?string => $record?->approvedBy?->name ?? '-')
+                                ->visible(fn(?Audit $record) => $record && $record->approved_at),
                         ]),
                 ])->columnSpan(['lg' => 1]),
             ])
@@ -208,10 +207,10 @@ class AuditResource extends Resource
                             : '';
 
                         return '<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px;">' .
-                                    $typeBadge .
-                                    $statusBadge .
-                                    $lockedBadge .
-                               '</div>';
+                            $typeBadge .
+                            $statusBadge .
+                            $lockedBadge .
+                            '</div>';
                     }),
                 Tables\Columns\TextColumn::make('inspector.name')
                     ->label('Inspector'),

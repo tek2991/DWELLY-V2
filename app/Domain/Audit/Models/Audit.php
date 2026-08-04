@@ -77,6 +77,9 @@ class Audit extends DomainModel implements HasMedia
             if (empty($audit->audit_number)) {
                 $audit->audit_number = self::generateAuditNumber();
             }
+            if (empty($audit->reviewer_id) && auth()->check()) {
+                $audit->reviewer_id = auth()->id();
+            }
         });
 
         static::updating(function ($audit) {

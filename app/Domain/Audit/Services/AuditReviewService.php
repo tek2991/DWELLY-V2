@@ -141,6 +141,20 @@ class AuditReviewService
             ]);
         }
 
+        // If audit was previously APPROVED but items are no longer all approved (e.g. decision was reset or item rejected)
+        if ($audit->status === AuditStatus::APPROVED && $approvedItems < $totalItems) {
+            $newStatus = $rejectedItems > 0 ? AuditStatus::PARTIALLY_APPROVED : AuditStatus::IN_REVIEW;
+            $audit->update([
+                'status' => $newStatus,
+                'approved_at' => null,
+                'approved_by_id' => null,
+            ]);
+
+            activity()
+                ->performedOn($audit)
+                ->log("Workflow: Audit status demoted from Approved to {$newStatus->getLabel()} due to item decision change");
+        }
+
         // If all items are approved, auto-approve the audit and sync items to property only when triggered from a user action
         if ($fromUserAction && $approvedItems === $totalItems) {
             $audit->update([

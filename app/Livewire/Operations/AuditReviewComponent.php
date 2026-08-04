@@ -99,6 +99,7 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
 
     public function refreshAuditRelations(): void
     {
+        $this->audit->refresh();
         $this->audit->unsetRelation('categories');
         $this->audit->unsetRelation('items');
         $this->audit->load('categories.items.evidence', 'categories.items.reviews', 'categories.items.category', 'items.category', 'media');

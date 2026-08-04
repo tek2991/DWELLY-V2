@@ -35,6 +35,7 @@ class CreateTenancyAgreement extends CreateRecord
                 'parent_name' => $tenantData['parent_name'] ?? null,
                 'aadhaar_number' => $tenantData['aadhaar_number'] ?? null,
                 'pan_number' => $tenantData['pan_number'] ?? null,
+                'voter_id' => $tenantData['voter_id'] ?? null,
             ]);
 
             if (!empty($tenantData['address_line_1'])) {

@@ -63,36 +63,53 @@ class TenancyAgreementForm
                         // Inline New Tenant Form
                         Group::make()
                             ->schema([
-                                TextInput::make('new_tenant.display_name')
-                                    ->label('Tenant Full Name')
-                                    ->required(fn(Get $get) => (bool)$get('create_new_tenant')),
+                                Section::make('👤 Personal Information')
+                                    ->compact()
+                                    ->schema([
+                                        Grid::make(2)
+                                            ->schema([
+                                                TextInput::make('new_tenant.display_name')
+                                                    ->label('Tenant Full Name (Required)')
+                                                    ->required(fn(Get $get) => (bool)$get('create_new_tenant')),
 
-                                TextInput::make('new_tenant.phone')
-                                    ->label('Phone Number')
-                                    ->tel()
-                                    ->required(fn(Get $get) => (bool)$get('create_new_tenant')),
+                                                TextInput::make('new_tenant.phone')
+                                                    ->label('Phone Number (Required)')
+                                                    ->tel()
+                                                    ->required(fn(Get $get) => (bool)$get('create_new_tenant')),
 
-                                TextInput::make('new_tenant.email')
-                                    ->label('Email Address')
-                                    ->email(),
+                                                TextInput::make('new_tenant.email')
+                                                    ->label('Email Address (Optional)')
+                                                    ->email(),
 
-                                TextInput::make('new_tenant.parent_name')
-                                    ->label("Father's / Care-Of Name")
-                                    ->placeholder("e.g. S/o Late Rajesh Sharma"),
+                                                TextInput::make('new_tenant.parent_name')
+                                                    ->label("Father's / Care-Of Name (Optional)")
+                                                    ->placeholder("e.g. S/o Late Rajesh Sharma"),
 
-                                TextInput::make('new_tenant.aadhaar_number')
-                                    ->label('Aadhaar Number')
-                                    ->placeholder('12-digit Aadhaar number'),
+                                                TextInput::make('new_tenant.address_line_1')
+                                                    ->label('Permanent Address (Optional)')
+                                                    ->columnSpanFull(),
+                                            ]),
+                                    ]),
 
-                                TextInput::make('new_tenant.pan_number')
-                                    ->label('PAN Number')
-                                    ->placeholder('10-character PAN'),
+                                Section::make('🪪 Identity Details')
+                                    ->compact()
+                                    ->schema([
+                                        Grid::make(2)
+                                            ->schema([
+                                                TextInput::make('new_tenant.aadhaar_number')
+                                                    ->label('Aadhaar Number (Optional)')
+                                                    ->placeholder('12-digit Aadhaar number'),
 
-                                TextInput::make('new_tenant.address_line_1')
-                                    ->label('Permanent Address')
-                                    ->columnSpanFull(),
+                                                TextInput::make('new_tenant.pan_number')
+                                                    ->label('PAN Number (Optional)')
+                                                    ->placeholder('10-character PAN'),
+
+                                                TextInput::make('new_tenant.voter_id')
+                                                    ->label('Voter Card Number (Optional)')
+                                                    ->placeholder('Voter Card / EPIC Number'),
+                                            ]),
+                                    ]),
                             ])
-                            ->columns(2)
                             ->visible(fn(Get $get) => (bool)$get('create_new_tenant'))
                             ->columnSpanFull(),
                     ]),
@@ -184,35 +201,35 @@ class TenancyAgreementForm
                             ->columnSpanFull(),
                     ])->columns(2),
 
-                Section::make('3. Tenant KYC & Document Collection')
-                    ->description('Upload tenant verification documents (Aadhaar, PAN, Cancelled Cheque / Bank Proof, Police Verification, etc.)')
+                Section::make('3. Primary Tenant KYC & Document Collection')
+                    ->description('Upload verification documents for the primary tenant.')
+                    ->columnSpanFull()
                     ->schema([
-                        Grid::make(2)
+                        Grid::make(4)
                             ->schema([
                                 SpatieMediaLibraryFileUpload::make('tenant_photo')
                                     ->collection('tenant_photo')
-                                    ->label('Tenant Passport Photo')
+                                    ->label('Tenant Passport Photo (Required)')
                                     ->helperText('Passport-sized photograph')
                                     ->image()
+                                    ->avatar()
                                     ->required(),
 
                                 SpatieMediaLibraryFileUpload::make('tenant_aadhaar')
                                     ->collection('tenant_aadhaar')
-                                    ->label('Tenant Aadhaar Card')
+                                    ->label('Tenant Aadhaar Card (Required)')
                                     ->helperText('Front & Back image or PDF')
                                     ->required(),
 
                                 SpatieMediaLibraryFileUpload::make('tenant_pan')
                                     ->collection('tenant_pan')
-                                    ->label('Tenant PAN Card')
-                                    ->helperText('Clear image or PDF')
-                                    ->required(),
+                                    ->label('Tenant PAN Card (Optional)')
+                                    ->helperText('Clear image or PDF'),
 
                                 SpatieMediaLibraryFileUpload::make('cancelled_cheque')
                                     ->collection('cancelled_cheque')
-                                    ->label('Cancelled Cheque')
-                                    ->helperText('Cancelled Cheque or Passbook')
-                                    ->required(),
+                                    ->label('Cancelled Cheque (Optional)')
+                                    ->helperText('Cancelled Cheque or Passbook'),
                             ]),
 
                         \Filament\Schemas\Components\Actions::make([
@@ -644,120 +661,164 @@ class TenancyAgreementForm
                         Tabs\Tab::make('Secondary Tenants')
                             ->icon('heroicon-o-user-group')
                             ->schema([
-                                Section::make('Secondary Tenants / Family Members & Occupants')
-                                    ->description('Manage family members or co-tenants living with the primary tenant, along with their KYC details and identity documents (Aadhaar, PAN, Voter ID, etc.).')
+                                Section::make('Secondary Tenants & Family Members')
+                                    ->description('Manage family members or co-tenants living with the primary tenant, along with their identity details and KYC documents.')
                                     ->schema([
                                         Repeater::make('secondary_tenants')
-                                            ->label('Secondary Tenants / Family Members List')
+                                            ->label('Secondary Tenants / Family Members')
                                             ->default([])
-                                            ->addActionLabel('Add Family Member / Secondary Tenant')
+                                            ->addActionLabel('Add Family Member')
+                                            ->collapsible()
+                                            ->collapsed(fn (array $state): bool => !empty($state['name']))
+                                            ->itemLabel(fn (array $state): ?string => !empty($state['name'])
+                                                ? ($state['name'] . (!empty($state['relationship']) ? ' • ' . $state['relationship'] : ''))
+                                                : 'New Family Member'
+                                            )
+                                            ->deleteAction(fn ($action) => $action->label('Remove Member')->icon('heroicon-o-trash'))
                                             ->reorderable(false)
-                                            ->compact()
                                             ->schema([
-                                                Grid::make(12)
+                                                Section::make('👤 Personal Information')
+                                                    ->compact()
                                                     ->schema([
-                                                        TextInput::make('name')
-                                                            ->label('Full Name')
-                                                            ->required()
-                                                            ->placeholder('e.g. Sunita Sharma')
-                                                            ->columnSpan(4),
-
-                                                        Select::make('relationship')
-                                                            ->label('Relationship to Primary Tenant')
-                                                            ->options([
-                                                                'Spouse' => 'Spouse',
-                                                                'Son' => 'Son',
-                                                                'Daughter' => 'Daughter',
-                                                                'Father' => 'Father',
-                                                                'Mother' => 'Mother',
-                                                                'Brother' => 'Brother',
-                                                                'Sister' => 'Sister',
-                                                                'Co-Tenant' => 'Co-Tenant / Roommate',
-                                                                'Relative' => 'Relative',
-                                                                'Other' => 'Other',
-                                                            ])
-                                                            ->required()
-                                                            ->columnSpan(3),
-
-                                                        TextInput::make('phone')
-                                                            ->label('Phone Number')
-                                                            ->tel()
-                                                            ->placeholder('e.g. 9876543210')
-                                                            ->columnSpan(3),
-
-                                                        TextInput::make('email')
-                                                            ->label('Email Address')
-                                                            ->email()
-                                                            ->columnSpan(2),
-
-                                                        TextInput::make('aadhaar_number')
-                                                            ->label('Aadhaar Number')
-                                                            ->placeholder('12-digit Aadhaar')
-                                                            ->maxLength(14)
-                                                            ->columnSpan(4),
-
-                                                        TextInput::make('pan_number')
-                                                            ->label('PAN Number')
-                                                            ->placeholder('10-character PAN')
-                                                            ->maxLength(10)
-                                                            ->columnSpan(4),
-
-                                                        TextInput::make('voter_id')
-                                                            ->label('Voter ID / ID Number')
-                                                            ->placeholder('Voter ID / Passport / DL')
-                                                            ->columnSpan(4),
-
-                                                        Section::make('KYC & Verification Documents')
-                                                            ->description('Upload identity, passport photo, and address verification documents for this family member / secondary tenant.')
+                                                        Grid::make(4)
                                                             ->schema([
-                                                                Grid::make(4)
-                                                                    ->schema([
-                                                                        FileUpload::make('photo_file')
-                                                                            ->label('Passport Photo')
-                                                                            ->helperText('Passport-sized photograph')
-                                                                            ->image()
-                                                                            ->required()
-                                                                            ->directory('tenancy-secondary-kyc')
-                                                                            ->downloadable()
-                                                                            ->openable()
-                                                                            ->columnSpan(1),
+                                                                TextInput::make('name')
+                                                                    ->label('Full Name (Required)')
+                                                                    ->required()
+                                                                    ->placeholder('e.g. Rahul Sharma'),
 
-                                                                        FileUpload::make('aadhaar_file')
-                                                                            ->label('Aadhaar Card')
-                                                                            ->helperText('Front & Back image or PDF')
-                                                                            ->directory('tenancy-secondary-kyc')
-                                                                            ->downloadable()
-                                                                            ->openable()
-                                                                            ->columnSpan(1),
+                                                                Select::make('relationship')
+                                                                    ->label('Relationship (Required)')
+                                                                    ->options([
+                                                                        'Spouse' => 'Spouse',
+                                                                        'Son' => 'Son',
+                                                                        'Daughter' => 'Daughter',
+                                                                        'Father' => 'Father',
+                                                                        'Mother' => 'Mother',
+                                                                        'Brother' => 'Brother',
+                                                                        'Sister' => 'Sister',
+                                                                        'Co-Tenant' => 'Co-Tenant / Roommate',
+                                                                        'Relative' => 'Relative',
+                                                                        'Other' => 'Other',
+                                                                    ])
+                                                                    ->required(),
 
-                                                                        FileUpload::make('pan_file')
-                                                                            ->label('PAN Card')
-                                                                            ->helperText('Clear image or PDF')
-                                                                            ->directory('tenancy-secondary-kyc')
-                                                                            ->downloadable()
-                                                                            ->openable()
-                                                                            ->columnSpan(1),
+                                                                TextInput::make('phone')
+                                                                    ->label('Phone (Optional)')
+                                                                    ->tel()
+                                                                    ->placeholder('e.g. 9876543210'),
 
-                                                                        FileUpload::make('voter_id_file')
-                                                                            ->label('Voter ID / ID Proof')
-                                                                            ->helperText('Voter ID, Passport, or DL')
-                                                                            ->directory('tenancy-secondary-kyc')
-                                                                            ->downloadable()
-                                                                            ->openable()
-                                                                            ->columnSpan(1),
-                                                                    ]),
+                                                                TextInput::make('email')
+                                                                    ->label('Email (Optional)')
+                                                                    ->email()
+                                                                    ->placeholder('e.g. rahul@example.com'),
+                                                            ]),
+                                                    ]),
 
-                                                                FileUpload::make('other_kyc_files')
-                                                                    ->label('Additional KYC Attachments')
-                                                                    ->helperText('Other supporting documents (Police Verification, etc.)')
+                                                Section::make('🪪 Identity Details')
+                                                    ->compact()
+                                                    ->schema([
+                                                        Grid::make(3)
+                                                            ->schema([
+                                                                TextInput::make('aadhaar_number')
+                                                                    ->label('Aadhaar Number (Optional)')
+                                                                    ->placeholder('12-digit Aadhaar')
+                                                                    ->maxLength(14),
+
+                                                                TextInput::make('pan_number')
+                                                                    ->label('PAN Number (Optional)')
+                                                                    ->placeholder('10-character PAN')
+                                                                    ->maxLength(10),
+
+                                                                TextInput::make('voter_id')
+                                                                    ->label('Voter Card Number (Optional)')
+                                                                    ->placeholder('Voter Card / EPIC Number'),
+                                                            ]),
+                                                    ]),
+
+                                                Section::make('📂 KYC & Verification Documents')
+                                                    ->compact()
+                                                    ->schema([
+                                                        Grid::make(4)
+                                                            ->schema([
+                                                                FileUpload::make('photo_file')
+                                                                    ->label('Passport Photo (Required)')
+                                                                    ->helperText('Passport-sized photograph')
+                                                                    ->image()
+                                                                    ->avatar()
+                                                                    ->required()
                                                                     ->directory('tenancy-secondary-kyc')
-                                                                    ->multiple()
-                                                                    ->preserveFilenames()
                                                                     ->downloadable()
                                                                     ->openable()
-                                                                    ->columnSpanFull(),
-                                                            ])
-                                                            ->columnSpanFull(),
+                                                                    ->columnSpan(1),
+
+                                                                FileUpload::make('aadhaar_file')
+                                                                    ->label('Aadhaar Card (Optional)')
+                                                                    ->helperText('Front & Back image or PDF')
+                                                                    ->directory('tenancy-secondary-kyc')
+                                                                    ->downloadable()
+                                                                    ->openable()
+                                                                    ->columnSpan(1),
+
+                                                                FileUpload::make('pan_file')
+                                                                    ->label('PAN Card (Optional)')
+                                                                    ->helperText('Clear image or PDF')
+                                                                    ->directory('tenancy-secondary-kyc')
+                                                                    ->downloadable()
+                                                                    ->openable()
+                                                                    ->columnSpan(1),
+
+                                                                FileUpload::make('voter_id_file')
+                                                                    ->label('Voter Card (Optional)')
+                                                                    ->helperText('Clear image or PDF of Voter Card')
+                                                                    ->directory('tenancy-secondary-kyc')
+                                                                    ->downloadable()
+                                                                    ->openable()
+                                                                    ->columnSpan(1),
+                                                            ]),
+
+                                                        \Filament\Schemas\Components\Actions::make([
+                                                            \Filament\Actions\Action::make('uploadSecondaryDocumentModal')
+                                                                ->label('Upload additional document')
+                                                                ->icon('heroicon-o-arrow-up-tray')
+                                                                ->color('primary')
+                                                                ->button()
+                                                                ->modalHeading('Upload Secondary Tenant Document (Select Type & File)')
+                                                                ->modalDescription('Select document type (Passport, Voter ID, Police Verification, Income Proof, Student ID, etc.) and attach file.')
+                                                                ->form([
+                                                                    Select::make('document_type')
+                                                                        ->label('Document Type')
+                                                                        ->options(\App\Domain\Shared\Enums\DocumentType::class)
+                                                                        ->required()
+                                                                        ->searchable(),
+                                                                    FileUpload::make('files')
+                                                                        ->label('Files (Images / PDF)')
+                                                                        ->directory('tenancy-secondary-kyc')
+                                                                        ->multiple()
+                                                                        ->preserveFilenames()
+                                                                        ->required(),
+                                                                ])
+                                                                ->action(function (array $data, Set $set, Get $get) {
+                                                                    $uploadedFiles = (array) ($data['files'] ?? []);
+                                                                    if (empty($uploadedFiles)) return;
+
+                                                                    $docType = $data['document_type'];
+                                                                    $targetField = match ($docType) {
+                                                                        'aadhaar', 'tenant_aadhaar' => 'aadhaar_file',
+                                                                        'pan', 'tenant_pan' => 'pan_file',
+                                                                        'photo', 'tenant_photo' => 'photo_file',
+                                                                        default => 'voter_id_file',
+                                                                    };
+
+                                                                    $set($targetField, reset($uploadedFiles));
+
+                                                                    \Filament\Notifications\Notification::make()
+                                                                        ->title('Document Attached')
+                                                                        ->body('File added to secondary tenant KYC.')
+                                                                        ->success()
+                                                                        ->send();
+                                                                }),
+                                                        ]),
                                                     ]),
                                             ])
                                             ->columnSpanFull(),
@@ -900,8 +961,8 @@ class TenancyAgreementForm
                         Tabs\Tab::make('4. Signed Agreement')
                             ->icon('heroicon-o-identification')
                             ->schema([
-                                DateTimePicker::make('signed_at')
-                                    ->label('Date & Time Executed/Signed'),
+                                DatePicker::make('signed_at')
+                                    ->label('Date Executed/Signed'),
 
                                 Toggle::make('signed_by_tenant')
                                     ->label('Agreement Executed & Signed by Tenant and Owner'),
@@ -938,8 +999,8 @@ class TenancyAgreementForm
                                     ->label('Keys Handed Over to Tenant')
                                     ->live(),
 
-                                DateTimePicker::make('keys_handed_over_at')
-                                    ->label('Key Handover Date & Time'),
+                                DatePicker::make('keys_handed_over_at')
+                                    ->label('Key Handover Date'),
 
                                 Textarea::make('key_handover_notes')
                                     ->label('Key Handover Notes & Instructions')
