@@ -258,4 +258,70 @@ class MaintenanceRequestTest extends TestCase
         $this->assertNotNull($invAuditItem);
         $this->assertStringContainsString('Geyser', $invAuditItem->name);
     }
+
+    public function test_direct_vendor_workflow_path(): void
+    {
+        $property = Property::create([
+            'building_name' => 'Sunset Towers 304',
+            'status' => 'active',
+        ]);
+
+        $request = MaintenanceRequest::create([
+            'property_id' => $property->id,
+            'title' => 'Direct Owner Door Repair',
+            'payer_type' => PayerType::OWNER_DIRECT,
+            'is_direct_vendor' => true,
+            'status' => MaintenanceStatus::SUBMITTED,
+        ]);
+
+        $this->assertTrue($request->is_direct_vendor);
+        $this->assertEquals(MaintenanceStatus::SUBMITTED, $request->status);
+
+        // Mark repair completed
+        $request->update(['status' => MaintenanceStatus::WORK_COMPLETED, 'completed_at' => now()]);
+        $this->assertEquals(MaintenanceStatus::WORK_COMPLETED, $request->status);
+    }
+
+    public function test_dwelly_facilitated_workflow_path_with_quotation_approval_proof(): void
+    {
+        $property = Property::create([
+            'building_name' => 'Palm Grove 501',
+            'status' => 'active',
+        ]);
+
+        $request = MaintenanceRequest::create([
+            'property_id' => $property->id,
+            'title' => 'Dwelly Facilitated Water Heater Replacement',
+            'payer_type' => PayerType::DWELLY_INVOICE_OWNER,
+            'is_direct_vendor' => false,
+            'status' => MaintenanceStatus::SUBMITTED,
+        ]);
+
+        $this->assertFalse($request->is_direct_vendor);
+
+        // 1. Upload Quotation
+        $request->update([
+            'quotation_amount' => 4500.00,
+            'quotation_notes' => 'Quote for standard 15L geyser replacement',
+            'status' => MaintenanceStatus::QUOTATION_PENDING,
+        ]);
+        $this->assertEquals(MaintenanceStatus::QUOTATION_PENDING, $request->status);
+
+        // 2. Approve Quotation with proof notes
+        $request->update([
+            'quotation_status' => 'approved',
+            'quotation_approved_at' => now(),
+            'quotation_approval_notes' => 'Approved by owner via email screenshot',
+            'status' => MaintenanceStatus::QUOTATION_APPROVED,
+        ]);
+        $this->assertEquals('approved', $request->quotation_status);
+        $this->assertEquals(MaintenanceStatus::QUOTATION_APPROVED, $request->status);
+
+        // 3. Start Repair & Complete
+        $request->update(['status' => MaintenanceStatus::IN_PROGRESS]);
+        $this->assertEquals(MaintenanceStatus::IN_PROGRESS, $request->status);
+
+        $request->update(['status' => MaintenanceStatus::WORK_COMPLETED, 'completed_at' => now()]);
+        $this->assertEquals(MaintenanceStatus::WORK_COMPLETED, $request->status);
+    }
 }

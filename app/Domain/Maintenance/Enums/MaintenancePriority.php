@@ -12,10 +12,10 @@ enum MaintenancePriority: string
     public function getLabel(): string
     {
         return match ($this) {
-            self::LOW => 'Low',
-            self::MEDIUM => 'Medium',
-            self::HIGH => 'High',
-            self::EMERGENCY => 'Emergency',
+            self::LOW => '🟢 Low',
+            self::MEDIUM => '🟡 Medium',
+            self::HIGH => '🟠 High',
+            self::EMERGENCY => '🔴 Emergency',
         };
     }
 

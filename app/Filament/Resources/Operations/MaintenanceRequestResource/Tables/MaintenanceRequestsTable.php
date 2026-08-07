@@ -53,6 +53,15 @@ class MaintenanceRequestsTable
                     ->badge()
                     ->sortable(),
 
+                IconColumn::make('is_direct_vendor')
+                    ->label('Direct Vendor?')
+                    ->boolean()
+                    ->trueIcon('heroicon-o-check-circle')
+                    ->falseIcon('heroicon-o-x-circle')
+                    ->trueColor('info')
+                    ->falseColor('gray')
+                    ->sortable(),
+
                 TextColumn::make('total_cost')
                     ->label('Total Cost')
                     ->money('INR')

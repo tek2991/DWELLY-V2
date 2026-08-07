@@ -34,13 +34,26 @@ class MaintenanceAuditTriggerService
         if (empty($request->assigned_inspector_id)) {
             $errors[] = 'Assigned Inspector / Executive is missing on Ticket Overview.';
         }
+        if (empty($request->payer_type)) {
+            $errors[] = 'Payer Decision (Who pays for repairs) is required.';
+        }
 
-        // 2. Repaired Items & Photos
+        // 2. Dwelly Facilitated vs Direct Vendor checks
+        if (!$request->is_direct_vendor) {
+            if ($request->quotation_status !== 'approved') {
+                $errors[] = 'Quotation must be uploaded and approved before triggering the verification audit.';
+            }
+            if ($request->getMedia('quotation_approval_proofs')->isEmpty()) {
+                $errors[] = 'Quotation approval proof document/image upload is missing.';
+            }
+        }
+
+        // 3. Repaired Items & Photos
         $request->loadMissing('items');
         $validItems = $request->items->filter(fn ($item) => !empty($item->itemable_type) && !empty($item->itemable_id));
 
         if ($validItems->isEmpty()) {
-            $errors[] = 'At least 1 valid item (with Category and Specific Item selected) is required under Repaired Items & Photos.';
+            $errors[] = 'At least 1 valid item (with Category and Specific Item selected) is required under Repair Items.';
         } else {
             foreach ($validItems->values() as $index => $item) {
                 $rowNum = $index + 1;
@@ -53,29 +66,6 @@ class MaintenanceAuditTriggerService
                 if ($item->getMedia('issue_photos')->isEmpty()) {
                     $errors[] = "Item #{$rowNum}: At least 1 Defect Photo / Video (Before Repair) upload is required.";
                 }
-                if ($item->getMedia('repaired_photos')->isEmpty()) {
-                    $errors[] = "Item #{$rowNum}: At least 1 Repaired Photo / Video (After Repair) upload is required.";
-                }
-            }
-        }
-
-        // 3. Financial Settlement
-        if (empty($request->payer_type)) {
-            $errors[] = 'Payment Scenario & Financial Responsibility is missing under Financial Settlement.';
-        } else {
-            $payerType = $request->payer_type;
-
-            if ($payerType->isDirectPayment()) {
-                if (empty($request->direct_payment_reference)) {
-                    $errors[] = 'Direct Payment Receipt / Ref # is missing under Financial Settlement.';
-                }
-                if (empty($request->direct_payment_notes)) {
-                    $errors[] = 'Direct Payment Notes are missing under Financial Settlement.';
-                }
-            }
-
-            if ($request->getMedia('direct_payment_receipts')->isEmpty()) {
-                $errors[] = 'Payment Receipts / Vendor Invoices media upload is missing under Financial Settlement.';
             }
         }
 

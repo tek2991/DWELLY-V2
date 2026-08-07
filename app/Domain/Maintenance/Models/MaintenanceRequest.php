@@ -27,6 +27,8 @@ class MaintenanceRequest extends DomainModel implements HasMedia
     {
         $this->addMediaCollection('issue_photos');
         $this->addMediaCollection('repair_proofs');
+        $this->addMediaCollection('quotation_files');
+        $this->addMediaCollection('quotation_approval_proofs');
         $this->addMediaCollection('direct_payment_receipts');
     }
 
@@ -43,7 +45,13 @@ class MaintenanceRequest extends DomainModel implements HasMedia
         'priority',
         'status',
         'payer_type',
+        'is_direct_vendor',
         'is_dwelly_involved',
+        'quotation_amount',
+        'quotation_status',
+        'quotation_notes',
+        'quotation_approved_at',
+        'quotation_approval_notes',
         'total_cost',
         'vendor_cost',
         'dwelly_amount',
@@ -65,12 +73,15 @@ class MaintenanceRequest extends DomainModel implements HasMedia
         'priority' => MaintenancePriority::class,
         'status' => MaintenanceStatus::class,
         'payer_type' => PayerType::class,
+        'is_direct_vendor' => 'boolean',
         'is_dwelly_involved' => 'boolean',
+        'quotation_amount' => 'decimal:2',
         'total_cost' => 'decimal:2',
         'vendor_cost' => 'decimal:2',
         'dwelly_amount' => 'decimal:2',
         'owner_amount' => 'decimal:2',
         'tenant_amount' => 'decimal:2',
+        'quotation_approved_at' => 'datetime',
         'assigned_at' => 'datetime',
         'completed_at' => 'datetime',
         'resolved_at' => 'datetime',
