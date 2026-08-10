@@ -1,31 +1,64 @@
 @php
-    // Get the record from the View component or Widget
     $record = $this->record ?? (method_exists($this, 'getRecord') ? $this->getRecord() : null); 
     $validationData = app(\App\Domain\Property\Services\PropertyOnboardingValidator::class)->validate($record);
     $progress = $validationData['progress'];
     $steps = $validationData['steps'];
+    $status = $record->onboardingProject?->status ?? 'Draft';
 @endphp
 
 <x-filament-widgets::widget wire:poll.2s>
     <x-filament::section>
         <x-slot name="heading">
-            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 1rem;">
                 <div style="display: flex; align-items: center; gap: 1rem;">
                     <span>Onboarding Progress</span>
                     <span style="font-size: 1.5rem; font-weight: 900; color: {{ $progress === 100 ? '#10b981' : '#f59e0b' }};">
                         {{ $progress }}%
                     </span>
+                    <span style="font-size: 0.875rem; font-weight: 600; padding: 0.25rem 0.75rem; border-radius: 9999px; background-color: {{ match($status) { 'Activated' => '#dcfce7', 'Pending Review' => '#fef3c7', 'Changes Requested' => '#fee2e2', default => '#f3f4f6' } }}; color: {{ match($status) { 'Activated' => '#15803d', 'Pending Review' => '#b45309', 'Changes Requested' => '#b91c1c', default => '#374151' } }};">
+                        {{ $status }}
+                    </span>
                 </div>
                 
-                @if($record->onboardingProject?->status === 'Activated')
-                    <x-filament::button color="success" icon="heroicon-o-check-badge" disabled>
-                        Property Activated
-                    </x-filament::button>
-                @else
-                    {{ $this->activatePropertyAction }}
-                @endif
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    @if($status === 'Activated')
+                        <x-filament::button color="success" icon="heroicon-o-check-badge" disabled>
+                            Property Activated
+                        </x-filament::button>
+                    @elseif($status === 'Pending Review')
+                        {{ $this->activatePropertyAction }}
+                        {{ $this->requestChangesAction }}
+                    @else
+                        {{ $this->submitForReviewAction }}
+                    @endif
+                </div>
             </div>
         </x-slot>
+
+        @if($status === 'Pending Review')
+            <div style="margin-bottom: 1.25rem; padding: 0.875rem 1rem; border-radius: 0.5rem; background-color: #fffbeb; border: 1px solid #fde68a; color: #92400e; display: flex; align-items: center; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <x-heroicon-o-clock style="width: 1.25rem; height: 1.25rem; color: #d97706;" />
+                    <span style="font-weight: 600; font-size: 0.875rem;">
+                        Submitted for Operations Review
+                        @if($record->onboardingProject?->submitted_at)
+                            ({{ $record->onboardingProject->submitted_at->diffForHumans() }})
+                        @endif
+                    </span>
+                </div>
+                <span style="font-size: 0.75rem; color: #b45309;">Operations Manager review and activation required.</span>
+            </div>
+        @elseif($status === 'Changes Requested' && $record->onboardingProject?->review_notes)
+            <div style="margin-bottom: 1.25rem; padding: 0.875rem 1rem; border-radius: 0.5rem; background-color: #fef2f2; border: 1px solid #fecaca; color: #991b1b;">
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                    <x-heroicon-o-exclamation-triangle style="width: 1.25rem; height: 1.25rem; color: #dc2626;" />
+                    <strong style="font-size: 0.875rem;">Revisions Requested by Reviewer</strong>
+                </div>
+                <p style="font-size: 0.875rem; margin: 0; padding-left: 1.75rem;">
+                    {{ $record->onboardingProject->review_notes }}
+                </p>
+            </div>
+        @endif
 
         <!-- Progress Bar -->
         <div style="width: 100%; border-radius: 9999px; height: 1rem; margin-bottom: 1.5rem; overflow: hidden; background-color: rgba(128, 128, 128, 0.2);">

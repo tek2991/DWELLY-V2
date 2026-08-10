@@ -13,21 +13,21 @@ use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
-class OnboardingQueue extends Page implements HasTable
+class ReviewQueue extends Page implements HasTable
 {
     use InteractsWithTable;
 
-    protected string $view = 'filament.pages.properties.onboarding-queue';
+    protected string $view = 'filament.pages.properties.review-queue';
 
     protected static ?string $cluster = \App\Filament\Clusters\PropertiesCluster::class;
 
-    protected static ?string $navigationLabel = 'Onboarding Queue';
+    protected static ?string $navigationLabel = 'Review Queue';
 
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 3;
 
     public function getTitle(): string|\Illuminate\Contracts\Support\Htmlable
     {
-        return 'Onboarding Queue';
+        return 'Review Queue';
     }
 
     public static function canAccess(): bool
@@ -40,11 +40,8 @@ class OnboardingQueue extends Page implements HasTable
         return $table
             ->query(
                 Property::query()
-                    ->where(function (Builder $query) {
-                        $query->where('status', 'Onboarding')
-                            ->orWhereHas('onboardingProject', fn (Builder $q) => $q->where('status', '!=', 'Activated'));
-                    })
-                    ->with(['localityRef', 'onboardingProject', 'owner'])
+                    ->whereHas('onboardingProject', fn (Builder $q) => $q->whereIn('status', ['Pending Review', 'Changes Requested']))
+                    ->with(['localityRef', 'onboardingProject', 'owner', 'onboardingProject.reviewer'])
                     ->latest('updated_at')
             )
             ->columns([
@@ -76,8 +73,7 @@ class OnboardingQueue extends Page implements HasTable
                     ->color(fn (string $state): string => (int)$state === 100 ? 'success' : 'warning'),
 
                 TextColumn::make('onboardingProject.status')
-                    ->label('Stage')
-                    ->placeholder('Draft')
+                    ->label('Review Status')
                     ->badge()
                     ->color(fn (?string $state): string => match ($state) {
                         'Pending Review' => 'warning',
@@ -85,6 +81,17 @@ class OnboardingQueue extends Page implements HasTable
                         'Activated' => 'success',
                         default => 'gray',
                     }),
+
+                TextColumn::make('onboardingProject.submitted_at')
+                    ->label('Submitted')
+                    ->since()
+                    ->sortable()
+                    ->placeholder('N/A'),
+
+                TextColumn::make('onboardingProject.reviewer.name')
+                    ->label('Reviewer')
+                    ->placeholder('Unassigned')
+                    ->searchable(),
 
                 TextColumn::make('owner.display_name')
                     ->label('Owner')
@@ -102,13 +109,6 @@ class OnboardingQueue extends Page implements HasTable
                     ->label('Review & Activate')
                     ->icon('heroicon-m-shield-check')
                     ->color('warning')
-                    ->visible(fn (Property $record): bool => $record->onboardingProject?->status === 'Pending Review')
-                    ->url(fn (Property $record): string => PropertyResource::getUrl('onboarding', ['record' => $record])),
-
-                Action::make('open_onboarding')
-                    ->label('Checklist')
-                    ->icon('heroicon-m-clipboard-document-check')
-                    ->color('primary')
                     ->url(fn (Property $record): string => PropertyResource::getUrl('onboarding', ['record' => $record])),
             ]);
     }
@@ -116,19 +116,18 @@ class OnboardingQueue extends Page implements HasTable
     public function getTabs(): array
     {
         return [
-            'all' => \Filament\Resources\Components\Tab::make('All Onboarding'),
             'pending_review' => \Filament\Resources\Components\Tab::make('Pending Review')
                 ->badge(fn () => Property::whereHas('onboardingProject', fn ($q) => $q->where('status', 'Pending Review'))->count())
                 ->badgeColor('warning')
                 ->modifyQueryUsing(fn (Builder $query) => $query->whereHas('onboardingProject', fn ($q) => $q->where('status', 'Pending Review'))),
+
             'changes_requested' => \Filament\Resources\Components\Tab::make('Changes Requested')
                 ->modifyQueryUsing(fn (Builder $query) => $query->whereHas('onboardingProject', fn ($q) => $q->where('status', 'Changes Requested'))),
-            'in_progress' => \Filament\Resources\Components\Tab::make('In Progress')
-                ->modifyQueryUsing(fn (Builder $query) => $query->whereHas('onboardingProject', fn ($q) => $q->where('status', 'In Progress'))),
-            'draft' => \Filament\Resources\Components\Tab::make('Draft')
-                ->modifyQueryUsing(fn (Builder $query) => $query->whereHas('onboardingProject', fn ($q) => $q->where('status', 'Draft'))),
-            'audit_pending' => \Filament\Resources\Components\Tab::make('Audit Pending')
-                ->modifyQueryUsing(fn (Builder $query) => $query->whereHas('onboardingProject', fn ($q) => $q->where('status', 'Audit Pending'))),
+
+            'assigned_to_me' => \Filament\Resources\Components\Tab::make('Assigned To Me')
+                ->modifyQueryUsing(fn (Builder $query) => $query->whereHas('onboardingProject', fn ($q) => $q->where('reviewer_id', auth()->id()))),
+
+            'all' => \Filament\Resources\Components\Tab::make('All Pending'),
         ];
     }
 }

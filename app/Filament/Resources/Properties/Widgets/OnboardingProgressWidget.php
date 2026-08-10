@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Properties\Widgets;
 use Filament\Actions\Action;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Widgets\Widget;
@@ -18,29 +19,29 @@ class OnboardingProgressWidget extends Widget implements HasActions, HasForms
     protected string $view = 'filament.resources.properties.pages.onboarding-dashboard';
 
     public ?Model $record = null;
-    
-    // Filament injects the record into widgets on the record page if defined as a public property
-    
+
     protected int | string | array $columnSpan = 'full';
 
-    public function activatePropertyAction(): Action
+    public function submitForReviewAction(): Action
     {
-        return Action::make('activateProperty')
-            ->label('Activate Property')
-            ->icon('heroicon-o-check-badge')
-            ->color('success')
+        return Action::make('submitForReview')
+            ->label('Submit for Review')
+            ->icon('heroicon-o-paper-airplane')
+            ->color('primary')
             ->requiresConfirmation()
-            ->modalHeading('Activate Property')
-            ->modalDescription('Are you sure you want to activate this property? It will be marked as Vacant and available for operations.')
-            ->modalIcon('heroicon-o-check-badge')
-            ->modalSubmitActionLabel('Yes, Activate')
+            ->modalHeading('Submit for Operations Review')
+            ->modalDescription('Are you sure all onboarding checklist steps are complete and ready for operations review?')
+            ->modalIcon('heroicon-o-paper-airplane')
+            ->modalSubmitActionLabel('Yes, Submit for Review')
             ->disabled(function (): bool {
                 if (!$this->record) {
                     return true;
                 }
 
                 $validationData = app(\App\Domain\Property\Services\PropertyOnboardingValidator::class)->validate($this->record);
-                return ($validationData['progress'] ?? 0) != 100 || $this->record->onboardingProject?->status === 'Activated';
+                $status = $this->record->onboardingProject?->status;
+
+                return ($validationData['progress'] ?? 0) != 100 || in_array($status, ['Pending Review', 'Activated']);
             })
             ->action(function () {
                 if (!$this->record) {
@@ -48,16 +49,54 @@ class OnboardingProgressWidget extends Widget implements HasActions, HasForms
                 }
 
                 $validationData = app(\App\Domain\Property\Services\PropertyOnboardingValidator::class)->validate($this->record);
-                if ($validationData['progress'] != 100 || $this->record->onboardingProject?->status === 'Activated') {
+                if (($validationData['progress'] ?? 0) != 100) {
                     return;
                 }
 
-                // Update onboarding status
                 $this->record->onboardingProject()->update([
-                    'status' => 'Activated',
+                    'status' => 'Pending Review',
+                    'submitted_at' => now(),
                 ]);
 
-                // Update property status
+                $this->record->refresh();
+
+                \Filament\Notifications\Notification::make()
+                    ->success()
+                    ->title('Submitted for Review')
+                    ->body('Onboarding checklist submitted. Awaiting Operations Manager review and activation.')
+                    ->send();
+            });
+    }
+
+    public function activatePropertyAction(): Action
+    {
+        return Action::make('activateProperty')
+            ->label('Approve & Activate Property')
+            ->icon('heroicon-o-check-badge')
+            ->color('success')
+            ->requiresConfirmation()
+            ->modalHeading('Approve & Activate Property')
+            ->modalDescription('Are you sure you want to approve and activate this property? It will be marked as Vacant and available for operations.')
+            ->modalIcon('heroicon-o-check-badge')
+            ->modalSubmitActionLabel('Yes, Approve & Activate')
+            ->disabled(function (): bool {
+                if (!$this->record) {
+                    return true;
+                }
+
+                return $this->record->onboardingProject?->status === 'Activated';
+            })
+            ->action(function () {
+                if (!$this->record) {
+                    return;
+                }
+
+                $this->record->onboardingProject()->update([
+                    'status' => 'Activated',
+                    'reviewer_id' => auth()->id(),
+                    'reviewed_at' => now(),
+                ]);
+
                 $this->record->update([
                     'status' => 'Vacant',
                 ]);
@@ -65,11 +104,48 @@ class OnboardingProgressWidget extends Widget implements HasActions, HasForms
                 \Filament\Notifications\Notification::make()
                     ->success()
                     ->title('Property Activated')
-                    ->body('All onboarding steps are complete and the property is now Vacant.')
+                    ->body('All onboarding steps approved. Property is now Vacant.')
                     ->send();
 
                 $this->redirect(\App\Filament\Resources\Properties\PropertyResource::getUrl('index'));
             });
     }
-}
 
+    public function requestChangesAction(): Action
+    {
+        return Action::make('requestChanges')
+            ->label('Request Changes')
+            ->icon('heroicon-o-arrow-path')
+            ->color('warning')
+            ->modalHeading('Request Onboarding Revisions')
+            ->modalDescription('Provide feedback describing what needs correction before property activation.')
+            ->modalIcon('heroicon-o-exclamation-triangle')
+            ->form([
+                Textarea::make('review_notes')
+                    ->label('Revision Notes / Feedback')
+                    ->placeholder('Specify missing photos, incorrect utility data, or missing documents...')
+                    ->required()
+                    ->rows(3),
+            ])
+            ->action(function (array $data) {
+                if (!$this->record) {
+                    return;
+                }
+
+                $this->record->onboardingProject()->update([
+                    'status' => 'Changes Requested',
+                    'review_notes' => $data['review_notes'],
+                    'reviewer_id' => auth()->id(),
+                    'reviewed_at' => now(),
+                ]);
+
+                $this->record->refresh();
+
+                \Filament\Notifications\Notification::make()
+                    ->warning()
+                    ->title('Revisions Requested')
+                    ->body('Onboarding status updated to Changes Requested. Feedback sent to team.')
+                    ->send();
+            });
+    }
+}

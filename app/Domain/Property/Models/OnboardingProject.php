@@ -14,6 +14,15 @@ class OnboardingProject extends DomainModel
         'property_id',
         'status',
         'assigned_executive_id',
+        'reviewer_id',
+        'submitted_at',
+        'reviewed_at',
+        'review_notes',
+    ];
+
+    protected $casts = [
+        'submitted_at' => 'datetime',
+        'reviewed_at' => 'datetime',
     ];
 
     public function property(): BelongsTo
@@ -24,5 +33,10 @@ class OnboardingProject extends DomainModel
     public function assignedExecutive(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_executive_id');
+    }
+
+    public function reviewer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reviewer_id');
     }
 }

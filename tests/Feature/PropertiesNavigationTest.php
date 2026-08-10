@@ -6,6 +6,7 @@ use App\Domain\Property\Models\OnboardingProject;
 use App\Domain\Property\Models\Property;
 use App\Filament\Clusters\PropertiesCluster;
 use App\Filament\Pages\Properties\OnboardingQueue;
+use App\Filament\Pages\Properties\ReviewQueue;
 use App\Filament\Resources\Properties\PropertyResource;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -34,6 +35,12 @@ class PropertiesNavigationTest extends TestCase
         $this->assertEquals('Onboarding Queue', OnboardingQueue::getNavigationLabel());
     }
 
+    public function test_review_queue_belongs_to_properties_cluster(): void
+    {
+        $this->assertEquals(PropertiesCluster::class, ReviewQueue::getCluster());
+        $this->assertEquals('Review Queue', ReviewQueue::getNavigationLabel());
+    }
+
     public function test_authenticated_user_can_access_onboarding_queue_page(): void
     {
         $user = User::factory()->create();
@@ -54,5 +61,28 @@ class PropertiesNavigationTest extends TestCase
         Livewire::test(OnboardingQueue::class)
             ->assertSuccessful()
             ->assertSee('PROP-101');
+    }
+
+    public function test_authenticated_user_can_access_review_queue_page(): void
+    {
+        $reviewer = User::factory()->create();
+
+        $property = Property::create([
+            'code' => 'PROP-REV-100',
+            'building_name' => 'Review Queue Test Property',
+            'status' => 'Onboarding',
+        ]);
+
+        OnboardingProject::create([
+            'property_id' => $property->id,
+            'status' => 'Pending Review',
+            'submitted_at' => now(),
+        ]);
+
+        $this->actingAs($reviewer);
+
+        Livewire::test(ReviewQueue::class)
+            ->assertSuccessful()
+            ->assertSee('PROP-REV-100');
     }
 }
