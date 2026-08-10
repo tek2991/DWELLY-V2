@@ -45,7 +45,7 @@ class MaintenanceRequestForm
                         Section::make('📍 Target Property & Context')
                             ->schema([
                                 Select::make('property_id')
-                                    ->label('Target Property *')
+                                    ->label('Target Property')
                                     ->options(fn () => Property::all()->mapWithKeys(fn ($p) => [
                                         $p->id => ($p->code ? "{$p->code} - " : '') . ($p->building_name ?: "Property #{$p->id}")
                                     ]))
@@ -99,13 +99,13 @@ class MaintenanceRequestForm
                             ->columns(2)
                             ->schema([
                                 TextInput::make('title')
-                                    ->label('Issue Title *')
+                                    ->label('Issue Title')
                                     ->placeholder('e.g. Kitchen Pipe Leakage / Master Bedroom AC Not Cooling')
                                     ->required()
                                     ->columnSpanFull(),
 
                                 Select::make('priority')
-                                    ->label('Priority *')
+                                    ->label('Priority')
                                     ->options([
                                         'low' => '🟢 Low',
                                         'medium' => '🟡 Medium',
@@ -116,7 +116,7 @@ class MaintenanceRequestForm
                                     ->required(),
 
                                 Select::make('reporter_type')
-                                    ->label('Reported By *')
+                                    ->label('Reported By')
                                     ->options([
                                         'tenant' => 'Tenant',
                                         'owner' => 'Owner',
@@ -126,7 +126,7 @@ class MaintenanceRequestForm
                                     ->required(),
 
                                 Textarea::make('description')
-                                    ->label('Detailed Description *')
+                                    ->label('Detailed Description')
                                     ->placeholder('Describe the issue, specific damage symptoms, affected areas, or emergency instructions...')
                                     ->rows(6)
                                     ->required()
@@ -140,18 +140,21 @@ class MaintenanceRequestForm
                     ->schema([
                         // 💰 Repair Decision Section
                         Section::make('💰 Repair Decision')
-                            ->description('Can be specified now or decided later during triage.')
+                            ->description(fn (string $operation) => $operation === 'create'
+                                ? 'Can be specified now or decided later during triage.'
+                                : 'Financial responsibility must be specified for repair triage.')
                             ->schema([
                                 Select::make('payer_type')
                                     ->label('Who Pays?')
-                                    ->placeholder('Decide Later')
+                                    ->placeholder(fn (string $operation) => $operation === 'create' ? 'Decide Later' : 'Select Payer Type')
                                     ->options([
                                         'owner' => '👤 Owner',
                                         'tenant' => '🏠 Tenant',
                                         'split' => '🤝 Split (Owner & Tenant)',
                                         'dwelly' => '🏢 Dwelly (Internal Absorbed)',
                                     ])
-                                    ->nullable()
+                                    ->required(fn (string $operation) => $operation !== 'create')
+                                    ->nullable(fn (string $operation) => $operation === 'create')
                                     ->reactive()
                                     ->afterStateUpdated(function ($state, Set $set) {
                                         if (in_array($state, ['dwelly', \App\Domain\Maintenance\Enums\PayerType::DWELLY->value, \App\Domain\Maintenance\Enums\PayerType::DWELLY_DIRECT_ABSORBED->value])) {
@@ -164,7 +167,7 @@ class MaintenanceRequestForm
 
                                 Placeholder::make('decide_later_notice')
                                     ->label('')
-                                    ->visible(fn (Get $get) => blank($get('payer_type')))
+                                    ->visible(fn (Get $get, string $operation) => $operation === 'create' && blank($get('payer_type')))
                                     ->content(new HtmlString('<div style="font-size: 12px; color: rgba(128, 128, 128, 0.8); font-style: italic; background-color: rgba(128, 128, 128, 0.04); border-left: 3px solid rgba(128, 128, 128, 0.3); padding: 8px 12px; border-radius: 4px;">ℹ️ Vendor contact method will be configured once financial responsibility is decided.</div>')),
 
                                 Radio::make('is_direct_vendor')
@@ -183,7 +186,8 @@ class MaintenanceRequestForm
                                         ];
                                     })
                                     ->default(0)
-                                    ->nullable()
+                                    ->required(fn (string $operation) => $operation !== 'create')
+                                    ->nullable(fn (string $operation) => $operation === 'create')
                                     ->reactive()
                                     ->helperText('Choose who facilitates vendor contact.'),
                             ]),
@@ -192,7 +196,7 @@ class MaintenanceRequestForm
                         Section::make('👤 Internal Assignment & Status')
                             ->schema([
                                 Select::make('assigned_inspector_id')
-                                    ->label('Assigned Staff *')
+                                    ->label('Assigned Staff')
                                     ->options(fn () => \App\Models\User::pluck('name', 'id'))
                                     ->searchable()
                                     ->preload()
@@ -329,7 +333,7 @@ class MaintenanceRequestForm
                                     ]),
                             ]),
 
-                        Tab::make('Financial & Audit Summary')
+                        Tab::make('Financial Summary')
                             ->icon('heroicon-o-currency-rupee')
                             ->schema([
                                 Section::make('Vendor Quotation & Repair Facilitation')
@@ -337,6 +341,7 @@ class MaintenanceRequestForm
                                     ->schema([
                                         Select::make('vendor_party_id')
                                             ->label('Assigned Service Vendor')
+                                            ->visible(fn (Get $get) => !$get('is_direct_vendor'))
                                             ->options(function () {
                                                 return Party::whereHas('vendorProfile', function ($q) {
                                                     $q->where('onboarding_status', VendorOnboardingStatus::VERIFIED->value)
@@ -345,10 +350,12 @@ class MaintenanceRequestForm
                                             })
                                             ->searchable()
                                             ->columnSpanFull()
+                                            ->nullable()
                                             ->helperText('Select verified vendor assigned to execute the repair.'),
 
                                         Section::make('Repair Quotation Upload & Approval (Dwelly Facilitated)')
                                             ->visible(fn (Get $get) => !$get('is_direct_vendor'))
+                                            ->columnSpan(1)
                                             ->columns(2)
                                             ->schema([
                                                 TextInput::make('quotation_amount')
@@ -379,19 +386,23 @@ class MaintenanceRequestForm
                                                     ->multiple()
                                                     ->label('Vendor Quotation Document / Estimate Photos')
                                                     ->columnSpanFull(),
+                                            ]),
 
-                                                Section::make('Approval Proof Details')
-                                                    ->description('Mandatory proof of approval from owner/tenant (e.g. Email screenshot, WhatsApp screenshot, or signed quotation).')
-                                                    ->schema([
-                                                        Textarea::make('quotation_approval_notes')
-                                                            ->label('Approval Notes / Confirmation Remarks')
-                                                            ->rows(2),
+                                        Section::make('Approval Proof Details')
+                                            ->visible(fn (Get $get) => !$get('is_direct_vendor'))
+                                            ->columnSpan(1)
+                                            ->description('Mandatory proof of approval from owner/tenant (e.g. Email screenshot, WhatsApp screenshot, or signed quotation).')
+                                            ->schema([
+                                                Textarea::make('quotation_approval_notes')
+                                                    ->label('Approval Notes / Confirmation Remarks')
+                                                    ->rows(2)
+                                                    ->columnSpanFull(),
 
-                                                        SpatieMediaLibraryFileUpload::make('quotation_approval_proofs')
-                                                            ->collection('quotation_approval_proofs')
-                                                            ->multiple()
-                                                            ->label('Quotation Approval Proof (Screenshot / Signature Document)'),
-                                                    ])->columnSpanFull(),
+                                                SpatieMediaLibraryFileUpload::make('quotation_approval_proofs')
+                                                    ->collection('quotation_approval_proofs')
+                                                    ->multiple()
+                                                    ->label('Quotation Approval Proof (Screenshot / Signature Document)')
+                                                    ->columnSpanFull(),
                                             ]),
 
                                         Section::make('Direct Repair Tracking (Owner / Tenant Direct)')
@@ -418,7 +429,11 @@ class MaintenanceRequestForm
                                                     ->columnSpanFull(),
                                             ]),
                                     ]),
+                            ]),
 
+                        Tab::make('Verification Audit')
+                            ->icon('heroicon-o-clipboard-document-check')
+                            ->schema([
                                 Section::make('Linked Verification Audit & Invoicing')
                                     ->columns(2)
                                     ->headerActions([

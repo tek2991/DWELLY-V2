@@ -40,6 +40,9 @@ class MaintenanceAuditTriggerService
 
         // 2. Dwelly Facilitated vs Direct Vendor checks
         if (!$request->is_direct_vendor) {
+            if (empty($request->vendor_party_id)) {
+                $errors[] = 'Assigned Service Vendor must be selected for Dwelly-facilitated repairs.';
+            }
             if ($request->quotation_status !== 'approved') {
                 $errors[] = 'Quotation must be uploaded and approved before triggering the verification audit.';
             }
