@@ -22,15 +22,7 @@
                         Property Activated
                     </x-filament::button>
                 @else
-                    <x-filament::button 
-                        wire:click="activateProperty"
-                        wire:confirm="Are you sure you want to activate this property? It will be marked as Vacant and available for operations."
-                        color="success" 
-                        icon="heroicon-o-check-badge"
-                        :disabled="$progress != 100"
-                    >
-                        Activate Property
-                    </x-filament::button>
+                    {{ $this->activatePropertyAction }}
                 @endif
             </div>
         </x-slot>
@@ -73,4 +65,6 @@
             @endforeach
         </div>
     </x-filament::section>
+
+    <x-filament-actions::modals />
 </x-filament-widgets::widget>

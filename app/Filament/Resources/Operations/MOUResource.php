@@ -71,6 +71,7 @@ class MOUResource extends Resource
                                                     \Filament\Infolists\Components\TextEntry::make('opportunity.title')->label('Title'),
                                                     \Filament\Infolists\Components\TextEntry::make('opportunity.status')->label('Status')->badge(),
                                                     \Filament\Infolists\Components\TextEntry::make('opportunity.opportunitySource.name')->label('Source'),
+                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.source_phone')->label('Source Phone'),
                                                     \Filament\Infolists\Components\TextEntry::make('opportunity.assignedUser.name')->label('Assigned To'),
                                                 ])->columns(2),
                                                 

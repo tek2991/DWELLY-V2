@@ -25,6 +25,7 @@ class Opportunity extends DomainModel implements HasMedia
         'title',
         'status',
         'opportunity_source_id',
+        'source_phone',
         'lead_origin_id',
         'assigned_user_id',
         'owner_party_id',

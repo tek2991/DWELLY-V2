@@ -2,11 +2,19 @@
 
 namespace App\Filament\Resources\Properties\Widgets;
 
+use Filament\Actions\Action;
+use Filament\Actions\Concerns\InteractsWithActions;
+use Filament\Actions\Contracts\HasActions;
+use Filament\Forms\Concerns\InteractsWithForms;
+use Filament\Forms\Contracts\HasForms;
 use Filament\Widgets\Widget;
 use Illuminate\Database\Eloquent\Model;
 
-class OnboardingProgressWidget extends Widget
+class OnboardingProgressWidget extends Widget implements HasActions, HasForms
 {
+    use InteractsWithActions;
+    use InteractsWithForms;
+
     protected string $view = 'filament.resources.properties.pages.onboarding-dashboard';
 
     public ?Model $record = null;
@@ -15,29 +23,53 @@ class OnboardingProgressWidget extends Widget
     
     protected int | string | array $columnSpan = 'full';
 
-    public function activateProperty()
+    public function activatePropertyAction(): Action
     {
-        $validationData = app(\App\Domain\Property\Services\PropertyOnboardingValidator::class)->validate($this->record);
-        if ($validationData['progress'] != 100 || $this->record->onboardingProject?->status === 'Activated') {
-            return;
-        }
+        return Action::make('activateProperty')
+            ->label('Activate Property')
+            ->icon('heroicon-o-check-badge')
+            ->color('success')
+            ->requiresConfirmation()
+            ->modalHeading('Activate Property')
+            ->modalDescription('Are you sure you want to activate this property? It will be marked as Vacant and available for operations.')
+            ->modalIcon('heroicon-o-check-badge')
+            ->modalSubmitActionLabel('Yes, Activate')
+            ->disabled(function (): bool {
+                if (!$this->record) {
+                    return true;
+                }
 
-        // Update onboarding status
-        $this->record->onboardingProject()->update([
-            'status' => 'Activated',
-        ]);
+                $validationData = app(\App\Domain\Property\Services\PropertyOnboardingValidator::class)->validate($this->record);
+                return ($validationData['progress'] ?? 0) != 100 || $this->record->onboardingProject?->status === 'Activated';
+            })
+            ->action(function () {
+                if (!$this->record) {
+                    return;
+                }
 
-        // Update property status
-        $this->record->update([
-            'status' => 'Vacant',
-        ]);
+                $validationData = app(\App\Domain\Property\Services\PropertyOnboardingValidator::class)->validate($this->record);
+                if ($validationData['progress'] != 100 || $this->record->onboardingProject?->status === 'Activated') {
+                    return;
+                }
 
-        \Filament\Notifications\Notification::make()
-            ->success()
-            ->title('Property Activated')
-            ->body('All onboarding steps are complete and the property is now Vacant.')
-            ->send();
+                // Update onboarding status
+                $this->record->onboardingProject()->update([
+                    'status' => 'Activated',
+                ]);
 
-        $this->redirect(\App\Filament\Resources\Properties\PropertyResource::getUrl('index'));
+                // Update property status
+                $this->record->update([
+                    'status' => 'Vacant',
+                ]);
+
+                \Filament\Notifications\Notification::make()
+                    ->success()
+                    ->title('Property Activated')
+                    ->body('All onboarding steps are complete and the property is now Vacant.')
+                    ->send();
+
+                $this->redirect(\App\Filament\Resources\Properties\PropertyResource::getUrl('index'));
+            });
     }
 }
+

@@ -47,6 +47,10 @@ class OpportunityResource extends Resource
                                 ->relationship('opportunitySource', 'name')
                                 ->searchable()
                                 ->preload(),
+                            Forms\Components\TextInput::make('source_phone')
+                                ->label('Source Phone Number')
+                                ->tel()
+                                ->maxLength(255),
                             Forms\Components\Select::make('assigned_user_id')
                                 ->relationship('assignedUser', 'name')
                                 ->searchable()
@@ -173,6 +177,12 @@ class OpportunityResource extends Resource
                 Tables\Columns\TextColumn::make('owner_name')
                     ->label('Owner')
                     ->searchable(),
+                Tables\Columns\TextColumn::make('opportunitySource.name')
+                    ->label('Source')
+                    ->optional(),
+                Tables\Columns\TextColumn::make('source_phone')
+                    ->label('Source Phone')
+                    ->searchable(),
                 Tables\Columns\TextColumn::make('assignedUser.name')
                     ->label('Assigned To'),
                 Tables\Columns\TextColumn::make('created_at')
@@ -271,6 +281,8 @@ class OpportunityResource extends Resource
                             \Filament\Infolists\Components\TextEntry::make('number')->label('Number'),
                             \Filament\Infolists\Components\TextEntry::make('status')
                                 ->badge(),
+                            \Filament\Infolists\Components\TextEntry::make('opportunitySource.name')->label('Source'),
+                            \Filament\Infolists\Components\TextEntry::make('source_phone')->label('Source Phone'),
                             \Filament\Infolists\Components\TextEntry::make('assignedUser.name')->label('Assigned To'),
                             \Filament\Infolists\Components\TextEntry::make('mou.number')
                                 ->label('Associated MOU')
