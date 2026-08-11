@@ -37,6 +37,22 @@ class MOUResource extends Resource
         ]);
     }
 
+    public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return false;
+    }
+
+    public static function canDeleteAny(): bool
+    {
+        return false;
+    }
+
+    public static function canForceDelete(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return false;
+    }
+
+
     public static function form(Schema $schema): Schema
     {
         return $schema
@@ -518,9 +534,9 @@ class MOUResource extends Resource
             ])
             ->actions([
                 \Filament\Actions\ViewAction::make(),
-                \Filament\Actions\EditAction::make()
-                    ->visible(fn ($record) => static::canEdit($record)),
                 \Filament\Actions\ActionGroup::make([
+                    \Filament\Actions\EditAction::make()
+                        ->visible(fn ($record) => static::canEdit($record)),
                     \Filament\Actions\Action::make('uploadDocument')
                         ->label('Upload additional documents')
                         ->icon('heroicon-o-arrow-up-tray')
@@ -774,15 +790,42 @@ class MOUResource extends Resource
                             
                             return redirect(\App\Filament\Resources\Properties\PropertyResource::getUrl('edit', ['record' => $property]));
                         }),
-                ])->label('Workflow Actions'),
+
+                    \Filament\Actions\Action::make('archive')
+                        ->label('Archive')
+                        ->icon('heroicon-o-archive-box')
+                        ->color('danger')
+                        ->visible(fn (Mou $record) => $record->verified_at === null && !in_array($record->status, [
+                            MouStatus::VERIFIED,
+                            MouStatus::CONVERTED,
+                            MouStatus::COMPLETED,
+                            MouStatus::CANCELLED
+                        ]))
+                        ->requiresConfirmation()
+                        ->modalHeading('Archive MOU')
+                        ->modalDescription('Are you sure you want to archive this MOU? The corresponding opportunity will also be marked as Closed Lost.')
+                        ->modalSubmitActionLabel('Archive')
+                        ->action(function (Mou $record) {
+                            try {
+                                app(MouWorkflowService::class)->archive($record);
+                                \Filament\Notifications\Notification::make()
+                                    ->title('MOU Archived')
+                                    ->body('The MOU has been archived and the opportunity marked as Closed Lost.')
+                                    ->success()
+                                    ->send();
+                            } catch (\Exception $e) {
+                                \Filament\Notifications\Notification::make()
+                                    ->title('Cannot Archive MOU')
+                                    ->body($e->getMessage())
+                                    ->danger()
+                                    ->send();
+                            }
+                        }),
+                ])
+                ->label('Actions')
+                ->icon('heroicon-m-ellipsis-vertical'),
             ])
-            ->bulkActions([
-                \Filament\Actions\BulkActionGroup::make([
-                    \Filament\Actions\DeleteBulkAction::make(),
-                    \Filament\Actions\ForceDeleteBulkAction::make(),
-                    \Filament\Actions\RestoreBulkAction::make(),
-                ]),
-            ]);
+            ->bulkActions([]);
     }
 
     public static function getPages(): array

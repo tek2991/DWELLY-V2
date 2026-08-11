@@ -17,6 +17,14 @@ class PropertyRoom extends DomainModel
             ->logAll()
             ->logOnlyDirty();
     }
+
+    public function tapActivity(\Spatie\Activitylog\Models\Activity $activity, string $eventName)
+    {
+        $name = $this->custom_name ?: ($this->roomDefinition?->name ?? null);
+        if ($name) {
+            $activity->properties = $activity->properties->merge(['item_name' => $name]);
+        }
+    }
     protected $table = 'property_rooms';
 
     protected $fillable = [

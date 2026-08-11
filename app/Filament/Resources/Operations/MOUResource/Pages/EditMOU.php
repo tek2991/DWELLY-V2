@@ -50,10 +50,42 @@ class EditMOU extends EditRecord
                     return response()->download($media->getPath(), $filename);
                 }),
                 
-            Actions\ViewAction::make(),
-            Actions\DeleteAction::make(),
-            Actions\ForceDeleteAction::make(),
-            Actions\RestoreAction::make(),
+            Actions\ActionGroup::make([
+                Actions\ViewAction::make(),
+                Actions\Action::make('archive')
+                    ->label('Archive')
+                    ->icon('heroicon-o-archive-box')
+                    ->color('danger')
+                    ->visible(fn (Mou $record) => $record->verified_at === null && !in_array($record->status, [
+                        MouStatus::VERIFIED,
+                        MouStatus::CONVERTED,
+                        MouStatus::COMPLETED,
+                        MouStatus::CANCELLED
+                    ]))
+                    ->requiresConfirmation()
+                    ->modalHeading('Archive MOU')
+                    ->modalDescription('Are you sure you want to archive this MOU? The corresponding opportunity will also be marked as Closed Lost.')
+                    ->modalSubmitActionLabel('Archive')
+                    ->action(function (Mou $record) {
+                        try {
+                            app(MouWorkflowService::class)->archive($record);
+                            \Filament\Notifications\Notification::make()
+                                ->title('MOU Archived')
+                                ->body('The MOU has been archived and the opportunity marked as Closed Lost.')
+                                ->success()
+                                ->send();
+                            $this->redirect(MOUResource::getUrl('index'));
+                        } catch (\Exception $e) {
+                            \Filament\Notifications\Notification::make()
+                                ->title('Cannot Archive MOU')
+                                ->body($e->getMessage())
+                                ->danger()
+                                ->send();
+                        }
+                    }),
+            ])
+            ->label('Actions')
+            ->icon('heroicon-m-ellipsis-vertical'),
         ];
     }
 

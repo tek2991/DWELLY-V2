@@ -149,4 +149,28 @@ class MouWorkflowService
             ]);
         }
     }
+
+    public function archive(Mou $mou, ?string $reason = null): void
+    {
+        if ($mou->verified_at !== null || in_array($mou->status, [MouStatus::VERIFIED, MouStatus::CONVERTED, MouStatus::COMPLETED])) {
+            throw new \Exception("Cannot archive MOU once the agreement has been verified.");
+        }
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($mou, $reason) {
+            $mou->update([
+                'status' => MouStatus::CANCELLED,
+                'cancelled_at' => now(),
+            ]);
+
+            if ($mou->opportunity) {
+                app(\App\Domain\Opportunity\Services\OpportunityWorkflowService::class)->closeLost(
+                    $mou->opportunity,
+                    $reason ?? 'MOU archived.'
+                );
+            }
+
+            $mou->delete();
+        });
+    }
 }
+

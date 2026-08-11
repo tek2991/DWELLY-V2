@@ -90,4 +90,100 @@ class MOUResourceTest extends TestCase
             'status' => MouStatus::CONVERTED,
         ]);
     }
+
+    public function test_archiving_unverified_mou_marks_opportunity_closed_lost()
+    {
+        \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'Business Owner', 'guard_name' => 'web']);
+        $user = User::factory()->create();
+        $user->assignRole('Business Owner');
+        $this->actingAs($user);
+
+        $opportunity = Opportunity::create([
+            'number' => 'OPP-102',
+            'title' => 'Test Opportunity 102',
+            'owner_name' => 'Mark Owner',
+            'owner_phone' => '9998887774',
+            'assigned_user_id' => $user->id,
+            'status' => \App\Domain\Opportunity\Enums\OpportunityStatus::MOU_CREATED,
+        ]);
+
+        $mou = Mou::create([
+            'number' => 'MOU-102',
+            'opportunity_id' => $opportunity->id,
+            'status' => MouStatus::DRAFT,
+            'owner_name' => 'Mark Owner',
+            'owner_phone' => '9998887774',
+        ]);
+
+        Livewire::test(MOUResource\Pages\ListMOUs::class)
+            ->callTableAction('archive', $mou);
+
+        $this->assertSoftDeleted('mous', [
+            'id' => $mou->id,
+            'status' => MouStatus::CANCELLED,
+        ]);
+
+        $this->assertDatabaseHas('opportunities', [
+            'id' => $opportunity->id,
+            'status' => \App\Domain\Opportunity\Enums\OpportunityStatus::CLOSED_LOST,
+        ]);
+    }
+
+    public function test_archive_action_is_hidden_for_verified_mou()
+    {
+        \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'Business Owner', 'guard_name' => 'web']);
+        $user = User::factory()->create();
+        $user->assignRole('Business Owner');
+        $this->actingAs($user);
+
+        $opportunity = Opportunity::create([
+            'number' => 'OPP-103',
+            'title' => 'Test Opportunity 103',
+            'owner_name' => 'Sarah Owner',
+            'owner_phone' => '9998887773',
+            'assigned_user_id' => $user->id,
+            'status' => \App\Domain\Opportunity\Enums\OpportunityStatus::MOU_SIGNED,
+        ]);
+
+        $mou = Mou::create([
+            'number' => 'MOU-103',
+            'opportunity_id' => $opportunity->id,
+            'status' => MouStatus::VERIFIED,
+            'verified_at' => now(),
+            'owner_name' => 'Sarah Owner',
+            'owner_phone' => '9998887773',
+        ]);
+
+        Livewire::test(MOUResource\Pages\ListMOUs::class)
+            ->assertTableActionHidden('archive', $mou);
+
+        Livewire::test(MOUResource\Pages\ViewMOU::class, [
+            'record' => $mou->getKey(),
+        ])
+            ->assertActionHidden('archive');
+    }
+
+    public function test_service_throws_exception_when_archiving_verified_mou()
+    {
+        $opportunity = Opportunity::create([
+            'number' => 'OPP-104',
+            'title' => 'Test Opportunity 104',
+            'owner_name' => 'David Owner',
+            'owner_phone' => '9998887772',
+            'status' => \App\Domain\Opportunity\Enums\OpportunityStatus::MOU_SIGNED,
+        ]);
+
+        $mou = Mou::create([
+            'number' => 'MOU-104',
+            'opportunity_id' => $opportunity->id,
+            'status' => MouStatus::VERIFIED,
+            'verified_at' => now(),
+        ]);
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('Cannot archive MOU once the agreement has been verified.');
+
+        app(\App\Domain\Mou\Services\MouWorkflowService::class)->archive($mou);
+    }
 }
+

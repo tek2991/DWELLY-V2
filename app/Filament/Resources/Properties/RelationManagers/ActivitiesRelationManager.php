@@ -37,6 +37,8 @@ class ActivitiesRelationManager extends RelationManager
         $roomIds = $property->rooms()->pluck('id')->toArray();
         $inventoryIds = $property->inventories()->pluck('id')->toArray();
         $utilityIds = $property->utilities()->pluck('id')->toArray();
+        $amenityIds = $property->amenities()->pluck('id')->toArray();
+        $establishmentIds = $property->establishments()->pluck('id')->toArray();
         $agreementIds = $property->agreements()->pluck('id')->toArray();
         $audits = $property->audits()->with('items')->get();
         $auditIds = $audits->pluck('id')->toArray();
@@ -51,7 +53,7 @@ class ActivitiesRelationManager extends RelationManager
         $financialTermIds = $property->financialTerms()->pluck('id')->toArray();
 
         return \Spatie\Activitylog\Models\Activity::query()
-            ->where(function ($query) use ($property, $onboardingProjectId, $roomIds, $inventoryIds, $utilityIds, $documentIds, $photoIds, $financialTermIds, $agreementIds, $auditIds, $auditItemIds, $maintenanceIds, $mouIds) {
+            ->where(function ($query) use ($property, $onboardingProjectId, $roomIds, $inventoryIds, $utilityIds, $amenityIds, $establishmentIds, $documentIds, $photoIds, $financialTermIds, $agreementIds, $auditIds, $auditItemIds, $maintenanceIds, $mouIds) {
                 $query->where(fn($q) => $q->where('subject_type', get_class($property))->where('subject_id', $property->id));
 
                 if ($onboardingProjectId) {
@@ -65,6 +67,12 @@ class ActivitiesRelationManager extends RelationManager
                 }
                 if (!empty($utilityIds)) {
                     $query->orWhere(fn($q) => $q->where('subject_type', \App\Domain\Property\Models\PropertyUtility::class)->whereIn('subject_id', $utilityIds));
+                }
+                if (!empty($amenityIds)) {
+                    $query->orWhere(fn($q) => $q->where('subject_type', \App\Domain\Property\Models\PropertyAmenity::class)->whereIn('subject_id', $amenityIds));
+                }
+                if (!empty($establishmentIds)) {
+                    $query->orWhere(fn($q) => $q->where('subject_type', \App\Domain\Property\Models\PropertyEstablishment::class)->whereIn('subject_id', $establishmentIds));
                 }
                 if (!empty($documentIds)) {
                     $query->orWhere(fn($q) => $q->where('subject_type', \App\Domain\Property\Models\PropertyDocument::class)->whereIn('subject_id', $documentIds));
@@ -112,6 +120,8 @@ class ActivitiesRelationManager extends RelationManager
                             'PropertyRoom' => 'Room',
                             'PropertyInventory' => 'Inventory',
                             'PropertyUtility' => 'Utility',
+                            'PropertyAmenity' => 'Amenity',
+                            'PropertyEstablishment' => 'Establishment',
                             'PropertyDocument' => 'Document',
                             'PropertyPhoto' => 'Photo',
                             'PropertyFinancialTerm' => 'Financial Terms',
@@ -129,6 +139,8 @@ class ActivitiesRelationManager extends RelationManager
                             'Audit', 'AuditItem' => 'warning',
                             'MaintenanceRequest' => 'danger',
                             'PropertyRoom', 'PropertyInventory', 'PropertyUtility' => 'cyan',
+                            'PropertyAmenity' => 'emerald',
+                            'PropertyEstablishment' => 'purple',
                             'PropertyDocument', 'PropertyPhoto' => 'gray',
                             'PropertyFinancialTerm' => 'emerald',
                             'Mou' => 'purple',
@@ -165,6 +177,8 @@ class ActivitiesRelationManager extends RelationManager
                         'PropertyRoom' => 'Rooms & Facilities',
                         'PropertyInventory' => 'Inventory Items',
                         'PropertyUtility' => 'Utilities & Bills',
+                        'PropertyAmenity' => 'Amenities',
+                        'PropertyEstablishment' => 'Establishments & Nearby',
                         'PropertyDocument' => 'Documents',
                         'PropertyPhoto' => 'Photos & Media',
                         'PropertyFinancialTerm' => 'Financial Terms',
@@ -206,6 +220,8 @@ class ActivitiesRelationManager extends RelationManager
             'PropertyRoom' => 'Room',
             'PropertyInventory' => 'Inventory Item',
             'PropertyUtility' => 'Utility',
+            'PropertyAmenity' => 'Amenity',
+            'PropertyEstablishment' => 'Establishment',
             'PropertyDocument' => 'Document',
             'PropertyPhoto' => 'Photo',
             'PropertyFinancialTerm' => 'Financial Term',
@@ -221,12 +237,45 @@ class ActivitiesRelationManager extends RelationManager
         $attributes = $properties['attributes'] ?? [];
         $old = $properties['old'] ?? [];
 
+        // Determine item name if applicable
+        $itemName = $properties['item_name'] ?? null;
+
+        if (!$itemName && $record->subject) {
+            $subject = $record->subject;
+            if ($subject instanceof \App\Domain\Property\Models\PropertyRoom) {
+                $itemName = $subject->custom_name ?: ($subject->roomDefinition?->name ?? null);
+            } elseif ($subject instanceof \App\Domain\Property\Models\PropertyInventory) {
+                $itemName = $subject->inventoryType?->name;
+            } elseif ($subject instanceof \App\Domain\Property\Models\PropertyAmenity) {
+                $itemName = $subject->amenityType?->name;
+            } elseif ($subject instanceof \App\Domain\Property\Models\PropertyEstablishment) {
+                $itemName = $subject->establishment?->name;
+            }
+        }
+
+        if (!$itemName) {
+            $attrSource = !empty($attributes) ? $attributes : $old;
+            if (!empty($attrSource['establishment_id'])) {
+                $itemName = \App\Domain\Property\Models\Establishment::find($attrSource['establishment_id'])?->name;
+            } elseif (!empty($attrSource['amenity_type_id'])) {
+                $itemName = \App\Domain\Property\Models\AmenityType::find($attrSource['amenity_type_id'])?->name;
+            } elseif (!empty($attrSource['inventory_type_id'])) {
+                $itemName = \App\Domain\Property\Models\InventoryType::find($attrSource['inventory_type_id'])?->name;
+            } elseif (!empty($attrSource['custom_name'])) {
+                $itemName = $attrSource['custom_name'];
+            } elseif (!empty($attrSource['room_definition_id'])) {
+                $itemName = \App\Domain\Property\Models\RoomDefinition::find($attrSource['room_definition_id'])?->name;
+            }
+        }
+
+        $namePrefix = $itemName ? " \"{$itemName}\"" : '';
+
         if ($event === 'created' || strtolower(trim($desc)) === 'created') {
-            return "{$subjectLabel} Created";
+            return "{$subjectLabel}{$namePrefix} Created";
         }
 
         if ($event === 'deleted' || strtolower(trim($desc)) === 'deleted') {
-            return "{$subjectLabel} Deleted";
+            return "{$subjectLabel}{$namePrefix} Deleted";
         }
 
         if (!empty($attributes)) {
@@ -254,10 +303,10 @@ class ActivitiesRelationManager extends RelationManager
             }
 
             if (!empty($changes)) {
-                return "{$subjectLabel} Updated (" . implode(', ', array_slice($changes, 0, 3)) . (count($changes) > 3 ? '...' : '') . ")";
+                return "{$subjectLabel}{$namePrefix} Updated (" . implode(', ', array_slice($changes, 0, 3)) . (count($changes) > 3 ? '...' : '') . ")";
             }
         }
 
-        return "{$subjectLabel} Updated";
+        return "{$subjectLabel}{$namePrefix} Updated";
     }
 }

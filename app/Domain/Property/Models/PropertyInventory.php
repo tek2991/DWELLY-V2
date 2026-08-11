@@ -17,6 +17,14 @@ class PropertyInventory extends DomainModel
             ->logAll()
             ->logOnlyDirty();
     }
+
+    public function tapActivity(\Spatie\Activitylog\Models\Activity $activity, string $eventName)
+    {
+        $typeName = $this->inventoryType?->name;
+        if ($typeName) {
+            $activity->properties = $activity->properties->merge(['item_name' => $typeName]);
+        }
+    }
     protected $table = 'property_inventories';
 
     protected $fillable = [

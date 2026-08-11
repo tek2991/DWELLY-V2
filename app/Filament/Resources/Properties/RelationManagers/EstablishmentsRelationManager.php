@@ -134,6 +134,7 @@ class EstablishmentsRelationManager extends RelationManager
                             ->get();
 
                         $defaultItems = $types->map(fn ($type) => [
+                            'is_default' => true,
                             'establishment_type_id' => $type->id,
                             'establishment_name' => '',
                             'distance_km' => null,
@@ -152,6 +153,7 @@ class EstablishmentsRelationManager extends RelationManager
                                 ->itemHeaders(false)
                                 ->compact()
                                 ->schema([
+                                    \Filament\Forms\Components\Hidden::make('is_default'),
                                     Grid::make(12)
                                         ->schema([
                                              Select::make('establishment_type_id')
@@ -159,6 +161,9 @@ class EstablishmentsRelationManager extends RelationManager
                                                 ->options(fn () => \App\Domain\Property\Models\EstablishmentType::orderBy('name')->pluck('name', 'id'))
                                                 ->required()
                                                 ->live()
+                                                ->disabled(fn (Get $get) => (bool) $get('is_default'))
+                                                ->dehydrated()
+                                                ->markAsRequired()
                                                 ->columnSpan(3),
                                             Select::make('establishment_id')
                                                 ->label('Establishment Name')
@@ -197,10 +202,18 @@ class EstablishmentsRelationManager extends RelationManager
 
                                                     return $establishment->id;
                                                 })
+                                                ->required(fn (Get $get) => filled($get('distance_km')) || filled($get('travel_time_minutes')))
+                                                ->distinct()
+                                                ->validationMessages([
+                                                    'distinct' => 'This establishment is already selected in another row.',
+                                                ])
+                                                ->markAsRequired()
                                                 ->columnSpan(4),
                                             TextInput::make('distance_km')
                                                 ->label('Distance (KM)')
                                                 ->numeric()
+                                                ->required(fn (Get $get) => filled($get('establishment_id')))
+                                                ->markAsRequired()
                                                 ->columnSpan(2),
                                             TextInput::make('travel_time_minutes')
                                                 ->label('Time (Mins)')
@@ -213,6 +226,7 @@ class EstablishmentsRelationManager extends RelationManager
                                                     ->color('danger')
                                                     ->iconButton()
                                                     ->tooltip('Remove row')
+                                                    ->visible(fn (Get $get) => !$get('is_default'))
                                                     ->action(function (array $arguments, \Filament\Schemas\Components\Actions $component, Get $get, Set $set) {
                                                         $statePath = $component->getContainer()->getStatePath();
                                                         $key = last(explode('.', $statePath));
