@@ -179,7 +179,7 @@ class OpportunityResource extends Resource
                     ->searchable(),
                 Tables\Columns\TextColumn::make('opportunitySource.name')
                     ->label('Source')
-                    ->optional(),
+                    ->placeholder('-'),
                 Tables\Columns\TextColumn::make('source_phone')
                     ->label('Source Phone')
                     ->searchable(),

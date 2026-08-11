@@ -4,9 +4,19 @@ namespace App\Domain\Property\Models;
 
 use App\Domain\Shared\Models\DomainModel;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Spatie\Activitylog\Traits\LogsActivity;
+use Spatie\Activitylog\LogOptions;
 
 class PropertyFinancialTerm extends DomainModel
 {
+    use LogsActivity;
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logAll()
+            ->logOnlyDirty();
+    }
     protected $table = 'property_financial_terms';
 
     protected $fillable = [

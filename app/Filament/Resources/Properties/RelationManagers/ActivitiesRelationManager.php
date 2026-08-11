@@ -44,10 +44,19 @@ class ActivitiesRelationManager extends RelationManager
         $maintenanceIds = $property->maintenanceRequests()->pluck('id')->toArray();
         $mouIds = $property->mous()->pluck('id')->toArray();
 
+        $onboardingProjectId = $property->onboardingProject?->id;
+
+        $documentIds = $property->documents()->pluck('id')->toArray();
+        $photoIds = $property->photos()->pluck('id')->toArray();
+        $financialTermIds = $property->financialTerms()->pluck('id')->toArray();
+
         return \Spatie\Activitylog\Models\Activity::query()
-            ->where(function ($query) use ($property, $roomIds, $inventoryIds, $utilityIds, $agreementIds, $auditIds, $auditItemIds, $maintenanceIds, $mouIds) {
+            ->where(function ($query) use ($property, $onboardingProjectId, $roomIds, $inventoryIds, $utilityIds, $documentIds, $photoIds, $financialTermIds, $agreementIds, $auditIds, $auditItemIds, $maintenanceIds, $mouIds) {
                 $query->where(fn($q) => $q->where('subject_type', get_class($property))->where('subject_id', $property->id));
 
+                if ($onboardingProjectId) {
+                    $query->orWhere(fn($q) => $q->where('subject_type', \App\Domain\Property\Models\OnboardingProject::class)->where('subject_id', $onboardingProjectId));
+                }
                 if (!empty($roomIds)) {
                     $query->orWhere(fn($q) => $q->where('subject_type', \App\Domain\Property\Models\PropertyRoom::class)->whereIn('subject_id', $roomIds));
                 }
@@ -56,6 +65,15 @@ class ActivitiesRelationManager extends RelationManager
                 }
                 if (!empty($utilityIds)) {
                     $query->orWhere(fn($q) => $q->where('subject_type', \App\Domain\Property\Models\PropertyUtility::class)->whereIn('subject_id', $utilityIds));
+                }
+                if (!empty($documentIds)) {
+                    $query->orWhere(fn($q) => $q->where('subject_type', \App\Domain\Property\Models\PropertyDocument::class)->whereIn('subject_id', $documentIds));
+                }
+                if (!empty($photoIds)) {
+                    $query->orWhere(fn($q) => $q->where('subject_type', \App\Domain\Property\Models\PropertyPhoto::class)->whereIn('subject_id', $photoIds));
+                }
+                if (!empty($financialTermIds)) {
+                    $query->orWhere(fn($q) => $q->where('subject_type', \App\Domain\Property\Models\PropertyFinancialTerm::class)->whereIn('subject_id', $financialTermIds));
                 }
                 if (!empty($agreementIds)) {
                     $query->orWhere(fn($q) => $q->where('subject_type', \App\Domain\Agreement\Models\TenancyAgreement::class)->whereIn('subject_id', $agreementIds));
@@ -86,6 +104,7 @@ class ActivitiesRelationManager extends RelationManager
                         $basename = class_basename($state);
                         return match ($basename) {
                             'Property' => 'Property',
+                            'OnboardingProject' => 'Onboarding',
                             'TenancyAgreement' => 'Tenancy',
                             'Audit' => 'Audit',
                             'AuditItem' => 'Audit Item',
@@ -93,6 +112,9 @@ class ActivitiesRelationManager extends RelationManager
                             'PropertyRoom' => 'Room',
                             'PropertyInventory' => 'Inventory',
                             'PropertyUtility' => 'Utility',
+                            'PropertyDocument' => 'Document',
+                            'PropertyPhoto' => 'Photo',
+                            'PropertyFinancialTerm' => 'Financial Terms',
                             'Mou' => 'MOU',
                             default => $basename ?: 'General',
                         };
@@ -102,9 +124,13 @@ class ActivitiesRelationManager extends RelationManager
                         $basename = class_basename($state);
                         return match ($basename) {
                             'Property' => 'primary',
+                            'OnboardingProject' => 'info',
                             'TenancyAgreement' => 'success',
                             'Audit', 'AuditItem' => 'warning',
                             'MaintenanceRequest' => 'danger',
+                            'PropertyRoom', 'PropertyInventory', 'PropertyUtility' => 'cyan',
+                            'PropertyDocument', 'PropertyPhoto' => 'gray',
+                            'PropertyFinancialTerm' => 'emerald',
                             'Mou' => 'purple',
                             default => 'gray',
                         };
@@ -134,12 +160,17 @@ class ActivitiesRelationManager extends RelationManager
                 Tables\Filters\SelectFilter::make('entity')
                     ->label('Filter by Module')
                     ->options([
-                        'Property' => 'Property Base',
+                        'Property' => 'Property Base Details',
+                        'OnboardingProject' => 'Onboarding Progress',
+                        'PropertyRoom' => 'Rooms & Facilities',
+                        'PropertyInventory' => 'Inventory Items',
+                        'PropertyUtility' => 'Utilities & Bills',
+                        'PropertyDocument' => 'Documents',
+                        'PropertyPhoto' => 'Photos & Media',
+                        'PropertyFinancialTerm' => 'Financial Terms',
                         'TenancyAgreement' => 'Tenancy Agreements',
                         'Audit' => 'Audits & Inspections',
                         'MaintenanceRequest' => 'Maintenance Requests',
-                        'PropertyRoom' => 'Rooms & Facilities',
-                        'PropertyInventory' => 'Inventory Items',
                         'Mou' => 'MOUs & Agreements',
                     ])
                     ->query(function ($query, array $data) {
@@ -167,6 +198,7 @@ class ActivitiesRelationManager extends RelationManager
 
         $subjectLabel = match ($subjectType) {
             'Property' => 'Property',
+            'OnboardingProject' => 'Onboarding Progress',
             'TenancyAgreement' => 'Tenancy Agreement',
             'Audit' => 'Audit',
             'AuditItem' => 'Audit Item',
@@ -174,6 +206,9 @@ class ActivitiesRelationManager extends RelationManager
             'PropertyRoom' => 'Room',
             'PropertyInventory' => 'Inventory Item',
             'PropertyUtility' => 'Utility',
+            'PropertyDocument' => 'Document',
+            'PropertyPhoto' => 'Photo',
+            'PropertyFinancialTerm' => 'Financial Term',
             'Mou' => 'MOU',
             default => $subjectType ?: 'Record',
         };

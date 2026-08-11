@@ -22,6 +22,20 @@ class OnboardingProgressWidget extends Widget implements HasActions, HasForms
 
     protected int | string | array $columnSpan = 'full';
 
+    public function canUserReview(): bool
+    {
+        $user = auth()->user();
+        if (!$user) {
+            return false;
+        }
+
+        if ($user->roles->isEmpty()) {
+            return true;
+        }
+
+        return $user->hasAnyRole(['Business Owner', 'Operations Manager', 'Admin', 'Super Admin']);
+    }
+
     public function submitForReviewAction(): Action
     {
         return Action::make('submitForReview')
@@ -58,6 +72,11 @@ class OnboardingProgressWidget extends Widget implements HasActions, HasForms
                     'submitted_at' => now(),
                 ]);
 
+                activity()
+                    ->performedOn($this->record)
+                    ->causedBy(auth()->user())
+                    ->log('Onboarding: Submitted for Operations Review');
+
                 $this->record->refresh();
 
                 \Filament\Notifications\Notification::make()
@@ -74,6 +93,7 @@ class OnboardingProgressWidget extends Widget implements HasActions, HasForms
             ->label('Approve & Activate Property')
             ->icon('heroicon-o-check-badge')
             ->color('success')
+            ->visible(fn (): bool => $this->canUserReview())
             ->requiresConfirmation()
             ->modalHeading('Approve & Activate Property')
             ->modalDescription('Are you sure you want to approve and activate this property? It will be marked as Vacant and available for operations.')
@@ -101,6 +121,11 @@ class OnboardingProgressWidget extends Widget implements HasActions, HasForms
                     'status' => 'Vacant',
                 ]);
 
+                activity()
+                    ->performedOn($this->record)
+                    ->causedBy(auth()->user())
+                    ->log('Onboarding: Approved & Activated Property (Status updated to Vacant)');
+
                 \Filament\Notifications\Notification::make()
                     ->success()
                     ->title('Property Activated')
@@ -117,6 +142,7 @@ class OnboardingProgressWidget extends Widget implements HasActions, HasForms
             ->label('Request Changes')
             ->icon('heroicon-o-arrow-path')
             ->color('warning')
+            ->visible(fn (): bool => $this->canUserReview())
             ->modalHeading('Request Onboarding Revisions')
             ->modalDescription('Provide feedback describing what needs correction before property activation.')
             ->modalIcon('heroicon-o-exclamation-triangle')
@@ -132,12 +158,20 @@ class OnboardingProgressWidget extends Widget implements HasActions, HasForms
                     return;
                 }
 
+                $reviewNotes = $data['review_notes'] ?? '';
+
                 $this->record->onboardingProject()->update([
                     'status' => 'Changes Requested',
-                    'review_notes' => $data['review_notes'],
+                    'review_notes' => $reviewNotes,
                     'reviewer_id' => auth()->id(),
                     'reviewed_at' => now(),
                 ]);
+
+                activity()
+                    ->performedOn($this->record)
+                    ->causedBy(auth()->user())
+                    ->withProperties(['review_notes' => $reviewNotes])
+                    ->log('Onboarding: Revisions Requested — Feedback: ' . $reviewNotes);
 
                 $this->record->refresh();
 

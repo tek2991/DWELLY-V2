@@ -32,7 +32,16 @@ class ReviewQueue extends Page implements HasTable
 
     public static function canAccess(): bool
     {
-        return true;
+        $user = auth()->user();
+        if (!$user) {
+            return false;
+        }
+
+        if ($user->roles->isEmpty()) {
+            return true;
+        }
+
+        return $user->hasAnyRole(['Business Owner', 'Operations Manager', 'Admin', 'Super Admin']);
     }
 
     public function table(Table $table): Table

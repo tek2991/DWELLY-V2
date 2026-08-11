@@ -6,7 +6,7 @@
     $status = $record->onboardingProject?->status ?? 'Draft';
 @endphp
 
-<x-filament-widgets::widget wire:poll.2s>
+<x-filament-widgets::widget>
     <x-filament::section>
         <x-slot name="heading">
             <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 1rem;">
@@ -26,8 +26,10 @@
                             Property Activated
                         </x-filament::button>
                     @elseif($status === 'Pending Review')
-                        {{ $this->activatePropertyAction }}
-                        {{ $this->requestChangesAction }}
+                        @if($this->canUserReview())
+                            {{ $this->activatePropertyAction }}
+                            {{ $this->requestChangesAction }}
+                        @endif
                     @else
                         {{ $this->submitForReviewAction }}
                     @endif

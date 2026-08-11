@@ -102,7 +102,22 @@ class OnboardingQueue extends Page implements HasTable
                     ->label('Review & Activate')
                     ->icon('heroicon-m-shield-check')
                     ->color('warning')
-                    ->visible(fn (Property $record): bool => $record->onboardingProject?->status === 'Pending Review')
+                    ->visible(function (Property $record): bool {
+                        if ($record->onboardingProject?->status !== 'Pending Review') {
+                            return false;
+                        }
+
+                        $user = auth()->user();
+                        if (!$user) {
+                            return false;
+                        }
+
+                        if ($user->roles->isEmpty()) {
+                            return true;
+                        }
+
+                        return $user->hasAnyRole(['Business Owner', 'Operations Manager', 'Admin', 'Super Admin']);
+                    })
                     ->url(fn (Property $record): string => PropertyResource::getUrl('onboarding', ['record' => $record])),
 
                 Action::make('open_onboarding')

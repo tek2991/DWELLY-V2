@@ -5,9 +5,19 @@ namespace App\Domain\Property\Models;
 use App\Domain\Shared\Models\DomainModel;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Spatie\Activitylog\Traits\LogsActivity;
+use Spatie\Activitylog\LogOptions;
 
 class OnboardingProject extends DomainModel
 {
+    use LogsActivity;
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logAll()
+            ->logOnlyDirty();
+    }
     protected $table = 'onboarding_projects';
 
     protected $fillable = [

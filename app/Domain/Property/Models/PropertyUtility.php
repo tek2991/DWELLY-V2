@@ -4,9 +4,19 @@ namespace App\Domain\Property\Models;
 
 use App\Domain\Shared\Models\DomainModel;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Spatie\Activitylog\Traits\LogsActivity;
+use Spatie\Activitylog\LogOptions;
 
 class PropertyUtility extends DomainModel
 {
+    use LogsActivity;
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logAll()
+            ->logOnlyDirty();
+    }
     protected $table = 'property_utilities';
 
     protected $fillable = [
