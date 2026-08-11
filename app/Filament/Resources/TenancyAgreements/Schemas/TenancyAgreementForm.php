@@ -199,6 +199,22 @@ class TenancyAgreementForm
                             ->required()
                             ->helperText('Supports manual input for proportional mid-month move-in dates.')
                             ->columnSpanFull(),
+
+                        Textarea::make('first_month_rent_notes')
+                            ->label('Manual Adjustment Remarks / Proration Basis')
+                            ->placeholder('Specify reason for custom/prorated first-month rent (e.g., Move-in on 15th, partial discount approved, utility offset...)')
+                            ->rows(2)
+                            ->columnSpanFull(),
+
+                        SpatieMediaLibraryFileUpload::make('first_month_rent_proof')
+                            ->label('Proration Basis & Adjustment Proof (Screenshots / Documents)')
+                            ->collection('first_month_rent_proof')
+                            ->multiple()
+                            ->downloadable()
+                            ->openable()
+                            ->acceptedFileTypes(['image/*', 'application/pdf'])
+                            ->helperText('Attach chat screenshots, approval notes, or proration calculation documents.')
+                            ->columnSpanFull(),
                     ])->columns(2),
 
                 Section::make('3. Primary Tenant KYC & Document Collection')
@@ -993,6 +1009,22 @@ class TenancyAgreementForm
                                         return static::calculateProRatedFirstMonthRent($startDate, $rent);
                                     })
                                     ->helperText('Supports manual input for proportional mid-month move-in dates.')
+                                    ->columnSpanFull(),
+
+                                Textarea::make('first_month_rent_notes')
+                                    ->label('Manual Adjustment Remarks / Proration Basis')
+                                    ->placeholder('Specify reason for custom/prorated first-month rent (e.g., Move-in on 15th, partial discount approved, utility offset...)')
+                                    ->rows(2)
+                                    ->columnSpanFull(),
+
+                                SpatieMediaLibraryFileUpload::make('first_month_rent_proof')
+                                    ->label('Proration Basis & Adjustment Proof (Screenshots / Documents)')
+                                    ->collection('first_month_rent_proof')
+                                    ->multiple()
+                                    ->downloadable()
+                                    ->openable()
+                                    ->acceptedFileTypes(['image/*', 'application/pdf'])
+                                    ->helperText('Attach chat screenshots, approval notes, or proration calculation documents.')
                                     ->columnSpanFull(),
 
                                 Toggle::make('keys_handed_over')

@@ -26,6 +26,7 @@ class TenancyAgreement extends DomainModel implements HasMedia
         'end_date',
         'rent_amount',
         'first_month_rent',
+        'first_month_rent_notes',
         'security_deposit',
         'booking_amount',
         'security_deposit_notes',
@@ -92,6 +93,7 @@ class TenancyAgreement extends DomainModel implements HasMedia
         $this->addMediaCollection('secondary_tenant_kyc');
         $this->addMediaCollection('key_handover_attachments');
         $this->addMediaCollection('key_return_attachments');
+        $this->addMediaCollection('first_month_rent_proof');
     }
 
     public function property(): BelongsTo
