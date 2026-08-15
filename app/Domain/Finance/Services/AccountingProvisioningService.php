@@ -26,11 +26,18 @@ class AccountingProvisioningService
         // Sync the latest details from the Party to the Contact
         $this->syncAccountingContact($party, $contact);
 
-        if ($party->hasRole(\App\Domain\Party\Enums\BusinessRole::TENANT)) {
-            $this->ensureReceivableLedger($contact, "AR - {$contact->name}");
-        }
+        $isTenant = $party->hasRole(\App\Domain\Party\Enums\BusinessRole::TENANT) || $party->tenantProfile()->exists();
+        $isOwner = $party->hasRole(\App\Domain\Party\Enums\BusinessRole::OWNER) || $party->ownerProfile()->exists();
+        $isVendor = $party->hasRole(\App\Domain\Party\Enums\BusinessRole::VENDOR) || $party->vendorProfile()->exists();
 
-        if ($party->hasRole(\App\Domain\Party\Enums\BusinessRole::OWNER) || $party->hasRole(\App\Domain\Party\Enums\BusinessRole::VENDOR)) {
+        // Owners and Tenants participate as BOTH Customer and Vendor (Receivables & Payables)
+        if ($isTenant || $isOwner || ($isVendor && ($isOwner || $isTenant))) {
+            $this->ensureReceivableLedger($contact, "AR - {$contact->name}");
+            $this->ensurePayableLedger($contact, "AP - {$contact->name}");
+        } elseif ($isVendor) {
+            $this->ensurePayableLedger($contact, "AP - {$contact->name}");
+        } else {
+            $this->ensureReceivableLedger($contact, "AR - {$contact->name}");
             $this->ensurePayableLedger($contact, "AP - {$contact->name}");
         }
         
@@ -49,12 +56,15 @@ class AccountingProvisioningService
         $contact = Contact::where('party_id', $party->id)->first();
 
         if (!$contact) {
+            $branchId = app(\Tek2991\Accounting\Services\BranchContext::class)->getCurrentId() ?? \App\Models\Branch::first()?->id;
+
             $contact = Contact::create([
                 'party_id' => $party->id,
+                'branch_id' => $branchId,
                 'name' => $party->display_name,
                 'email' => $party->email,
                 'phone' => $party->phone,
-                'type' => ContactType::Customer->value,
+                'type' => ContactType::Both->value,
             ]);
         }
 
@@ -136,14 +146,16 @@ class AccountingProvisioningService
     
     protected function updateContactTypeBasedOnRoles(Contact $contact, Party $party): void
     {
-        $isTenant = $party->hasRole(\App\Domain\Party\Enums\BusinessRole::TENANT);
-        $isOwnerOrVendor = $party->hasRole(\App\Domain\Party\Enums\BusinessRole::OWNER) || $party->hasRole(\App\Domain\Party\Enums\BusinessRole::VENDOR);
+        $isTenant = $party->hasRole(\App\Domain\Party\Enums\BusinessRole::TENANT) || $party->tenantProfile()->exists();
+        $isOwner = $party->hasRole(\App\Domain\Party\Enums\BusinessRole::OWNER) || $party->ownerProfile()->exists();
+        $isVendor = $party->hasRole(\App\Domain\Party\Enums\BusinessRole::VENDOR) || $party->vendorProfile()->exists();
         
-        $newType = ContactType::Customer->value;
-        if ($isTenant && $isOwnerOrVendor) {
+        if ($isOwner || $isTenant || ($isVendor && ($isOwner || $isTenant))) {
             $newType = ContactType::Both->value;
-        } elseif ($isOwnerOrVendor) {
+        } elseif ($isVendor) {
             $newType = ContactType::Vendor->value;
+        } else {
+            $newType = ContactType::Both->value;
         }
         
         if ($contact->type !== $newType) {

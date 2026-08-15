@@ -100,16 +100,16 @@ class MaintenanceBillingService
 
             $incomeAccount = Account::where('type', \Tek2991\Accounting\Enums\AccountType::Revenue->value)->first();
             $invoiceNumber = $this->docNumberService->nextInvoiceNumber();
+            $branchId = app(\Tek2991\Accounting\Services\BranchContext::class)->getCurrentId() ?? $contact->branch_id ?? $request->property?->branch_id ?? \App\Models\Branch::first()?->id;
 
             $invoice = Invoice::create([
+                'branch_id' => $branchId,
                 'contact_id' => $contact->id,
                 'invoice_number' => $invoiceNumber,
                 'status' => InvoiceStatus::Sent,
                 'issue_date' => $options['issue_date'] ?? now()->toDateString(),
                 'due_date' => $options['due_date'] ?? now()->addDays(7)->toDateString(),
                 'currency_code' => 'INR',
-                'reference_type' => MaintenanceRequest::class,
-                'reference_id' => $request->id,
                 'notes' => $options['notes'] ?? "Maintenance Invoice for Ticket {$request->ticket_number}: {$request->title}",
             ]);
 
@@ -210,8 +210,10 @@ class MaintenanceBillingService
             $expenseAccount = Account::where('type', 'expense')->first();
             $billNumber = $this->docNumberService->nextBillNumber();
             $request = $vendorQuote->maintenanceRequest;
+            $branchId = app(\Tek2991\Accounting\Services\BranchContext::class)->getCurrentId() ?? $contact->branch_id ?? $request->property?->branch_id ?? \App\Models\Branch::first()?->id;
 
             $bill = Bill::create([
+                'branch_id' => $branchId,
                 'contact_id' => $contact->id,
                 'bill_number' => $billNumber,
                 'vendor_reference' => $vendorQuote->vendor_quote_number ?: $vendorQuote->work_order_number,

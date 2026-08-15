@@ -1033,16 +1033,22 @@ class MaintenanceQuotationForm
 
                                             // 2. Generate Client Invoices
                                             $payer = $request->payer_type?->value ?? (string) $request->payer_type;
-                                            if ($payer === 'tenant' || $payer === 'dwelly_invoice_tenant') {
-                                                $billingService->createMaintenanceInvoice($request, 'tenant_invoice');
-                                            } elseif ($payer === 'owner' || $payer === 'dwelly_invoice_owner') {
-                                                $billingService->createMaintenanceInvoice($request, 'owner_invoice');
-                                            } elseif ($payer === 'split' || $payer === 'dwelly_invoice_split') {
-                                                if ($record->owner_amount > 0) {
-                                                    $billingService->createMaintenanceInvoice($request, 'owner_invoice');
+                                            $generatedInvoices = [];
+
+                                            if ($payer === 'tenant' || $payer === 'dwelly_invoice_tenant' || $payer === 'tenant_direct') {
+                                                $generatedInvoices[] = $billingService->createMaintenanceInvoice($request, 'tenant_invoice');
+                                            } elseif ($payer === 'split' || $payer === 'dwelly_invoice_split' || ((float)$record->owner_amount > 0 && (float)$record->tenant_amount > 0)) {
+                                                if ((float)$record->owner_amount > 0) {
+                                                    $generatedInvoices[] = $billingService->createMaintenanceInvoice($request, 'owner_invoice');
                                                 }
-                                                if ($record->tenant_amount > 0) {
-                                                    $billingService->createMaintenanceInvoice($request, 'tenant_invoice');
+                                                if ((float)$record->tenant_amount > 0) {
+                                                    $generatedInvoices[] = $billingService->createMaintenanceInvoice($request, 'tenant_invoice');
+                                                }
+                                            } else {
+                                                if ((float)$record->tenant_amount > 0 && (float)$record->owner_amount == 0) {
+                                                    $generatedInvoices[] = $billingService->createMaintenanceInvoice($request, 'tenant_invoice');
+                                                } else {
+                                                    $generatedInvoices[] = $billingService->createMaintenanceInvoice($request, 'owner_invoice');
                                                 }
                                             }
 
@@ -1052,7 +1058,7 @@ class MaintenanceQuotationForm
 
                                             Notification::make()
                                                 ->title('Accounting Documents Generated')
-                                                ->body("Generated " . count($bills) . " Vendor Bill(s) and Client Invoices successfully in the Accounting module.")
+                                                ->body("Generated " . count($bills) . " Vendor Bill(s) and " . count($generatedInvoices) . " Client Invoice(s) in the Accounting module.")
                                                 ->success()
                                                 ->send();
 
