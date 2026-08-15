@@ -235,9 +235,8 @@ class MaintenanceQuotationForm
                                             SpatieMediaLibraryFileUpload::make('vendor_quote_files')
                                                 ->collection('vendor_quote_files')
                                                 ->multiple()
-                                                ->required()
-                                                ->minFiles(1)
                                                 ->label('Vendor Official Quotation PDF / Estimate Sheet')
+                                                ->helperText('Optional: Upload vendor quotation documents or estimate sheets.')
                                                 ->columnSpanFull(),
                                         ]),
                                 ]),
@@ -746,18 +745,15 @@ class MaintenanceQuotationForm
                                         ->label('Approval Confirmation Remarks')
                                         ->placeholder('e.g. Approved by Owner via WhatsApp on 15 Aug')
                                         ->rows(2)
-                                        ->markAsRequired()
                                         ->disabled(fn ($record) => $record?->status === 'approved')
                                         ->columnSpanFull(),
 
                                     SpatieMediaLibraryFileUpload::make('approval_proof_files')
                                         ->collection('approval_proof_files')
                                         ->multiple()
-                                        ->markAsRequired()
-                                        ->minFiles(1)
                                         ->disabled(fn ($record) => $record?->status === 'approved')
                                         ->label('Quotation Approval Proof (WhatsApp Screenshot / Email / Signed PDF)')
-                                        ->helperText('Upload proof of customer acceptance before confirming approval.')
+                                        ->helperText('Upload proof of customer acceptance before clicking "Confirm Quotation Approval" above.')
                                         ->columnSpanFull(),
 
                                     Textarea::make('rejection_reason')
