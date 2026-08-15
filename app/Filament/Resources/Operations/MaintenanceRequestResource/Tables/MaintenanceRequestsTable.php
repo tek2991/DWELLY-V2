@@ -6,13 +6,11 @@ use App\Domain\Maintenance\Enums\MaintenancePriority;
 use App\Domain\Maintenance\Enums\MaintenanceStatus;
 use App\Domain\Maintenance\Enums\PayerType;
 use App\Domain\Maintenance\Services\MaintenanceAuditTriggerService;
-use App\Domain\Maintenance\Services\MaintenanceSettlementService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Notifications\Notification;
-use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -38,7 +36,7 @@ class MaintenanceRequestsTable
 
                 TextColumn::make('title')
                     ->searchable()
-                    ->limit(30),
+                    ->limit(28),
 
                 TextColumn::make('priority')
                     ->badge()
@@ -53,29 +51,36 @@ class MaintenanceRequestsTable
                     ->badge()
                     ->sortable(),
 
-                IconColumn::make('is_direct_vendor')
-                    ->label('Direct Vendor?')
-                    ->boolean()
-                    ->trueIcon('heroicon-o-check-circle')
-                    ->falseIcon('heroicon-o-x-circle')
-                    ->trueColor('info')
-                    ->falseColor('gray')
-                    ->sortable(),
+                TextColumn::make('route')
+                    ->label('Execution Route')
+                    ->state(fn ($record) => $record->is_direct_vendor ? 'Direct' : 'Dwelly Coordinated')
+                    ->badge()
+                    ->color(fn ($record) => $record->is_direct_vendor ? 'warning' : 'info'),
 
-                TextColumn::make('total_cost')
-                    ->label('Total Cost')
+                TextColumn::make('vendor_info')
+                    ->label('Vendor / Trades')
+                    ->state(function ($record) {
+                        if ($record->is_direct_vendor) {
+                            return 'Client Direct';
+                        }
+                        $count = $record->vendorQuotes()->count();
+                        if ($count > 0) {
+                            return "{$count} Trade(s)";
+                        }
+                        return $record->vendor?->display_name ?? 'Unassigned';
+                    }),
+
+                TextColumn::make('total_client_cost')
+                    ->label('Quoted (₹)')
                     ->money('INR')
+                    ->state(fn ($record) => $record->total_client_cost > 0 ? $record->total_client_cost : $record->quotation_amount)
                     ->sortable(),
-
-                TextColumn::make('vendor.display_name')
-                    ->label('Vendor')
-                    ->placeholder('Unassigned')
-                    ->searchable(),
 
                 TextColumn::make('assignedInspector.name')
                     ->label('Inspector')
                     ->placeholder('Unassigned')
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('triggeredAudit.audit_number')
                     ->label('Triggered Audit')
@@ -95,6 +100,10 @@ class MaintenanceRequestsTable
                     ->options(MaintenancePriority::class),
                 \Filament\Tables\Filters\SelectFilter::make('payer_type')
                     ->options(PayerType::class),
+                \Filament\Tables\Filters\TernaryFilter::make('is_direct_vendor')
+                    ->label('Execution Route')
+                    ->trueLabel('Direct Repair')
+                    ->falseLabel('Dwelly Coordinated'),
             ])
             ->recordActions([
                 EditAction::make(),
@@ -128,71 +137,6 @@ class MaintenanceRequestsTable
                             ->body("Audit #{$audit->audit_number} has been created for post-repair inspection.")
                             ->success()
                             ->send();
-                    }),
-
-                Action::make('raiseInvoice')
-                    ->label('Raise Invoice/Bill')
-                    ->icon('heroicon-o-currency-rupee')
-                    ->color('warning')
-                    ->form([
-                        \Filament\Forms\Components\Select::make('bill_type')
-                            ->label('Bill Type')
-                            ->options([
-                                'tenant_invoice' => 'Invoice to Tenant',
-                                'owner_invoice' => 'Invoice to Owner',
-                                'vendor_bill' => 'Vendor Bill',
-                            ])
-                            ->default('tenant_invoice')
-                            ->required(),
-
-                        \Filament\Forms\Components\TextInput::make('cost')
-                            ->label('Cost Amount (₹)')
-                            ->numeric()
-                            ->prefix('₹')
-                            ->default(fn ($record) => $record->total_cost > 0 ? $record->total_cost : 0)
-                            ->required(),
-
-                        \Filament\Forms\Components\DatePicker::make('due_date')
-                            ->label('Due Date')
-                            ->default(now()->addDays(7)),
-
-                        \Filament\Forms\Components\Textarea::make('notes')
-                            ->label('Billing Remarks'),
-                    ])
-                    ->action(function ($record, array $data) {
-                        $service = app(\App\Domain\Maintenance\Services\MaintenanceBillingService::class);
-
-                        if ($data['bill_type'] === 'vendor_bill') {
-                            $bill = $service->createVendorBill($record, [
-                                [
-                                    'description' => "Vendor Work: {$record->title} ({$record->ticket_number})",
-                                    'quantity' => 1,
-                                    'unit_price' => (float) $data['cost'],
-                                    'total' => (float) $data['cost'],
-                                ]
-                            ], ['notes' => $data['notes'] ?? null, 'due_date' => $data['due_date'] ?? null]);
-
-                            Notification::make()
-                                ->title('Vendor Bill Created')
-                                ->body("Vendor Bill {$bill->bill_number} generated for Ticket #{$record->ticket_number}")
-                                ->success()
-                                ->send();
-                        } else {
-                            $invoice = $service->createMaintenanceInvoice($record, $data['bill_type'], [
-                                [
-                                    'description' => "Maintenance Service: {$record->title} ({$record->ticket_number})",
-                                    'quantity' => 1,
-                                    'unit_price' => (float) $data['cost'],
-                                    'total' => (float) $data['cost'],
-                                ]
-                            ], ['notes' => $data['notes'] ?? null, 'due_date' => $data['due_date'] ?? null]);
-
-                            Notification::make()
-                                ->title('Maintenance Invoice Raised')
-                                ->body("Invoice {$invoice->invoice_number} raised for Ticket #{$record->ticket_number}")
-                                ->success()
-                                ->send();
-                        }
                     }),
 
                 Action::make('closeTicket')
@@ -250,9 +194,7 @@ class MaintenanceRequestsTable
                     }),
             ])
             ->toolbarActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                ]),
+                BulkActionGroup::make([]),
             ]);
     }
 }

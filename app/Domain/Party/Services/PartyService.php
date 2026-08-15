@@ -24,8 +24,17 @@ class PartyService
             $organizationData = $partyData['organization_data'] ?? [];
             $bankDetails = $partyData['bank_details'] ?? [];
             $addressDetails = $partyData['address_details'] ?? [];
+            $vendorData = $partyData['vendor_data'] ?? [];
             
-            unset($partyData['individual_data'], $partyData['organization_data'], $partyData['bank_details'], $partyData['address_details'], $partyData['is_bank_editing_unlocked']);
+            unset(
+                $partyData['individual_data'],
+                $partyData['organization_data'],
+                $partyData['bank_details'],
+                $partyData['address_details'],
+                $partyData['vendor_data'],
+                $partyData['is_bank_editing_unlocked'],
+                $partyData['roles']
+            );
             
             $party = Party::create($partyData);
 
@@ -76,7 +85,7 @@ class PartyService
                 match ($role) {
                     'owner' => OwnerProfile::create(['party_id' => $party->id] + $profileData),
                     'tenant' => TenantProfile::create(['party_id' => $party->id] + $profileData),
-                    'vendor' => VendorProfile::create(['party_id' => $party->id] + $profileData),
+                    'vendor' => VendorProfile::create(array_merge(['party_id' => $party->id], array_filter($vendorData)) + $profileData),
                     default => throw new \InvalidArgumentException("Invalid role type: {$role}"),
                 };
             }
@@ -103,8 +112,18 @@ class PartyService
             $bankDetails = $data['bank_details'] ?? null;
             $addressDetails = $data['address_details'] ?? null;
             $roles = $data['roles'] ?? null;
+            $vendorData = $data['vendor_data'] ?? [];
             
-            unset($data['individual_data'], $data['organization_data'], $data['profile_type'], $data['roles'], $data['bank_details'], $data['address_details'], $data['is_bank_editing_unlocked']);
+            unset(
+                $data['individual_data'],
+                $data['organization_data'],
+                $data['profile_type'],
+                $data['roles'],
+                $data['bank_details'],
+                $data['address_details'],
+                $data['is_bank_editing_unlocked'],
+                $data['vendor_data']
+            );
             
             $party->update($data);
 

@@ -64,6 +64,11 @@ class Party extends DomainModel implements HasMedia
     {
         return $this->hasOne(StaffProfile::class);
     }
+
+    public function accountingContact(): BelongsTo
+    {
+        return $this->belongsTo(\Tek2991\Accounting\Models\Contact::class, 'accounting_contact_id');
+    }
     
     public function hasRole(\App\Domain\Party\Enums\BusinessRole $role): bool
     {

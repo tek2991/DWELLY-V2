@@ -33,7 +33,7 @@ class AuditResource extends Resource
 
     public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
     {
-        return $record->status !== AuditStatus::APPROVED;
+        return $record->status !== AuditStatus::APPROVED && !$record->is_locked;
     }
 
     public static function form(Schema $schema): Schema

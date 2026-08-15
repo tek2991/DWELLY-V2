@@ -42,14 +42,63 @@ class MaintenanceBillingService
                 default => $request->tenant ?? $request->owner,
             };
 
+            // If owner party is null, fallback to property owner / MOU party
+            if (!$party && ($billType === 'owner_invoice' || empty($request->tenant_id))) {
+                $party = $request->property?->owner;
+                if (!$party && $request->property_id) {
+                    $mouPartyId = \App\Domain\Mou\Models\Mou::where('property_id', $request->property_id)
+                        ->whereNotNull('party_id')
+                        ->latest()
+                        ->value('party_id');
+                    if ($mouPartyId) {
+                        $party = \App\Domain\Party\Models\Party::find($mouPartyId);
+                    }
+                }
+                if ($party && empty($request->owner_id)) {
+                    $request->update(['owner_id' => $party->id]);
+                }
+            }
+
+            // If tenant party is null, fallback to property active lease tenant party
+            if (!$party && $billType === 'tenant_invoice') {
+                $agreement = $request->property?->agreements()->latest()->first();
+                $party = $agreement?->tenantParty ?? $agreement?->party;
+                if ($party && empty($request->tenant_id)) {
+                    $request->update(['tenant_id' => $party->id]);
+                }
+            }
+
+            // General fallback: if one is present, use it
             if (!$party) {
-                throw new \InvalidArgumentException("No valid party associated with maintenance request for bill type {$billType}");
+                $party = $request->owner ?? $request->tenant;
+            }
+
+            // Final fallback: check any party associated with property
+            if (!$party && $request->property_id) {
+                $anyPartyId = \App\Domain\Mou\Models\Mou::where('property_id', $request->property_id)->whereNotNull('party_id')->latest()->value('party_id')
+                    ?? \App\Domain\Agreement\Models\TenancyAgreement::where('property_id', $request->property_id)->whereNotNull('tenant_party_id')->latest()->value('tenant_party_id');
+                if ($anyPartyId) {
+                    $party = \App\Domain\Party\Models\Party::find($anyPartyId);
+                    if ($party) {
+                        if ($billType === 'owner_invoice') {
+                            $request->update(['owner_id' => $party->id]);
+                        } else {
+                            $request->update(['tenant_id' => $party->id]);
+                        }
+                    }
+                }
+            }
+
+            if (!$party) {
+                $propertyName = $request->property?->building_name ?: 'Property';
+                throw new \InvalidArgumentException("No valid party (Owner / Tenant) associated with maintenance ticket #{$request->ticket_number} ({$propertyName}) for bill type {$billType}. Please ensure the Owner or Tenant party is assigned on the ticket.");
             }
 
             $this->provisioningService->ensurePartyAccountingReady($party);
-            $contact = $party->accountingContact;
+            $party->refresh();
+            $contact = $party->accountingContact ?? \Tek2991\Accounting\Models\Contact::where('party_id', $party->id)->first();
 
-            $incomeAccount = Account::where('type', 'income')->first();
+            $incomeAccount = Account::where('type', \Tek2991\Accounting\Enums\AccountType::Revenue->value)->first();
             $invoiceNumber = $this->docNumberService->nextInvoiceNumber();
 
             $invoice = Invoice::create([
@@ -64,7 +113,36 @@ class MaintenanceBillingService
                 'notes' => $options['notes'] ?? "Maintenance Invoice for Ticket {$request->ticket_number}: {$request->title}",
             ]);
 
-            if (empty($lineItems)) {
+            $quote = $request->currentClientQuote ?? $request->clientQuotes()->latest()->first();
+
+            if (empty($lineItems) && $quote && $quote->items()->count() > 0) {
+                $isFullAmount = ($billType === 'owner_invoice' && (float)$quote->owner_amount == (float)$quote->total_amount) ||
+                                ($billType === 'tenant_invoice' && (float)$quote->tenant_amount == (float)$quote->total_amount);
+
+                if ($isFullAmount) {
+                    foreach ($quote->items as $qItem) {
+                        $lineItems[] = [
+                            'description' => $qItem->description . " (Ticket #{$request->ticket_number})",
+                            'quantity' => (float) ($qItem->quantity ?: 1),
+                            'unit_price' => (float) $qItem->unit_price,
+                            'total' => (float) $qItem->total_price,
+                        ];
+                    }
+                } else {
+                    $cost = match ($billType) {
+                        'tenant_invoice' => (float)$quote->tenant_amount > 0 ? (float)$quote->tenant_amount : (float)$quote->total_amount,
+                        'owner_invoice' => (float)$quote->owner_amount > 0 ? (float)$quote->owner_amount : (float)$quote->total_amount,
+                        default => (float)$quote->total_amount,
+                    };
+
+                    $lineItems[] = [
+                        'description' => "Maintenance Service Share: {$request->title} (Quote #{$quote->quote_number}, Ticket #{$request->ticket_number})",
+                        'quantity' => 1,
+                        'unit_price' => $cost,
+                        'total' => $cost,
+                    ];
+                }
+            } elseif (empty($lineItems)) {
                 $cost = match ($billType) {
                     'tenant_invoice' => $request->tenant_amount > 0 ? $request->tenant_amount : $request->total_cost,
                     'owner_invoice' => $request->owner_amount > 0 ? $request->owner_amount : $request->total_cost,
@@ -113,6 +191,108 @@ class MaintenanceBillingService
     }
 
     /**
+     * Create a Vendor Bill for a specific Maintenance Vendor Quote.
+     */
+    public function createVendorBillForQuote(
+        \App\Domain\Maintenance\Models\MaintenanceVendorQuote $vendorQuote,
+        array $options = []
+    ): Bill {
+        return DB::transaction(function () use ($vendorQuote, $options) {
+            $vendorParty = $vendorQuote->vendor;
+            if (!$vendorParty) {
+                throw new \InvalidArgumentException("No vendor party associated with quote #{$vendorQuote->id}");
+            }
+
+            $this->provisioningService->ensurePartyAccountingReady($vendorParty);
+            $vendorParty->refresh();
+            $contact = $vendorParty->accountingContact ?? \Tek2991\Accounting\Models\Contact::where('party_id', $vendorParty->id)->first();
+
+            $expenseAccount = Account::where('type', 'expense')->first();
+            $billNumber = $this->docNumberService->nextBillNumber();
+            $request = $vendorQuote->maintenanceRequest;
+
+            $bill = Bill::create([
+                'contact_id' => $contact->id,
+                'bill_number' => $billNumber,
+                'vendor_reference' => $vendorQuote->vendor_quote_number ?: $vendorQuote->work_order_number,
+                'status' => BillStatus::Received,
+                'issue_date' => $options['issue_date'] ?? now()->toDateString(),
+                'due_date' => $options['due_date'] ?? now()->addDays(14)->toDateString(),
+                'currency_code' => 'INR',
+                'notes' => $options['notes'] ?? "Vendor Bill for {$vendorQuote->trade_title} (Ticket #{$request->ticket_number}, Work Order #{$vendorQuote->work_order_number})",
+            ]);
+
+            $cost = $vendorQuote->final_cost ?? $vendorQuote->quoted_cost;
+            $description = $vendorQuote->trade_title ?: "Repair Trade Service";
+            if ($vendorQuote->work_order_number) {
+                $description .= " [Work Order #{$vendorQuote->work_order_number}]";
+            }
+            if ($vendorQuote->vendor_quote_number) {
+                $description .= " [Quote #{$vendorQuote->vendor_quote_number}]";
+            }
+            if ($vendorQuote->scope_of_work) {
+                $description .= " - " . \Illuminate\Support\Str::limit($vendorQuote->scope_of_work, 80);
+            }
+
+            BillItem::create([
+                'bill_id' => $bill->id,
+                'line_type' => DocumentLineType::Account,
+                'sort_order' => 1,
+                'description' => $description,
+                'quantity' => 1,
+                'unit_price' => (float) $cost,
+                'line_total' => (float) $cost,
+                'gross_amount' => (float) $cost,
+                'net_amount' => (float) $cost,
+                'expense_account_id' => $expenseAccount?->id,
+            ]);
+
+            $this->billService->recalculateTotals($bill);
+            $vendorQuote->update([
+                'bill_id' => (string) $bill->id,
+                'status' => 'billed',
+            ]);
+
+            if (empty($request->bill_id)) {
+                $request->update(['bill_id' => (string) $bill->id]);
+            }
+
+            return $bill;
+        });
+    }
+
+    /**
+     * Create Vendor Bills for all awarded vendor quotes on a maintenance request.
+     * @return Bill[]
+     */
+    public function createAllVendorBillsForRequest(MaintenanceRequest $request, array $options = []): array
+    {
+        $bills = [];
+        $quote = $request->currentClientQuote ?? $request->clientQuotes()->latest()->first();
+        $awardedIds = (array) ($quote?->awarded_vendor_quote_ids ?? []);
+
+        $quotesQuery = $request->vendorQuotes()->whereNull('bill_id');
+        if (!empty($awardedIds)) {
+            $quotes = $quotesQuery->whereIn('id', $awardedIds)->get();
+        } elseif ($request->vendorQuotes()->where('is_awarded', true)->exists()) {
+            $quotes = $quotesQuery->where('is_awarded', true)->get();
+        } else {
+            $quotes = $quotesQuery->get();
+        }
+
+        foreach ($quotes as $q) {
+            $bills[] = $this->createVendorBillForQuote($q, $options);
+        }
+
+        // Fallback for single vendor legacy request if no quotes exist but vendor_party_id is set
+        if ($quotes->isEmpty() && $request->vendor_party_id && empty($request->bill_id)) {
+            $bills[] = $this->createVendorBill($request, [], $options);
+        }
+
+        return $bills;
+    }
+
+    /**
      * Create a Vendor Bill for a Maintenance Request.
      */
     public function createVendorBill(
@@ -121,7 +301,7 @@ class MaintenanceBillingService
         array $options = []
     ): Bill {
         return DB::transaction(function () use ($request, $lineItems, $options) {
-            $vendorParty = $request->vendorParty;
+            $vendorParty = $request->vendor;
             if (!$vendorParty) {
                 throw new \InvalidArgumentException("No vendor party associated with maintenance request {$request->ticket_number}");
             }

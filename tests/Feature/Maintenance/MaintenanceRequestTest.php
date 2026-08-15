@@ -65,6 +65,38 @@ class MaintenanceRequestTest extends TestCase
         $this->assertTrue($profile->isVerified());
     }
 
+    public function test_can_create_party_with_vendor_data_via_party_service(): void
+    {
+        $trade = VendorTrade::create([
+            'name' => 'Carpentry',
+            'slug' => 'carpentry',
+            'is_active' => true,
+        ]);
+
+        $partyService = app(\App\Domain\Party\Services\PartyService::class);
+        $party = $partyService->createParty([
+            'party_type' => 'organization',
+            'display_name' => 'Elite Woodworks',
+            'email' => 'elite@woodworks.test',
+            'organization_data' => [
+                'legal_name' => 'Elite Woodworks Pvt Ltd',
+            ],
+            'vendor_data' => [
+                'vendor_trade_id' => $trade->id,
+                'onboarding_status' => VendorOnboardingStatus::VERIFIED->value,
+                'is_preferred' => true,
+                'verification_notes' => 'Trade license verified',
+            ],
+        ], ['vendor']);
+
+        $this->assertNotNull($party->id);
+        $this->assertEquals('Elite Woodworks', $party->display_name);
+        $this->assertNotNull($party->vendorProfile);
+        $this->assertEquals($trade->id, $party->vendorProfile->vendor_trade_id);
+        $this->assertTrue((bool)$party->vendorProfile->is_preferred);
+        $this->assertEquals('Trade license verified', $party->vendorProfile->verification_notes);
+    }
+
     public function test_can_create_maintenance_request_with_items(): void
     {
         $property = Property::create([

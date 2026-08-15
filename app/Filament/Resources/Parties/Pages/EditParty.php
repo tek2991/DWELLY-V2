@@ -2,8 +2,14 @@
 
 namespace App\Filament\Resources\Parties\Pages;
 
+use App\Domain\Party\Enums\BusinessRole;
+use App\Domain\Party\Enums\VendorOnboardingStatus;
+use App\Domain\Party\Services\VendorOnboardingService;
 use App\Filament\Resources\Parties\PartyResource;
+use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
+use Filament\Forms\Components\Textarea;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Database\Eloquent\Model;
 
@@ -14,6 +20,71 @@ class EditParty extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('verifyVendor')
+                ->label('Verify & Approve Vendor')
+                ->icon('heroicon-o-check-badge')
+                ->color('success')
+                ->visible(fn () => $this->record->hasRole(BusinessRole::VENDOR) && $this->record->vendorProfile?->onboarding_status !== VendorOnboardingStatus::VERIFIED)
+                ->requiresConfirmation()
+                ->modalHeading('Verify & Approve Vendor')
+                ->modalDescription(fn () => "Approve {$this->record->display_name} as an active, verified vendor for maintenance assignments.")
+                ->form([
+                    Textarea::make('verification_notes')
+                        ->label('Verification Remarks / Credentials')
+                        ->placeholder('e.g. Verified trade license, identity proof, and tax details.')
+                        ->default(fn () => $this->record->vendorProfile?->verification_notes),
+                ])
+                ->action(function (array $data) {
+                    $profile = $this->record->vendorProfile;
+                    if (!$profile) return;
+
+                    app(VendorOnboardingService::class)->verifyVendor(
+                        profile: $profile,
+                        verifier: auth()->user(),
+                        notes: $data['verification_notes'] ?? null
+                    );
+
+                    Notification::make()
+                        ->title('Vendor Verified & Approved')
+                        ->body("{$this->record->display_name} is now approved and available for maintenance work orders.")
+                        ->success()
+                        ->send();
+
+                    $this->fillForm();
+                }),
+
+            Action::make('suspendVendor')
+                ->label('Suspend Vendor')
+                ->icon('heroicon-o-no-symbol')
+                ->color('danger')
+                ->visible(fn () => $this->record->hasRole(BusinessRole::VENDOR) && $this->record->vendorProfile?->onboarding_status === VendorOnboardingStatus::VERIFIED)
+                ->requiresConfirmation()
+                ->modalHeading('Suspend Vendor')
+                ->modalDescription(fn () => "Are you sure you want to suspend {$this->record->display_name}? They will not appear in maintenance assignment dropdowns.")
+                ->form([
+                    Textarea::make('suspension_reason')
+                        ->label('Suspension Reason')
+                        ->placeholder('e.g. Unresponsive to work orders / poor workmanship quality')
+                        ->required(),
+                ])
+                ->action(function (array $data) {
+                    $profile = $this->record->vendorProfile;
+                    if (!$profile) return;
+
+                    app(VendorOnboardingService::class)->suspendVendor(
+                        profile: $profile,
+                        reason: $data['suspension_reason'] ?? 'Suspended by admin'
+                    );
+
+                    Notification::make()
+                        ->title('Vendor Suspended')
+                        ->body("{$this->record->display_name} has been suspended.")
+                        ->warning()
+                        ->send();
+
+                    $this->fillForm();
+                }),
+
             DeleteAction::make(),
         ];
     }

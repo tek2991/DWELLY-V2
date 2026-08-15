@@ -4,213 +4,170 @@ namespace App\Filament\Resources\Operations\MaintenanceRequestResource\Pages;
 
 use App\Domain\Maintenance\Enums\MaintenanceStatus;
 use App\Domain\Maintenance\Services\MaintenanceAuditTriggerService;
+use App\Domain\Maintenance\Services\MaintenanceBillingService;
 use App\Filament\Resources\Operations\MaintenanceRequestResource;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
-use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
-use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\HtmlString;
 
 class EditMaintenanceRequest extends EditRecord
 {
     protected static string $resource = MaintenanceRequestResource::class;
 
-    public function mount(int|string $record): void
+    public function getSubheading(): ?\Illuminate\Contracts\Support\Htmlable
     {
-        parent::mount($record);
+        $status = $this->record->status ?? MaintenanceStatus::SUBMITTED;
+        $statusLabel = e($status->getLabel());
 
-        if ($this->record->items()->count() === 0) {
-            $this->record->items()->create([
-                'status' => 'pending',
-            ]);
-            $this->fillForm();
+        $quoteBadge = '';
+        if (!$this->record->is_direct_vendor) {
+            $quote = $this->record->currentClientQuote ?? $this->record->clientQuotes()->latest()->first();
+            if ($quote) {
+                if ($quote->status === 'approved') {
+                    $quoteBadge = '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/60 dark:text-green-200">✅ Quotation Approved</span>';
+                } elseif ($quote->status === 'rejected') {
+                    $quoteBadge = '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800 dark:bg-red-900/60 dark:text-red-200">❌ Quotation Rejected</span>';
+                } else {
+                    $quoteBadge = '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200 animate-pulse">⏳ Quotation Approval Pending</span>';
+                }
+            } elseif (filled($this->record->payer_type)) {
+                $quoteBadge = '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200">📝 Quotation Required</span>';
+            }
+        } else {
+            $quoteBadge = '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">🛠 Direct Repair Route</span>';
         }
+
+        return new HtmlString(
+            '<div class="flex items-center gap-2 text-sm text-gray-500 mt-1 flex-wrap">' .
+            '<span>Status: <strong class="text-gray-900 dark:text-gray-100">' . $statusLabel . '</strong></span>' .
+            '<span class="text-gray-300 dark:text-gray-700">&bull;</span>' .
+            $quoteBadge .
+            '</div>'
+        );
     }
 
     protected function getHeaderActions(): array
     {
         return [
-            Action::make('approveQuotation')
-                ->label('Approve Quotation')
-                ->icon('heroicon-o-check-circle')
-                ->color('success')
-                ->visible(fn () => !$this->record->is_direct_vendor && in_array($this->record->status, [
-                    MaintenanceStatus::SUBMITTED,
-                    MaintenanceStatus::VENDOR_ASSIGNED,
-                    MaintenanceStatus::QUOTED,
-                    MaintenanceStatus::QUOTATION_PENDING,
-                ]))
-                ->form([
-                    Textarea::make('quotation_approval_notes')
-                        ->label('Approval Confirmation Notes')
-                        ->placeholder('e.g. Approved via WhatsApp / Email confirmation by Owner')
-                        ->required(),
+            Action::make('openFinancialWorkflow')
+                ->label('Open Quotations & Settlement')
+                ->icon('heroicon-o-calculator')
+                ->color('indigo')
+                ->visible(fn () => !$this->record->is_direct_vendor && (bool) $this->record->currentClientQuote)
+                ->url(fn () => \App\Filament\Resources\Billing\MaintenanceQuotationResource::getUrl('edit', ['record' => $this->record->currentClientQuote]))
+                ->openUrlInNewTab(),
 
-                    SpatieMediaLibraryFileUpload::make('quotation_approval_proofs')
-                        ->collection('quotation_approval_proofs')
-                        ->multiple()
-                        ->required()
-                        ->label('Quotation Approval Proof (Mandatory: Upload Email / WhatsApp screenshot or signed quotation)'),
-                ])
-                ->action(function (array $data) {
-                    $record = $this->getRecord();
-                    $record->update([
-                        'quotation_status' => 'approved',
-                        'quotation_approved_at' => now(),
-                        'quotation_approval_notes' => $data['quotation_approval_notes'] ?? null,
-                        'status' => MaintenanceStatus::QUOTATION_APPROVED,
+            Action::make('createFinancialWorkflow')
+                ->label('Prepare Quotation & Settlement')
+                ->icon('heroicon-o-plus-circle')
+                ->color('primary')
+                ->visible(fn () => !$this->record->is_direct_vendor && !$this->record->currentClientQuote)
+                ->disabled(fn () => blank($this->record->payer_type))
+                ->tooltip(fn () => blank($this->record->payer_type) ? 'Please select Who Pays? in the form first.' : 'Launch financial quotation job in Billing & Finance')
+                ->requiresConfirmation()
+                ->modalHeading('Initialize Financial Quotation & Settlement')
+                ->modalDescription('This will create a formal quotation & multi-vendor settlement job for this ticket and open the quotation workspace.')
+                ->modalIcon('heroicon-o-calculator')
+                ->modalSubmitActionLabel('Yes, Prepare Quotation')
+                ->action(function () {
+                    $quote = \App\Domain\Maintenance\Models\MaintenanceClientQuote::create([
+                        'maintenance_request_id' => $this->record->id,
+                        'quote_number' => 'QTE-' . date('Y') . '-' . strtoupper(\Illuminate\Support\Str::random(5)),
+                        'status' => 'draft',
+                        'total_amount' => 0.00,
+                        'owner_amount' => 0.00,
+                        'tenant_amount' => 0.00,
+                        'dwelly_amount' => 0.00,
+                    ]);
+
+                    $this->record->update([
+                        'current_client_quote_id' => $quote->id,
+                        'status' => $this->record->status === MaintenanceStatus::SUBMITTED ? MaintenanceStatus::QUOTED : $this->record->status,
                     ]);
 
                     Notification::make()
-                        ->title('Quotation Approved')
-                        ->body("Quotation for ticket #{$record->ticket_number} has been approved with proof attached.")
+                        ->title('Quotation Job Created')
+                        ->body("Created Quotation #{$quote->quote_number} for ticket #{$this->record->ticket_number}.")
                         ->success()
                         ->send();
 
-                    $this->refreshFormData(['status', 'quotation_status', 'quotation_approved_at', 'quotation_approval_notes']);
+                    return redirect(\App\Filament\Resources\Billing\MaintenanceQuotationResource::getUrl('edit', ['record' => $quote]));
                 }),
 
             Action::make('startRepair')
                 ->label('Proceed with Repair')
-                ->icon('heroicon-o-wrench-screwdriver')
+                ->icon('heroicon-o-play')
                 ->color('primary')
-                ->visible(fn () => in_array($this->record->status, [
-                    MaintenanceStatus::SUBMITTED,
-                    MaintenanceStatus::QUOTATION_APPROVED,
-                ]) || ($this->record->is_direct_vendor && $this->record->status === MaintenanceStatus::SUBMITTED))
-                ->action(function () {
-                    $record = $this->getRecord();
-                    $record->update([
-                        'status' => MaintenanceStatus::IN_PROGRESS,
-                    ]);
-
-                    Notification::make()
-                        ->title('Repair In Progress')
-                        ->body("Status updated to Repair In Progress.")
-                        ->success()
-                        ->send();
-
-                    $this->refreshFormData(['status']);
-                }),
-
-            Action::make('markWorkCompleted')
-                ->label('Mark Repair Completed')
-                ->icon('heroicon-o-check-badge')
-                ->color('teal')
-                ->visible(fn () => in_array($this->record->status, [
+                ->visible(fn () => !in_array($this->record->status, [
                     MaintenanceStatus::IN_PROGRESS,
-                    MaintenanceStatus::QUOTATION_APPROVED,
-                ]))
-                ->action(function () {
-                    $record = $this->getRecord();
-                    $record->update([
-                        'status' => MaintenanceStatus::WORK_COMPLETED,
-                        'completed_at' => now(),
-                    ]);
-
-                    Notification::make()
-                        ->title('Work Completed')
-                        ->body("Repair marked as completed. You can now trigger the post-repair verification audit.")
-                        ->success()
-                        ->send();
-
-                    $this->refreshFormData(['status']);
-                }),
-
-            Action::make('submitInvoice')
-                ->label('Submit Invoice to Payer')
-                ->icon('heroicon-o-document-text')
-                ->color('indigo')
-                ->visible(fn () => !$this->record->is_direct_vendor && in_array($this->record->status, [
                     MaintenanceStatus::WORK_COMPLETED,
                     MaintenanceStatus::AUDIT_PENDING,
-                    MaintenanceStatus::AUDIT_APPROVED,
+                    MaintenanceStatus::CLOSED,
+                    MaintenanceStatus::CANCELLED,
                 ]))
-                ->action(function () {
-                    $record = $this->getRecord();
-
-                    // Check audit approval
-                    if (!$record->triggered_audit_id || !$record->triggeredAudit || !in_array($record->triggeredAudit->status?->value ?? (string)$record->triggeredAudit->status, ['approved', 'completed'])) {
-                        Notification::make()
-                            ->title('Audit Approval Required')
-                            ->body('Post-repair verification audit must be completed and approved before submitting the invoice to the tenant/owner.')
-                            ->warning()
-                            ->persistent()
-                            ->send();
-                        return;
+                ->disabled(function () {
+                    if (blank($this->record->payer_type)) {
+                        return true;
                     }
 
-                    $record->update([
-                        'status' => MaintenanceStatus::INVOICED,
-                    ]);
+                    if ($this->record->is_direct_vendor) {
+                        return !in_array($this->record->status, [
+                            MaintenanceStatus::SUBMITTED,
+                            MaintenanceStatus::VENDOR_ASSIGNED,
+                        ]);
+                    }
 
-                    Notification::make()
-                        ->title('Invoice Submitted')
-                        ->body("Invoice submitted to payer for ticket #{$record->ticket_number}.")
-                        ->success()
-                        ->send();
+                    // Dwelly-coordinated route: disabled if quotation is not officially approved or work order is not issued
+                    $quote = $this->record->currentClientQuote ?? $this->record->clientQuotes()->latest()->first();
+                    if (!$quote || $quote->status !== 'approved') {
+                        return true;
+                    }
 
-                    $this->refreshFormData(['status']);
-                }),
+                    if (empty($quote->awarded_vendor_quote_ids)) {
+                        return true;
+                    }
 
-            Action::make('payVendor')
-                ->label('Record Vendor Payment')
-                ->icon('heroicon-o-currency-rupee')
-                ->color('success')
-                ->visible(fn () => !$this->record->is_direct_vendor && in_array($this->record->status, [
-                    MaintenanceStatus::INVOICED,
-                    MaintenanceStatus::AUDIT_APPROVED,
-                ]))
-                ->action(function () {
-                    $record = $this->getRecord();
+                    return false;
+                })
+                ->tooltip(function () {
+                    if (blank($this->record->payer_type)) {
+                        return 'Select financial responsibility (Who Pays?) in the form first.';
+                    }
 
-                    $record->update([
-                        'status' => MaintenanceStatus::RESOLVED,
-                        'resolved_at' => now(),
-                    ]);
+                    if (!$this->record->is_direct_vendor) {
+                        $quote = $this->record->currentClientQuote ?? $this->record->clientQuotes()->latest()->first();
+                        if (!$quote) {
+                            return 'Quotation required: Prepare and approve quotation before proceeding with repair.';
+                        }
+                        if ($quote->status !== 'approved') {
+                            return 'Quotation Approval Pending: Client must approve pricing before physical repairs can start.';
+                        }
+                        if (empty($quote->awarded_vendor_quote_ids)) {
+                            return 'Work Order Required: Please award winning vendor quote(s) and issue Work Orders in the Quotation page before proceeding with repair.';
+                        }
+                    }
 
-                    Notification::make()
-                        ->title('Vendor Paid & Resolved')
-                        ->body("Vendor payment recorded for ticket #{$record->ticket_number}.")
-                        ->success()
-                        ->send();
-
-                    $this->refreshFormData(['status']);
-                }),
-
-            Action::make('closeTicket')
-                ->label('Close Maintenance Request')
-                ->icon('heroicon-o-lock-closed')
-                ->color('gray')
+                    return 'Authorize & commence on-site physical repairs.';
+                })
                 ->requiresConfirmation()
-                ->modalHeading('Close Maintenance Ticket')
-                ->modalDescription('Are you sure you want to close this maintenance ticket?')
-                ->visible(fn () => !in_array($this->record->status, [MaintenanceStatus::CLOSED, MaintenanceStatus::CANCELLED]))
+                ->modalHeading('Authorize & Start On-Site Repairs')
+                ->modalDescription(function () {
+                    $ticketNumber = $this->record->ticket_number;
+                    $payer = $this->record->payer_type?->getLabel() ?? ucfirst((string)$this->record->payer_type);
+                    return "Confirm that technicians are authorized to commence on-site repair work for ticket #{$ticketNumber}. Financial responsibility: {$payer}.";
+                })
+                ->modalIcon('heroicon-o-play')
+                ->modalSubmitActionLabel('Yes, Proceed with Repair')
                 ->action(function () {
-                    $record = $this->getRecord();
-                    $service = app(MaintenanceAuditTriggerService::class);
-                    $errors = $service->validateForAuditTrigger($record);
-
-                    if (!empty($errors)) {
-                        $bulletList = implode("<br>&bull; ", $errors);
-                        Notification::make()
-                            ->title('Cannot Close Maintenance Request')
-                            ->body(new HtmlString("Please complete mandatory ticket details:<br>&bull; {$bulletList}"))
-                            ->danger()
-                            ->persistent()
-                            ->send();
-                        return;
-                    }
-
-                    if ($record->triggered_audit_id && $record->triggeredAudit) {
-                        $auditStatus = $record->triggeredAudit->status;
-                        $statusVal = $auditStatus instanceof \App\Domain\Audit\Enums\AuditStatus ? $auditStatus->value : (string) $auditStatus;
-                        if (!in_array($statusVal, ['approved', 'completed'])) {
+                    if (!$this->record->is_direct_vendor) {
+                        $quote = $this->record->currentClientQuote ?? $this->record->clientQuotes()->latest()->first();
+                        if (!$quote || $quote->status !== 'approved' || empty($quote->awarded_vendor_quote_ids)) {
                             Notification::make()
-                                ->title('Cannot Close Maintenance Request')
-                                ->body('The linked post-repair verification audit is still pending approval. Please approve the audit first.')
+                                ->title('Work Order Required')
+                                ->body('Work order must be awarded to at least one vendor quote in the quotation record before proceeding with repairs.')
                                 ->warning()
                                 ->persistent()
                                 ->send();
@@ -218,37 +175,96 @@ class EditMaintenanceRequest extends EditRecord
                         }
                     }
 
-                    $record->update([
-                        'status' => MaintenanceStatus::CLOSED,
-                        'resolved_at' => $record->resolved_at ?? now(),
-                        'completed_at' => $record->completed_at ?? now(),
+                    $this->record->update([
+                        'status' => MaintenanceStatus::IN_PROGRESS,
                     ]);
 
-                    if ($record->triggered_audit_id && $record->triggeredAudit) {
-                        app(\App\Domain\Audit\Services\AuditReviewService::class)->lockAudit($record->triggeredAudit, auth()->user());
-                    }
-
                     Notification::make()
-                        ->title('Maintenance Request Closed')
-                        ->body("Ticket #{$record->ticket_number} has been closed successfully.")
+                        ->title('Repairs In Progress')
+                        ->body("Ticket #{$this->record->ticket_number} marked as In Progress.")
                         ->success()
                         ->send();
 
                     $this->refreshFormData(['status']);
                 }),
 
-            DeleteAction::make(),
+            Action::make('viewAudit')
+                ->label(fn () => $this->record->triggeredAudit ? ('View Audit #' . $this->record->triggeredAudit->audit_number) : 'View Verification Audit')
+                ->icon('heroicon-o-clipboard-document-check')
+                ->color('info')
+                ->button()
+                ->size('sm')
+                ->visible(fn () => filled($this->record->triggered_audit_id) && (bool)$this->record->triggeredAudit)
+                ->url(fn () => \App\Filament\Resources\Operations\AuditResource::getUrl('inspect', ['record' => $this->record->triggeredAudit]))
+                ->openUrlInNewTab(),
+
+            Action::make('closeTicket')
+                ->label('Close Ticket')
+                ->icon('heroicon-o-lock-closed')
+                ->color('gray')
+                ->visible(fn () => !in_array($this->record->status, [MaintenanceStatus::CLOSED, MaintenanceStatus::CANCELLED]))
+                ->requiresConfirmation()
+                ->modalHeading('Close Maintenance Ticket')
+                ->modalDescription('Confirm that on-site repairs are verified, the post-repair audit is approved, and the ticket is ready to be closed. Closing the ticket will permanently lock the verification audit.')
+                ->action(function () {
+                    $record = $this->getRecord();
+                    $audit = $record->triggeredAudit;
+
+                    // Check audit approval
+                    if (!$audit || (!in_array($audit->status?->value ?? (string)$audit->status, ['approved', 'completed']) && !$audit->is_locked)) {
+                        Notification::make()
+                            ->title('Audit Verification Required')
+                            ->body('You cannot close this maintenance ticket until the post-repair verification audit has been inspected and approved.')
+                            ->warning()
+                            ->persistent()
+                            ->send();
+                        return;
+                    }
+
+                    // Permanently lock the audit
+                    if ($audit && !$audit->is_locked) {
+                        $audit->update([
+                            'status' => \App\Domain\Audit\Enums\AuditStatus::APPROVED,
+                            'is_locked' => true,
+                            'locked_at' => now(),
+                            'locked_by_id' => auth()->id(),
+                        ]);
+                    }
+
+                    $record->update([
+                        'status' => MaintenanceStatus::CLOSED,
+                    ]);
+
+                    Notification::make()
+                        ->title('Ticket Closed & Audit Locked')
+                        ->body("Maintenance ticket #{$record->ticket_number} is closed and Verification Audit #{$audit?->audit_number} is permanently locked.")
+                        ->success()
+                        ->send();
+
+                    $this->refreshFormData(['status']);
+                }),
         ];
     }
 
-    protected function mutateFormDataBeforeSave(array $data): array
+    public function hasCombinedRelationManagerTabsWithContent(): bool
     {
-        if (!empty($data['vendor_party_id']) && in_array($this->record->status, [MaintenanceStatus::DRAFT, MaintenanceStatus::SUBMITTED])) {
-            $data['status'] = MaintenanceStatus::VENDOR_ASSIGNED;
-            $data['assigned_at'] = now();
-        }
+        return true;
+    }
 
-        return $data;
+    public function getContentTabLabel(): ?string
+    {
+        return 'Ticket Overview';
+    }
+
+    public function getContentTabIcon(): ?string
+    {
+        return 'heroicon-o-information-circle';
+    }
+
+    protected function handleRecordUpdate(Model $record, array $data): Model
+    {
+        $record->update($data);
+        return $record;
     }
 
     protected function getRedirectUrl(): ?string

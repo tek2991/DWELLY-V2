@@ -47,6 +47,7 @@ class MaintenanceRequest extends DomainModel implements HasMedia
         'payer_type',
         'is_direct_vendor',
         'is_dwelly_involved',
+        'current_client_quote_id',
         'quotation_amount',
         'quotation_status',
         'quotation_notes',
@@ -54,6 +55,8 @@ class MaintenanceRequest extends DomainModel implements HasMedia
         'quotation_approval_notes',
         'total_cost',
         'vendor_cost',
+        'total_vendor_cost',
+        'total_client_cost',
         'dwelly_amount',
         'owner_amount',
         'tenant_amount',
@@ -78,6 +81,8 @@ class MaintenanceRequest extends DomainModel implements HasMedia
         'quotation_amount' => 'decimal:2',
         'total_cost' => 'decimal:2',
         'vendor_cost' => 'decimal:2',
+        'total_vendor_cost' => 'decimal:2',
+        'total_client_cost' => 'decimal:2',
         'dwelly_amount' => 'decimal:2',
         'owner_amount' => 'decimal:2',
         'tenant_amount' => 'decimal:2',
@@ -94,6 +99,21 @@ class MaintenanceRequest extends DomainModel implements HasMedia
         static::creating(function ($request) {
             if (empty($request->ticket_number)) {
                 $request->ticket_number = self::generateTicketNumber();
+            }
+            if (empty($request->owner_id) && $request->property_id) {
+                $mouPartyId = \App\Domain\Mou\Models\Mou::where('property_id', $request->property_id)->whereNotNull('party_id')->latest()->value('party_id');
+                if ($mouPartyId) {
+                    $request->owner_id = $mouPartyId;
+                }
+            }
+        });
+
+        static::saving(function ($request) {
+            if (empty($request->owner_id) && $request->property_id) {
+                $mouPartyId = \App\Domain\Mou\Models\Mou::where('property_id', $request->property_id)->whereNotNull('party_id')->latest()->value('party_id');
+                if ($mouPartyId) {
+                    $request->owner_id = $mouPartyId;
+                }
             }
         });
 
@@ -152,6 +172,52 @@ class MaintenanceRequest extends DomainModel implements HasMedia
     public function items(): HasMany
     {
         return $this->hasMany(MaintenanceRequestItem::class, 'maintenance_request_id');
+    }
+
+    public function vendorQuotes(): HasMany
+    {
+        return $this->hasMany(MaintenanceVendorQuote::class, 'maintenance_request_id');
+    }
+
+    public function clientQuotes(): HasMany
+    {
+        return $this->hasMany(MaintenanceClientQuote::class, 'maintenance_request_id');
+    }
+
+    public function currentClientQuote(): BelongsTo
+    {
+        return $this->belongsTo(MaintenanceClientQuote::class, 'current_client_quote_id');
+    }
+
+    public function isDirectRepair(): bool
+    {
+        return (bool) $this->is_direct_vendor;
+    }
+
+    public function isDwellyCoordinated(): bool
+    {
+        return !$this->is_direct_vendor;
+    }
+
+    public function syncQuotationTotals(): void
+    {
+        $totalVendor = (float) $this->vendorQuotes()->sum('quoted_cost');
+        $this->total_vendor_cost = $totalVendor;
+        $this->vendor_cost = $totalVendor;
+
+        $clientQuote = $this->currentClientQuote ?? $this->clientQuotes()->latest()->first();
+        if ($clientQuote) {
+            $this->total_client_cost = (float) $clientQuote->total_amount;
+            $this->quotation_amount = (float) $clientQuote->total_amount;
+            $this->total_cost = (float) $clientQuote->total_amount;
+            $this->owner_amount = (float) $clientQuote->owner_amount;
+            $this->tenant_amount = (float) $clientQuote->tenant_amount;
+            $this->dwelly_amount = (float) $clientQuote->dwelly_amount;
+        } elseif ($this->isDirectRepair()) {
+            $this->total_client_cost = 0.00;
+        }
+
+        $this->saveQuietly();
     }
 
     public function bill(): BelongsTo

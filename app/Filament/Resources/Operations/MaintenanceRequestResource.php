@@ -36,7 +36,20 @@ class MaintenanceRequestResource extends Resource
 
     public static function getRelations(): array
     {
-        return [];
+        return [
+            \App\Filament\Resources\Operations\MaintenanceRequestResource\RelationManagers\ItemsRelationManager::class,
+            \App\Filament\Resources\Operations\MaintenanceRequestResource\RelationManagers\RepairExecutionRelationManager::class,
+        ];
+    }
+
+    public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return false;
+    }
+
+    public static function canDeleteAny(): bool
+    {
+        return false;
     }
 
     public static function getPages(): array

@@ -2,9 +2,17 @@
 
 namespace App\Filament\Resources\Parties\Tables;
 
+use App\Domain\Party\Enums\BusinessRole;
+use App\Domain\Party\Enums\VendorOnboardingStatus;
+use App\Domain\Party\Services\VendorOnboardingService;
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Textarea;
+use Filament\Notifications\Notification;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
 class PartiesTable
@@ -13,34 +21,34 @@ class PartiesTable
     {
         return $table
             ->columns([
-                \Filament\Tables\Columns\TextColumn::make('display_name')
+                TextColumn::make('display_name')
                     ->searchable()
                     ->sortable(),
-                \Filament\Tables\Columns\TextColumn::make('party_type')
+                TextColumn::make('party_type')
                     ->badge()
                     ->sortable(),
-                \Filament\Tables\Columns\TextColumn::make('email')
+                TextColumn::make('email')
                     ->searchable()
                     ->sortable(),
-                \Filament\Tables\Columns\TextColumn::make('phone')
+                TextColumn::make('phone')
                     ->searchable(),
-                \Filament\Tables\Columns\TextColumn::make('vendorProfile.trade.name')
+                TextColumn::make('vendorProfile.trade.name')
                     ->label('Vendor Trade')
                     ->badge()
                     ->placeholder('N/A')
                     ->toggleable(),
-                \Filament\Tables\Columns\TextColumn::make('vendorProfile.onboarding_status')
+                TextColumn::make('vendorProfile.onboarding_status')
                     ->label('Vendor Status')
                     ->badge()
                     ->placeholder('N/A')
                     ->toggleable(),
-                \Filament\Tables\Columns\TextColumn::make('created_at')
+                TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                \Filament\Tables\Filters\SelectFilter::make('role')
+                SelectFilter::make('role')
                     ->options([
                         'owner' => 'Owner',
                         'tenant' => 'Tenant',
@@ -55,9 +63,9 @@ class PartiesTable
                             $query->whereHas('tenantProfile');
                         }
                     }),
-                \Filament\Tables\Filters\SelectFilter::make('vendor_status')
+                SelectFilter::make('vendor_status')
                     ->label('Vendor Onboarding Status')
-                    ->options(\App\Domain\Party\Enums\VendorOnboardingStatus::class)
+                    ->options(VendorOnboardingStatus::class)
                     ->query(function ($query, array $data) {
                         if (!empty($data['value'])) {
                             $query->whereHas('vendorProfile', fn ($q) => $q->where('onboarding_status', $data['value']));
@@ -65,6 +73,37 @@ class PartiesTable
                     }),
             ])
             ->recordActions([
+                Action::make('verifyVendor')
+                    ->label('Verify')
+                    ->icon('heroicon-o-check-badge')
+                    ->color('success')
+                    ->visible(fn ($record) => $record->hasRole(BusinessRole::VENDOR) && $record->vendorProfile?->onboarding_status !== VendorOnboardingStatus::VERIFIED)
+                    ->requiresConfirmation()
+                    ->modalHeading('Verify & Approve Vendor')
+                    ->modalDescription(fn ($record) => "Approve {$record->display_name} as an active, verified vendor for maintenance assignments.")
+                    ->form([
+                        Textarea::make('verification_notes')
+                            ->label('Verification Notes / Remarks')
+                            ->placeholder('e.g. Verified license, identity proof, and tax details.')
+                            ->default(fn ($record) => $record->vendorProfile?->verification_notes),
+                    ])
+                    ->action(function ($record, array $data) {
+                        $profile = $record->vendorProfile;
+                        if (!$profile) return;
+
+                        app(VendorOnboardingService::class)->verifyVendor(
+                            profile: $profile,
+                            verifier: auth()->user(),
+                            notes: $data['verification_notes'] ?? null
+                        );
+
+                        Notification::make()
+                            ->title('Vendor Verified & Approved')
+                            ->body("{$record->display_name} is now approved and available for maintenance work orders.")
+                            ->success()
+                            ->send();
+                    }),
+
                 EditAction::make(),
             ])
             ->toolbarActions([
