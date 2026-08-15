@@ -1144,7 +1144,7 @@ class MaintenanceQuotationForm
                                                     $billNo = $bill?->bill_number ?: "#{$bq->bill_id}";
                                                     $vName = e($bq->vendor?->display_name ?: 'Vendor');
                                                     $cost = number_format((float)($bq->final_cost ?? $bq->quoted_cost), 2);
-                                                    $billUrl = $bill ? \Tek2991\Accounting\Filament\Resources\Purchases\Bills\BillResource::getUrl('view', ['record' => $bill]) : '#';
+                                                    $billUrl = $bill ? url("/accounting/purchases/bills/{$bill->id}") : '#';
                                                     $billsList[] = '<div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0;">' .
                                                         '<span>📄 <a href="' . e($billUrl) . '" target="_blank" style="color: #2563eb; font-weight: 600; text-decoration: underline;">' . e($billNo) . '</a> (' . $vName . ')</span>' .
                                                         '<strong>₹' . $cost . '</strong>' .
@@ -1154,7 +1154,7 @@ class MaintenanceQuotationForm
                                             } elseif ($request->bill_id) {
                                                 $bill = \Tek2991\Accounting\Models\Bill::find($request->bill_id);
                                                 $billNo = $bill?->bill_number ?: "#{$request->bill_id}";
-                                                $billUrl = $bill ? \Tek2991\Accounting\Filament\Resources\Purchases\Bills\BillResource::getUrl('view', ['record' => $bill]) : '#';
+                                                $billUrl = $bill ? url("/accounting/purchases/bills/{$bill->id}") : '#';
                                                 $billsHtml = '<div>📄 <a href="' . e($billUrl) . '" target="_blank" style="color: #2563eb; font-weight: 600; text-decoration: underline;">' . e($billNo) . '</a></div>';
                                             } else {
                                                 $billsHtml = '<span style="color: gray;">Not Generated</span>';
@@ -1165,7 +1165,7 @@ class MaintenanceQuotationForm
                                             if ($request->owner_invoice_id) {
                                                 $inv = \Tek2991\Accounting\Models\Invoice::find($request->owner_invoice_id);
                                                 $invNo = $inv?->invoice_number ?: "#{$request->owner_invoice_id}";
-                                                $invUrl = $inv ? \Tek2991\Accounting\Filament\Resources\Sales\Invoices\InvoiceResource::getUrl('view', ['record' => $inv]) : '#';
+                                                $invUrl = $inv ? url("/accounting/sales/invoices/{$inv->id}") : '#';
                                                 $amt = number_format((float)($record->owner_amount > 0 ? $record->owner_amount : $record->total_amount), 2);
                                                 $invoicesList[] = '<div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0;">' .
                                                     '<span>🧾 <a href="' . e($invUrl) . '" target="_blank" style="color: #16a34a; font-weight: 600; text-decoration: underline;">' . e($invNo) . '</a> (Owner Invoice)</span>' .
@@ -1175,7 +1175,7 @@ class MaintenanceQuotationForm
                                             if ($request->tenant_invoice_id) {
                                                 $inv = \Tek2991\Accounting\Models\Invoice::find($request->tenant_invoice_id);
                                                 $invNo = $inv?->invoice_number ?: "#{$request->tenant_invoice_id}";
-                                                $invUrl = $inv ? \Tek2991\Accounting\Filament\Resources\Sales\Invoices\InvoiceResource::getUrl('view', ['record' => $inv]) : '#';
+                                                $invUrl = $inv ? url("/accounting/sales/invoices/{$inv->id}") : '#';
                                                 $amt = number_format((float)($record->tenant_amount > 0 ? $record->tenant_amount : $record->total_amount), 2);
                                                 $invoicesList[] = '<div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0;">' .
                                                     '<span>🧾 <a href="' . e($invUrl) . '" target="_blank" style="color: #16a34a; font-weight: 600; text-decoration: underline;">' . e($invNo) . '</a> (Tenant Invoice)</span>' .
