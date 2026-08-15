@@ -1118,6 +1118,72 @@ class MaintenanceQuotationForm
                                                     '</div>';
                                             }
 
+                                            // Auto-heal any branch_id on previously generated bills/invoices for this request
+                                            $defaultBranchId = app(\Tek2991\Accounting\Services\BranchContext::class)->getCurrentId() ?? $request->property?->branch_id ?? \App\Models\Branch::first()?->id;
+                                            if ($defaultBranchId) {
+                                                $quoteBillIds = $request->vendorQuotes()->whereNotNull('bill_id')->pluck('bill_id')->toArray();
+                                                if ($request->bill_id) $quoteBillIds[] = $request->bill_id;
+                                                if (!empty($quoteBillIds)) {
+                                                    \Tek2991\Accounting\Models\Bill::whereNull('branch_id')->whereIn('id', $quoteBillIds)->update(['branch_id' => $defaultBranchId]);
+                                                }
+                                                if ($request->owner_invoice_id) {
+                                                    \Tek2991\Accounting\Models\Invoice::whereNull('branch_id')->where('id', $request->owner_invoice_id)->update(['branch_id' => $defaultBranchId]);
+                                                }
+                                                if ($request->tenant_invoice_id) {
+                                                    \Tek2991\Accounting\Models\Invoice::whereNull('branch_id')->where('id', $request->tenant_invoice_id)->update(['branch_id' => $defaultBranchId]);
+                                                }
+                                            }
+
+                                            // Fetch generated bills
+                                            $billedQuotes = $request->vendorQuotes()->whereNotNull('bill_id')->with('vendor')->get();
+                                            $billsHtml = '';
+                                            if ($billedQuotes->isNotEmpty()) {
+                                                $billsList = [];
+                                                foreach ($billedQuotes as $bq) {
+                                                    $bill = \Tek2991\Accounting\Models\Bill::find($bq->bill_id);
+                                                    $billNo = $bill?->bill_number ?: "#{$bq->bill_id}";
+                                                    $vName = e($bq->vendor?->display_name ?: 'Vendor');
+                                                    $cost = number_format((float)($bq->final_cost ?? $bq->quoted_cost), 2);
+                                                    $billUrl = $bill ? \Tek2991\Accounting\Filament\Resources\Purchases\Bills\BillResource::getUrl('view', ['record' => $bill]) : '#';
+                                                    $billsList[] = '<div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0;">' .
+                                                        '<span>📄 <a href="' . e($billUrl) . '" target="_blank" style="color: #2563eb; font-weight: 600; text-decoration: underline;">' . e($billNo) . '</a> (' . $vName . ')</span>' .
+                                                        '<strong>₹' . $cost . '</strong>' .
+                                                        '</div>';
+                                                }
+                                                $billsHtml = implode('', $billsList);
+                                            } elseif ($request->bill_id) {
+                                                $bill = \Tek2991\Accounting\Models\Bill::find($request->bill_id);
+                                                $billNo = $bill?->bill_number ?: "#{$request->bill_id}";
+                                                $billUrl = $bill ? \Tek2991\Accounting\Filament\Resources\Purchases\Bills\BillResource::getUrl('view', ['record' => $bill]) : '#';
+                                                $billsHtml = '<div>📄 <a href="' . e($billUrl) . '" target="_blank" style="color: #2563eb; font-weight: 600; text-decoration: underline;">' . e($billNo) . '</a></div>';
+                                            } else {
+                                                $billsHtml = '<span style="color: gray;">Not Generated</span>';
+                                            }
+
+                                            // Fetch generated invoices
+                                            $invoicesList = [];
+                                            if ($request->owner_invoice_id) {
+                                                $inv = \Tek2991\Accounting\Models\Invoice::find($request->owner_invoice_id);
+                                                $invNo = $inv?->invoice_number ?: "#{$request->owner_invoice_id}";
+                                                $invUrl = $inv ? \Tek2991\Accounting\Filament\Resources\Sales\Invoices\InvoiceResource::getUrl('view', ['record' => $inv]) : '#';
+                                                $amt = number_format((float)($record->owner_amount > 0 ? $record->owner_amount : $record->total_amount), 2);
+                                                $invoicesList[] = '<div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0;">' .
+                                                    '<span>🧾 <a href="' . e($invUrl) . '" target="_blank" style="color: #16a34a; font-weight: 600; text-decoration: underline;">' . e($invNo) . '</a> (Owner Invoice)</span>' .
+                                                    '<strong style="color: #16a34a;">₹' . $amt . '</strong>' .
+                                                    '</div>';
+                                            }
+                                            if ($request->tenant_invoice_id) {
+                                                $inv = \Tek2991\Accounting\Models\Invoice::find($request->tenant_invoice_id);
+                                                $invNo = $inv?->invoice_number ?: "#{$request->tenant_invoice_id}";
+                                                $invUrl = $inv ? \Tek2991\Accounting\Filament\Resources\Sales\Invoices\InvoiceResource::getUrl('view', ['record' => $inv]) : '#';
+                                                $amt = number_format((float)($record->tenant_amount > 0 ? $record->tenant_amount : $record->total_amount), 2);
+                                                $invoicesList[] = '<div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0;">' .
+                                                    '<span>🧾 <a href="' . e($invUrl) . '" target="_blank" style="color: #16a34a; font-weight: 600; text-decoration: underline;">' . e($invNo) . '</a> (Tenant Invoice)</span>' .
+                                                    '<strong style="color: #16a34a;">₹' . $amt . '</strong>' .
+                                                    '</div>';
+                                            }
+                                            $invoicesHtml = !empty($invoicesList) ? implode('', $invoicesList) : '<span style="color: gray;">Not Generated</span>';
+
                                             return new HtmlString(
                                                 $prereqBanner .
                                                 '<div style="background-color: rgba(128, 128, 128, 0.03); border: 1px solid rgba(128, 128, 128, 0.2); padding: 18px; border-radius: 8px; font-size: 13px;">' .
@@ -1128,9 +1194,9 @@ class MaintenanceQuotationForm
                                                 '<div><span style="color: gray;">Dwelly Margin / Fee:</span><br><strong style="font-size: 16px; color: #16a34a;">₹' . $margin . '</strong></div>' .
                                                 '</div>' .
                                                 '<hr style="margin: 16px 0; border: 0; border-top: 1px solid rgba(128,128,128,0.2);">' .
-                                                '<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;">' .
-                                                '<div><span style="color: gray;">Generated Vendor Bill:</span><br><strong>' . e($billId) . '</strong></div>' .
-                                                '<div><span style="color: gray;">Generated Client Invoice:</span><br><strong>' . e($ownerInv ?: $tenantInv) . '</strong></div>' .
+                                                '<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px;">' .
+                                                '<div><div style="color: gray; font-size: 11px; font-weight: 700; text-transform: uppercase; margin-bottom: 6px;">Generated Vendor Bill(s) [Payables]</div>' . $billsHtml . '</div>' .
+                                                '<div><div style="color: gray; font-size: 11px; font-weight: 700; text-transform: uppercase; margin-bottom: 6px;">Generated Client Invoice(s) [Receivables]</div>' . $invoicesHtml . '</div>' .
                                                 '</div>' .
                                                 '</div>'
                                             );
