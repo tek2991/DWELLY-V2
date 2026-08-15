@@ -249,6 +249,70 @@ class MaintenanceQuotationForm
                         ->schema([
                             Section::make('💵 Itemized Client Quotation')
                                 ->description('Prepare the formal quotation presented to the Owner/Tenant with line items, materials, and Dwelly service fees.')
+                                ->headerActions([
+                                    Action::make('importFromVendorQuotes')
+                                        ->label('Auto-Populate Line Items from Vendor Quotes')
+                                        ->icon('heroicon-o-arrow-down-tray')
+                                        ->color('info')
+                                        ->button()
+                                        ->size('sm')
+                                        ->visible(fn ($record) => $record?->status !== 'approved')
+                                        ->action(function (Get $get, Set $set, $record, $livewire) {
+                                            $ticketId = $get('maintenance_request_id') ?? $record?->maintenance_request_id;
+                                            $quotes = [];
+
+                                            // 1. Check DB quotes
+                                            if ($ticketId) {
+                                                $dbQuotes = \App\Domain\Maintenance\Models\MaintenanceVendorQuote::where('maintenance_request_id', $ticketId)->get();
+                                                foreach ($dbQuotes as $q) {
+                                                    $quotes[] = [
+                                                        'vendor_quote_id' => $q->id,
+                                                        'description' => $q->trade_title ?: 'Trade Work',
+                                                        'quantity' => 1,
+                                                        'unit_price' => (float)$q->quoted_cost,
+                                                        'total_price' => (float)$q->quoted_cost,
+                                                    ];
+                                                }
+                                            }
+
+                                            // 2. Check form state quotes if DB was empty
+                                            if (empty($quotes)) {
+                                                $formQuotes = $get('vendorQuotes') ?? [];
+                                                foreach ($formQuotes as $idx => $vq) {
+                                                    if (!empty($vq['trade_title']) || !empty($vq['quoted_cost'])) {
+                                                        $cost = (float)($vq['quoted_cost'] ?? 0);
+                                                        $quotes[] = [
+                                                            'vendor_quote_id' => $vq['id'] ?? null,
+                                                            'description' => $vq['trade_title'] ?? ('Trade Work #' . ($idx + 1)),
+                                                            'quantity' => 1,
+                                                            'unit_price' => $cost,
+                                                            'total_price' => $cost,
+                                                        ];
+                                                    }
+                                                }
+                                            }
+
+                                            if (empty($quotes)) {
+                                                Notification::make()
+                                                    ->title('No Vendor Quotes Found')
+                                                    ->body('Please enter at least one vendor quote in Tab 1 (Vendor Quotes & Sourcing) first.')
+                                                    ->warning()
+                                                    ->send();
+                                                return;
+                                            }
+
+                                            $set('items', $quotes);
+
+                                            $total = array_sum(array_column($quotes, 'total_price'));
+                                            $set('total_amount', $total);
+
+                                            Notification::make()
+                                                ->title('Items Auto-Populated')
+                                                ->body("Imported " . count($quotes) . " line item(s) from Vendor Quotes. You can now adjust markups and pricing.")
+                                                ->success()
+                                                ->send();
+                                        }),
+                                ])
                                 ->schema([
                                     Grid::make(3)->schema([
                                         TextInput::make('quote_number')
@@ -281,13 +345,22 @@ class MaintenanceQuotationForm
                                     Repeater::make('items')
                                         ->relationship('items')
                                         ->columns(4)
-                                        ->defaultItems(1)
+                                        ->defaultItems(0)
                                         ->disabled(fn ($record) => $record?->status === 'approved')
                                         ->addable(fn ($record) => $record?->status !== 'approved')
                                         ->deletable(fn ($record) => $record?->status !== 'approved')
                                         ->reorderable(fn ($record) => $record?->status !== 'approved')
-                                        ->required()
-                                        ->minItems(1)
+                                        ->live()
+                                        ->afterStateUpdated(function (Get $get, Set $set) {
+                                            $items = $get('items') ?? [];
+                                            $sum = 0.0;
+                                            foreach ($items as $item) {
+                                                $qty = (float)($item['quantity'] ?? 1);
+                                                $price = (float)($item['unit_price'] ?? 0);
+                                                $sum += ($qty * $price);
+                                            }
+                                            $set('total_amount', $sum);
+                                        })
                                         ->schema([
                                             Select::make('vendor_quote_id')
                                                 ->label('Linked Trade Quote')
@@ -299,27 +372,58 @@ class MaintenanceQuotationForm
                                                         ?? $record?->maintenance_request_id
                                                         ?? $livewire->record?->maintenance_request_id;
 
-                                                    if (!$ticketId) {
-                                                        return [];
+                                                    $options = [];
+
+                                                    if ($ticketId) {
+                                                        $dbQuotes = \App\Domain\Maintenance\Models\MaintenanceVendorQuote::where('maintenance_request_id', $ticketId)->get();
+                                                        foreach ($dbQuotes as $q) {
+                                                            $options[$q->id] = ($q->trade_title ?: 'Trade Quote') . " (₹" . number_format($q->quoted_cost, 0) . ")";
+                                                        }
                                                     }
 
-                                                    return \App\Domain\Maintenance\Models\MaintenanceVendorQuote::where('maintenance_request_id', $ticketId)
-                                                        ->get()
-                                                        ->mapWithKeys(fn ($q) => [
-                                                            $q->id => ($q->trade_title ?: 'Trade Quote') . " (₹" . number_format($q->quoted_cost, 0) . ")"
-                                                        ]);
+                                                    if (empty($options)) {
+                                                        $formQuotes = $get('../../vendorQuotes') ?? $get('../vendorQuotes') ?? [];
+                                                        foreach ($formQuotes as $idx => $vq) {
+                                                            $title = $vq['trade_title'] ?? ('Vendor Quote #' . ($idx + 1));
+                                                            $cost = isset($vq['quoted_cost']) ? number_format((float)$vq['quoted_cost'], 0) : '0';
+                                                            $id = $vq['id'] ?? "temp_{$idx}";
+                                                            $options[$id] = "{$title} (₹{$cost})";
+                                                        }
+                                                    }
+
+                                                    return $options;
                                                 })
                                                 ->nullable()
                                                 ->searchable()
                                                 ->reactive()
                                                 ->afterStateUpdated(function ($state, Set $set, Get $get) {
-                                                    if ($state && blank($get('description'))) {
+                                                    if ($state) {
                                                         $quote = \App\Domain\Maintenance\Models\MaintenanceVendorQuote::find($state);
                                                         if ($quote) {
-                                                            $set('description', $quote->trade_title);
+                                                            if (blank($get('description'))) {
+                                                                $set('description', $quote->trade_title);
+                                                            }
                                                             if (blank($get('unit_price')) || (float)$get('unit_price') === 0.0) {
-                                                                $set('unit_price', $quote->quoted_cost);
-                                                                $set('total_price', $quote->quoted_cost);
+                                                                $cost = (float)$quote->quoted_cost;
+                                                                $set('unit_price', $cost);
+                                                                $qty = (float)($get('quantity') ?: 1);
+                                                                $set('total_price', $qty * $cost);
+                                                            }
+                                                        } else {
+                                                            $formQuotes = $get('../../vendorQuotes') ?? $get('../vendorQuotes') ?? [];
+                                                            foreach ($formQuotes as $idx => $vq) {
+                                                                if (($vq['id'] ?? "temp_{$idx}") == $state) {
+                                                                    if (blank($get('description'))) {
+                                                                        $set('description', $vq['trade_title'] ?? '');
+                                                                    }
+                                                                    if (blank($get('unit_price')) || (float)$get('unit_price') === 0.0) {
+                                                                        $cost = (float)($vq['quoted_cost'] ?? 0);
+                                                                        $set('unit_price', $cost);
+                                                                        $qty = (float)($get('quantity') ?: 1);
+                                                                        $set('total_price', $qty * $cost);
+                                                                    }
+                                                                    break;
+                                                                }
                                                             }
                                                         }
                                                     }
