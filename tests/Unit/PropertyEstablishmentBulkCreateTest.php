@@ -146,4 +146,33 @@ class PropertyEstablishmentBulkCreateTest extends TestCase
         // Verify total property establishments count is 2
         $this->assertEquals(2, $property->establishments()->count());
     }
+
+    public function test_establishment_type_and_city_many_to_many_relationship()
+    {
+        $state = State::create(['name' => 'Assam', 'code' => 'AS', 'country_id' => 1]);
+        $district = District::create(['state_id' => $state->id, 'name' => 'Kamrup', 'slug' => 'kamrup']);
+        $cityGuwahati = City::create(['district_id' => $district->id, 'name' => 'Guwahati', 'slug' => 'guwahati']);
+        $citySilchar = City::create(['district_id' => $district->id, 'name' => 'Silchar', 'slug' => 'silchar']);
+
+        $airport = EstablishmentType::create([
+            'name' => 'Airport',
+            'slug' => 'airport',
+            'is_active' => true,
+        ]);
+
+        $hospital = EstablishmentType::create([
+            'name' => 'Hospital',
+            'slug' => 'hospital',
+            'is_active' => true,
+        ]);
+
+        // Attach cities to establishment types
+        $airport->cities()->attach([$cityGuwahati->id, $citySilchar->id]);
+        $hospital->cities()->attach([$cityGuwahati->id]);
+
+        $this->assertCount(2, $airport->fresh()->cities);
+        $this->assertCount(1, $hospital->fresh()->cities);
+        $this->assertCount(2, $cityGuwahati->fresh()->establishmentTypes);
+        $this->assertCount(1, $citySilchar->fresh()->establishmentTypes);
+    }
 }

@@ -45,6 +45,13 @@ class CreateTenancyAgreement extends CreateRecord
                 ]);
             }
 
+            if (!empty($tenantData['pan_number']) && empty($data['tenant_bank_details']['pan_number'])) {
+                if (!isset($data['tenant_bank_details']) || !is_array($data['tenant_bank_details'])) {
+                    $data['tenant_bank_details'] = [];
+                }
+                $data['tenant_bank_details']['pan_number'] = $tenantData['pan_number'];
+            }
+
             $party->enableRole(BusinessRole::TENANT);
             $primaryTenantId = $party->id;
         } else {

@@ -8,7 +8,7 @@ class PropertyOnboardingValidator
 {
     public function validate(Property $property): array
     {
-        $property->loadMissing(['rooms', 'inventories', 'furnishingType', 'photos', 'utilities', 'pricingVersions', 'establishments']);
+        $property->load(['rooms', 'inventories.inventoryType', 'furnishingType', 'photos', 'utilities', 'pricingVersions', 'establishments', 'onboardingProject']);
 
         $steps = [
             'property_info' => $this->validatePropertyInfo($property),

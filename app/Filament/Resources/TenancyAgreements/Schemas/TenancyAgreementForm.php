@@ -82,11 +82,14 @@ class TenancyAgreementForm
                                                     ->email(),
 
                                                 TextInput::make('new_tenant.parent_name')
-                                                    ->label("Father's / Care-Of Name (Optional)")
-                                                    ->placeholder("e.g. S/o Late Rajesh Sharma"),
+                                                    ->label("Father's / Care-Of Name (Required)")
+                                                    ->placeholder("e.g. S/o Late Rajesh Sharma")
+                                                    ->required(fn(Get $get) => (bool)$get('create_new_tenant')),
 
                                                 TextInput::make('new_tenant.address_line_1')
-                                                    ->label('Permanent Address (Optional)')
+                                                    ->label('Permanent Address (Required)')
+                                                    ->placeholder('Permanent residence address')
+                                                    ->required(fn(Get $get) => (bool)$get('create_new_tenant'))
                                                     ->columnSpanFull(),
                                             ]),
                                     ]),
@@ -97,12 +100,14 @@ class TenancyAgreementForm
                                         Grid::make(2)
                                             ->schema([
                                                 TextInput::make('new_tenant.aadhaar_number')
-                                                    ->label('Aadhaar Number (Optional)')
-                                                    ->placeholder('12-digit Aadhaar number'),
+                                                    ->label('Aadhaar Number (Required)')
+                                                    ->placeholder('12-digit Aadhaar number')
+                                                    ->required(fn(Get $get) => (bool)$get('create_new_tenant')),
 
                                                 TextInput::make('new_tenant.pan_number')
-                                                    ->label('PAN Number (Optional)')
-                                                    ->placeholder('10-character PAN'),
+                                                    ->label('PAN Number (Required)')
+                                                    ->placeholder('10-character PAN')
+                                                    ->required(fn(Get $get) => (bool)$get('create_new_tenant')),
 
                                                 TextInput::make('new_tenant.voter_id')
                                                     ->label('Voter Card Number (Optional)')

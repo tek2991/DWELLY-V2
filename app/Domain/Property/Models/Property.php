@@ -16,6 +16,7 @@ class Property extends DomainModel
 
     protected $casts = [
         'is_listed' => 'boolean',
+        'is_promoted' => 'boolean',
     ];
 
     public function getActivitylogOptions(): LogOptions

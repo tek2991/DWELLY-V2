@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 
 use App\Domain\Finance\Services\AccountingProvisioningService;
 use App\Domain\Party\Events\PartyCreated;
+use App\Domain\Party\Events\PartyUpdated;
 
 class MouService
 {
@@ -239,6 +240,191 @@ class MouService
             if ($partyData['action_type'] === 'create_new') {
                 PartyCreated::dispatch($party, 'owner');
             }
+        });
+    }
+
+    public function updatePartyDetails(Mou $mou, array $partyData): void
+    {
+        DB::transaction(function () use ($mou, $partyData) {
+            $actionType = $partyData['action_type'] ?? 'update_current';
+
+            if ($actionType === 'select_existing') {
+                $party = \App\Domain\Party\Models\Party::findOrFail($partyData['existing_party_id']);
+
+                if (!$party->ownerProfile()->exists()) {
+                    \App\Domain\Party\Models\OwnerProfile::create([
+                        'party_id' => $party->id,
+                    ]);
+                }
+            } elseif ($actionType === 'create_new') {
+                $party = \App\Domain\Party\Models\Party::create([
+                    'party_type' => $partyData['party_type'] === 'individual' ? 'individual' : 'organization',
+                    'display_name' => $partyData['party_type'] === 'individual' ? trim($partyData['name'] ?? '') : ($partyData['legal_name'] ?? ''),
+                    'phone' => $partyData['phone'] ?? $mou->opportunity?->owner_phone,
+                    'email' => $partyData['email'] ?? $mou->opportunity?->owner_email,
+                    'state_id' => $partyData['state_id'] ?? null,
+                ]);
+
+                $stateName = isset($partyData['state_id']) ? \Tek2991\Accounting\Models\State::find($partyData['state_id'])?->name : null;
+
+                if ($partyData['party_type'] === 'individual') {
+                    \App\Domain\Party\Models\PartyIndividual::create([
+                        'party_id' => $party->id,
+                        'name' => $partyData['name'],
+                        'parent_name' => $partyData['parent_name'] ?? null,
+                        'date_of_birth' => $partyData['date_of_birth'] ?? null,
+                        'gender' => $partyData['gender'] ?? null,
+                        'pan_number' => $partyData['pan_number'] ?? null,
+                        'aadhaar_number' => $partyData['aadhar_number'] ?? null,
+                        'voter_id' => $partyData['voter_id'] ?? null,
+                    ]);
+                } else {
+                    \App\Domain\Party\Models\PartyOrganization::create([
+                        'party_id' => $party->id,
+                        'legal_name' => $partyData['legal_name'],
+                        'pan' => $partyData['pan_number'] ?? null,
+                        'gstin' => $partyData['gst_number'] ?? null,
+                        'cin' => $partyData['cin'] ?? null,
+                        'contact_person_name' => $partyData['contact_person_name'] ?? null,
+                        'contact_person_phone' => $partyData['contact_person_phone'] ?? null,
+                    ]);
+                }
+
+                if (!empty($partyData['address'])) {
+                    $baseType = $partyData['party_type'] === 'individual' ? 'residential' : 'registered_office';
+                    $types = [$baseType, 'billing', 'shipping'];
+
+                    foreach ($types as $type) {
+                        \App\Domain\Party\Models\PartyAddress::create([
+                            'party_id' => $party->id,
+                            'type' => $type,
+                            'address_line_1' => $partyData['address'],
+                            'state' => $stateName,
+                            'is_primary' => true,
+                        ]);
+                    }
+                }
+
+                \App\Domain\Party\Models\OwnerProfile::create([
+                    'party_id' => $party->id,
+                ]);
+
+                PartyCreated::dispatch($party, 'owner');
+            } else {
+                // update_current
+                $party = $mou->party;
+                if (!$party) {
+                    $this->resolveParty($mou, array_merge($partyData, ['action_type' => 'create_new']));
+                    return;
+                }
+
+                $stateName = isset($partyData['state_id']) ? \Tek2991\Accounting\Models\State::find($partyData['state_id'])?->name : null;
+
+                $party->update([
+                    'party_type' => $partyData['party_type'] ?? $party->party_type,
+                    'display_name' => ($partyData['party_type'] ?? $party->party_type) === 'individual'
+                        ? trim($partyData['name'] ?? $party->display_name)
+                        : ($partyData['legal_name'] ?? $party->display_name),
+                    'phone' => $partyData['phone'] ?? $party->phone,
+                    'email' => $partyData['email'] ?? $party->email,
+                    'state_id' => $partyData['state_id'] ?? $party->state_id,
+                ]);
+
+                if (($partyData['party_type'] ?? $party->party_type) === 'individual') {
+                    \App\Domain\Party\Models\PartyIndividual::updateOrCreate(
+                        ['party_id' => $party->id],
+                        [
+                            'name' => $partyData['name'] ?? $party->display_name,
+                            'parent_name' => $partyData['parent_name'] ?? null,
+                            'date_of_birth' => $partyData['date_of_birth'] ?? null,
+                            'gender' => $partyData['gender'] ?? null,
+                            'pan_number' => $partyData['pan_number'] ?? null,
+                            'aadhaar_number' => $partyData['aadhar_number'] ?? null,
+                            'voter_id' => $partyData['voter_id'] ?? null,
+                        ]
+                    );
+                } else {
+                    \App\Domain\Party\Models\PartyOrganization::updateOrCreate(
+                        ['party_id' => $party->id],
+                        [
+                            'legal_name' => $partyData['legal_name'] ?? $party->display_name,
+                            'pan' => $partyData['pan_number'] ?? null,
+                            'gstin' => $partyData['gst_number'] ?? null,
+                            'cin' => $partyData['cin'] ?? null,
+                            'contact_person_name' => $partyData['contact_person_name'] ?? null,
+                            'contact_person_phone' => $partyData['contact_person_phone'] ?? null,
+                        ]
+                    );
+                }
+
+                if (!empty($partyData['address'])) {
+                    $baseType = ($partyData['party_type'] ?? $party->party_type) === 'individual' ? 'residential' : 'registered_office';
+                    $primaryAddress = $party->addresses()->where('is_primary', true)->first();
+                    if ($primaryAddress) {
+                        $primaryAddress->update([
+                            'type' => $baseType,
+                            'address_line_1' => $partyData['address'],
+                            'state' => $stateName,
+                        ]);
+                    } else {
+                        $party->addresses()->create([
+                            'type' => $baseType,
+                            'address_line_1' => $partyData['address'],
+                            'state' => $stateName,
+                            'is_primary' => true,
+                        ]);
+                    }
+                }
+
+                if (!$party->ownerProfile()->exists()) {
+                    \App\Domain\Party\Models\OwnerProfile::create([
+                        'party_id' => $party->id,
+                    ]);
+                }
+
+                PartyUpdated::dispatch($party, 'owner');
+            }
+
+            $ownerDetails = $this->getOwnerDetails($party, $mou->opportunity);
+            $mouUpdateData = [
+                'party_id' => $party->id,
+                'owner_details' => $ownerDetails,
+            ];
+            if (!$mou->is_signatory_different) {
+                $mouUpdateData['signatory_details'] = $this->getSignatoryDetailsForOwner($party, $mou->opportunity);
+            }
+            $mou->update($mouUpdateData);
+
+            // Sync resolved party back to Opportunity
+            if ($mou->opportunity) {
+                $mou->opportunity->update(['owner_party_id' => $party->id]);
+            }
+
+            // If MOU already has bank details, sync them to the party as a Bank Account
+            if (!empty($mou->bank_details)) {
+                $bankAccount = \App\Domain\Party\Models\PartyBankAccount::firstOrCreate(
+                    [
+                        'party_id' => $party->id,
+                        'account_number' => $mou->bank_details['account_number'] ?? null,
+                    ],
+                    [
+                        'bank_name' => $mou->bank_details['bank_name'] ?? 'Unknown',
+                        'bank_address' => $mou->bank_details['bank_address'] ?? null,
+                        'beneficiary_name' => $mou->bank_details['beneficiary_name'] ?? 'Unknown',
+                        'ifsc_code' => $mou->bank_details['ifsc_code'] ?? 'Unknown',
+                        'is_primary' => true,
+                    ]
+                );
+
+                $profile = \App\Domain\Party\Models\OwnerProfile::where('party_id', $party->id)->first();
+                if ($profile && !$profile->default_bank_account_id) {
+                    $profile->update(['default_bank_account_id' => $bankAccount->id]);
+                }
+            }
+
+            // Reload and provision accounting entity
+            $party->loadMissing(['individual', 'organization', 'bankAccounts', 'addresses', 'ownerProfile', 'tenantProfile', 'vendorProfile']);
+            $this->accountingProvisioning->ensurePartyAccountingReady($party);
         });
     }
 

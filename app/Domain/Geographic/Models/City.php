@@ -30,4 +30,14 @@ class City extends DomainModel
     {
         return $this->hasMany(Locality::class);
     }
+
+    public function establishmentTypes(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(
+            \App\Domain\Property\Models\EstablishmentType::class,
+            'city_establishment_type',
+            'city_id',
+            'establishment_type_id'
+        )->withTimestamps();
+    }
 }

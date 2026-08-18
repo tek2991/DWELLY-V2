@@ -10,6 +10,7 @@ use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Widgets\Widget;
 use Illuminate\Database\Eloquent\Model;
+use Livewire\Attributes\On;
 
 class OnboardingProgressWidget extends Widget implements HasActions, HasForms
 {
@@ -21,6 +22,26 @@ class OnboardingProgressWidget extends Widget implements HasActions, HasForms
     public ?Model $record = null;
 
     protected int | string | array $columnSpan = 'full';
+
+    protected $listeners = [
+        'refresh-onboarding-progress' => 'refreshProgress',
+        'refresh-page' => 'refreshProgress',
+        'refreshOnboardingProgress' => 'refreshProgress',
+        'updateRelationManagerList' => 'refreshProgress',
+        'saved' => 'refreshProgress',
+    ];
+
+    #[On('refresh-onboarding-progress')]
+    #[On('refresh-page')]
+    #[On('refreshOnboardingProgress')]
+    #[On('updateRelationManagerList')]
+    #[On('saved')]
+    public function refreshProgress(): void
+    {
+        if ($this->record) {
+            $this->record = $this->record->fresh(['rooms', 'inventories.inventoryType', 'furnishingType', 'photos', 'utilities', 'pricingVersions', 'establishments', 'onboardingProject']);
+        }
+    }
 
     public function canUserReview(): bool
     {

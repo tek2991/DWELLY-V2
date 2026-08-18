@@ -64,6 +64,12 @@ class CityResource extends Resource
                     ->required()
                     ->maxLength(255)
                     ->unique(ignoreRecord: true),
+                Select::make('establishmentTypes')
+                    ->label('Applicable Establishment Types')
+                    ->relationship('establishmentTypes', 'name')
+                    ->multiple()
+                    ->preload()
+                    ->searchable(),
                 Toggle::make('is_active')
                     ->default(true),
             ]);

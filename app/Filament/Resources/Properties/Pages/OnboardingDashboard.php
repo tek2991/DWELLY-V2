@@ -62,6 +62,11 @@ class OnboardingDashboard extends EditRecord
         }
     }
 
+    protected function afterSave(): void
+    {
+        $this->dispatch('refresh-onboarding-progress');
+    }
+
     public function getSubheading(): string | \Illuminate\Support\HtmlString | null
     {
         if (!$this->record) {

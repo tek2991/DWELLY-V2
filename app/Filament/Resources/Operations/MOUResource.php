@@ -128,7 +128,7 @@ class MOUResource extends Resource
                                     }
                                     return new \Illuminate\Support\HtmlString("<span class=\"text-gray-500\">Unresolved</span>");
                                 })
-                                ->hintAction(
+                                ->hintActions([
                                     \Filament\Actions\Action::make('viewParty')
                                         ->icon('heroicon-m-eye')
                                         ->tooltip('View Party Details')
@@ -170,8 +170,12 @@ class MOUResource extends Resource
                                                 ])->columns(2)
                                                 ->visible(fn (?Mou $record) => $record?->party?->party_type === 'organization'),
                                         ])
-                                        ->visible(fn (?Mou $record) => $record?->party !== null)
-                                ),
+                                        ->visible(fn (?Mou $record) => $record?->party !== null),
+
+                                    static::getUpdatePartyAction('editPartyFromHint')
+                                        ->tooltip('Update Party Details')
+                                        ->icon('heroicon-m-pencil-square'),
+                                ]),
                             Forms\Components\Placeholder::make('property')
                                 ->label('Associated Property')
                                 ->content(function (?Mou $record): ?\Illuminate\Support\HtmlString {
@@ -584,114 +588,14 @@ class MOUResource extends Resource
                         ->label('Resolve Party')
                         ->icon('heroicon-o-users')
                         ->color('primary')
-                        ->visible(fn (Mou $record) => !$record->party_id && $record->status === MouStatus::DRAFT)
-                        ->form([
-                            Forms\Components\Radio::make('action_type')
-                                ->label('Action')
-                                ->options([
-                                    'select_existing' => 'Select Existing Party',
-                                    'create_new' => 'Create New Party',
-                                ])
-                                ->default('select_existing')
-                                ->live()
-                                ->required(),
-                                
-                            Forms\Components\Select::make('existing_party_id')
-                                ->label('Existing Party')
-                                ->options(function () {
-                                    return \App\Domain\Party\Models\Party::all()->mapWithKeys(function ($party) {
-                                        $phone = $party->phone ? " ({$party->phone})" : '';
-                                        return [$party->id => $party->display_name . $phone];
-                                    });
-                                })
-                                ->searchable()
-                                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'select_existing')
-                                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'select_existing'),
-
-                            Forms\Components\Radio::make('party_type')
-                                ->label('Entity Type')
-                                ->options([
-                                    'individual' => 'Individual',
-                                    'organization' => 'Company',
-                                ])
-                                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new')
-                                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new')
-                                ->live(),
-
-                            // --- INDIVIDUAL FIELDS ---
-                            Forms\Components\TextInput::make('name')
-                                ->label('Full Name')
-                                ->default(fn (Mou $record) => $record->opportunity?->owner_name)
-                                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'individual')
-                                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'individual'),
-                            Forms\Components\TextInput::make('parent_name')
-                                ->label('S/o or D/o (Parent/Guardian Name)')
-                                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'individual')
-                                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'individual'),
-                            Forms\Components\DatePicker::make('date_of_birth')
-                                ->label('Date of Birth')
-                                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'individual'),
-                            Forms\Components\Select::make('gender')
-                                ->label('Gender')
-                                ->options([
-                                    'male' => 'Male',
-                                    'female' => 'Female',
-                                    'other' => 'Other',
-                                ])
-                                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'individual'),
-
-                            // --- ORGANIZATION FIELDS ---
-                            Forms\Components\TextInput::make('legal_name')
-                                ->label('Company Legal Name')
-                                ->default(fn (Mou $record) => $record->opportunity?->owner_name)
-                                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'organization')
-                                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'organization'),
-                            Forms\Components\TextInput::make('contact_person_name')
-                                ->label('Contact Person Name')
-                                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'organization'),
-                            Forms\Components\TextInput::make('contact_person_phone')
-                                ->label('Contact Person Phone')
-                                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'organization'),
-
-                            // --- COMMON FIELDS ---
-                            Forms\Components\TextInput::make('pan_number')
-                                ->label('PAN Number')
-                                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new'),
-                            Forms\Components\TextInput::make('gst_number')
-                                ->label('GST Number')
-                                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'organization'),
-                            Forms\Components\TextInput::make('aadhar_number')
-                                ->label('Aadhar Number')
-                                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'individual'),
-                            Forms\Components\TextInput::make('voter_id')
-                                ->label('Voter ID')
-                                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'individual'),
-                            Forms\Components\TextInput::make('phone')
-                                ->label('Phone Number')
-                                ->default(fn (Mou $record) => $record->opportunity->owner_phone)
-                                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new'),
-                            Forms\Components\TextInput::make('email')
-                                ->label('Email Address')
-                                ->default(fn (Mou $record) => $record->opportunity->owner_email)
-                                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new'),
-                            Forms\Components\Select::make('state_id')
-                                ->label('State (Accounting)')
-                                ->options(fn() => \Tek2991\Accounting\Models\State::pluck('name', 'id'))
-                                ->searchable()
-                                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new')
-                                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new'),
-                            Forms\Components\Textarea::make('address')
-                                ->label(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('party_type') === 'organization' ? 'Registered Address' : 'Personal Address')
-                                ->default(fn (Mou $record) => $record->opportunity?->address)
-                                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new')
-                                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new')
-                                ->columnSpanFull(),
-                        ])
+                        ->visible(fn (Mou $record) => !$record->party_id && static::canEdit($record))
+                        ->form(static::getResolvePartyFormSchema())
                         ->action(function (Mou $record, array $data) {
                             app(\App\Domain\Mou\Services\MouService::class)->resolveParty($record, $data);
                             $record->refresh();
                             \Filament\Notifications\Notification::make()->title('Party Resolved')->success()->send();
                         }),
+                    static::getUpdatePartyAction(),
 
                     \Filament\Actions\Action::make('provisionAccounting')
                         ->label('Provision Accounting')
@@ -844,5 +748,280 @@ class MOUResource extends Resource
             ->withoutGlobalScopes([
                 SoftDeletingScope::class,
             ]);
+    }
+
+    public static function getUpdatePartyAction(string $name = 'updateParty'): \Filament\Actions\Action
+    {
+        return \Filament\Actions\Action::make($name)
+            ->label('Update Party Details')
+            ->icon('heroicon-o-pencil-square')
+            ->color('primary')
+            ->visible(fn (?Mou $record) => $record && $record->party_id && static::canEdit($record))
+            ->fillForm(function (Mou $record): array {
+                $party = $record->party;
+                if (!$party) {
+                    return [
+                        'action_type' => 'create_new',
+                        'party_type' => 'individual',
+                        'name' => $record->opportunity?->owner_name ?? ($record->owner_details['name'] ?? ''),
+                        'phone' => $record->opportunity?->owner_phone ?? ($record->owner_details['phone'] ?? ''),
+                        'email' => $record->opportunity?->owner_email ?? ($record->owner_details['email'] ?? ''),
+                        'address' => $record->opportunity?->address ?? ($record->owner_details['address'] ?? ''),
+                    ];
+                }
+
+                $party->loadMissing(['individual', 'organization', 'addresses']);
+                $primaryAddress = $party->addresses->where('is_primary', true)->first() ?? $party->addresses->first();
+
+                return [
+                    'action_type' => 'update_current',
+                    'existing_party_id' => $party->id,
+                    'party_type' => $party->party_type ?? 'individual',
+                    'name' => $party->individual?->name ?? $party->display_name ?? ($record->owner_details['name'] ?? ''),
+                    'parent_name' => $party->individual?->parent_name ?? ($record->owner_details['parent_name'] ?? ''),
+                    'date_of_birth' => $party->individual?->date_of_birth,
+                    'gender' => $party->individual?->gender,
+                    'pan_number' => $party->individual?->pan_number ?? $party->organization?->pan ?? ($record->owner_details['pan_number'] ?? ''),
+                    'aadhar_number' => $party->individual?->aadhaar_number ?? ($record->owner_details['aadhar_number'] ?? ''),
+                    'voter_id' => $party->individual?->voter_id ?? ($record->owner_details['voter_id'] ?? ''),
+                    'legal_name' => $party->organization?->legal_name ?? $party->display_name ?? ($record->owner_details['name'] ?? ''),
+                    'contact_person_name' => $party->organization?->contact_person_name ?? ($record->owner_details['contact_person_name'] ?? ''),
+                    'contact_person_phone' => $party->organization?->contact_person_phone ?? ($record->owner_details['contact_person_phone'] ?? ''),
+                    'gst_number' => $party->organization?->gstin ?? ($record->owner_details['gstin'] ?? ''),
+                    'phone' => $party->phone ?? ($record->owner_details['phone'] ?? ''),
+                    'email' => $party->email ?? ($record->owner_details['email'] ?? ''),
+                    'state_id' => $party->state_id,
+                    'address' => $primaryAddress?->address_line_1 ?? ($record->owner_details['address'] ?? ''),
+                ];
+            })
+            ->form(static::getUpdatePartyFormSchema())
+            ->action(function (Mou $record, array $data) {
+                app(\App\Domain\Mou\Services\MouService::class)->updatePartyDetails($record, $data);
+                $record->refresh();
+                \Filament\Notifications\Notification::make()->title('Party Details Updated')->success()->send();
+            });
+    }
+
+    public static function getResolvePartyFormSchema(): array
+    {
+        return [
+            Forms\Components\Radio::make('action_type')
+                ->label('Action')
+                ->options([
+                    'select_existing' => 'Select Existing Party',
+                    'create_new' => 'Create New Party',
+                ])
+                ->default('select_existing')
+                ->live()
+                ->required(),
+
+            Forms\Components\Select::make('existing_party_id')
+                ->label('Existing Party')
+                ->options(function () {
+                    return \App\Domain\Party\Models\Party::all()->mapWithKeys(function ($party) {
+                        $phone = $party->phone ? " ({$party->phone})" : '';
+                        return [$party->id => $party->display_name . $phone];
+                    });
+                })
+                ->searchable()
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'select_existing')
+                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'select_existing'),
+
+            Forms\Components\Radio::make('party_type')
+                ->label('Entity Type')
+                ->options([
+                    'individual' => 'Individual',
+                    'organization' => 'Company',
+                ])
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new')
+                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new')
+                ->live(),
+
+            // --- INDIVIDUAL FIELDS ---
+            Forms\Components\TextInput::make('name')
+                ->label('Full Name')
+                ->default(fn (?Mou $record) => $record?->opportunity?->owner_name)
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'individual')
+                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'individual'),
+            Forms\Components\TextInput::make('parent_name')
+                ->label('S/o or D/o (Parent/Guardian Name)')
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'individual')
+                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'individual'),
+            Forms\Components\DatePicker::make('date_of_birth')
+                ->label('Date of Birth')
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'individual'),
+            Forms\Components\Select::make('gender')
+                ->label('Gender')
+                ->options([
+                    'male' => 'Male',
+                    'female' => 'Female',
+                    'other' => 'Other',
+                ])
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'individual'),
+
+            // --- ORGANIZATION FIELDS ---
+            Forms\Components\TextInput::make('legal_name')
+                ->label('Company Legal Name')
+                ->default(fn (?Mou $record) => $record?->opportunity?->owner_name)
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'organization')
+                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'organization'),
+            Forms\Components\TextInput::make('contact_person_name')
+                ->label('Contact Person Name')
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'organization')
+                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'organization'),
+            Forms\Components\TextInput::make('contact_person_phone')
+                ->label('Contact Person Phone')
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'organization')
+                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'organization'),
+
+            // --- COMMON FIELDS ---
+            Forms\Components\TextInput::make('pan_number')
+                ->label('PAN Number')
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new')
+                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new'),
+            Forms\Components\TextInput::make('gst_number')
+                ->label('GST Number')
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'organization'),
+            Forms\Components\TextInput::make('aadhar_number')
+                ->label('Aadhar Number')
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'individual')
+                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'individual'),
+            Forms\Components\TextInput::make('voter_id')
+                ->label('Voter ID')
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new' && $get('party_type') === 'individual'),
+            Forms\Components\TextInput::make('phone')
+                ->label('Phone Number')
+                ->default(fn (?Mou $record) => $record?->opportunity?->owner_phone)
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new')
+                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new'),
+            Forms\Components\TextInput::make('email')
+                ->label('Email Address')
+                ->default(fn (?Mou $record) => $record?->opportunity?->owner_email)
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new')
+                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new'),
+            Forms\Components\Select::make('state_id')
+                ->label('State (Accounting)')
+                ->options(fn() => \Tek2991\Accounting\Models\State::pluck('name', 'id'))
+                ->searchable()
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new')
+                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new'),
+            Forms\Components\Textarea::make('address')
+                ->label(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('party_type') === 'organization' ? 'Registered Address' : 'Personal Address')
+                ->default(fn (?Mou $record) => $record?->opportunity?->address)
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new')
+                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'create_new')
+                ->columnSpanFull(),
+        ];
+    }
+
+    public static function getUpdatePartyFormSchema(): array
+    {
+        return [
+            Forms\Components\Radio::make('action_type')
+                ->label('Action')
+                ->options(function (?Mou $record) {
+                    $partyName = $record?->party?->display_name ?? 'Resolved Party';
+                    return [
+                        'update_current' => "Update Current Party ({$partyName})",
+                        'select_existing' => 'Switch to Different Existing Party',
+                        'create_new' => 'Create & Switch to New Party',
+                    ];
+                })
+                ->default('update_current')
+                ->live()
+                ->required(),
+
+            Forms\Components\Select::make('existing_party_id')
+                ->label('Select Existing Party')
+                ->options(function () {
+                    return \App\Domain\Party\Models\Party::all()->mapWithKeys(function ($party) {
+                        $phone = $party->phone ? " ({$party->phone})" : '';
+                        return [$party->id => $party->display_name . $phone];
+                    });
+                })
+                ->searchable()
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'select_existing')
+                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('action_type') === 'select_existing'),
+
+            Forms\Components\Radio::make('party_type')
+                ->label('Entity Type')
+                ->options([
+                    'individual' => 'Individual',
+                    'organization' => 'Company',
+                ])
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => in_array($get('action_type'), ['update_current', 'create_new']))
+                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => in_array($get('action_type'), ['update_current', 'create_new']))
+                ->live(),
+
+            // --- INDIVIDUAL FIELDS ---
+            Forms\Components\TextInput::make('name')
+                ->label('Full Name')
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => in_array($get('action_type'), ['update_current', 'create_new']) && $get('party_type') === 'individual')
+                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => in_array($get('action_type'), ['update_current', 'create_new']) && $get('party_type') === 'individual'),
+            Forms\Components\TextInput::make('parent_name')
+                ->label('S/o or D/o (Parent/Guardian Name)')
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => in_array($get('action_type'), ['update_current', 'create_new']) && $get('party_type') === 'individual')
+                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => in_array($get('action_type'), ['update_current', 'create_new']) && $get('party_type') === 'individual'),
+            Forms\Components\DatePicker::make('date_of_birth')
+                ->label('Date of Birth')
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => in_array($get('action_type'), ['update_current', 'create_new']) && $get('party_type') === 'individual'),
+            Forms\Components\Select::make('gender')
+                ->label('Gender')
+                ->options([
+                    'male' => 'Male',
+                    'female' => 'Female',
+                    'other' => 'Other',
+                ])
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => in_array($get('action_type'), ['update_current', 'create_new']) && $get('party_type') === 'individual'),
+
+            // --- ORGANIZATION FIELDS ---
+            Forms\Components\TextInput::make('legal_name')
+                ->label('Company Legal Name')
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => in_array($get('action_type'), ['update_current', 'create_new']) && $get('party_type') === 'organization')
+                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => in_array($get('action_type'), ['update_current', 'create_new']) && $get('party_type') === 'organization'),
+            Forms\Components\TextInput::make('contact_person_name')
+                ->label('Contact Person Name')
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => in_array($get('action_type'), ['update_current', 'create_new']) && $get('party_type') === 'organization')
+                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => in_array($get('action_type'), ['update_current', 'create_new']) && $get('party_type') === 'organization'),
+            Forms\Components\TextInput::make('contact_person_phone')
+                ->label('Contact Person Phone')
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => in_array($get('action_type'), ['update_current', 'create_new']) && $get('party_type') === 'organization')
+                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => in_array($get('action_type'), ['update_current', 'create_new']) && $get('party_type') === 'organization'),
+
+            // --- COMMON FIELDS ---
+            Forms\Components\TextInput::make('pan_number')
+                ->label('PAN Number')
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => in_array($get('action_type'), ['update_current', 'create_new']))
+                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => in_array($get('action_type'), ['update_current', 'create_new'])),
+            Forms\Components\TextInput::make('gst_number')
+                ->label('GST Number')
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => in_array($get('action_type'), ['update_current', 'create_new']) && $get('party_type') === 'organization'),
+            Forms\Components\TextInput::make('aadhar_number')
+                ->label('Aadhar Number')
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => in_array($get('action_type'), ['update_current', 'create_new']) && $get('party_type') === 'individual')
+                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => in_array($get('action_type'), ['update_current', 'create_new']) && $get('party_type') === 'individual'),
+            Forms\Components\TextInput::make('voter_id')
+                ->label('Voter ID')
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => in_array($get('action_type'), ['update_current', 'create_new']) && $get('party_type') === 'individual'),
+            Forms\Components\TextInput::make('phone')
+                ->label('Phone Number')
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => in_array($get('action_type'), ['update_current', 'create_new']))
+                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => in_array($get('action_type'), ['update_current', 'create_new'])),
+            Forms\Components\TextInput::make('email')
+                ->label('Email Address')
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => in_array($get('action_type'), ['update_current', 'create_new']))
+                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => in_array($get('action_type'), ['update_current', 'create_new'])),
+            Forms\Components\Select::make('state_id')
+                ->label('State (Accounting)')
+                ->options(fn() => \Tek2991\Accounting\Models\State::pluck('name', 'id'))
+                ->searchable()
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => in_array($get('action_type'), ['update_current', 'create_new']))
+                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => in_array($get('action_type'), ['update_current', 'create_new'])),
+            Forms\Components\Textarea::make('address')
+                ->label(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('party_type') === 'organization' ? 'Registered Address' : 'Personal Address')
+                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => in_array($get('action_type'), ['update_current', 'create_new']))
+                ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => in_array($get('action_type'), ['update_current', 'create_new']))
+                ->columnSpanFull(),
+        ];
     }
 }

@@ -85,6 +85,7 @@ class AmenitiesRelationManager extends RelationManager
                             }
                         }
                         \Filament\Notifications\Notification::make()->title('Amenities added successfully')->success()->send();
+                        $livewire->dispatch('refresh-onboarding-progress');
                     }),
             ])
             ->recordActions([

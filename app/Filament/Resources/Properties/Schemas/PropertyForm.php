@@ -208,8 +208,13 @@ class PropertyForm
 
                 \Filament\Schemas\Components\Section::make('Marketing & Availability')
                     ->schema([
+                        \Filament\Forms\Components\Toggle::make('is_listed')
+                            ->label('Listed')
+                            ->default(true),
                         \Filament\Forms\Components\Toggle::make('is_promoted')
-                            ->label('List Property'),
+                            ->label('Promote Property')
+                            ->helperText('Boost ranking in listings')
+                            ->default(false),
                         \Filament\Forms\Components\DatePicker::make('available_from')
                             ->label('Available From'),
                     ])->columns(2),

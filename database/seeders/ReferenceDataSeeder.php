@@ -137,13 +137,21 @@ class ReferenceDataSeeder extends Seeder
 
     private function seedEstablishmentTypes()
     {
-        $activeTypes = ['Airport', 'Railway Station', 'Hospital', 'School'];
-        $inactiveTypes = ['IT Park', 'Metro Station', 'Shopping Mall', 'Park'];
+        $types = [
+            'Airport',
+            'Hospital',
+            'Railway Station',
+            'School',
+            'Park',
+            'IT Park',
+            'Metro Station',
+            'Shopping Mall',
+        ];
 
         $now = now();
         $data = [];
 
-        foreach ($activeTypes as $item) {
+        foreach ($types as $item) {
             $data[] = [
                 'id' => (string) Str::ulid(),
                 'name' => $item,
@@ -154,23 +162,7 @@ class ReferenceDataSeeder extends Seeder
             ];
         }
 
-        foreach ($inactiveTypes as $item) {
-            $data[] = [
-                'id' => (string) Str::ulid(),
-                'name' => $item,
-                'slug' => Str::slug($item),
-                'is_active' => false,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ];
-        }
-
         DB::table('establishment_types')->upsert($data, ['slug'], ['name', 'is_active', 'updated_at']);
-
-        $activeSlugs = array_map(fn ($item) => Str::slug($item), $activeTypes);
-        DB::table('establishment_types')
-            ->whereNotIn('slug', $activeSlugs)
-            ->update(['is_active' => false]);
     }
 
     private function seedUtilityTypes()

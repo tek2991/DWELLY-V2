@@ -125,6 +125,8 @@ class RoomsRelationManager extends RelationManager
                             ->title('Rooms added successfully')
                             ->success()
                             ->send();
+
+                        $livewire->dispatch('refresh-onboarding-progress');
                     }),
             ])
             ->recordActions([

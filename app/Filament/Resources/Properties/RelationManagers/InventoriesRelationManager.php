@@ -155,6 +155,7 @@ class InventoriesRelationManager extends RelationManager
                             }
                         }
                         \Filament\Notifications\Notification::make()->title('Inventories created successfully')->success()->send();
+                        $livewire->dispatch('refresh-onboarding-progress');
                     }),
             ])
             ->recordActions([

@@ -117,34 +117,65 @@ class EstablishmentsRelationManager extends RelationManager
                     ->form(function (RelationManager $livewire) {
                         $property = $livewire->getOwnerRecord();
                         $cityId = $property->city_id;
-                        $cityName = null;
-                        if ($cityId) {
-                            $cityName = \App\Domain\Geographic\Models\City::find($cityId)?->name;
-                        }
-                        if (!$cityName && $property->city) {
-                            $cityName = $property->city;
-                        }
+                        $initialCityIds = $cityId ? [$cityId] : [];
 
-                        $noticeHtml = $cityName
-                            ? "<div class=\"p-3 rounded-lg bg-primary-50 dark:bg-primary-950/40 border border-primary-200 dark:border-primary-800 text-sm text-primary-800 dark:text-primary-300 flex items-center gap-2\"><svg width=\"20\" height=\"20\" style=\"width:20px; height:20px; min-width:20px; min-height:20px; flex-shrink:0; display:inline-block;\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z\"/><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M15 11a3 3 0 11-6 0 3 3 0 016 0z\"/></svg><span>Suggestions filtered by city: <strong>{$cityName}</strong></span></div>"
-                            : "<div class=\"p-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-sm text-amber-800 dark:text-amber-300\">Showing suggestions across all cities (No city set on property).</div>";
+                        $initialTypes = !empty($initialCityIds)
+                            ? \App\Domain\Property\Models\EstablishmentType::whereHas('cities', fn ($q) => $q->whereIn('cities.id', $initialCityIds))->distinct()->orderBy('name')->get()
+                            : collect();
 
-                        $types = \App\Domain\Property\Models\EstablishmentType::where('is_active', true)
-                            ->orderBy('name')
-                            ->get();
-
-                        $defaultItems = $types->map(fn ($type) => [
+                        $defaultItems = $initialTypes->map(fn ($type) => [
                             'is_default' => true,
                             'establishment_type_id' => $type->id,
-                            'establishment_name' => '',
+                            'establishment_id' => null,
                             'distance_km' => null,
                             'travel_time_minutes' => null,
                         ])->toArray();
 
                         return [
-                            Placeholder::make('city_filter_notice')
-                                ->hiddenLabel()
-                                ->content(new \Illuminate\Support\HtmlString($noticeHtml)),
+                            Select::make('selected_cities')
+                                ->label('Filter & Suggest by Cities')
+                                ->placeholder('Select cities...')
+                                ->helperText('Select cities to automatically suggest mapped establishment types and filter establishment names.')
+                                ->options(fn () => \App\Domain\Geographic\Models\City::orderBy('name')->pluck('name', 'id'))
+                                ->multiple()
+                                ->searchable()
+                                ->preload()
+                                ->default($initialCityIds)
+                                ->live()
+                                ->afterStateUpdated(function (Set $set, ?array $state, Get $get) {
+                                    $selectedCityIds = $state ?? [];
+                                    if (empty($selectedCityIds)) {
+                                        $set('establishments', []);
+                                        return;
+                                    }
+
+                                    $types = \App\Domain\Property\Models\EstablishmentType::whereHas('cities', function ($q) use ($selectedCityIds) {
+                                        $q->whereIn('cities.id', $selectedCityIds);
+                                    })->distinct()->orderBy('name')->get();
+
+                                    $currentItems = $get('establishments') ?? [];
+                                    $existingByType = [];
+                                    foreach ($currentItems as $item) {
+                                        if (!empty($item['establishment_type_id'])) {
+                                            $existingByType[$item['establishment_type_id']] = $item;
+                                        }
+                                    }
+
+                                    $newItems = $types->map(function ($type) use ($existingByType) {
+                                        if (isset($existingByType[$type->id])) {
+                                            return $existingByType[$type->id];
+                                        }
+                                        return [
+                                            'is_default' => true,
+                                            'establishment_type_id' => $type->id,
+                                            'establishment_id' => null,
+                                            'distance_km' => null,
+                                            'travel_time_minutes' => null,
+                                        ];
+                                    })->values()->toArray();
+
+                                    $set('establishments', $newItems);
+                                }),
                             Repeater::make('establishments')
                                 ->label('Establishments')
                                 ->default($defaultItems)
@@ -169,15 +200,19 @@ class EstablishmentsRelationManager extends RelationManager
                                                 ->label('Establishment Name')
                                                 ->options(function (Get $get, RelationManager $livewire) {
                                                     $typeId = $get('establishment_type_id');
-                                                    $cityId = $livewire->getOwnerRecord()->city_id;
+                                                    $selectedCities = $get('../../selected_cities');
+                                                    if ($selectedCities === null) {
+                                                        $cityId = $livewire->getOwnerRecord()->city_id;
+                                                        $selectedCities = $cityId ? [$cityId] : [];
+                                                    }
 
                                                     $query = \App\Domain\Property\Models\Establishment::query();
                                                     if ($typeId) {
                                                         $query->where('establishment_type_id', $typeId);
                                                     }
-                                                    if ($cityId) {
-                                                        $query->where(function ($q) use ($cityId) {
-                                                            $q->where('city_id', $cityId)
+                                                    if (!empty($selectedCities)) {
+                                                        $query->where(function ($q) use ($selectedCities) {
+                                                            $q->whereIn('city_id', $selectedCities)
                                                               ->orWhereNull('city_id');
                                                         });
                                                     }
@@ -189,10 +224,16 @@ class EstablishmentsRelationManager extends RelationManager
                                                     TextInput::make('name')
                                                         ->label('Establishment Name')
                                                         ->required(),
+                                                    Select::make('city_id')
+                                                        ->label('City')
+                                                        ->options(fn () => \App\Domain\Geographic\Models\City::orderBy('name')->pluck('name', 'id'))
+                                                        ->default(fn (RelationManager $livewire) => $livewire->getOwnerRecord()->city_id)
+                                                        ->searchable()
+                                                        ->preload(),
                                                 ])
                                                 ->createOptionUsing(function (array $data, Get $get, RelationManager $livewire) {
                                                     $typeId = $get('establishment_type_id');
-                                                    $cityId = $livewire->getOwnerRecord()->city_id;
+                                                    $cityId = $data['city_id'] ?? $livewire->getOwnerRecord()->city_id;
 
                                                     $establishment = \App\Domain\Property\Models\Establishment::create([
                                                         'name' => trim($data['name']),
@@ -311,6 +352,8 @@ class EstablishmentsRelationManager extends RelationManager
                                 ->warning()
                                 ->send();
                         }
+
+                        $livewire->dispatch('refresh-onboarding-progress');
                     }),
             ])
             ->recordActions([

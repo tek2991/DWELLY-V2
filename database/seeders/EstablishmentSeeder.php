@@ -27,14 +27,113 @@ class EstablishmentSeeder extends Seeder
             'is_active' => true,
         ]);
 
-        $establishments = [
+        $karnataka = \Tek2991\Accounting\Models\State::where('name', 'Karnataka')->first();
+        $bangaloreDistrict = District::firstOrCreate(
+            ['name' => 'Bangalore Urban'],
             [
-                'name' => 'Apollo Hospital',
+                'state_id' => $karnataka?->id ?? 1,
+                'slug' => 'bangalore-urban',
+                'is_active' => true,
+            ]
+        );
+
+        $bangalore = City::firstOrCreate(
+            ['name' => 'Bangalore'],
+            [
+                'district_id' => $bangaloreDistrict->id,
+                'slug' => 'bangalore',
+                'is_active' => true,
+            ]
+        );
+
+        $guwahati = City::where('name', 'Guwahati')->first() ?? City::firstOrCreate(
+            ['name' => 'Guwahati'],
+            [
+                'district_id' => $defaultDistrict->id,
+                'slug' => 'guwahati',
+                'is_active' => true,
+            ]
+        );
+
+        // Map establishment types: 3 for Guwahati only, 3 for Bangalore only, 2 for both
+        $guwahatiOnly = ['Railway Station', 'School', 'Park'];
+        $bangaloreOnly = ['IT Park', 'Metro Station', 'Shopping Mall'];
+        $bothCities = ['Airport', 'Hospital'];
+
+        $guwahatiTypeIds = collect([...$guwahatiOnly, ...$bothCities])
+            ->map(fn ($name) => $types->get($name)?->id)
+            ->filter()
+            ->values()
+            ->toArray();
+
+        $bangaloreTypeIds = collect([...$bangaloreOnly, ...$bothCities])
+            ->map(fn ($name) => $types->get($name)?->id)
+            ->filter()
+            ->values()
+            ->toArray();
+
+        $guwahati->establishmentTypes()->sync($guwahatiTypeIds);
+        $bangalore->establishmentTypes()->sync($bangaloreTypeIds);
+
+        $establishments = [
+            // Guwahati (Guwahati-only & Both)
+            [
+                'name' => 'Lokpriya Gopinath Bordoloi International Airport',
+                'type' => 'Airport',
+                'address' => 'Borjhar',
+                'city' => 'Guwahati',
+                'latitude' => 26.1061,
+                'longitude' => 91.5859,
+            ],
+            [
+                'name' => 'Gauhati Medical College & Hospital',
                 'type' => 'Hospital',
-                'address' => 'Greams Road',
-                'city' => 'Chennai',
-                'latitude' => 13.0617,
-                'longitude' => 80.2543,
+                'address' => 'Bhangagarh',
+                'city' => 'Guwahati',
+                'latitude' => 26.1554,
+                'longitude' => 91.7686,
+            ],
+            [
+                'name' => 'Guwahati Railway Station',
+                'type' => 'Railway Station',
+                'address' => 'Paltan Bazaar',
+                'city' => 'Guwahati',
+                'latitude' => 26.1824,
+                'longitude' => 91.7506,
+            ],
+            [
+                'name' => 'Cotton Collegiate School',
+                'type' => 'School',
+                'address' => 'Panbazar',
+                'city' => 'Guwahati',
+                'latitude' => 26.1884,
+                'longitude' => 91.7455,
+            ],
+            [
+                'name' => 'Nehru Park',
+                'type' => 'Park',
+                'address' => 'Panbazar',
+                'city' => 'Guwahati',
+                'latitude' => 26.1865,
+                'longitude' => 91.7470,
+            ],
+
+            // Bangalore (Bangalore-only & Both)
+            [
+                'name' => 'Kempegowda International Airport',
+                'type' => 'Airport',
+                'address' => 'Devanahalli',
+                'city' => 'Bangalore',
+                'latitude' => 13.1989,
+                'longitude' => 77.7068,
+            ],
+            [
+                'name' => 'Manipal Hospital',
+                'type' => 'Hospital',
+                'address' => 'HAL Airport Road',
+                'city' => 'Bangalore',
+                'latitude' => 12.9587,
+                'longitude' => 77.6493,
             ],
             [
                 'name' => 'Manyata Tech Park',
@@ -43,14 +142,6 @@ class EstablishmentSeeder extends Seeder
                 'city' => 'Bangalore',
                 'latitude' => 13.0450,
                 'longitude' => 77.6206,
-            ],
-            [
-                'name' => 'Delhi Public School',
-                'type' => 'School',
-                'address' => 'RK Puram',
-                'city' => 'New Delhi',
-                'latitude' => 28.5630,
-                'longitude' => 77.1812,
             ],
             [
                 'name' => 'Indiranagar Metro Station',
@@ -68,30 +159,6 @@ class EstablishmentSeeder extends Seeder
                 'latitude' => 12.9960,
                 'longitude' => 77.6953,
             ],
-            [
-                'name' => 'Kempegowda International Airport',
-                'type' => 'Airport',
-                'address' => 'Devanahalli',
-                'city' => 'Bangalore',
-                'latitude' => 13.1989,
-                'longitude' => 77.7068,
-            ],
-            [
-                'name' => 'Gauhati Medical College & Hospital',
-                'type' => 'Hospital',
-                'address' => 'Bhangagarh',
-                'city' => 'Guwahati',
-                'latitude' => 26.1554,
-                'longitude' => 91.7686,
-            ],
-            [
-                'name' => 'Lokpriya Gopinath Bordoloi International Airport',
-                'type' => 'Airport',
-                'address' => 'Borjhar',
-                'city' => 'Guwahati',
-                'latitude' => 26.1061,
-                'longitude' => 91.5859,
-            ],
         ];
 
         $now = now();
@@ -104,14 +171,7 @@ class EstablishmentSeeder extends Seeder
                 continue;
             }
 
-            $city = City::firstOrCreate(
-                ['name' => $est['city']],
-                [
-                    'slug' => Str::slug($est['city']),
-                    'district_id' => $defaultDistrict->id,
-                    'is_active' => true,
-                ]
-            );
+            $city = $est['city'] === 'Bangalore' ? $bangalore : $guwahati;
 
             $data[] = [
                 'id' => (string) Str::ulid(),

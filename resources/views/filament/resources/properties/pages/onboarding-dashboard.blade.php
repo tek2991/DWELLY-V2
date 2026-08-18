@@ -1,20 +1,27 @@
 @php
     $record = $this->record ?? (method_exists($this, 'getRecord') ? $this->getRecord() : null); 
+    if ($record) {
+        $record->refresh();
+    }
     $validationData = app(\App\Domain\Property\Services\PropertyOnboardingValidator::class)->validate($record);
     $progress = $validationData['progress'];
     $steps = $validationData['steps'];
     $status = $record->onboardingProject?->status ?? 'Draft';
 @endphp
 
-<x-filament-widgets::widget>
+<x-filament-widgets::widget 
+    x-on:refresh-onboarding-progress.window="$wire.$refresh()" 
+    x-on:refresh-page.window="$wire.$refresh()"
+    x-on:update-relation-manager-list.window="$wire.$refresh()"
+    x-on:saved.window="$wire.$refresh()"
+    x-on:close-modal.window="$wire.$refresh()"
+>
     <x-filament::section>
         <x-slot name="heading">
             <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 1rem;">
                 <div style="display: flex; align-items: center; gap: 1rem;">
                     <span>Onboarding Progress</span>
-                    <span style="font-size: 1.5rem; font-weight: 900; color: {{ $progress === 100 ? '#10b981' : '#f59e0b' }};">
-                        {{ $progress }}%
-                    </span>
+                    <span style="font-size: 1.5rem; font-weight: 900; color: {{ $progress === 100 ? '#10b981' : '#f59e0b' }};">{{ $progress }}%</span>
                     <span style="font-size: 0.875rem; font-weight: 600; padding: 0.25rem 0.75rem; border-radius: 9999px; background-color: {{ match($status) { 'Activated' => '#dcfce7', 'Pending Review' => '#fef3c7', 'Changes Requested' => '#fee2e2', default => '#f3f4f6' } }}; color: {{ match($status) { 'Activated' => '#15803d', 'Pending Review' => '#b45309', 'Changes Requested' => '#b91c1c', default => '#374151' } }};">
                         {{ $status }}
                     </span>

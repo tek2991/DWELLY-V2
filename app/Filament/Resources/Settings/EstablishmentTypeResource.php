@@ -37,6 +37,13 @@ class EstablishmentTypeResource extends Resource
                 Forms\Components\Textarea::make('description')
                     ->maxLength(65535)
                     ->columnSpanFull(),
+                Forms\Components\Select::make('cities')
+                    ->label('Applicable Cities')
+                    ->relationship('cities', 'name')
+                    ->multiple()
+                    ->preload()
+                    ->searchable()
+                    ->columnSpanFull(),
                 Forms\Components\Toggle::make('is_active')
                     ->default(true)
                     ->required(),
@@ -50,6 +57,11 @@ class EstablishmentTypeResource extends Resource
                 Tables\Columns\TextColumn::make('slug')
                     ->searchable(),
                 Tables\Columns\TextColumn::make('name')
+                    ->searchable(),
+                Tables\Columns\TextColumn::make('cities.name')
+                    ->label('Mapped Cities')
+                    ->badge()
+                    ->separator(', ')
                     ->searchable(),
                 Tables\Columns\IconColumn::make('is_active')
                     ->boolean(),

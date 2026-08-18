@@ -93,4 +93,89 @@ class OnboardingReviewWorkflowTest extends TestCase
         $this->assertEquals('Vacant', $property->fresh()->status);
         $this->assertEquals($reviewer->id, $project->fresh()->reviewer_id);
     }
+
+    public function test_progress_widget_refreshes_dynamically_on_event_dispatch(): void
+    {
+        $user = User::factory()->create();
+        $property = Property::create([
+            'code' => 'PROP-DYN-001',
+            'building_name' => 'Dynamic Progress Test',
+            'status' => 'Onboarding',
+        ]);
+
+        $project = OnboardingProject::create([
+            'property_id' => $property->id,
+            'status' => 'Draft',
+        ]);
+
+        $this->actingAs($user);
+
+        $component = Livewire::test(OnboardingProgressWidget::class, ['record' => $property])
+            ->assertSee('At least one room is required.');
+
+        // Add rooms to the property
+        $roomDefinition = \App\Domain\Property\Models\RoomDefinition::create([
+            'room_type_id' => \App\Domain\Property\Models\RoomType::create(['name' => 'Bedroom', 'slug' => 'bedroom'])->id,
+            'name' => 'Master Bedroom',
+            'slug' => 'master-bedroom',
+        ]);
+
+        $property->rooms()->create([
+            'room_definition_id' => $roomDefinition->id,
+        ]);
+
+        // Dispatch event without full page refresh
+        $component->dispatch('refresh-onboarding-progress')
+            ->assertDontSee('At least one room is required.');
+    }
+
+    public function test_utilities_and_inventory_updates_refresh_progress_widget(): void
+    {
+        $user = User::factory()->create();
+        $property = Property::create([
+            'code' => 'PROP-DYN-002',
+            'building_name' => 'Dynamic Utility & Inventory Test',
+            'status' => 'Onboarding',
+        ]);
+
+        OnboardingProject::create([
+            'property_id' => $property->id,
+            'status' => 'Draft',
+        ]);
+
+        $this->actingAs($user);
+
+        $widget = Livewire::test(OnboardingProgressWidget::class, ['record' => $property])
+            ->assertSee('At least one utility (e.g. Electricity) must be configured.')
+            ->assertSee('Keys must be added to the inventory.');
+
+        // Add utility
+        $utilityType = \App\Domain\Property\Models\UtilityType::create([
+            'name' => 'Electricity',
+            'slug' => 'electricity',
+            'is_active' => true,
+        ]);
+
+        $property->utilities()->create([
+            'utility_type_id' => $utilityType->id,
+            'paid_by' => 'tenant',
+            'effective_from' => now(),
+        ]);
+
+        // Add keys inventory
+        $keyType = \App\Domain\Property\Models\InventoryType::create([
+            'name' => 'Keys',
+            'slug' => 'keys',
+            'is_active' => true,
+        ]);
+
+        $property->inventories()->create([
+            'inventory_type_id' => $keyType->id,
+            'count' => 3,
+        ]);
+
+        $widget->dispatch('refresh-onboarding-progress')
+            ->assertDontSee('At least one utility (e.g. Electricity) must be configured.')
+            ->assertDontSee('Keys must be added to the inventory.');
+    }
 }

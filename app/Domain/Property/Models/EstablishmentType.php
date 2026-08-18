@@ -11,4 +11,14 @@ class EstablishmentType extends DomainModel
     protected $casts = [
         'is_active' => 'boolean',
     ];
+
+    public function cities(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(
+            \App\Domain\Geographic\Models\City::class,
+            'city_establishment_type',
+            'establishment_type_id',
+            'city_id'
+        )->withTimestamps();
+    }
 }
