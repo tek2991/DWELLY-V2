@@ -15,7 +15,7 @@
     <x-filament::section>
         <div style="display: flex; flex-direction: column; gap: 1.25rem; width: 100%;">
             
-            <!-- Row 1: Audit Info & Single Primary Action Button at Top Right -->
+            <!-- Row 1: Audit Info & Primary Action Buttons at Top Right -->
             <x-audit-header :audit="$audit">
                 <x-slot name="actions">
                     @if($audit->status === \App\Domain\Audit\Enums\AuditStatus::DRAFT)

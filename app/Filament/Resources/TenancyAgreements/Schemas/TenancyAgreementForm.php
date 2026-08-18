@@ -126,28 +126,37 @@ class TenancyAgreementForm
                             ->label('Property')
                             ->options(function (?TenancyAgreement $record) {
                                 $query = \App\Domain\Property\Models\Property::query()
-                                    ->whereHas('onboardingProject', fn($q) => $q->whereRaw('LOWER(status) = ?', ['activated']))
                                     ->whereRaw('LOWER(status) = ?', ['vacant']);
 
                                 if ($record && $record->property_id) {
                                     $query->orWhere('id', $record->property_id);
                                 }
 
-                                $options = $query->get()->mapWithKeys(fn($p) => [
+                                return $query->get()->mapWithKeys(fn($p) => [
                                     $p->id => ($p->building_name ?? $p->address_line_1 ?? 'Property #' . $p->id) . ($p->code ? ' (' . $p->code . ')' : '')
                                 ]);
-
-                                if ($options->isEmpty()) {
-                                    return \App\Domain\Property\Models\Property::all()->mapWithKeys(fn($p) => [
-                                        $p->id => ($p->building_name ?? $p->address_line_1 ?? 'Property #' . $p->id) . ($p->code ? ' (' . $p->code . ')' : '')
-                                    ]);
-                                }
-
-                                return $options;
                             })
                             ->searchable()
                             ->required()
+                            ->default(request()->query('property_id'))
+                            ->rules([
+                                \Illuminate\Validation\Rule::exists('properties', 'id')->where(function ($query) {
+                                    $query->whereRaw('LOWER(status) = ?', ['vacant']);
+                                }),
+                            ])
+                            ->validationMessages([
+                                'exists' => 'The selected property is not vacant or available for tenancy.',
+                            ])
                             ->live()
+                            ->afterStateHydrated(function ($state, Set $set) {
+                                if ($state) {
+                                    $property = \App\Domain\Property\Models\Property::find($state);
+                                    $pricing = $property?->pricingVersions()->latest('effective_from')->first();
+                                    if ($pricing && !empty($pricing->booking_amount)) {
+                                        $set('booking_amount', $pricing->booking_amount);
+                                    }
+                                }
+                            })
                             ->afterStateUpdated(function (?string $state, Set $set) {
                                 if ($state) {
                                     $property = \App\Domain\Property\Models\Property::find($state);
@@ -165,6 +174,15 @@ class TenancyAgreementForm
                             ->prefix('₹')
                             ->placeholder('e.g. 5000')
                             ->required()
+                            ->default(function () {
+                                $propertyId = request()->query('property_id');
+                                if ($propertyId) {
+                                    $property = \App\Domain\Property\Models\Property::find($propertyId);
+                                    $pricing = $property?->pricingVersions()->latest('effective_from')->first();
+                                    return $pricing?->booking_amount ?? 0;
+                                }
+                                return null;
+                            })
                             ->helperText('Advance token/booking amount collected at onboarding initiation')
                             ->columnSpanFull(),
 

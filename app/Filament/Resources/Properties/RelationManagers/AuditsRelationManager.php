@@ -51,9 +51,17 @@ class AuditsRelationManager extends RelationManager
                     ->searchable()
                     ->preload(),
                 Forms\Components\Select::make('inspector_id')
+                    ->label('Assigned Inspector')
                     ->relationship('inspector', 'name')
                     ->searchable()
                     ->preload()
+                    ->default(auth()->id()),
+                Forms\Components\Select::make('reviewer_id')
+                    ->label('Assigned Reviewer')
+                    ->relationship('reviewer', 'name')
+                    ->searchable()
+                    ->preload()
+                    ->required()
                     ->default(auth()->id()),
                 Forms\Components\DatePicker::make('scheduled_at')
                     ->label('Scheduled Date'),

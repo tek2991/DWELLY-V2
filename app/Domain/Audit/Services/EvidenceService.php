@@ -52,7 +52,7 @@ class EvidenceService
             throw new \DomainException('Cannot modify annotations for non-editable audit items.');
         }
 
-        $evidence->annotation_json = [
+        $evidence->annotation_json = isset($fabricJson['canvas']) ? $fabricJson : [
             'version' => 1,
             'canvas' => $fabricJson,
         ];

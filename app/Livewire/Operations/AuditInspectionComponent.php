@@ -118,6 +118,7 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
 
 
 
+
     public function startAuditAction(): Action
     {
         return Action::make('startAudit')
@@ -695,24 +696,7 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
                             $prevId = $this->getPreviousItemId($item);
                             if (!$prevId) return;
 
-                            $schema = $this->getMountedActionSchema();
-                            $data = $schema ? $schema->getState() : [];
-
-                            if ($item->isEditable() && !empty($data['condition'])) {
-                                $data['status'] = ItemStatus::INSPECTED;
-                                $item->update($data);
-
-                                $item->revisions()->create([
-                                    'updated_by_id' => auth()->id(),
-                                    'snapshot_data' => [
-                                        'condition' => $data['condition'] ?? null,
-                                        'remarks' => $data['remarks'] ?? null,
-                                        'evidence_count' => $item->evidence()->count(),
-                                    ],
-                                ]);
-                            }
-
-                            $this->audit->load('categories.items');
+                            $this->saveCurrentItemFormData();
                             $this->replaceMountedAction('editItem', ['item_id' => $prevId], ['seq' => microtime(true)]);
                         }),
 
@@ -733,24 +717,7 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
                             $nextId = $this->getNextItemId($item);
                             if (!$nextId) return;
 
-                            $schema = $this->getMountedActionSchema();
-                            $data = $schema ? $schema->getState() : [];
-
-                            if ($item->isEditable() && !empty($data['condition'])) {
-                                $data['status'] = ItemStatus::INSPECTED;
-                                $item->update($data);
-
-                                $item->revisions()->create([
-                                    'updated_by_id' => auth()->id(),
-                                    'snapshot_data' => [
-                                        'condition' => $data['condition'] ?? null,
-                                        'remarks' => $data['remarks'] ?? null,
-                                        'evidence_count' => $item->evidence()->count(),
-                                    ],
-                                ]);
-                            }
-
-                            $this->audit->load('categories.items');
+                            $this->saveCurrentItemFormData();
                             $this->replaceMountedAction('editItem', ['item_id' => $nextId], ['seq' => microtime(true)]);
                         }),
                 ];
@@ -800,6 +767,73 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
     public ?string $currentItemId = null;
     public $uploads = [];
     public $videoUpload = null;
+
+    public function saveCurrentItemFormData(): void
+    {
+        if (!$this->currentItemId) {
+            return;
+        }
+
+        $item = AuditItem::find($this->currentItemId);
+        if (!$item || !$item->isEditable()) {
+            return;
+        }
+
+        $data = [];
+        $schema = $this->getMountedActionSchema();
+        if ($schema) {
+            $rawState = $schema->getRawState();
+            if (is_array($rawState)) {
+                $data = $rawState;
+            }
+        }
+
+        if (empty($data) && !empty($this->mountedActions)) {
+            $lastIndex = array_key_last($this->mountedActions);
+            $data = $this->mountedActions[$lastIndex]['data'] ?? [];
+        }
+
+        $updateData = [];
+        $hasChanges = false;
+
+        if (!empty($data['condition'])) {
+            $newCondition = $data['condition'] instanceof ItemCondition ? $data['condition'] : ItemCondition::tryFrom($data['condition']);
+            if ($item->condition !== $newCondition) {
+                $updateData['condition'] = $data['condition'];
+                $hasChanges = true;
+            }
+            if ($item->status !== ItemStatus::INSPECTED) {
+                $updateData['status'] = ItemStatus::INSPECTED;
+                $hasChanges = true;
+            }
+        }
+
+        if (array_key_exists('remarks', $data)) {
+            if ($item->remarks !== $data['remarks']) {
+                $updateData['remarks'] = $data['remarks'];
+                $hasChanges = true;
+            }
+        }
+
+        if ($hasChanges && !empty($updateData)) {
+            $item->update($updateData);
+
+            $item->revisions()->create([
+                'updated_by_id' => auth()->id(),
+                'snapshot_data' => [
+                    'condition' => $item->condition?->value ?? ($data['condition'] ?? null),
+                    'remarks' => $item->remarks,
+                    'evidence_count' => $item->evidence()->count(),
+                ],
+            ]);
+
+            activity()
+                ->performedOn($item)
+                ->log('Inspection: ' . $item->name . ' auto-saved');
+
+            $this->audit->load('categories.items');
+        }
+    }
 
     public function updatedVideoUpload()
     {
@@ -852,6 +886,8 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
             return;
         }
 
+        $this->saveCurrentItemFormData();
+
         $service = app(\App\Domain\Audit\Services\EvidenceService::class);
         $dtos = $service->createFromUpload($item, $this->uploads);
         $this->uploads = [];
@@ -873,6 +909,9 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
                 ->send();
             return;
         }
+
+        $this->saveCurrentItemFormData();
+
         $this->editingEvidenceId = $evidenceId;
         $this->unmountAction(false);
     }

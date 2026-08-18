@@ -388,4 +388,76 @@ class TenancyAgreementOnboardingTest extends TestCase
 
         $this->assertEquals(12500.00, $agreement->first_month_rent);
     }
+
+    public function test_create_tenancy_agreement_only_shows_vacant_properties()
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        // 1. Create properties with different statuses
+        $vacantProperty1 = Property::create([
+            'building_name' => 'Vacant Apartment 101',
+            'code' => 'VAC-101',
+            'address_line_1' => 'Zoo Road, Guwahati',
+            'status' => 'vacant',
+        ]);
+
+        $vacantProperty2 = Property::create([
+            'building_name' => 'Vacant Apartment 102',
+            'code' => 'VAC-102',
+            'address_line_1' => 'Beltola, Guwahati',
+            'status' => 'Vacant',
+        ]);
+
+        $occupiedProperty = Property::create([
+            'building_name' => 'Occupied Apartment 201',
+            'code' => 'OCC-201',
+            'address_line_1' => 'GS Road, Guwahati',
+            'status' => 'occupied',
+        ]);
+
+        $draftProperty = Property::create([
+            'building_name' => 'Draft Apartment 301',
+            'code' => 'DFT-301',
+            'address_line_1' => 'Six Mile, Guwahati',
+            'status' => 'draft',
+        ]);
+
+        // 2. Test Create Tenancy Agreement Page Form
+        $testable = \Livewire\Livewire::test(\App\Filament\Resources\TenancyAgreements\Pages\CreateTenancyAgreement::class);
+        
+        $form = $testable->instance()->form;
+        $propertyComponent = $form->getComponent('property_id');
+        $this->assertNotNull($propertyComponent);
+
+        $options = $propertyComponent->getOptions();
+
+        // 3. Assert only vacant properties are present in the options list
+        $this->assertArrayHasKey($vacantProperty1->id, $options);
+        $this->assertArrayHasKey($vacantProperty2->id, $options);
+        $this->assertArrayNotHasKey($occupiedProperty->id, $options);
+        $this->assertArrayNotHasKey($draftProperty->id, $options);
+
+        // 4. Assert that non-vacant property cannot be submitted due to validation
+        $testable
+            ->fillForm([
+                'property_id' => $occupiedProperty->id,
+                'create_new_tenant' => true,
+                'new_tenant' => [
+                    'display_name' => 'Test Tenant',
+                    'phone' => '9876543210',
+                    'parent_name' => 'Father Name',
+                    'address_line_1' => 'Address 1',
+                    'aadhaar_number' => '123456789012',
+                    'pan_number' => 'ABCDE1234F',
+                ],
+                'start_date' => '2026-09-01',
+                'end_date' => '2027-08-31',
+                'first_month_rent' => 15000,
+                'booking_amount' => 5000,
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['property_id']);
+    }
 }
+

@@ -113,6 +113,7 @@ class AuditResource extends Resource
                                 ->relationship('reviewer', 'name')
                                 ->searchable()
                                 ->preload()
+                                ->required()
                                 ->default(fn() => auth()->id()),
 
                             Forms\Components\DatePicker::make('scheduled_at')
@@ -231,7 +232,19 @@ class AuditResource extends Resource
                 Tables\Filters\TernaryFilter::make('is_locked')
                     ->label('Locked Status'),
             ])
-            ->actions([])
+            ->actions([
+                \Filament\Actions\Action::make('pdfReport')
+                    ->label('PDF Report')
+                    ->icon('heroicon-o-document-arrow-down')
+                    ->color('gray')
+                    ->tooltip('View / Download Inspection PDF Report')
+                    ->modalHeading(fn (Audit $record) => "Inspection Report - {$record->audit_number}")
+                    ->modalWidth(\Filament\Support\Enums\Width::SevenExtraLarge)
+                    ->modalContent(fn (Audit $record) => view('components.audit-report-modal', ['audit' => $record]))
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel('Close'),
+                \Filament\Actions\EditAction::make(),
+            ])
             ->bulkActions([
                 \Filament\Actions\BulkActionGroup::make([
                     \Filament\Actions\DeleteBulkAction::make(),

@@ -32,6 +32,16 @@ class ReviewAudit extends Page
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('pdfReport')
+                ->label('PDF Report')
+                ->icon('heroicon-o-document-arrow-down')
+                ->color('gray')
+                ->modalHeading(fn () => "Inspection Report - {$this->record->audit_number}")
+                ->modalWidth(\Filament\Support\Enums\Width::SevenExtraLarge)
+                ->modalContent(fn () => view('components.audit-report-modal', ['audit' => $this->record]))
+                ->modalSubmitAction(false)
+                ->modalCancelActionLabel('Close'),
+
             Action::make('backToInspection')
                 ->label('Inspection Page')
                 ->color('gray')

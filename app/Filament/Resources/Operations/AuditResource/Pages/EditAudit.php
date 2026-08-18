@@ -18,7 +18,9 @@ class EditAudit extends EditRecord
                 ->label('Perform Inspection')
                 ->icon('heroicon-o-clipboard-document-check')
                 ->color('primary')
-                ->url(fn () => AuditResource::getUrl('inspect', ['record' => $this->getRecord()])),
+                ->disabled(fn () => blank($this->getRecord()->inspector_id))
+                ->tooltip(fn () => blank($this->getRecord()->inspector_id) ? 'Please assign an inspector before performing inspection.' : null)
+                ->url(fn () => blank($this->getRecord()->inspector_id) ? null : AuditResource::getUrl('inspect', ['record' => $this->getRecord()])),
 
             Action::make('review')
                 ->label('Open Review Page')
@@ -26,6 +28,16 @@ class EditAudit extends EditRecord
                 ->color('warning')
                 ->visible(fn () => $this->getRecord()->canReview())
                 ->url(fn () => AuditResource::getUrl('review', ['record' => $this->getRecord()])),
+
+            Action::make('pdfReport')
+                ->label('PDF Report')
+                ->icon('heroicon-o-document-arrow-down')
+                ->color('gray')
+                ->modalHeading(fn () => "Inspection Report - {$this->getRecord()->audit_number}")
+                ->modalWidth(\Filament\Support\Enums\Width::SevenExtraLarge)
+                ->modalContent(fn () => view('components.audit-report-modal', ['audit' => $this->getRecord()]))
+                ->modalSubmitAction(false)
+                ->modalCancelActionLabel('Close'),
 
             Actions\DeleteAction::make(),
         ];

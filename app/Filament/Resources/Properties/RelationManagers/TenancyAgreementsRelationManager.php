@@ -71,6 +71,7 @@ class TenancyAgreementsRelationManager extends RelationManager
                     ->icon('heroicon-o-plus')
                     ->color('primary')
                     ->button()
+                    ->visible(fn () => strtolower((string)$this->getOwnerRecord()->status) === 'vacant')
                     ->url(fn () => TenancyAgreementResource::getUrl('create', ['property_id' => $this->getOwnerRecord()->id])),
             ])
             ->actions([
