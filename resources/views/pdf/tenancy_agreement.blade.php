@@ -119,6 +119,21 @@
         (hereinafter referred to as the <strong>“Licensee”</strong>, which shall mean and include its legal representatives, executors, assignees and administrators).
     </p>
 
+    @if(!empty($agreement->secondary_tenants) && is_array($agreement->secondary_tenants))
+    <p style="font-size: 12px; font-style: italic; color: #444;">
+        <strong>Co-occupants / Family members residing with Licensee:</strong>
+        @php
+            $secList = [];
+            foreach ($agreement->secondary_tenants as $st) {
+                if (!empty($st['name'])) {
+                    $secList[] = e($st['name']) . (!empty($st['relationship']) ? ' (' . e($st['relationship']) . ')' : '');
+                }
+            }
+        @endphp
+        {!! implode(', ', $secList) !!}
+    </p>
+    @endif
+
     <p>
         AND WHEREAS the ‘Licensor’ is the absolute owner in full possession of the constructed structure described as 
         <strong>{{ $property->building_name ?? $property->name ?? '' }}, {{ $propertyAddress ?? '_______________________________' }}</strong> 
@@ -219,6 +234,11 @@
         <li>Minimum Rupees Two Thousand only (INR 2,000.00) will be deducted from the security deposit at the time of refund towards cleaning charges.</li>
         <li>Rupees One Thousand and Five Hundred only (INR 1,500.00) will be charged by the Service provider to the Licensee for the paperwork.</li>
     </ul>
+
+    @if(!empty($agreement->special_terms))
+    <div class="section-title">Special Terms & Conditions:</div>
+    <p>{!! nl2br(e($agreement->special_terms)) !!}</p>
+    @endif
 
     <p style="margin-top: 30px;">IN WITNESS WHEREOF, THE PARTIES TO HAVE HEREUNTO SET AND SUBSCRIBED THEIR RESPECTIVE HANDS ON THE DAY AND THE YEAR FIRST HEREIN ABOVE WRITTEN.</p>
 

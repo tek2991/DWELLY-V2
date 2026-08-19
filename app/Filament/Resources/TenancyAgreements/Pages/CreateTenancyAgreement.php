@@ -2,13 +2,13 @@
 
 namespace App\Filament\Resources\TenancyAgreements\Pages;
 
-use App\Filament\Resources\TenancyAgreements\TenancyAgreementResource;
 use App\Domain\Agreement\Actions\DraftTenancyAgreementAction;
-use App\Domain\Property\Models\Property;
-use App\Domain\Party\Models\Party;
 use App\Domain\Party\Enums\BusinessRole;
-use Illuminate\Database\Eloquent\Model;
+use App\Domain\Party\Models\Party;
+use App\Domain\Property\Models\Property;
+use App\Filament\Resources\TenancyAgreements\TenancyAgreementResource;
 use Filament\Resources\Pages\CreateRecord;
+use Illuminate\Database\Eloquent\Model;
 
 class CreateTenancyAgreement extends CreateRecord
 {
@@ -17,10 +17,10 @@ class CreateTenancyAgreement extends CreateRecord
     protected function handleRecordCreation(array $data): Model
     {
         $property = Property::findOrFail($data['property_id']);
-        
+
         $primaryTenantId = null;
 
-        if (!empty($data['create_new_tenant']) && !empty($data['new_tenant'])) {
+        if (! empty($data['create_new_tenant']) && ! empty($data['new_tenant'])) {
             $tenantData = $data['new_tenant'];
 
             $party = Party::create([
@@ -38,15 +38,15 @@ class CreateTenancyAgreement extends CreateRecord
                 'voter_id' => $tenantData['voter_id'] ?? null,
             ]);
 
-            if (!empty($tenantData['address_line_1'])) {
+            if (! empty($tenantData['address_line_1'])) {
                 $party->addresses()->create([
                     'address_line_1' => $tenantData['address_line_1'],
                     'is_primary' => true,
                 ]);
             }
 
-            if (!empty($tenantData['pan_number']) && empty($data['tenant_bank_details']['pan_number'])) {
-                if (!isset($data['tenant_bank_details']) || !is_array($data['tenant_bank_details'])) {
+            if (! empty($tenantData['pan_number']) && empty($data['tenant_bank_details']['pan_number'])) {
+                if (! isset($data['tenant_bank_details']) || ! is_array($data['tenant_bank_details'])) {
                     $data['tenant_bank_details'] = [];
                 }
                 $data['tenant_bank_details']['pan_number'] = $tenantData['pan_number'];
@@ -59,16 +59,17 @@ class CreateTenancyAgreement extends CreateRecord
         }
 
         unset($data['create_new_tenant'], $data['new_tenant'], $data['primary_tenant_id']);
-        
+
         $roles = [
             [
                 'party_id' => $primaryTenantId,
                 'role_type' => 'Primary Tenant',
                 'is_primary' => true,
-            ]
+            ],
         ];
 
         $action = app(DraftTenancyAgreementAction::class);
+
         return $action->execute($property, $data, $roles, auth()->user());
     }
 

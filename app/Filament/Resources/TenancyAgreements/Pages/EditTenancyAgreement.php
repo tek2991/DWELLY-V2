@@ -2,18 +2,30 @@
 
 namespace App\Filament\Resources\TenancyAgreements\Pages;
 
+use App\Filament\Resources\TenancyAgreements\Pages\Concerns\HasTenancyWorkflowHeader;
+use App\Filament\Resources\TenancyAgreements\Schemas\TenancyAgreementForm;
 use App\Filament\Resources\TenancyAgreements\TenancyAgreementResource;
-use App\Domain\Agreement\Services\TenancyAgreementPdfService;
-use App\Domain\Agreement\Services\TenancyAgreementDocxService;
-use App\Domain\Agreement\Actions\ActivateTenancyAction;
-use Filament\Actions\Action;
-use Filament\Actions\DeleteAction;
-use Filament\Notifications\Notification;
+use BackedEnum;
 use Filament\Resources\Pages\EditRecord;
+use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 
 class EditTenancyAgreement extends EditRecord
 {
+    use HasTenancyWorkflowHeader;
+
     protected static string $resource = TenancyAgreementResource::class;
+
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentCheck;
+
+    protected static ?string $navigationLabel = '1. Move-In Audit';
+
+    protected static ?string $title = 'Tenancy Agreement – Move-In Audit & Overview';
+
+    public function form(Schema $schema): Schema
+    {
+        return TenancyAgreementForm::configureOverviewForm($schema);
+    }
 
     protected function mutateFormDataBeforeFill(array $data): array
     {
@@ -21,6 +33,7 @@ class EditTenancyAgreement extends EditRecord
         if ($primaryRole) {
             $data['primary_tenant_id'] = $primaryRole->party_id;
         }
+
         return $data;
     }
 
@@ -35,179 +48,8 @@ class EditTenancyAgreement extends EditRecord
                 ['party_id' => $primaryTenantId, 'role_type' => 'Primary Tenant']
             );
         }
+
         return $data;
-    }
-
-    public function generateDraftDocuments(): void
-    {
-        $record = $this->getRecord();
-        try {
-            app(TenancyAgreementPdfService::class)->saveDraftPdf($record);
-            app(TenancyAgreementDocxService::class)->saveDraftDocx($record);
-
-            Notification::make()
-                ->title('Draft Documents Generated')
-                ->body('Leave & License Agreement PDF and Word (.docx) drafts have been generated and updated.')
-                ->success()
-                ->send();
-
-            $this->refreshFormData(['draft_pdf', 'draft_word']);
-        } catch (\Throwable $e) {
-            Notification::make()
-                ->title('Draft Generation Failed')
-                ->body($e->getMessage())
-                ->danger()
-                ->send();
-        }
-    }
-
-    public function downloadDraftPdf()
-    {
-        $record = $this->getRecord();
-        $media = $record->getFirstMedia('draft_pdf');
-
-        if ($media && file_exists($media->getPath())) {
-            return response()->download($media->getPath(), $media->file_name);
-        }
-
-        $pdfService = app(TenancyAgreementPdfService::class);
-        $binary = $pdfService->generatePdf($record);
-        $filename = 'Tenancy_Agreement_Draft_' . ($record->code ?? $record->id) . '.pdf';
-        return response()->streamDownload(fn() => print($binary), $filename, [
-            'Content-Type' => 'application/pdf',
-        ]);
-    }
-
-    public function downloadDraftWord()
-    {
-        $record = $this->getRecord();
-        $media = $record->getFirstMedia('draft_word');
-
-        if ($media && file_exists($media->getPath())) {
-            return response()->download($media->getPath(), $media->file_name);
-        }
-
-        $docxService = app(TenancyAgreementDocxService::class);
-        $binary = $docxService->generateDocx($record);
-        $filename = 'Tenancy_Agreement_Draft_' . ($record->code ?? $record->id) . '.docx';
-        return response()->streamDownload(fn() => print($binary), $filename, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        ]);
-    }
-
-    public function activateTenancy(): void
-    {
-        $record = $this->getRecord();
-
-        if ($record->status === 'active') {
-            Notification::make()
-                ->title('Tenancy Already Active')
-                ->body('This tenancy agreement is already active.')
-                ->info()
-                ->send();
-            return;
-        }
-
-        $pending = \App\Filament\Resources\TenancyAgreements\Schemas\TenancyAgreementForm::getPendingActivationRequirements($record);
-
-        if (!empty($pending)) {
-            $formatted = implode('<br>• ', $pending);
-            Notification::make()
-                ->title('Cannot Activate Tenancy')
-                ->body('Please complete all onboarding requirements first:<br>• ' . $formatted)
-                ->danger()
-                ->persistent()
-                ->send();
-            return;
-        }
-
-        try {
-            app(ActivateTenancyAction::class)->execute($record, auth()->user());
-
-            Notification::make()
-                ->title('Tenancy Activated Successfully')
-                ->body('Tenancy agreement is now active and property status set to occupied. The linked Move-In Audit is permanently locked.')
-                ->success()
-                ->send();
-
-            $this->refreshFormData([]);
-        } catch (\Throwable $e) {
-            Notification::make()
-                ->title('Activation Failed')
-                ->body($e->getMessage())
-                ->danger()
-                ->send();
-        }
-    }
-
-    protected function getHeaderActions(): array
-    {
-        return [
-            Action::make('activateTenancyHeader')
-                ->label('Activate Tenancy')
-                ->icon('heroicon-o-bolt')
-                ->color('success')
-                ->requiresConfirmation()
-                ->modalHeading('Activate Tenancy Agreement')
-                ->modalDescription('Are you sure you want to activate this tenancy agreement? This will mark the property as Occupied, post initial accounting invoices, and permanently lock the linked Move-In Audit.')
-                ->visible(fn() => $this->getRecord()?->status !== 'active' && $this->getRecord()?->status !== 'deboarding_initiated' && $this->getRecord()?->status !== 'vacated')
-                ->disabled(fn() => !\App\Filament\Resources\TenancyAgreements\Schemas\TenancyAgreementForm::canActivateTenancy($this->getRecord()))
-                ->action(fn() => $this->activateTenancy()),
-
-            Action::make('initiateDeboardingHeader')
-                ->label('Initiate Deboarding & Exit Audit')
-                ->icon('heroicon-o-arrow-left-on-rectangle')
-                ->color('warning')
-                ->modalHeading('Initiate Tenant Deboarding & Trigger Exit Audit')
-                ->modalDescription('Record notice dates, reason for exit, and automatically trigger the Move-Out Verification Audit.')
-                ->visible(fn() => $this->getRecord()?->status === 'active')
-                ->form([
-                    \Filament\Forms\Components\DatePicker::make('notice_date')
-                        ->label('Notice Date')
-                        ->default(now()->toDateString())
-                        ->required(),
-                    \Filament\Forms\Components\DatePicker::make('vacating_date')
-                        ->label('Target Vacating Date')
-                        ->required(),
-                    \Filament\Forms\Components\Select::make('deboarding_reason')
-                        ->label('Reason for Deboarding')
-                        ->options([
-                            'Agreement Expiry' => 'Agreement Expiry',
-                            'Tenant Early Termination' => 'Tenant Early Termination',
-                            'Owner Request' => 'Owner Request / Non-renewal',
-                            'Eviction' => 'Eviction',
-                            'Mutual Agreement' => 'Mutual Agreement',
-                        ])
-                        ->default('Agreement Expiry')
-                        ->required(),
-                    \Filament\Forms\Components\Textarea::make('deboarding_notes')
-                        ->label('Notes & Special Exit Remarks')
-                        ->rows(2),
-                ])
-                ->action(function (array $data) {
-                    $record = $this->getRecord();
-                    $service = app(\App\Domain\Agreement\Services\TenancyDeboardingService::class);
-                    $service->initiateDeboarding($record, $data);
-                    $audit = $service->triggerMoveOutAudit($record, auth()->user());
-
-                    Notification::make()
-                        ->title('Deboarding Initiated & Exit Audit Triggered')
-                        ->body("Notice recorded. Move-Out Verification Audit #{$audit->audit_number} created.")
-                        ->success()
-                        ->send();
-
-                    $this->redirect(TenancyAgreementResource::getUrl('deboard', ['record' => $record]));
-                }),
-
-            Action::make('deboardTenancyHeader')
-                ->label('Deboarding Dashboard')
-                ->icon('heroicon-o-arrow-left-on-rectangle')
-                ->color('info')
-                ->url(fn() => TenancyAgreementResource::getUrl('deboard', ['record' => $this->getRecord()]))
-                ->visible(fn() => in_array($this->getRecord()?->status, ['deboarding_initiated', 'vacated'])),
-
-            DeleteAction::make(),
-        ];
     }
 
     protected function getFormActions(): array
@@ -222,32 +64,5 @@ class EditTenancyAgreement extends EditRecord
     protected function getRedirectUrl(): ?string
     {
         return null;
-    }
-
-    public function getSubheading(): string | \Illuminate\Support\HtmlString | null
-    {
-        $record = $this->getRecord();
-        if (!$record || !$record->property) {
-            return null;
-        }
-
-        $property = $record->property;
-        $code = $property->code;
-        $name = $property->building_name ?? $property->address_line_1 ?? 'Property #' . $property->id;
-        $propertyUrl = \App\Filament\Resources\Properties\PropertyResource::getUrl('edit', ['record' => $property]);
-
-        $codeBadge = $code
-            ? '<span style="display: inline-flex; align-items: center; font-family: monospace; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; background-color: rgba(37, 99, 235, 0.15); color: #2563eb;">' . e($code) . '</span>'
-            : '';
-
-        return new \Illuminate\Support\HtmlString(
-            '<div style="display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; margin-top: 4px;">' .
-                $codeBadge .
-                '<span style="font-weight: 700; font-size: 15px; color: inherit;">' . e($name) . '</span>' .
-                '<a href="' . e($propertyUrl) . '" target="_blank" style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; background-color: rgba(37, 99, 235, 0.1); color: #2563eb; font-size: 12px; font-weight: 600; text-decoration: none;" title="View Property Profile">' .
-                    'View Property Profile &rarr;' .
-                '</a>' .
-            '</div>'
-        );
     }
 }

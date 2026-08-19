@@ -2,16 +2,33 @@
 
 namespace Tests\Feature;
 
-use Tests\TestCase;
-use App\Domain\Agreement\Models\TenancyAgreement;
+use App\Domain\Agreement\Actions\ActivateTenancyAction;
 use App\Domain\Agreement\Actions\DraftTenancyAgreementAction;
-use App\Domain\Property\Models\Property;
-use App\Domain\Audit\Models\Audit;
-use App\Domain\Party\Models\Party;
-use App\Domain\Agreement\Services\TenancyAgreementPdfService;
+use App\Domain\Agreement\Models\TenancyAgreement;
 use App\Domain\Agreement\Services\TenancyAgreementDocxService;
+use App\Domain\Agreement\Services\TenancyAgreementPdfService;
+use App\Domain\Audit\Enums\AuditStatus;
+use App\Domain\Audit\Enums\AuditType;
+use App\Domain\Audit\Enums\ItemCondition;
+use App\Domain\Audit\Models\Audit;
+use App\Domain\Audit\Models\AuditCategory;
+use App\Domain\Audit\Models\AuditItem;
+use App\Domain\Party\Enums\BusinessRole;
+use App\Domain\Party\Models\Party;
+use App\Domain\Property\Models\Property;
+use App\Domain\Property\Models\PropertyRoom;
+use App\Domain\Property\Models\RoomDefinition;
+use App\Domain\Property\Models\RoomType;
+use App\Domain\Property\Models\UtilityProvider;
+use App\Domain\Property\Models\UtilityType;
+use App\Filament\Resources\TenancyAgreements\Pages\CreateTenancyAgreement;
+use App\Filament\Resources\TenancyAgreements\Pages\ListTenancyAgreements;
+use App\Filament\Resources\TenancyAgreements\Schemas\TenancyAgreementForm;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Livewire\Livewire;
+use Tests\TestCase;
 
 class TenancyAgreementOnboardingTest extends TestCase
 {
@@ -54,18 +71,18 @@ class TenancyAgreementOnboardingTest extends TestCase
                     'party_id' => $tenant->id,
                     'role_type' => 'Primary Tenant',
                     'is_primary' => true,
-                ]
+                ],
             ],
             $user
         );
 
         $this->assertNotNull($agreement->audit_id);
-        
+
         $audit = Audit::find($agreement->audit_id);
         $this->assertNotNull($audit);
         $this->assertEquals($property->id, $audit->property_id);
         $this->assertEquals($tenant->id, $audit->tenant_id);
-        $this->assertEquals(\App\Domain\Audit\Enums\AuditType::MOVE_IN, $audit->audit_type);
+        $this->assertEquals(AuditType::MOVE_IN, $audit->audit_type);
     }
 
     public function test_can_create_tenancy_agreement_with_inline_new_tenant_party()
@@ -79,7 +96,7 @@ class TenancyAgreementOnboardingTest extends TestCase
             'status' => 'vacant',
         ]);
 
-        $createPage = new \App\Filament\Resources\TenancyAgreements\Pages\CreateTenancyAgreement();
+        $createPage = new CreateTenancyAgreement;
 
         // Simulate handleRecordCreation with inline tenant party creation data
         $data = [
@@ -113,7 +130,7 @@ class TenancyAgreementOnboardingTest extends TestCase
         $this->assertNotNull($party);
         $this->assertEquals('+91 98765 43210', $party->phone);
         $this->assertEquals('S/o M. L. Das', $party->individual->parent_name);
-        $this->assertTrue($party->hasRole(\App\Domain\Party\Enums\BusinessRole::TENANT));
+        $this->assertTrue($party->hasRole(BusinessRole::TENANT));
 
         // Verify Move-In Audit auto-creation and linkage
         $this->assertNotNull($agreement->audit_id);
@@ -154,13 +171,13 @@ class TenancyAgreementOnboardingTest extends TestCase
                     'party_id' => $tenant->id,
                     'role_type' => 'Primary Tenant',
                     'is_primary' => true,
-                ]
+                ],
             ],
             $user
         );
 
-        $this->assertEquals(22500.00, (float)$agreement->rent_amount);
-        $this->assertEquals(45000.00, (float)$agreement->security_deposit);
+        $this->assertEquals(22500.00, (float) $agreement->rent_amount);
+        $this->assertEquals(45000.00, (float) $agreement->security_deposit);
     }
 
     public function test_terms_and_drafts_not_ticked_unless_all_mandatory_fields_filled()
@@ -183,11 +200,11 @@ class TenancyAgreementOnboardingTest extends TestCase
         ]);
 
         // Should return false because mandatory fields are missing
-        $this->assertFalse(\App\Filament\Resources\TenancyAgreements\Schemas\TenancyAgreementForm::areTermsComplete($agreement));
+        $this->assertFalse(TenancyAgreementForm::areTermsComplete($agreement));
 
-        $provider = \App\Domain\Property\Models\UtilityProvider::create([
+        $provider = UtilityProvider::create([
             'name' => 'APDCL',
-            'utility_type_id' => \App\Domain\Property\Models\UtilityType::create(['name' => 'Electricity', 'slug' => 'electricity'])->id,
+            'utility_type_id' => UtilityType::create(['name' => 'Electricity', 'slug' => 'electricity'])->id,
         ]);
 
         // Now populate all mandatory fields (leaving special_terms NULL)
@@ -211,7 +228,65 @@ class TenancyAgreementOnboardingTest extends TestCase
             ],
         ]);
 
-        $this->assertTrue(\App\Filament\Resources\TenancyAgreements\Schemas\TenancyAgreementForm::areTermsComplete($agreement->fresh()));
+        $this->assertTrue(TenancyAgreementForm::areTermsComplete($agreement->fresh()));
+    }
+
+    public function test_prorated_agreement_conditionally_mandates_remarks_and_proof()
+    {
+        $property = Property::create([
+            'building_name' => 'Hillside Heights 301',
+            'address_line_1' => 'Kahilipara, Guwahati',
+            'status' => 'vacant',
+        ]);
+
+        $provider = UtilityProvider::create([
+            'name' => 'APDCL Urban',
+            'utility_type_id' => UtilityType::create(['name' => 'Electricity 3', 'slug' => 'electricity-3'])->id,
+        ]);
+
+        // Mid-month lease start date: 2026-08-16 (Prorated)
+        $agreement = TenancyAgreement::create([
+            'property_id' => $property->id,
+            'code' => 'TNC-2026-7777',
+            'status' => 'draft',
+            'start_date' => '2026-08-16',
+            'end_date' => '2027-08-15',
+            'rent_amount' => 20000.00,
+            'first_month_rent' => 10322.58,
+            'security_deposit' => 40000.00,
+            'booking_amount' => 5000.00,
+            'lock_in_period_months' => 6,
+            'notice_period_days' => 30,
+            'electricity_provider_id' => $provider->id,
+            'apdcl_consumer_id' => '100444555',
+            'tenant_bank_details' => [
+                'account_holder_name' => 'Prorated Tenant',
+                'bank_name' => 'Axis Bank',
+                'bank_address' => 'Ganeshguri Branch',
+                'account_number' => '91201002345678',
+                'account_type' => 'Saving',
+                'ifsc_code' => 'UTIB0000123',
+                'pan_number' => 'ABCDE7777F',
+            ],
+            // missing first_month_rent_notes and first_month_rent_proof
+        ]);
+
+        // Should return FALSE because mid-month move-in mandates remarks and proof
+        $this->assertTrue(TenancyAgreementForm::isRecordProrated($agreement));
+        $this->assertFalse(TenancyAgreementForm::areTermsComplete($agreement));
+
+        // Add remarks only (still missing proof)
+        $agreement->update([
+            'first_month_rent_notes' => '16 days prorated calculation approved by sales head.',
+        ]);
+        $this->assertFalse(TenancyAgreementForm::areTermsComplete($agreement->fresh()));
+
+        // Attach proof media
+        $proofFile = UploadedFile::fake()->create('proration_approval.pdf', 50, 'application/pdf');
+        $agreement->addMedia($proofFile)->toMediaCollection('first_month_rent_proof');
+
+        // Now terms are complete
+        $this->assertTrue(TenancyAgreementForm::areTermsComplete($agreement->fresh()));
     }
 
     public function test_activation_requires_all_checks_and_permanently_locks_linked_audit()
@@ -226,13 +301,13 @@ class TenancyAgreementOnboardingTest extends TestCase
 
         $audit = Audit::create([
             'property_id' => $property->id,
-            'audit_type' => \App\Domain\Audit\Enums\AuditType::MOVE_IN,
-            'status' => \App\Domain\Audit\Enums\AuditStatus::APPROVED,
+            'audit_type' => AuditType::MOVE_IN,
+            'status' => AuditStatus::APPROVED,
         ]);
 
-        $provider = \App\Domain\Property\Models\UtilityProvider::create([
+        $provider = UtilityProvider::create([
             'name' => 'APDCL Test',
-            'utility_type_id' => \App\Domain\Property\Models\UtilityType::create(['name' => 'Electricity 2', 'slug' => 'electricity-2'])->id,
+            'utility_type_id' => UtilityType::create(['name' => 'Electricity 2', 'slug' => 'electricity-2'])->id,
         ]);
 
         $agreement = TenancyAgreement::create([
@@ -264,24 +339,26 @@ class TenancyAgreementOnboardingTest extends TestCase
         ]);
 
         // Activation check fails because signed_by_tenant, signed agreement pdf, and keys_handed_over are missing
-        $this->assertFalse(\App\Filament\Resources\TenancyAgreements\Schemas\TenancyAgreementForm::canActivateTenancy($agreement));
-        $pending = \App\Filament\Resources\TenancyAgreements\Schemas\TenancyAgreementForm::getPendingActivationRequirements($agreement);
+        $this->assertFalse(TenancyAgreementForm::canActivateTenancy($agreement));
+        $pending = TenancyAgreementForm::getPendingActivationRequirements($agreement);
         $this->assertNotEmpty($pending);
 
-        // Update signed_by_tenant and keys_handed_over, attach dummy signed_agreement PDF
+        // Update signed_by_tenant, signed_at, keys_handed_over, and keys_handed_over_at, attach dummy signed_agreement PDF
         $agreement->update([
             'signed_by_tenant' => true,
+            'signed_at' => '2026-08-01',
             'keys_handed_over' => true,
+            'keys_handed_over_at' => '2026-08-01',
         ]);
 
         // Attach dummy PDF media to 'signed_agreement' collection
-        $file = \Illuminate\Http\UploadedFile::fake()->create('signed_agreement.pdf', 100, 'application/pdf');
+        $file = UploadedFile::fake()->create('signed_agreement.pdf', 100, 'application/pdf');
         $agreement->addMedia($file)->toMediaCollection('signed_agreement');
 
-        $this->assertTrue(\App\Filament\Resources\TenancyAgreements\Schemas\TenancyAgreementForm::canActivateTenancy($agreement->fresh()));
+        $this->assertTrue(TenancyAgreementForm::canActivateTenancy($agreement->fresh()));
 
         // Perform Activation
-        app(\App\Domain\Agreement\Actions\ActivateTenancyAction::class)->execute($agreement->fresh(), $user);
+        app(ActivateTenancyAction::class)->execute($agreement->fresh(), $user);
 
         $agreement->refresh();
         $audit->refresh();
@@ -289,7 +366,7 @@ class TenancyAgreementOnboardingTest extends TestCase
         $this->assertEquals('active', $agreement->status);
         $this->assertEquals('occupied', $property->fresh()->status);
         $this->assertTrue($audit->is_locked);
-        $this->assertEquals(\App\Domain\Audit\Enums\AuditStatus::COMPLETED, $audit->status);
+        $this->assertEquals(AuditStatus::COMPLETED, $audit->status);
     }
 
     public function test_annexure_iii_organizes_audit_items_by_room()
@@ -300,10 +377,10 @@ class TenancyAgreementOnboardingTest extends TestCase
             'status' => 'vacant',
         ]);
 
-        $roomType = \App\Domain\Property\Models\RoomType::create(['name' => 'Bedroom', 'slug' => 'bedroom']);
-        $roomDef = \App\Domain\Property\Models\RoomDefinition::create(['room_type_id' => $roomType->id, 'name' => 'Bedroom', 'slug' => 'bedroom']);
+        $roomType = RoomType::create(['name' => 'Bedroom', 'slug' => 'bedroom']);
+        $roomDef = RoomDefinition::create(['room_type_id' => $roomType->id, 'name' => 'Bedroom', 'slug' => 'bedroom']);
 
-        $bedroom = \App\Domain\Property\Models\PropertyRoom::create([
+        $bedroom = PropertyRoom::create([
             'property_id' => $property->id,
             'room_definition_id' => $roomDef->id,
             'custom_name' => 'Master Bedroom',
@@ -311,35 +388,35 @@ class TenancyAgreementOnboardingTest extends TestCase
 
         $audit = Audit::create([
             'property_id' => $property->id,
-            'audit_type' => \App\Domain\Audit\Enums\AuditType::MOVE_IN,
-            'status' => \App\Domain\Audit\Enums\AuditStatus::APPROVED,
+            'audit_type' => AuditType::MOVE_IN,
+            'status' => AuditStatus::APPROVED,
         ]);
 
-        $categoryRooms = \App\Domain\Audit\Models\AuditCategory::create([
+        $categoryRooms = AuditCategory::create([
             'audit_id' => $audit->id,
             'name' => 'Rooms',
         ]);
 
-        $categoryInv = \App\Domain\Audit\Models\AuditCategory::create([
+        $categoryInv = AuditCategory::create([
             'audit_id' => $audit->id,
             'name' => 'Inventory',
         ]);
 
-        \App\Domain\Audit\Models\AuditItem::create([
+        AuditItem::create([
             'audit_category_id' => $categoryRooms->id,
             'name' => 'Master Bedroom',
             'source_type' => get_class($bedroom),
             'source_id' => $bedroom->id,
-            'condition' => \App\Domain\Audit\Enums\ItemCondition::GOOD,
+            'condition' => ItemCondition::GOOD,
         ]);
 
-        \App\Domain\Audit\Models\AuditItem::create([
+        AuditItem::create([
             'audit_category_id' => $categoryInv->id,
             'name' => 'King Size Bed (Master Bedroom)',
             'snapshot_data' => [
                 'property_room_id' => $bedroom->id,
             ],
-            'condition' => \App\Domain\Audit\Enums\ItemCondition::EXCELLENT,
+            'condition' => ItemCondition::EXCELLENT,
         ]);
 
         $agreement = TenancyAgreement::create([
@@ -363,11 +440,11 @@ class TenancyAgreementOnboardingTest extends TestCase
     public function test_first_month_rent_supports_manual_input_and_pro_rated_calculation()
     {
         // 1. Pro-rated calculation test (mid-month start date: Aug 16th, 31 days in Aug, 16 active days => 20000 / 31 * 16 = 10322.58)
-        $proRated = \App\Filament\Resources\TenancyAgreements\Schemas\TenancyAgreementForm::calculateProRatedFirstMonthRent('2026-08-16', 20000.00);
+        $proRated = TenancyAgreementForm::calculateProRatedFirstMonthRent('2026-08-16', 20000.00);
         $this->assertEquals(10322.58, $proRated);
 
         // 2. Full month test (1st of month => 20000.00)
-        $fullMonth = \App\Filament\Resources\TenancyAgreements\Schemas\TenancyAgreementForm::calculateProRatedFirstMonthRent('2026-08-01', 20000.00);
+        $fullMonth = TenancyAgreementForm::calculateProRatedFirstMonthRent('2026-08-01', 20000.00);
         $this->assertEquals(20000.00, $fullMonth);
 
         // 3. Manual override saving test on TenancyAgreement
@@ -379,7 +456,7 @@ class TenancyAgreementOnboardingTest extends TestCase
 
         $user = User::factory()->create();
 
-        $action = app(\App\Domain\Agreement\Actions\DraftTenancyAgreementAction::class);
+        $action = app(DraftTenancyAgreementAction::class);
         $agreement = $action->execute($property, [
             'start_date' => '2026-08-16',
             'rent_amount' => 20000.00,
@@ -424,8 +501,8 @@ class TenancyAgreementOnboardingTest extends TestCase
         ]);
 
         // 2. Test Create Tenancy Agreement Page Form
-        $testable = \Livewire\Livewire::test(\App\Filament\Resources\TenancyAgreements\Pages\CreateTenancyAgreement::class);
-        
+        $testable = Livewire::test(CreateTenancyAgreement::class);
+
         $form = $testable->instance()->form;
         $propertyComponent = $form->getComponent('property_id');
         $this->assertNotNull($propertyComponent);
@@ -459,5 +536,67 @@ class TenancyAgreementOnboardingTest extends TestCase
             ->call('create')
             ->assertHasFormErrors(['property_id']);
     }
-}
 
+    public function test_docx_generation_produces_complete_valid_document()
+    {
+        $property = Property::create([
+            'building_name' => 'Word Doc Tower 101',
+            'address_line_1' => 'Beltola Road, Guwahati',
+            'status' => 'vacant',
+        ]);
+
+        $tenant = Party::create([
+            'display_name' => 'Bikash Kalita',
+            'phone' => '9876543210',
+            'party_type' => 'individual',
+        ]);
+
+        $agreement = TenancyAgreement::create([
+            'property_id' => $property->id,
+            'code' => 'TNC-2026-DOCX',
+            'status' => 'draft',
+            'start_date' => '2026-09-01',
+            'end_date' => '2027-08-31',
+            'rent_amount' => 18000.00,
+            'security_deposit' => 36000.00,
+            'lock_in_period_months' => 6,
+            'notice_period_days' => 30,
+            'apdcl_consumer_id' => '100555666',
+            'special_terms' => 'Tenant must park vehicle in slot #4.',
+            'secondary_tenants' => [
+                ['name' => 'Pooja Kalita', 'relationship' => 'Spouse'],
+            ],
+            'tenant_bank_details' => [
+                'account_holder_name' => 'Bikash Kalita',
+                'bank_name' => 'State Bank of India',
+                'bank_address' => 'Beltola Branch',
+                'account_number' => '30123456789',
+                'account_type' => 'Saving',
+                'ifsc_code' => 'SBIN0001234',
+                'pan_number' => 'ABCDE1234F',
+            ],
+        ]);
+
+        $agreement->roles()->create([
+            'party_id' => $tenant->id,
+            'role_type' => 'Primary Tenant',
+            'is_primary' => true,
+        ]);
+
+        $docxService = app(TenancyAgreementDocxService::class);
+        $binary = $docxService->generateDocx($agreement);
+
+        $this->assertNotEmpty($binary);
+        $this->assertStringStartsWith('PK', $binary); // Zip/Docx magic bytes
+    }
+
+    public function test_can_render_tenancy_agreements_list_page_with_tabs()
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        Livewire::test(ListTenancyAgreements::class)
+            ->assertSuccessful()
+            ->assertCanSeeTableRecords([]);
+    }
+}
