@@ -72,20 +72,6 @@ class MaintenanceRequestsRelationManager extends RelationManager
             ])
             ->recordActions([
                 EditAction::make(),
-
-                Action::make('triggerAudit')
-                    ->label('Trigger Audit')
-                    ->icon('heroicon-o-clipboard-document-check')
-                    ->color('purple')
-                    ->hidden(fn ($record) => filled($record->triggered_audit_id))
-                    ->action(function ($record) {
-                        $audit = app(MaintenanceAuditTriggerService::class)->triggerAudit($record);
-                        Notification::make()
-                            ->title('Audit Triggered')
-                            ->body("Audit #{$audit->audit_number} created.")
-                            ->success()
-                            ->send();
-                    }),
             ]);
     }
 }

@@ -38,13 +38,17 @@ class ItemsRelationManager extends RelationManager
                     ->label('Item Category')
                     ->placeholder('Select Category')
                     ->options([
-                        PropertyRoom::class => 'Room',
-                        PropertyInventory::class => 'Inventory Item',
-                        PropertyUtility::class => 'Utility',
+                        'general' => '🏢 General Property Area',
+                        PropertyRoom::class => '🚪 Room',
+                        PropertyInventory::class => '📦 Inventory Item',
+                        PropertyUtility::class => '⚡ Utility',
                     ])
+                    ->default('general')
+                    ->formatStateUsing(fn ($state) => $state ?? 'general')
+                    ->dehydrateStateUsing(fn ($state) => $state === 'general' ? null : $state)
                     ->required()
-                    ->reactive()
-                    ->columnSpan(1),
+                    ->live()
+                    ->columnSpan(fn (Get $get) => ($get('itemable_type') === 'general' || blank($get('itemable_type'))) ? 2 : 1),
 
                 Select::make('itemable_id')
                     ->label('Specific Item')
@@ -53,7 +57,7 @@ class ItemsRelationManager extends RelationManager
                         $propertyId = $livewire->getOwnerRecord()->property_id;
                         $type = $get('itemable_type');
 
-                        if (!$propertyId || !$type) {
+                        if (!$propertyId || !$type || $type === 'general') {
                             return [];
                         }
 
@@ -83,7 +87,9 @@ class ItemsRelationManager extends RelationManager
 
                         return [];
                     })
-                    ->required()
+                    ->visible(fn (Get $get) => filled($get('itemable_type')) && $get('itemable_type') !== 'general')
+                    ->required(fn (Get $get) => filled($get('itemable_type')) && $get('itemable_type') !== 'general')
+                    ->dehydrateStateUsing(fn ($state, Get $get) => $get('itemable_type') === 'general' ? null : $state)
                     ->searchable()
                     ->columnSpan(1),
 
@@ -98,15 +104,7 @@ class ItemsRelationManager extends RelationManager
                     ->label('Action Required')
                     ->placeholder('e.g. Repair, Replace, Service')
                     ->required()
-                    ->columnSpan(1),
-
-                TextInput::make('actual_cost')
-                    ->label('Estimated / Actual Cost (₹)')
-                    ->numeric()
-                    ->prefix('₹')
-                    ->default(0.00)
-                    ->required()
-                    ->columnSpan(1),
+                    ->columnSpanFull(),
 
                 SpatieMediaLibraryFileUpload::make('issue_photos')
                     ->collection('issue_photos')
@@ -154,10 +152,6 @@ class ItemsRelationManager extends RelationManager
                     ->label('Action Required')
                     ->badge()
                     ->placeholder('Pending Triage'),
-
-                TextColumn::make('actual_cost')
-                    ->label('Cost (₹)')
-                    ->money('INR'),
 
                 SpatieMediaLibraryImageColumn::make('issue_photos')
                     ->collection('issue_photos')

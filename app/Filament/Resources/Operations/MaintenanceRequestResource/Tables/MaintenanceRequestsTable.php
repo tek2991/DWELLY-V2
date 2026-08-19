@@ -8,10 +8,7 @@ use App\Domain\Maintenance\Enums\PayerType;
 use App\Domain\Maintenance\Services\MaintenanceAuditTriggerService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
 use Filament\Notifications\Notification;
-use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Support\HtmlString;
@@ -28,11 +25,25 @@ class MaintenanceRequestsTable
                     ->sortable()
                     ->weight('bold'),
 
-                TextColumn::make('property.building_name')
+                TextColumn::make('property.code')
                     ->label('Property')
                     ->searchable()
                     ->sortable()
-                    ->formatStateUsing(fn ($record) => $record->property?->code ? "{$record->property->code} - {$record->property->building_name}" : ($record->property?->building_name ?? 'Property')),
+                    ->formatStateUsing(fn ($state, $record) => $state ?: ($record->property?->building_name ?? '—'))
+                    ->tooltip(function ($record) {
+                        $property = $record->property;
+                        if (!$property) {
+                            return null;
+                        }
+
+                        $parts = array_filter([
+                            $property->building_name,
+                            $property->locality ?? $property->area,
+                            $property->city,
+                        ]);
+
+                        return !empty($parts) ? implode(', ', $parts) : ($property->building_name ?: "Property #{$property->id}");
+                    }),
 
                 TextColumn::make('title')
                     ->searchable()
@@ -82,12 +93,6 @@ class MaintenanceRequestsTable
                     ->searchable()
                     ->toggleable(isToggledHiddenByDefault: true),
 
-                TextColumn::make('triggeredAudit.audit_number')
-                    ->label('Triggered Audit')
-                    ->placeholder('No Audit')
-                    ->url(fn ($record) => $record->triggeredAudit ? \App\Filament\Resources\Operations\AuditResource::getUrl('edit', ['record' => $record->triggeredAudit]) : null)
-                    ->openUrlInNewTab(),
-
                 TextColumn::make('created_at')
                     ->dateTime('d M Y, H:i')
                     ->sortable()
@@ -106,39 +111,6 @@ class MaintenanceRequestsTable
                     ->falseLabel('Dwelly Coordinated'),
             ])
             ->recordActions([
-                EditAction::make(),
-
-                Action::make('triggerAudit')
-                    ->label('Trigger Audit')
-                    ->icon('heroicon-o-clipboard-document-check')
-                    ->color('info')
-                    ->requiresConfirmation()
-                    ->modalHeading('Trigger Maintenance Verification Audit')
-                    ->modalDescription('This will generate a post-repair Audit containing all selected rooms, inventory items, and utilities for inspection.')
-                    ->hidden(fn ($record) => filled($record->triggered_audit_id))
-                    ->action(function ($record) {
-                        $service = app(MaintenanceAuditTriggerService::class);
-                        $errors = $service->validateForAuditTrigger($record);
-
-                        if (!empty($errors)) {
-                            $bulletList = implode("<br>&bull; ", $errors);
-                            Notification::make()
-                                ->title('Cannot Trigger Verification Audit')
-                                ->body(new HtmlString("Please complete all mandatory information across the tabs:<br>&bull; {$bulletList}"))
-                                ->danger()
-                                ->persistent()
-                                ->send();
-                            return;
-                        }
-
-                        $audit = $service->triggerAudit($record);
-                        Notification::make()
-                            ->title('Audit Triggered Successfully')
-                            ->body("Audit #{$audit->audit_number} has been created for post-repair inspection.")
-                            ->success()
-                            ->send();
-                    }),
-
                 Action::make('closeTicket')
                     ->label('Close Ticket')
                     ->icon('heroicon-o-check-badge')

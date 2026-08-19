@@ -97,6 +97,39 @@ class MaintenanceRequestTest extends TestCase
         $this->assertEquals('Trade license verified', $party->vendorProfile->verification_notes);
     }
 
+    public function test_can_quick_create_individual_artisan_vendor(): void
+    {
+        $trade = VendorTrade::create([
+            'name' => 'Plumbing',
+            'slug' => 'plumbing-test',
+            'is_active' => true,
+        ]);
+
+        $partyService = app(\App\Domain\Party\Services\PartyService::class);
+        $party = $partyService->createParty([
+            'party_type' => 'individual',
+            'display_name' => 'Ramesh Kumar (Plumber)',
+            'phone' => '+919876543210',
+            'individual_data' => [
+                'name' => 'Ramesh Kumar (Plumber)',
+            ],
+            'vendor_data' => [
+                'vendor_trade_id' => $trade->id,
+                'onboarding_status' => VendorOnboardingStatus::VERIFIED->value,
+                'is_preferred' => true,
+                'verification_notes' => 'Quick-created from Maintenance Quotation',
+            ],
+        ], ['vendor']);
+
+        $this->assertNotNull($party->id);
+        $this->assertEquals('Ramesh Kumar (Plumber)', $party->display_name);
+        $this->assertEquals('individual', $party->party_type);
+        $this->assertNotNull($party->vendorProfile);
+        $this->assertEquals($trade->id, $party->vendorProfile->vendor_trade_id);
+        $this->assertTrue($party->vendorProfile->isVerified());
+        $this->assertNotNull($party->accounting_contact_id);
+    }
+
     public function test_can_create_maintenance_request_with_items(): void
     {
         $property = Property::create([

@@ -40,7 +40,7 @@ class MaintenanceRequestForm
                                         ]))
                                         ->searchable()
                                         ->required()
-                                        ->reactive()
+                                        ->live()
                                         ->afterStateUpdated(function ($state, Get $get, Set $set) {
                                             if ($state) {
                                                 $property = Property::find($state);
@@ -191,7 +191,7 @@ class MaintenanceRequestForm
                                             return $options;
                                         })
                                         ->required()
-                                        ->reactive()
+                                        ->live()
                                         ->afterStateUpdated(function ($state, Set $set) {
                                             if (in_array($state, ['dwelly', PayerType::DWELLY->value, PayerType::DWELLY_DIRECT_ABSORBED->value])) {
                                                 $set('is_direct_vendor', 0);
@@ -230,7 +230,7 @@ class MaintenanceRequestForm
                                         ->dehydrateStateUsing(fn ($state) => (bool) $state)
                                         ->default(0)
                                         ->required()
-                                        ->reactive()
+                                        ->live()
                                         ->helperText('Choose whether Dwelly manages vendors or client repairs directly.'),
 
                                     Placeholder::make('decision_route_banner')
@@ -254,7 +254,7 @@ class MaintenanceRequestForm
 
                             // 💳 Financial & Quotations Bridge Section (Visible when a Quotation exists)
                             Section::make('💳 Financial Quotations & Settlement Job')
-                                ->visible(fn (Get $get, $record) => $record && !$record->is_direct_vendor && (bool)($record->currentClientQuote ?? $record->clientQuotes()->first()))
+                                ->visible(fn (Get $get, $record) => $record && !$get('is_direct_vendor') && (bool)($record->currentClientQuote ?? $record->clientQuotes()->first()))
                                 ->schema([
                                     Placeholder::make('financial_workflow_bridge')
                                         ->label('')
@@ -356,7 +356,7 @@ class MaintenanceRequestForm
 
                             // 🧾 Direct Repair Settlement (Visible when Direct)
                             Section::make('Direct Repair Settlement')
-                                ->visible(fn (Get $get, $record) => $record && $record->is_direct_vendor)
+                                ->visible(fn (Get $get) => (bool) $get('is_direct_vendor'))
                                 ->columns(2)
                                 ->schema([
                                     Placeholder::make('direct_settlement_notice')
@@ -397,7 +397,7 @@ class MaintenanceRequestForm
 
                                     Placeholder::make('quotation_status_badge')
                                         ->label('Quotation Status')
-                                        ->visible(fn ($record) => $record && !$record->is_direct_vendor)
+                                        ->visible(fn (Get $get, $record) => $record && !$get('is_direct_vendor'))
                                         ->content(function ($record) {
                                             $quote = $record->currentClientQuote ?? $record->clientQuotes()->latest()->first();
                                             if (!$quote) {

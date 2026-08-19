@@ -19,6 +19,12 @@ class MaintenanceClientQuote extends DomainModel implements HasMedia
         'quote_number',
         'version',
         'total_amount',
+        'subtotal_amount',
+        'margin_percentage',
+        'margin_amount',
+        'gst_percentage',
+        'tax_amount',
+        'valid_until',
         'owner_amount',
         'tenant_amount',
         'dwelly_amount',
@@ -29,15 +35,23 @@ class MaintenanceClientQuote extends DomainModel implements HasMedia
         'rejection_action',
         'approved_at',
         'approval_notes',
+        'approved_by_type',
+        'approval_channel',
     ];
 
     protected $casts = [
         'version' => 'integer',
         'awarded_vendor_quote_ids' => 'array',
         'total_amount' => 'decimal:2',
+        'subtotal_amount' => 'decimal:2',
+        'margin_percentage' => 'decimal:2',
+        'margin_amount' => 'decimal:2',
+        'gst_percentage' => 'decimal:2',
+        'tax_amount' => 'decimal:2',
         'owner_amount' => 'decimal:2',
         'tenant_amount' => 'decimal:2',
         'dwelly_amount' => 'decimal:2',
+        'valid_until' => 'date',
         'approved_at' => 'datetime',
         'generated_at' => 'datetime',
     ];
@@ -58,6 +72,18 @@ class MaintenanceClientQuote extends DomainModel implements HasMedia
         static::creating(function ($quote) {
             if (empty($quote->quote_number)) {
                 $quote->quote_number = self::generateQuoteNumber();
+            }
+
+            if (blank($quote->margin_percentage)) {
+                $quote->margin_percentage = (float) \App\Domain\Shared\Services\SettingService::get('financials.default_margin_percentage', 10.00);
+            }
+
+            if (blank($quote->gst_percentage)) {
+                $quote->gst_percentage = (float) \App\Domain\Shared\Services\SettingService::get('financials.default_gst_percentage', 18.00);
+            }
+
+            if (blank($quote->valid_until)) {
+                $quote->valid_until = now()->addDays((int) \App\Domain\Shared\Services\SettingService::get('financials.default_quotation_validity_days', 14));
             }
         });
     }

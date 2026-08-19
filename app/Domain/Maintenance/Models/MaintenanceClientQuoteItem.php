@@ -12,6 +12,7 @@ class MaintenanceClientQuoteItem extends DomainModel
     protected $fillable = [
         'maintenance_client_quote_id',
         'vendor_quote_id',
+        'maintenance_request_item_id',
         'description',
         'quantity',
         'unit_price',
@@ -34,5 +35,30 @@ class MaintenanceClientQuoteItem extends DomainModel
     public function vendorQuote(): BelongsTo
     {
         return $this->belongsTo(MaintenanceVendorQuote::class, 'vendor_quote_id');
+    }
+
+    public function maintenanceRequestItem(): BelongsTo
+    {
+        return $this->belongsTo(MaintenanceRequestItem::class, 'maintenance_request_item_id');
+    }
+
+    public function getUnitRateAttribute(): ?float
+    {
+        return (float) ($this->unit_price ?? 0);
+    }
+
+    public function setUnitRateAttribute($value): void
+    {
+        $this->attributes['unit_price'] = $value;
+    }
+
+    public function getTotalCostAttribute(): ?float
+    {
+        return (float) ($this->total_price ?? 0);
+    }
+
+    public function setTotalCostAttribute($value): void
+    {
+        $this->attributes['total_price'] = $value;
     }
 }

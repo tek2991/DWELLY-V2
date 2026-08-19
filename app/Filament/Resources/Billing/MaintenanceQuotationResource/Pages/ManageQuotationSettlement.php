@@ -10,20 +10,20 @@ use Filament\Resources\Pages\EditRecord;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 
-class EditMaintenanceQuotation extends EditRecord
+class ManageQuotationSettlement extends EditRecord
 {
     use HasMaintenanceQuotationWorkflowHeader;
 
     protected static string $resource = MaintenanceQuotationResource::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDocumentCurrencyRupee;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;
 
-    protected static ?string $navigationLabel = '1. Vendor Quotes';
+    protected static ?string $navigationLabel = '5. Settlement & Billing';
 
-    protected static ?string $title = 'Maintenance Quotation – Multi-Vendor Trade Estimates';
+    protected static ?string $title = 'Maintenance Quotation – Financial Settlement & Accounting';
 
     public function form(Schema $schema): Schema
     {
-        return MaintenanceQuotationForm::configureVendorQuotesForm($schema);
+        return MaintenanceQuotationForm::configureSettlementForm($schema);
     }
 }

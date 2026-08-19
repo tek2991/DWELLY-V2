@@ -55,10 +55,10 @@ class MaintenanceAuditTriggerService
 
         // 3. Repaired Items & Photos
         $request->loadMissing('items');
-        $validItems = $request->items->filter(fn ($item) => !empty($item->itemable_type) && !empty($item->itemable_id));
+        $validItems = $request->items->filter(fn ($item) => filled($item->issue_description) || filled($item->repair_action) || filled($item->itemable_type));
 
         if ($validItems->isEmpty()) {
-            $errors[] = 'At least 1 valid item (with Category and Specific Item selected) is required under Repair Items.';
+            $errors[] = 'At least 1 defect item is required under Defect Items.';
         } else {
             foreach ($validItems->values() as $index => $item) {
                 $rowNum = $index + 1;
@@ -90,13 +90,13 @@ class MaintenanceAuditTriggerService
                 'notes' => "Maintenance Verification Audit for Ticket #{$request->ticket_number}: {$request->title}",
             ]);
 
-            // Group maintenance request items by standard categories (Rooms, Inventory, Utilities)
+            // Group maintenance request items by standard categories (Rooms, Inventory, Utilities, General Property)
             $request->loadMissing('items.itemable');
 
             $categoryMap = [];
 
             foreach ($request->items as $index => $mItem) {
-                if (empty($mItem->itemable_type) || empty($mItem->itemable_id)) {
+                if (empty($mItem->issue_description) && empty($mItem->repair_action) && empty($mItem->itemable_type)) {
                     continue;
                 }
 
@@ -117,8 +117,8 @@ class MaintenanceAuditTriggerService
                 $auditItem = AuditItem::create([
                     'audit_category_id' => $category->id,
                     'name' => $itemName,
-                    'source_type' => $mItem->itemable_type,
-                    'source_id' => $mItem->itemable_id,
+                    'source_type' => $mItem->itemable_type ?? \App\Domain\Property\Models\Property::class,
+                    'source_id' => $mItem->itemable_id ?? $request->property_id,
                     'status' => ItemStatus::PENDING,
                     'remarks' => "Defect: " . ($mItem->issue_description ?? 'N/A') . " | Action: " . ($mItem->repair_action ?? 'Repaired'),
                     'snapshot_data' => [
@@ -178,12 +178,13 @@ class MaintenanceAuditTriggerService
             return 'Utilities';
         }
 
-        return 'Maintenance Items';
+        return 'General Property';
     }
 
     protected function resolveCategorySortOrder(string $categoryName): int
     {
         return match ($categoryName) {
+            'General Property' => 5,
             'Rooms' => 10,
             'Inventory' => 20,
             'Utilities' => 30,
@@ -194,7 +195,7 @@ class MaintenanceAuditTriggerService
     protected function resolveItemName(?object $itemable): string
     {
         if (!$itemable) {
-            return 'Repaired Item';
+            return 'General Property Area';
         }
 
         if ($itemable instanceof PropertyRoom) {
