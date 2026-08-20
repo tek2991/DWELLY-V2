@@ -28,9 +28,10 @@ class MaintenanceWorkOrderPdfService
 
         // Ensure work order number exists
         if (blank($vendorQuote->work_order_number)) {
-            $woSuffix = strtoupper(substr($clientQuote?->quote_number ?: uniqid(), -5)) . '-' . substr($vendorQuote->id, -4);
+            $year = now()->year;
+            $quoteSuffix = strtoupper(substr(str_replace(['QT-', 'QTE-'], '', $clientQuote?->quote_number ?: (string) $vendorQuote->id), -5));
             $vendorQuote->update([
-                'work_order_number' => "WO-{$woSuffix}",
+                'work_order_number' => "WO-{$year}-{$quoteSuffix}-01",
                 'work_order_issued_at' => $vendorQuote->work_order_issued_at ?: now(),
                 'is_awarded' => true,
                 'status' => 'awarded',

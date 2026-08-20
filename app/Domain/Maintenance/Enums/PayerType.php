@@ -27,6 +27,16 @@ enum PayerType: string
         };
     }
 
+    public function getPlainLabel(): string
+    {
+        return match ($this) {
+            self::OWNER, self::OWNER_DIRECT, self::DWELLY_INVOICE_OWNER => 'Owner',
+            self::TENANT, self::TENANT_DIRECT, self::DWELLY_INVOICE_TENANT => 'Tenant',
+            self::SPLIT, self::DWELLY_INVOICE_SPLIT => 'Split (Owner & Tenant)',
+            self::DWELLY, self::DWELLY_DIRECT_ABSORBED => 'Dwelly (Internal Absorbed)',
+        };
+    }
+
     public function getColor(): string
     {
         return match ($this) {

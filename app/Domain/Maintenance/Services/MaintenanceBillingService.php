@@ -3,6 +3,8 @@
 namespace App\Domain\Maintenance\Services;
 
 use App\Domain\Finance\Services\AccountingProvisioningService;
+use App\Domain\Maintenance\Enums\MaintenanceStatus;
+use App\Domain\Maintenance\Models\MaintenanceClientQuote;
 use App\Domain\Maintenance\Models\MaintenanceRequest;
 use Illuminate\Support\Facades\DB;
 use Tek2991\Accounting\Enums\BillStatus;
@@ -359,6 +361,102 @@ class MaintenanceBillingService
             $request->update(['bill_id' => (string) $bill->id]);
 
             return $bill;
+        });
+    }
+
+    /**
+     * Record client approval on quotation and advance operational maintenance request.
+     */
+    public function recordClientApproval(MaintenanceClientQuote $quote, array $data): void
+    {
+        DB::transaction(function () use ($quote, $data) {
+            $quote->update([
+                'status' => 'approved',
+                'approved_at' => now(),
+                'approved_by_type' => $data['approved_by_type'] ?? 'owner',
+                'approval_channel' => $data['approval_channel'] ?? 'written',
+                'approval_notes' => $data['approval_notes'] ?? null,
+            ]);
+
+            $request = $quote->maintenanceRequest;
+            if ($request) {
+                $request->update([
+                    'quotation_status' => 'approved',
+                    'quotation_approved_at' => now(),
+                    'quotation_approval_notes' => $data['approval_notes'] ?? null,
+                    'status' => MaintenanceStatus::QUOTATION_APPROVED,
+                ]);
+                $request->syncQuotationTotals();
+            }
+        });
+    }
+
+    /**
+     * Award winning vendor quote(s) and advance maintenance request to Work Orders Issued.
+     */
+    public function awardVendorQuotesAndIssueWorkOrders(MaintenanceClientQuote $quote, array $selectedIds): void
+    {
+        DB::transaction(function () use ($quote, $selectedIds) {
+            $quote->update([
+                'awarded_vendor_quote_ids' => $selectedIds,
+            ]);
+
+            $request = $quote->maintenanceRequest;
+            $vendorQuotes = MaintenanceVendorQuote::whereIn('id', $selectedIds)->get();
+            $year = now()->year;
+            $quoteSuffix = strtoupper(substr(str_replace(['QT-', 'QTE-'], '', $quote->quote_number ?: (string) $quote->id), -5));
+
+            foreach ($vendorQuotes as $idx => $vq) {
+                if (blank($vq->work_order_number)) {
+                    $seq = str_pad((string) ($idx + 1), 2, '0', STR_PAD_LEFT);
+                    $vq->work_order_number = "WO-{$year}-{$quoteSuffix}-{$seq}";
+                }
+
+                $vq->work_order_issued_at = $vq->work_order_issued_at ?: now();
+                $vq->is_awarded = true;
+                $vq->status = 'awarded';
+                $vq->save();
+
+                // Automatically generate work order PDF document
+                app(MaintenanceWorkOrderPdfService::class)->generatePdf($vq, $quote);
+            }
+
+            if ($request) {
+                $request->update([
+                    'status' => MaintenanceStatus::IN_PROGRESS,
+                ]);
+            }
+        });
+    }
+
+    /**
+     * Archive active quotation(s) and unlock the maintenance request's financial responsibility.
+     * Allowed only before work orders have been issued.
+     */
+    public function archiveQuotationAndUnlock(MaintenanceRequest $request): void
+    {
+        $quote = $request->currentClientQuote ?? $request->clientQuotes()->where('status', '!=', 'archived')->latest()->first();
+
+        $hasWorkOrders = ($quote && ! empty($quote->awarded_vendor_quote_ids))
+            || $request->vendorQuotes()->where('is_awarded', true)->exists()
+            || in_array($request->status, [MaintenanceStatus::IN_PROGRESS, MaintenanceStatus::WORK_COMPLETED, MaintenanceStatus::RESOLVED, MaintenanceStatus::CLOSED]);
+
+        if ($hasWorkOrders) {
+            throw new \RuntimeException('Cannot unlock financial responsibility after Work Orders have been issued.');
+        }
+
+        DB::transaction(function () use ($request, $quote) {
+            if ($quote) {
+                $quote->update(['status' => 'archived']);
+            }
+            $request->clientQuotes()->where('status', '!=', 'archived')->update(['status' => 'archived']);
+
+            $request->update([
+                'current_client_quote_id' => null,
+                'status' => in_array($request->status, [MaintenanceStatus::QUOTED, MaintenanceStatus::QUOTATION_PENDING, MaintenanceStatus::QUOTATION_APPROVED])
+                    ? MaintenanceStatus::SUBMITTED
+                    : $request->status,
+            ]);
         });
     }
 }

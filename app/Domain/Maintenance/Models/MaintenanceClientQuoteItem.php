@@ -15,17 +15,39 @@ class MaintenanceClientQuoteItem extends DomainModel
         'maintenance_request_item_id',
         'description',
         'quantity',
+        'vendor_cost',
         'unit_price',
         'total_price',
+        'unit_rate',
+        'total_cost',
         'sort_order',
+    ];
+
+    protected $appends = [
+        'unit_rate',
+        'total_cost',
     ];
 
     protected $casts = [
         'quantity' => 'decimal:2',
+        'vendor_cost' => 'decimal:2',
         'unit_price' => 'decimal:2',
         'total_price' => 'decimal:2',
         'sort_order' => 'integer',
     ];
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::saving(function ($item) {
+            $qty = (float) ($item->quantity ?? 1);
+            $price = (float) ($item->unit_price ?? $item->unit_rate ?? 0);
+            if (blank($item->total_price) || $item->isDirty(['quantity', 'unit_price', 'unit_rate'])) {
+                $item->total_price = round($qty * $price, 2);
+            }
+        });
+    }
 
     public function clientQuote(): BelongsTo
     {
@@ -38,6 +60,11 @@ class MaintenanceClientQuoteItem extends DomainModel
     }
 
     public function maintenanceRequestItem(): BelongsTo
+    {
+        return $this->belongsTo(MaintenanceRequestItem::class, 'maintenance_request_item_id');
+    }
+
+    public function defectItem(): BelongsTo
     {
         return $this->belongsTo(MaintenanceRequestItem::class, 'maintenance_request_item_id');
     }

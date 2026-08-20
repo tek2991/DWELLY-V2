@@ -56,4 +56,70 @@ test('maintenance quotation pdf service generates valid pdf and increments versi
     $media2 = $service->generatePdf($quote);
     expect($quote->fresh()->version)->toBe(2);
     expect($quote->fresh()->getMedia('generated_quote_pdf')->count())->toBe(2);
+
+    $user = \App\Models\User::factory()->create();
+
+    expect($quote->fresh()->subtotal_amount)->toEqual(1500.00);
+    expect($quote->fresh()->tax_amount)->toEqual(270.00);
+    expect($quote->fresh()->total_amount)->toEqual(1770.00);
+
+    // Verify rendered PDF view has tax components and rupee formatting
+    $viewHtml = view('pdf.maintenance_quotation', [
+        'quote' => $quote->fresh(),
+        'ticket' => $ticket,
+    ])->render();
+
+    expect($viewHtml)->toContain('Tax Component');
+    expect($viewHtml)->toContain('CGST');
+    expect($viewHtml)->toContain('SGST');
+    expect($viewHtml)->toContain('₹ 1,500.00');
+    expect($viewHtml)->toContain('₹ 1,770.00');
+    expect($viewHtml)->not->toContain('&#8377;');
+
+    // Stream PDF
+    $response = $this->actingAs($user)->get(route('billing.quotation.pdf', ['quote' => $quote->id]));
+    $response->assertOk();
+    $response->assertHeader('Content-Type', 'application/pdf');
+
+    // Download PDF
+    $downloadResponse = $this->actingAs($user)->get(route('billing.quotation.pdf.download', ['quote' => $quote->id]));
+    $downloadResponse->assertOk();
+    $downloadResponse->assertHeader('Content-Type', 'application/pdf');
 });
+
+test('contractor work order pdf streaming and downloading routes work properly', function () {
+    $vendorParty = Party::create(['display_name' => 'Apex Electricals', 'party_type' => 'organization']);
+    $property = Property::create(['building_name' => 'Sunrise Heights 101', 'status' => 'active']);
+
+    $ticket = MaintenanceRequest::create([
+        'ticket_number' => 'MR-2026-WO01',
+        'title' => 'Electrical Short Circuit',
+        'property_id' => $property->id,
+        'status' => \App\Domain\Maintenance\Enums\MaintenanceStatus::IN_PROGRESS,
+        'payer_type' => 'owner',
+        'is_direct_vendor' => false,
+    ]);
+
+    $vendorQuote = \App\Domain\Maintenance\Models\MaintenanceVendorQuote::create([
+        'maintenance_request_id' => $ticket->id,
+        'vendor_party_id' => $vendorParty->id,
+        'trade_title' => 'Main Distribution Board Repair',
+        'quoted_cost' => 4500.00,
+        'work_order_number' => 'WO-2026-WO01-101',
+        'is_awarded' => true,
+        'status' => 'awarded',
+    ]);
+
+    $user = \App\Models\User::factory()->create();
+
+    // Stream Work Order PDF
+    $streamResponse = $this->actingAs($user)->get(route('billing.work_order.pdf', ['vendorQuote' => $vendorQuote->id]));
+    $streamResponse->assertOk();
+    $streamResponse->assertHeader('Content-Type', 'application/pdf');
+
+    // Download Work Order PDF
+    $downloadResponse = $this->actingAs($user)->get(route('billing.work_order.pdf.download', ['vendorQuote' => $vendorQuote->id]));
+    $downloadResponse->assertOk();
+    $downloadResponse->assertHeader('Content-Type', 'application/pdf');
+});
+

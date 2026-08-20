@@ -17,12 +17,9 @@ class MaintenanceQuotationPdfService
             throw new \Exception("Cannot generate quotation PDF: At least one quotation line item is required.");
         }
 
-        // Recalculate total amount from items if needed
-        $total = $quote->items()->sum('total_price');
-        if ($total > 0 && $quote->total_amount != $total) {
-            $quote->total_amount = $total;
-            $quote->save();
-        }
+        // Recalculate financial totals (subtotal, margin, tax, grand total)
+        $quote->recalculateTotals();
+        $quote->refresh();
 
         // If a PDF already exists, increment version for revision history
         if ($quote->hasMedia('generated_quote_pdf')) {

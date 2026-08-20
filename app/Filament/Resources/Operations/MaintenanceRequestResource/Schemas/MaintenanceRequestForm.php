@@ -5,12 +5,14 @@ namespace App\Filament\Resources\Operations\MaintenanceRequestResource\Schemas;
 use App\Domain\Maintenance\Enums\MaintenanceStatus;
 use App\Domain\Maintenance\Enums\PayerType;
 use App\Domain\Property\Models\Property;
+use Filament\Actions\Action;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
@@ -158,7 +160,85 @@ class MaintenanceRequestForm
 
                             // 💰 Section 3: Repair Decision & Financial Responsibility
                             Section::make('💰 Repair Decision & Financial Responsibility')
-                                ->description('Determine financial responsibility and execution route for this maintenance request.')
+                                ->description(function ($record) {
+                                    $hasActiveQuote = (bool) ($record && ($record->current_client_quote_id || $record->clientQuotes()->where('status', '!=', 'archived')->exists()));
+                                    if ($hasActiveQuote) {
+                                        return '🔒 Financial responsibility and execution route are locked because an official Maintenance Quotation has been created for this ticket.';
+                                    }
+
+                                    return 'Determine financial responsibility and execution route for this maintenance request.';
+                                })
+                                ->headerActions([
+                                    Action::make('unlockFinancialDecision')
+                                        ->label('Unlock & Archive Quotation')
+                                        ->icon('heroicon-o-lock-open')
+                                        ->color('danger')
+                                        ->size('sm')
+                                        ->button()
+                                        ->visible(function ($record) {
+                                            if (! $record) {
+                                                return false;
+                                            }
+
+                                            return (bool) ($record->current_client_quote_id || $record->clientQuotes()->where('status', '!=', 'archived')->exists());
+                                        })
+                                        ->disabled(function ($record) {
+                                            if (! $record) {
+                                                return false;
+                                            }
+                                            $quote = $record->currentClientQuote ?? $record->clientQuotes()->where('status', '!=', 'archived')->latest()->first();
+                                            $hasWorkOrders = ($quote && ! empty($quote->awarded_vendor_quote_ids))
+                                                || $record->vendorQuotes()->where('is_awarded', true)->exists()
+                                                || in_array($record->status, [MaintenanceStatus::IN_PROGRESS, MaintenanceStatus::WORK_COMPLETED, MaintenanceStatus::CLOSED, MaintenanceStatus::CANCELLED]);
+
+                                            return $hasWorkOrders;
+                                        })
+                                        ->tooltip(function ($record) {
+                                            if (! $record) {
+                                                return null;
+                                            }
+                                            $quote = $record->currentClientQuote ?? $record->clientQuotes()->where('status', '!=', 'archived')->latest()->first();
+                                            $hasWorkOrders = ($quote && ! empty($quote->awarded_vendor_quote_ids))
+                                                || $record->vendorQuotes()->where('is_awarded', true)->exists()
+                                                || in_array($record->status, [MaintenanceStatus::IN_PROGRESS, MaintenanceStatus::WORK_COMPLETED, MaintenanceStatus::CLOSED, MaintenanceStatus::CANCELLED]);
+
+                                            return $hasWorkOrders ? 'Cannot unlock financial responsibility after Work Orders have been issued.' : 'Archive active quotation and unlock Who Pays / Execution Route';
+                                        })
+                                        ->requiresConfirmation()
+                                        ->modalHeading('⚠️ Unlock Financial Responsibility & Archive Quotation?')
+                                        ->modalDescription(function ($record) {
+                                            $quote = $record?->currentClientQuote ?? $record?->clientQuotes()->where('status', '!=', 'archived')->latest()->first();
+                                            $quoteNum = $quote ? "Quotation #{$quote->quote_number}" : 'the active Quotation';
+
+                                            return "Unlocking will archive {$quoteNum} and reset the financial decision lock on this ticket, allowing you to change Who Pays? and the Execution Route. Are you sure you want to proceed?";
+                                        })
+                                        ->modalSubmitActionLabel('Yes, Archive Quotation & Unlock')
+                                        ->action(function ($record, $livewire) {
+                                            if (! $record) {
+                                                return;
+                                            }
+
+                                            try {
+                                                app(\App\Domain\Maintenance\Services\MaintenanceBillingService::class)->archiveQuotationAndUnlock($record);
+
+                                                Notification::make()
+                                                    ->title('Financial Responsibility Unlocked')
+                                                    ->body('Active quotation has been archived. You can now modify Who Pays? and the Execution Route.')
+                                                    ->success()
+                                                    ->send();
+
+                                                $livewire->redirect(
+                                                    \App\Filament\Resources\Operations\MaintenanceRequestResource::getUrl('edit', ['record' => $record])
+                                                );
+                                            } catch (\Throwable $e) {
+                                                Notification::make()
+                                                    ->title('Unlock Failed')
+                                                    ->body($e->getMessage())
+                                                    ->danger()
+                                                    ->send();
+                                            }
+                                        }),
+                                ])
                                 ->columns(2)
                                 ->schema([
                                     Select::make('payer_type')
@@ -192,6 +272,8 @@ class MaintenanceRequestForm
                                         })
                                         ->required()
                                         ->live()
+                                        ->disabled(fn ($record) => (bool) ($record && ($record->current_client_quote_id || $record->clientQuotes()->where('status', '!=', 'archived')->exists())))
+                                        ->dehydrated()
                                         ->afterStateUpdated(function ($state, Set $set) {
                                             if (in_array($state, ['dwelly', PayerType::DWELLY->value, PayerType::DWELLY_DIRECT_ABSORBED->value])) {
                                                 $set('is_direct_vendor', 0);
@@ -200,14 +282,22 @@ class MaintenanceRequestForm
                                             }
                                         })
                                         ->helperText(function (Get $get, $record) {
+                                            if ($record && ($record->current_client_quote_id || $record->clientQuotes()->where('status', '!=', 'archived')->exists())) {
+                                                $quote = $record->currentClientQuote ?? $record->clientQuotes()->where('status', '!=', 'archived')->latest()->first();
+                                                $quoteRef = $quote ? " (#{$quote->quote_number})" : '';
+
+                                                return "🔒 Locked: Financial responsibility cannot be changed because Maintenance Quotation{$quoteRef} is active. Use 'Unlock & Archive Quotation' above to change.";
+                                            }
+
                                             $propertyId = $get('property_id') ?? $record?->property_id;
                                             if ($propertyId) {
                                                 $property = Property::find($propertyId);
                                                 $hasActiveTenant = $property && $property->agreements()->where('status', 'active')->whereHas('tenants')->exists();
-                                                if (!$hasActiveTenant) {
+                                                if (! $hasActiveTenant) {
                                                     return 'Property is currently vacant (no active tenant). Only Owner or Dwelly can be selected.';
                                                 }
                                             }
+
                                             return 'Select who is financially responsible for this repair.';
                                         }),
 
@@ -221,6 +311,7 @@ class MaintenanceRequestForm
                                                     0 => 'Dwelly Coordinates (Internal Expense)',
                                                 ];
                                             }
+
                                             return [
                                                 0 => 'Dwelly Coordinates (Multi-Vendor Sourcing & Invoicing)',
                                                 1 => 'Owner/Tenant Repairs Directly (Dwelly audits only)',
@@ -231,17 +322,33 @@ class MaintenanceRequestForm
                                         ->default(0)
                                         ->required()
                                         ->live()
-                                        ->helperText('Choose whether Dwelly manages vendors or client repairs directly.'),
+                                        ->disabled(fn ($record) => (bool) ($record && ($record->current_client_quote_id || $record->clientQuotes()->where('status', '!=', 'archived')->exists())))
+                                        ->dehydrated()
+                                        ->helperText(function (Get $get, $record) {
+                                            if ($record && ($record->current_client_quote_id || $record->clientQuotes()->where('status', '!=', 'archived')->exists())) {
+                                                return '🔒 Locked: Execution route cannot be modified because an active Maintenance Quotation is linked.';
+                                            }
+
+                                            return 'Choose whether Dwelly manages vendors or client repairs directly.';
+                                        }),
 
                                     Placeholder::make('decision_route_banner')
                                         ->label('')
                                         ->columnSpanFull()
-                                        ->content(function (Get $get) {
+                                        ->content(function (Get $get, $record) {
                                             $payer = $get('payer_type');
                                             $isDirect = $get('is_direct_vendor');
+                                            $hasQuotation = (bool) ($record && ($record->current_client_quote_id || $record->clientQuotes()->where('status', '!=', 'archived')->exists()));
 
                                             if (blank($payer)) {
                                                 return new HtmlString('<div style="font-size: 13px; color: #d97706; background-color: rgba(217, 119, 6, 0.08); border-left: 4px solid #d97706; padding: 10px 14px; border-radius: 4px;">⚠️ <strong>Decision Required:</strong> Please assign financial responsibility above before preparing quotations or starting repairs.</div>');
+                                            }
+
+                                            if ($hasQuotation) {
+                                                $quote = $record->currentClientQuote ?? $record->clientQuotes()->where('status', '!=', 'archived')->latest()->first();
+                                                $quoteNum = $quote ? $quote->quote_number : 'Active';
+
+                                                return new HtmlString('<div style="font-size: 13px; color: #1e3a8a; background-color: rgba(30, 58, 138, 0.06); border-left: 4px solid #2563eb; padding: 10px 14px; border-radius: 4px;">🔒 <strong>Financial Responsibility Locked:</strong> Maintenance Quotation <strong>#' . e($quoteNum) . '</strong> is created. Financial responsibility and execution route are locked to ensure billing integrity. To reassign, click <strong>Unlock & Archive Quotation</strong> in the section header.</div>');
                                             }
 
                                             if ($isDirect) {
@@ -254,7 +361,7 @@ class MaintenanceRequestForm
 
                             // 💳 Financial & Quotations Bridge Section (Visible when a Quotation exists)
                             Section::make('💳 Financial Quotations & Settlement Job')
-                                ->visible(fn (Get $get, $record) => $record && !$get('is_direct_vendor') && (bool)($record->currentClientQuote ?? $record->clientQuotes()->first()))
+                                ->visible(fn (Get $get, $record) => $record && !$get('is_direct_vendor') && (bool)($record->currentClientQuote ?? $record->clientQuotes()->where('status', '!=', 'archived')->first()))
                                 ->schema([
                                     Placeholder::make('financial_workflow_bridge')
                                         ->label('')

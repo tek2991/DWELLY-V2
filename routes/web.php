@@ -20,6 +20,16 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/billing/bills/{bill}/pdf', [BillingDocumentController::class, 'downloadBill'])
         ->name('billing.bill.pdf');
 
+    Route::get('/billing/quotations/{quote}/pdf', [BillingDocumentController::class, 'streamQuotation'])
+        ->name('billing.quotation.pdf');
+    Route::get('/billing/quotations/{quote}/pdf/download', [BillingDocumentController::class, 'downloadQuotation'])
+        ->name('billing.quotation.pdf.download');
+
+    Route::get('/billing/work-orders/{vendorQuote}/pdf', [BillingDocumentController::class, 'streamWorkOrder'])
+        ->name('billing.work_order.pdf');
+    Route::get('/billing/work-orders/{vendorQuote}/pdf/download', [BillingDocumentController::class, 'downloadWorkOrder'])
+        ->name('billing.work_order.pdf.download');
+
     Route::get('/operations/audits/{audit}/pdf', [AuditReportController::class, 'stream'])
         ->name('operations.audits.pdf');
     Route::get('/operations/audits/{audit}/pdf/download', [AuditReportController::class, 'download'])

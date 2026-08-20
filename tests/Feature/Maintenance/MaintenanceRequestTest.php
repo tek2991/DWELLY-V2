@@ -389,4 +389,91 @@ class MaintenanceRequestTest extends TestCase
         $request->update(['status' => MaintenanceStatus::WORK_COMPLETED, 'completed_at' => now()]);
         $this->assertEquals(MaintenanceStatus::WORK_COMPLETED, $request->status);
     }
+
+    public function test_repair_decision_is_locked_when_quotation_exists(): void
+    {
+        $property = Property::create([
+            'building_name' => 'Hillside Heights 202',
+            'status' => 'active',
+        ]);
+
+        $request = MaintenanceRequest::create([
+            'property_id' => $property->id,
+            'title' => 'Kitchen Sink Pipe Replacement',
+            'payer_type' => PayerType::OWNER,
+            'is_direct_vendor' => false,
+            'status' => MaintenanceStatus::SUBMITTED,
+        ]);
+
+        $user = \App\Models\User::factory()->create();
+
+        // 1. Without quotation: payer_type and is_direct_vendor are enabled
+        $testWithoutQuote = \Livewire\Livewire::actingAs($user)
+            ->test(\App\Filament\Resources\Operations\MaintenanceRequestResource\Pages\EditMaintenanceRequest::class, [
+                'record' => $request->getRouteKey(),
+            ])
+            ->assertSuccessful();
+
+        $formWithoutQuote = $testWithoutQuote->instance()->getSchema('form');
+        $payerField = $formWithoutQuote->getComponent('payer_type');
+        $this->assertFalse($payerField->isDisabled());
+
+        // 2. Create quotation for this request
+        $quote = \App\Domain\Maintenance\Models\MaintenanceClientQuote::create([
+            'quote_number' => 'QTE-2026-HILL-1',
+            'maintenance_request_id' => $request->id,
+            'status' => 'draft',
+            'total_amount' => 3000.00,
+        ]);
+        $request->update(['current_client_quote_id' => $quote->id]);
+        $request->refresh();
+
+        // 3. With quotation: payer_type and is_direct_vendor are locked (disabled)
+        $testWithQuote = \Livewire\Livewire::actingAs($user)
+            ->test(\App\Filament\Resources\Operations\MaintenanceRequestResource\Pages\EditMaintenanceRequest::class, [
+                'record' => $request->getRouteKey(),
+            ])
+            ->assertSuccessful()
+            ->assertSee('Financial Responsibility Locked');
+
+        $formWithQuote = $testWithQuote->instance()->getSchema('form');
+        $payerFieldLocked = $formWithQuote->getComponent('payer_type');
+        $this->assertTrue($payerFieldLocked->isDisabled());
+        $routeFieldLocked = $formWithQuote->getComponent('is_direct_vendor');
+        $this->assertTrue($routeFieldLocked->isDisabled());
+
+        // 4. Test unlocking & archiving quotation via billing service
+        $billingService = app(\App\Domain\Maintenance\Services\MaintenanceBillingService::class);
+        $billingService->archiveQuotationAndUnlock($request);
+
+        $request->refresh();
+        $quote->refresh();
+        $this->assertNull($request->current_client_quote_id);
+        $this->assertEquals('archived', $quote->status);
+
+        // Form should be unlocked again
+        $testUnlocked = \Livewire\Livewire::actingAs($user)
+            ->test(\App\Filament\Resources\Operations\MaintenanceRequestResource\Pages\EditMaintenanceRequest::class, [
+                'record' => $request->getRouteKey(),
+            ])
+            ->assertSuccessful();
+
+        $formUnlocked = $testUnlocked->instance()->getSchema('form');
+        $this->assertFalse($formUnlocked->getComponent('payer_type')->isDisabled());
+        $this->assertFalse($formUnlocked->getComponent('is_direct_vendor')->isDisabled());
+
+        // 5. If work orders are issued, unlocking throws exception
+        $newQuote = \App\Domain\Maintenance\Models\MaintenanceClientQuote::create([
+            'quote_number' => 'QTE-2026-HILL-2',
+            'maintenance_request_id' => $request->id,
+            'status' => 'approved',
+            'awarded_vendor_quote_ids' => [99],
+            'total_amount' => 4500.00,
+        ]);
+        $request->update(['current_client_quote_id' => $newQuote->id, 'status' => MaintenanceStatus::IN_PROGRESS]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Cannot unlock financial responsibility after Work Orders have been issued.');
+        $billingService->archiveQuotationAndUnlock($request);
+    }
 }

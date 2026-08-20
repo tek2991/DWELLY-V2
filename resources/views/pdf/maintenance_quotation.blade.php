@@ -7,8 +7,11 @@
         @page {
             margin: 30px 35px;
         }
+        * {
+            font-family: 'DejaVu Sans', sans-serif;
+        }
         body {
-            font-family: 'DejaVu Sans', Arial, sans-serif;
+            font-family: 'DejaVu Sans', sans-serif;
             font-size: 11px;
             color: #1e293b;
             margin: 0;
@@ -252,7 +255,7 @@
                 <div class="info-row">
                     <span class="info-label">Paying Party:</span>
                     <span class="info-value" style="color: #2563eb; font-weight: bold;">
-                        {{ $ticket->payer_type?->getLabel() ?? ucfirst((string)$ticket->payer_type) }}
+                        {{ $ticket->payer_type?->getPlainLabel() ?? $ticket->payer_type?->getLabel() ?? ucfirst((string)$ticket->payer_type) }}
                     </span>
                 </div>
             </td>
@@ -287,27 +290,54 @@
     <table class="items-table">
         <thead>
             <tr>
-                <th style="width: 8%;">#</th>
-                <th style="width: 52%;">Scope / Item Description</th>
-                <th style="width: 10%; text-align: center;">Qty</th>
-                <th style="width: 15%;" class="text-right">Unit Price (&#8377;)</th>
-                <th style="width: 15%;" class="text-right">Total Price (&#8377;)</th>
+                <th style="width: 6%;">#</th>
+                <th style="width: 38%;">Scope / Item Description</th>
+                <th style="width: 8%; text-align: center;">Qty</th>
+                <th style="width: 15%;" class="text-right">Unit Rate (₹)</th>
+                <th style="width: 17%;" class="text-right">Tax Component</th>
+                <th style="width: 16%;" class="text-right">Line Total (₹)</th>
             </tr>
         </thead>
         <tbody>
+            @php
+                $gstRate = (float) ($quote->gst_percentage ?: 18.00);
+                $taxComps = $quote->getTaxComponentsBreakdown();
+            @endphp
             @forelse($quote->items as $index => $item)
+                @php
+                    $lineQty = (float) ($item->quantity ?: 1);
+                    $lineUnit = (float) ($item->unit_price ?: 0);
+                    $lineSubtotal = round($lineQty * $lineUnit, 2);
+                    $lineTax = round($lineSubtotal * ($gstRate / 100), 2);
+                    $lineTotal = round($lineSubtotal + $lineTax, 2);
+                @endphp
             <tr>
                 <td style="color: #64748b; font-weight: bold;">{{ $index + 1 }}</td>
                 <td>
                     <strong>{{ $item->description }}</strong>
+                    @if($item->defectItem)
+                        <div style="font-size: 8px; color: #64748b; margin-top: 2px;">Defect Item: {{ \Illuminate\Support\Str::limit($item->defectItem->issue_description, 45) }}</div>
+                    @endif
                 </td>
                 <td style="text-align: center;">{{ number_format($item->quantity, 0) }}</td>
-                <td class="text-right">&#8377; {{ number_format($item->unit_price, 2) }}</td>
-                <td class="text-right" style="font-weight: bold;">&#8377; {{ number_format($item->total_price, 2) }}</td>
+                <td class="text-right">₹ {{ number_format($item->unit_price, 2) }}</td>
+                <td class="text-right">
+                    <span style="color: #475569; font-weight: bold;">+ ₹ {{ number_format($lineTax, 2) }}</span>
+                    <div style="font-size: 8px; color: #64748b; margin-top: 1px;">
+                        @if(!empty($taxComps))
+                            @foreach($taxComps as $c)
+                                {{ $c['name'] }} ({{ number_format($c['rate'], 0) }}%): ₹ {{ number_format(round($lineSubtotal * ($c['rate'] / 100), 2), 2) }}@if(!$loop->last)<br>@endif
+                            @endforeach
+                        @else
+                            GST ({{ number_format($gstRate, 0) }}%)
+                        @endif
+                    </div>
+                </td>
+                <td class="text-right" style="font-weight: bold; color: #1e3a8a;">₹ {{ number_format($lineTotal, 2) }}</td>
             </tr>
             @empty
             <tr>
-                <td colspan="5" style="text-align: center; color: #94a3b8; padding: 15px;">
+                <td colspan="6" style="text-align: center; color: #94a3b8; padding: 15px;">
                     Comprehensive Repair &amp; Maintenance Scope
                 </td>
             </tr>
@@ -315,12 +345,44 @@
         </tbody>
     </table>
 
-    <!-- Grand Total Box -->
-    <div class="grand-total-box">
-        <div class="grand-total-label">Grand Total Payable</div>
-        <div class="grand-total-amount">&#8377; {{ number_format($quote->total_amount, 2) }}</div>
-        <div style="font-size: 9px; color: #64748b; margin-top: 3px;">
-            Financial Responsibility: <strong>{{ $ticket->payer_type?->getLabel() ?? ucfirst((string)$ticket->payer_type) }}</strong>
+    <!-- Grand Total Breakdown Box -->
+    @php
+        $calcSubtotal = (float) ($quote->subtotal_amount ?: $quote->items->sum('total_price'));
+        $calcTaxAmt = (float) ($quote->tax_amount ?: round($calcSubtotal * (($quote->gst_percentage ?: 18.00) / 100), 2));
+        $calcGrandTotal = (float) ($quote->total_amount ?: round($calcSubtotal + $calcTaxAmt, 2));
+        if ($calcGrandTotal <= $calcSubtotal && $calcTaxAmt > 0) {
+            $calcGrandTotal = round($calcSubtotal + $calcTaxAmt, 2);
+        }
+        $taxComponents = $quote->getTaxComponentsBreakdown();
+    @endphp
+    <div style="float: right; width: 300px; margin-bottom: 15px;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 6px;">
+            <tr>
+                <td style="padding: 4px 6px; color: #475569;">Quotation Subtotal (Excl. Tax):</td>
+                <td style="padding: 4px 6px; text-align: right; font-weight: bold;">₹ {{ number_format($calcSubtotal, 2) }}</td>
+            </tr>
+            @if($calcTaxAmt > 0)
+                @if(!empty($taxComponents))
+                    @foreach($taxComponents as $comp)
+                    <tr>
+                        <td style="padding: 3px 6px; color: #64748b;">{{ $comp['name'] }} ({{ number_format($comp['rate'], 1) }}%):</td>
+                        <td style="padding: 3px 6px; text-align: right; font-weight: bold; color: #64748b;">+ ₹ {{ number_format($comp['amount'], 2) }}</td>
+                    </tr>
+                    @endforeach
+                @else
+                    <tr>
+                        <td style="padding: 3px 6px; color: #64748b;">GST / Tax ({{ number_format($quote->gst_percentage ?: 18, 0) }}%):</td>
+                        <td style="padding: 3px 6px; text-align: right; font-weight: bold; color: #64748b;">+ ₹ {{ number_format($calcTaxAmt, 2) }}</td>
+                    </tr>
+                @endif
+            @endif
+        </table>
+        <div class="grand-total-box" style="float: none; width: auto; box-sizing: border-box; margin-bottom: 0;">
+            <div class="grand-total-label">Grand Total Payable (Incl. Tax)</div>
+            <div class="grand-total-amount">₹ {{ number_format($calcGrandTotal, 2) }}</div>
+            <div style="font-size: 9px; color: #64748b; margin-top: 3px;">
+                Financial Responsibility: <strong>{{ $ticket->payer_type?->getPlainLabel() ?? $ticket->payer_type?->getLabel() ?? ucfirst((string)$ticket->payer_type) }}</strong>
+            </div>
         </div>
     </div>
     <div class="clear"></div>

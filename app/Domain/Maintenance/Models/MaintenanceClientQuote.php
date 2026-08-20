@@ -22,6 +22,7 @@ class MaintenanceClientQuote extends DomainModel implements HasMedia
         'subtotal_amount',
         'margin_percentage',
         'margin_amount',
+        'tax_id',
         'gst_percentage',
         'tax_amount',
         'valid_until',
@@ -41,6 +42,7 @@ class MaintenanceClientQuote extends DomainModel implements HasMedia
 
     protected $casts = [
         'version' => 'integer',
+        'tax_id' => 'integer',
         'awarded_vendor_quote_ids' => 'array',
         'total_amount' => 'decimal:2',
         'subtotal_amount' => 'decimal:2',
@@ -120,6 +122,51 @@ class MaintenanceClientQuote extends DomainModel implements HasMedia
         return $this->hasMany(MaintenanceVendorQuote::class, 'maintenance_request_id', 'maintenance_request_id');
     }
 
+    public function tax(): BelongsTo
+    {
+        return $this->belongsTo(\Tek2991\Accounting\Models\Tax::class, 'tax_id');
+    }
+
+    /**
+     * Get itemized breakdown of tax components (e.g. CGST, SGST, IGST)
+     */
+    public function getTaxComponentsBreakdown(): array
+    {
+        $taxAmount = (float) ($this->tax_amount ?? 0);
+        $subtotal = (float) ($this->subtotal_amount ?: $this->items->sum('total_price'));
+        $gstPct = (float) ($this->gst_percentage ?: 18.00);
+
+        if ($this->tax && $this->tax->components && $this->tax->components->isNotEmpty()) {
+            $components = [];
+            $intrastate = $this->tax->components->filter(fn ($c) => $c->type === \Tek2991\Accounting\Enums\TaxComponentType::Intrastate || $c->type === 'intrastate');
+            $componentsToUse = $intrastate->isNotEmpty() ? $intrastate : $this->tax->components;
+
+            foreach ($componentsToUse as $comp) {
+                $rate = (float) $comp->rate;
+                $compAmount = round($subtotal * ($rate / 100), 2);
+                $components[] = [
+                    'name' => $comp->name,
+                    'rate' => $rate,
+                    'amount' => $compAmount,
+                ];
+            }
+            return $components;
+        }
+
+        // Standard Indian GST breakdown (CGST + SGST)
+        if ($gstPct > 0) {
+            $halfPct = round($gstPct / 2, 2);
+            $halfAmount = round($subtotal * ($halfPct / 100), 2);
+            $secondHalf = round($taxAmount - $halfAmount, 2);
+            return [
+                ['name' => 'CGST', 'rate' => $halfPct, 'amount' => $halfAmount],
+                ['name' => 'SGST', 'rate' => $halfPct, 'amount' => $secondHalf > 0 ? $secondHalf : $halfAmount],
+            ];
+        }
+
+        return [];
+    }
+
     public function isApproved(): bool
     {
         return $this->status === 'approved';
@@ -137,9 +184,91 @@ class MaintenanceClientQuote extends DomainModel implements HasMedia
 
     public function recalculateTotals(): self
     {
-        $total = $this->items()->sum('total_price');
+        $subtotal = 0.0;
+        $vendorTotal = 0.0;
+
+        foreach ($this->items as $item) {
+            $qty = (float) ($item->quantity ?? 1);
+            $clientRate = (float) ($item->unit_price ?? $item->unit_rate ?? 0);
+            $subtotal += (float) ($item->total_price ?? round($qty * $clientRate, 2));
+
+            $vCost = (float) ($item->vendor_cost ?? $item->vendorQuote?->quoted_cost ?? 0);
+            $vendorTotal += round($qty * $vCost, 2);
+        }
+
+        if ($vendorTotal <= 0) {
+            $vendorTotal = (float) $this->vendorQuotes()->sum('quoted_cost');
+        }
+
+        $marginPct = (float) ($this->margin_percentage ?: \App\Domain\Shared\Services\SettingService::get('financials.default_margin_percentage', 10.00));
+        $taxPct = (float) ($this->gst_percentage ?: \App\Domain\Shared\Services\SettingService::get('financials.default_gst_percentage', 18.00));
+
+        $marginAmount = ($vendorTotal > 0 && $subtotal >= $vendorTotal)
+            ? round($subtotal - $vendorTotal, 2)
+            : round($subtotal * ($marginPct / 100), 2);
+
+        $taxAmount = round($subtotal * ($taxPct / 100), 2);
+        $total = round($subtotal + $taxAmount, 2);
+
+        $this->subtotal_amount = $subtotal;
+        $this->margin_amount = $marginAmount;
+        $this->tax_amount = $taxAmount;
         $this->total_amount = $total;
+
+        $payer = $this->maintenanceRequest?->payer_type?->value ?? (string) $this->maintenanceRequest?->payer_type;
+        if ($payer === 'tenant' || $payer === 'dwelly_invoice_tenant') {
+            $this->tenant_amount = $total;
+            $this->owner_amount = 0.00;
+            $this->dwelly_amount = 0.00;
+        } elseif ($payer === 'owner' || $payer === 'dwelly_invoice_owner') {
+            $this->owner_amount = $total;
+            $this->tenant_amount = 0.00;
+            $this->dwelly_amount = 0.00;
+        } elseif ($payer === 'dwelly' || $payer === 'dwelly_absorbs') {
+            $this->dwelly_amount = $total;
+            $this->owner_amount = 0.00;
+            $this->tenant_amount = 0.00;
+        }
+
         $this->save();
         return $this;
+    }
+
+    /**
+     * Get IDs of contractor vendor quotes included in the client quotation line items
+     */
+    public function getIncludedVendorQuoteIds(): array
+    {
+        $ids = $this->items()
+            ->whereNotNull('vendor_quote_id')
+            ->pluck('vendor_quote_id')
+            ->map(fn ($id) => (string) $id)
+            ->unique()
+            ->values()
+            ->toArray();
+
+        if (! empty($ids)) {
+            return $ids;
+        }
+
+        // Fallback: match via defect items or if single vendor quote
+        $defectItemIds = $this->items()
+            ->whereNotNull('maintenance_request_item_id')
+            ->pluck('maintenance_request_item_id')
+            ->filter()
+            ->unique()
+            ->toArray();
+
+        if (! empty($defectItemIds)) {
+            $vendorQuotes = $this->vendorQuotes()->get();
+            foreach ($vendorQuotes as $vq) {
+                $vqDefectIds = (array) ($vq->maintenance_request_item_ids ?? []);
+                if (! empty(array_intersect($defectItemIds, $vqDefectIds))) {
+                    $ids[] = (string) $vq->id;
+                }
+            }
+        }
+
+        return array_values(array_unique($ids));
     }
 }

@@ -24,7 +24,7 @@ class EditMaintenanceRequest extends EditRecord
 
         $quoteBadge = '';
         if (!$this->record->is_direct_vendor) {
-            $quote = $this->record->currentClientQuote ?? $this->record->clientQuotes()->latest()->first();
+            $quote = $this->record->currentClientQuote ?? $this->record->clientQuotes()->where('status', '!=', 'archived')->latest()->first();
             if ($quote) {
                 if ($quote->status === 'approved') {
                     $quoteBadge = '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/60 dark:text-green-200">✅ Quotation Approved</span>';
@@ -56,15 +56,15 @@ class EditMaintenanceRequest extends EditRecord
                 ->label('Open Quotations & Settlement')
                 ->icon('heroicon-o-calculator')
                 ->color('indigo')
-                ->visible(fn () => !$this->record->is_direct_vendor && (bool) $this->record->currentClientQuote)
-                ->url(fn () => \App\Filament\Resources\Billing\MaintenanceQuotationResource::getUrl('edit', ['record' => $this->record->currentClientQuote]))
+                ->visible(fn () => !$this->record->is_direct_vendor && (bool) ($this->record->currentClientQuote ?? $this->record->clientQuotes()->where('status', '!=', 'archived')->first()))
+                ->url(fn () => \App\Filament\Resources\Billing\MaintenanceQuotationResource::getUrl('edit', ['record' => $this->record->currentClientQuote ?? $this->record->clientQuotes()->where('status', '!=', 'archived')->first()]))
                 ->openUrlInNewTab(),
 
             Action::make('createFinancialWorkflow')
                 ->label('Prepare Quotation & Settlement')
                 ->icon('heroicon-o-plus-circle')
                 ->color('primary')
-                ->visible(fn () => !$this->record->is_direct_vendor && !$this->record->currentClientQuote)
+                ->visible(fn () => !$this->record->is_direct_vendor && !($this->record->currentClientQuote ?? $this->record->clientQuotes()->where('status', '!=', 'archived')->first()))
                 ->disabled(fn () => blank($this->record->payer_type))
                 ->tooltip(fn () => blank($this->record->payer_type) ? 'Please select Who Pays? in the form first.' : 'Launch financial quotation job in Billing & Finance')
                 ->requiresConfirmation()
@@ -98,16 +98,16 @@ class EditMaintenanceRequest extends EditRecord
                 }),
 
             Action::make('startRepair')
-                ->label('Proceed with Repair')
+                ->label('Authorize & Start Repair')
                 ->icon('heroicon-o-play')
-                ->color('primary')
-                ->visible(fn () => !in_array($this->record->status, [
-                    MaintenanceStatus::IN_PROGRESS,
-                    MaintenanceStatus::WORK_COMPLETED,
-                    MaintenanceStatus::AUDIT_PENDING,
-                    MaintenanceStatus::CLOSED,
-                    MaintenanceStatus::CANCELLED,
-                ]))
+                ->color('success')
+                ->visible(function () {
+                    return in_array($this->record->status, [
+                        MaintenanceStatus::SUBMITTED,
+                        MaintenanceStatus::VENDOR_ASSIGNED,
+                        MaintenanceStatus::QUOTATION_APPROVED,
+                    ]);
+                })
                 ->disabled(function () {
                     if (blank($this->record->payer_type)) {
                         return true;
@@ -121,7 +121,7 @@ class EditMaintenanceRequest extends EditRecord
                     }
 
                     // Dwelly-coordinated route: disabled if quotation is not officially approved or work order is not issued
-                    $quote = $this->record->currentClientQuote ?? $this->record->clientQuotes()->latest()->first();
+                    $quote = $this->record->currentClientQuote ?? $this->record->clientQuotes()->where('status', '!=', 'archived')->latest()->first();
                     if (!$quote || $quote->status !== 'approved') {
                         return true;
                     }
@@ -138,7 +138,7 @@ class EditMaintenanceRequest extends EditRecord
                     }
 
                     if (!$this->record->is_direct_vendor) {
-                        $quote = $this->record->currentClientQuote ?? $this->record->clientQuotes()->latest()->first();
+                        $quote = $this->record->currentClientQuote ?? $this->record->clientQuotes()->where('status', '!=', 'archived')->latest()->first();
                         if (!$quote) {
                             return 'Quotation required: Prepare and approve quotation before proceeding with repair.';
                         }
@@ -163,7 +163,7 @@ class EditMaintenanceRequest extends EditRecord
                 ->modalSubmitActionLabel('Yes, Proceed with Repair')
                 ->action(function () {
                     if (!$this->record->is_direct_vendor) {
-                        $quote = $this->record->currentClientQuote ?? $this->record->clientQuotes()->latest()->first();
+                        $quote = $this->record->currentClientQuote ?? $this->record->clientQuotes()->where('status', '!=', 'archived')->latest()->first();
                         if (!$quote || $quote->status !== 'approved' || empty($quote->awarded_vendor_quote_ids)) {
                             Notification::make()
                                 ->title('Work Order Required')

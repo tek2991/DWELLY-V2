@@ -37,6 +37,16 @@ trait HasMaintenanceQuotationWorkflowHeader
         $record = $this->getRecord();
 
         return [
+            Action::make('viewQuotationPdf')
+                ->label('📄 View Quotation PDF')
+                ->icon('heroicon-o-document-text')
+                ->color('primary')
+                ->button()
+                ->size('sm')
+                ->visible(fn () => $record && ($record->hasMedia('generated_quote_pdf') || $record->hasMedia('quote_pdf')))
+                ->url(fn () => $record ? route('billing.quotation.pdf', ['quote' => $record->id]) : '#')
+                ->openUrlInNewTab(),
+
             Action::make('viewTicket')
                 ->label('View Operational Ticket')
                 ->icon('heroicon-o-arrow-top-right-on-square')
@@ -94,8 +104,21 @@ trait HasMaintenanceQuotationWorkflowHeader
             $data['gst_percentage'] = (float) \App\Domain\Shared\Services\SettingService::get('financials.default_gst_percentage', 18.00);
         }
 
+        if (blank($data['tax_id'] ?? null)) {
+            $data['tax_id'] = \Tek2991\Accounting\Models\Tax::where('name', 'like', '%18%')->value('id') ?? \Tek2991\Accounting\Models\Tax::first()?->id;
+        }
+
         if (blank($data['valid_until'] ?? null)) {
             $data['valid_until'] = now()->addDays((int) \App\Domain\Shared\Services\SettingService::get('financials.default_quotation_validity_days', 14))->format('Y-m-d');
+        }
+
+        if (empty($data['awarded_vendor_quote_ids'])) {
+            $record = $this->getRecord();
+            if ($record) {
+                $data['awarded_vendor_quote_ids'] = ! empty($record->awarded_vendor_quote_ids)
+                    ? (array) $record->awarded_vendor_quote_ids
+                    : (array) $record->getIncludedVendorQuoteIds();
+            }
         }
 
         return $data;
@@ -104,6 +127,10 @@ trait HasMaintenanceQuotationWorkflowHeader
     protected function mutateFormDataBeforeSave(array $data): array
     {
         $record = $this->getRecord();
+        if ($record && $record->status === 'archived') {
+            throw new \RuntimeException('Cannot save modifications to an archived quotation.');
+        }
+
         $request = $record?->maintenanceRequest;
 
         if ($request) {
@@ -128,15 +155,29 @@ trait HasMaintenanceQuotationWorkflowHeader
         return $data;
     }
 
+    protected function getFormActions(): array
+    {
+        $record = $this->getRecord();
+        if ($record && in_array($record->status, ['archived'])) {
+            return [];
+        }
+
+        return parent::getFormActions();
+    }
+
     protected function afterSave(): void
     {
         $record = $this->getRecord();
-        if ($record && $record->maintenanceRequest) {
-            $record->maintenanceRequest->update([
-                'current_client_quote_id' => $record->id,
-                'quotation_amount' => $record->total_amount,
-            ]);
-            $record->maintenanceRequest->syncQuotationTotals();
+        if ($record) {
+            $record->refresh();
+            $record->recalculateTotals();
+            if ($record->maintenanceRequest) {
+                $record->maintenanceRequest->update([
+                    'current_client_quote_id' => $record->id,
+                    'quotation_amount' => $record->total_amount,
+                ]);
+                $record->maintenanceRequest->syncQuotationTotals();
+            }
         }
     }
 
