@@ -54,18 +54,6 @@ class ViewMOU extends ViewRecord
             Actions\ActionGroup::make([
                 Actions\EditAction::make()
                     ->visible(fn ($record) => MOUResource::canEdit($record)),
-                
-                Actions\Action::make('resolveParty')
-                    ->label('Resolve Party')
-                    ->icon('heroicon-o-users')
-                    ->color('primary')
-                    ->visible(fn (?Mou $record) => $record && !$record->party_id && MOUResource::canEdit($record))
-                    ->form(MOUResource::getResolvePartyFormSchema())
-                    ->action(function (Mou $record, array $data) {
-                        app(\App\Domain\Mou\Services\MouService::class)->resolveParty($record, $data);
-                        $record->refresh();
-                        \Filament\Notifications\Notification::make()->title('Party Resolved')->success()->send();
-                    }),
 
                 MOUResource::getUpdatePartyAction(),
 

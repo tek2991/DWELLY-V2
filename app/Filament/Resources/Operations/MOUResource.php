@@ -59,6 +59,10 @@ class MOUResource extends Resource
             ->schema([
                 \Filament\Schemas\Components\Group::make()->schema([
                     \Filament\Schemas\Components\Section::make('MOU Summary')
+                        ->key('mou_summary')
+                        ->headerActions([
+                            static::getResolvePartyAction(),
+                        ])
                         ->schema([
                             Forms\Components\TextInput::make('number')
                                 ->disabled()
@@ -493,6 +497,9 @@ class MOUResource extends Resource
 
                 \Filament\Schemas\Components\Group::make()->schema([
                     \Filament\Schemas\Components\Section::make('Status & Documents')
+                        ->headerActions([
+                            static::getGeneratePdfAction(),
+                        ])
                         ->schema([
                             Forms\Components\Placeholder::make('status')
                                 ->content(fn (?Mou $record): string => $record?->status?->getLabel() ?? 'Draft'),
@@ -584,17 +591,7 @@ class MOUResource extends Resource
                             $record->refresh();
                             \Filament\Notifications\Notification::make()->title('Document Uploaded Successfully')->success()->send();
                         }),
-                    \Filament\Actions\Action::make('resolveParty')
-                        ->label('Resolve Party')
-                        ->icon('heroicon-o-users')
-                        ->color('primary')
-                        ->visible(fn (Mou $record) => !$record->party_id && static::canEdit($record))
-                        ->form(static::getResolvePartyFormSchema())
-                        ->action(function (Mou $record, array $data) {
-                            app(\App\Domain\Mou\Services\MouService::class)->resolveParty($record, $data);
-                            $record->refresh();
-                            \Filament\Notifications\Notification::make()->title('Party Resolved')->success()->send();
-                        }),
+                    static::getResolvePartyAction(),
                     static::getUpdatePartyAction(),
 
                     \Filament\Actions\Action::make('provisionAccounting')
@@ -623,32 +620,7 @@ class MOUResource extends Resource
                             \Filament\Notifications\Notification::make()->title('Accounting Provisioned')->success()->send();
                         }),
 
-                    \Filament\Actions\Action::make('generatePdf')
-                        ->label(fn (Mou $record) => $record->hasMedia('draft_pdf') ? 'Regenerate PDF' : 'Generate PDF')
-                        ->icon('heroicon-o-document-arrow-down')
-                        ->color('warning')
-                        ->visible(fn (Mou $record) => in_array($record->status, [
-                            MouStatus::DRAFT, 
-                            MouStatus::PARTY_PENDING, 
-                            MouStatus::READY_TO_GENERATE, 
-                            MouStatus::PDF_GENERATED, 
-                            MouStatus::DOWNLOADED,
-                            MouStatus::SIGNED_COPY_UPLOADED
-                        ]))
-                        ->requiresConfirmation(fn (Mou $record) => $record->hasMedia('draft_pdf'))
-                        ->modalHeading(fn (Mou $record) => $record->hasMedia('draft_pdf') ? 'Regenerate Draft PDF' : 'Generate Draft PDF')
-                        ->modalDescription(fn (Mou $record) => $record->hasMedia('signed_pdf') 
-                            ? 'Are you sure you want to regenerate the draft PDF? The currently uploaded signed PDF will be archived, and the MOU status will revert to "PDF Generated".' 
-                            : 'Are you sure you want to generate a new draft PDF? This will increment the document version.')
-                        ->action(function (Mou $record) {
-                            try {
-                                app(MouWorkflowService::class)->generatePdf($record);
-                                $record->refresh();
-                                \Filament\Notifications\Notification::make()->title('PDF Generated')->success()->send();
-                            } catch (\Exception $e) {
-                                \Filament\Notifications\Notification::make()->title('Cannot Generate PDF')->body($e->getMessage())->danger()->send();
-                            }
-                        }),
+                    static::getGeneratePdfAction(),
                         
                     \Filament\Actions\Action::make('uploadSignedCopy')
                         ->label('Upload Signed PDF')
@@ -748,6 +720,51 @@ class MOUResource extends Resource
             ->withoutGlobalScopes([
                 SoftDeletingScope::class,
             ]);
+    }
+
+    public static function getGeneratePdfAction(string $name = 'generatePdf'): \Filament\Actions\Action
+    {
+        return \Filament\Actions\Action::make($name)
+            ->label(fn (?Mou $record) => $record?->hasMedia('draft_pdf') ? 'Regenerate PDF' : 'Generate PDF')
+            ->icon('heroicon-o-document-arrow-down')
+            ->color('warning')
+            ->visible(fn (?Mou $record) => $record && in_array($record->status, [
+                MouStatus::DRAFT, 
+                MouStatus::PARTY_PENDING, 
+                MouStatus::READY_TO_GENERATE, 
+                MouStatus::PDF_GENERATED, 
+                MouStatus::DOWNLOADED,
+                MouStatus::SIGNED_COPY_UPLOADED
+            ]))
+            ->requiresConfirmation(fn (?Mou $record) => (bool) $record?->hasMedia('draft_pdf'))
+            ->modalHeading(fn (?Mou $record) => $record?->hasMedia('draft_pdf') ? 'Regenerate Draft PDF' : 'Generate Draft PDF')
+            ->modalDescription(fn (?Mou $record) => $record?->hasMedia('signed_pdf') 
+                ? 'Are you sure you want to regenerate the draft PDF? The currently uploaded signed PDF will be archived, and the MOU status will revert to "PDF Generated".' 
+                : 'Are you sure you want to generate a new draft PDF? This will increment the document version.')
+            ->action(function (Mou $record) {
+                try {
+                    app(MouWorkflowService::class)->generatePdf($record);
+                    $record->refresh();
+                    \Filament\Notifications\Notification::make()->title('PDF Generated')->success()->send();
+                } catch (\Exception $e) {
+                    \Filament\Notifications\Notification::make()->title('Cannot Generate PDF')->body($e->getMessage())->danger()->send();
+                }
+            });
+    }
+
+    public static function getResolvePartyAction(string $name = 'resolveParty'): \Filament\Actions\Action
+    {
+        return \Filament\Actions\Action::make($name)
+            ->label('Resolve Party')
+            ->icon('heroicon-o-users')
+            ->color('primary')
+            ->visible(fn (?Mou $record) => $record && !$record->party_id && static::canEdit($record))
+            ->form(static::getResolvePartyFormSchema())
+            ->action(function (Mou $record, array $data) {
+                app(\App\Domain\Mou\Services\MouService::class)->resolveParty($record, $data);
+                $record->refresh();
+                \Filament\Notifications\Notification::make()->title('Party Resolved')->success()->send();
+            });
     }
 
     public static function getUpdatePartyAction(string $name = 'updateParty'): \Filament\Actions\Action

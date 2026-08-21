@@ -234,7 +234,7 @@ class MOUResourceTest extends TestCase
             'record' => $mou->getKey(),
         ])
             ->assertActionVisible('updateParty')
-            ->assertActionHidden('resolveParty')
+            ->assertFormComponentActionDoesNotExist('mou_summary', 'resolveParty')
             ->callAction('updateParty', [
                 'action_type' => 'update_current',
                 'party_type' => 'individual',
@@ -468,7 +468,7 @@ class MOUResourceTest extends TestCase
         Livewire::test(MOUResource\Pages\ViewMOU::class, [
             'record' => $mou->getKey(),
         ])
-            ->callAction('resolveParty', [
+            ->callFormComponentAction('mou_summary', 'resolveParty', [
                 'action_type' => 'create_new',
                 'party_type' => 'individual',
                 'name' => '',
@@ -480,7 +480,7 @@ class MOUResourceTest extends TestCase
                 'address' => '',
                 'state_id' => null,
             ])
-            ->assertHasActionErrors([
+            ->assertHasFormComponentActionErrors([
                 'name' => 'required',
                 'parent_name' => 'required',
                 'aadhar_number' => 'required',
@@ -513,7 +513,7 @@ class MOUResourceTest extends TestCase
         Livewire::test(MOUResource\Pages\ViewMOU::class, [
             'record' => $mou->getKey(),
         ])
-            ->callAction('resolveParty', [
+            ->callFormComponentAction('mou_summary', 'resolveParty', [
                 'action_type' => 'create_new',
                 'party_type' => 'organization',
                 'legal_name' => '',
@@ -525,7 +525,7 @@ class MOUResourceTest extends TestCase
                 'address' => '',
                 'state_id' => null,
             ])
-            ->assertHasActionErrors([
+            ->assertHasFormComponentActionErrors([
                 'legal_name' => 'required',
                 'contact_person_name' => 'required',
                 'contact_person_phone' => 'required',
