@@ -73,7 +73,10 @@ class OperationsPanelProvider extends PanelProvider
             )
             ->renderHook(
                 \Filament\View\PanelsRenderHook::BODY_END,
-                fn (): string => \Illuminate\Support\Facades\Blade::render('@vite([\'resources/js/annotation-editor.js\'])')
+                fn (): string => \Illuminate\Support\Facades\Blade::render('
+                    @vite([\'resources/js/annotation-editor.js\'])
+                    <script src="' . asset('js/fslightbox.js') . '"></script>
+                ')
             );
     }
 }

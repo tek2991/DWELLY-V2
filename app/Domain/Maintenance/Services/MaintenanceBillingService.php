@@ -437,12 +437,15 @@ class MaintenanceBillingService
     {
         $quote = $request->currentClientQuote ?? $request->clientQuotes()->where('status', '!=', 'archived')->latest()->first();
 
+        $isApproved = ($quote && $quote->status === 'approved')
+            || $request->isQuotationApproved();
+
         $hasWorkOrders = ($quote && ! empty($quote->awarded_vendor_quote_ids))
             || $request->vendorQuotes()->where('is_awarded', true)->exists()
             || in_array($request->status, [MaintenanceStatus::IN_PROGRESS, MaintenanceStatus::WORK_COMPLETED, MaintenanceStatus::RESOLVED, MaintenanceStatus::CLOSED]);
 
-        if ($hasWorkOrders) {
-            throw new \RuntimeException('Cannot unlock financial responsibility after Work Orders have been issued.');
+        if ($isApproved || $hasWorkOrders) {
+            throw new \RuntimeException('Cannot unlock financial responsibility after Quotation has been approved or Work Orders have been issued.');
         }
 
         DB::transaction(function () use ($request, $quote) {

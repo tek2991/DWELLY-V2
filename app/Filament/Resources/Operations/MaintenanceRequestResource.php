@@ -39,6 +39,7 @@ class MaintenanceRequestResource extends Resource
         return [
             \App\Filament\Resources\Operations\MaintenanceRequestResource\RelationManagers\ItemsRelationManager::class,
             \App\Filament\Resources\Operations\MaintenanceRequestResource\RelationManagers\RepairExecutionRelationManager::class,
+            \App\Filament\Resources\Operations\MaintenanceRequestResource\RelationManagers\VerificationAuditRelationManager::class,
         ];
     }
 

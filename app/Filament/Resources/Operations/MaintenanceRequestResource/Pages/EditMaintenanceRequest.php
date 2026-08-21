@@ -40,11 +40,17 @@ class EditMaintenanceRequest extends EditRecord
             $quoteBadge = '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">🛠 Direct Repair Route</span>';
         }
 
+        $lockedBadge = '';
+        if ($this->record->isLocked()) {
+            $lockedBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200">🔒 Ticket Locked</span>';
+        }
+
         return new HtmlString(
             '<div class="flex items-center gap-2 text-sm text-gray-500 mt-1 flex-wrap">' .
             '<span>Status: <strong class="text-gray-900 dark:text-gray-100">' . $statusLabel . '</strong></span>' .
             '<span class="text-gray-300 dark:text-gray-700">&bull;</span>' .
             $quoteBadge .
+            ($lockedBadge ? '<span class="text-gray-300 dark:text-gray-700">&bull;</span>' . $lockedBadge : '') .
             '</div>'
         );
     }

@@ -32,6 +32,25 @@ class MaintenanceRequestForm
                     Grid::make(1)
                         ->columnSpan(2)
                         ->schema([
+                            Placeholder::make('maintenance_request_locked_banner')
+                                ->hiddenLabel()
+                                ->columnSpanFull()
+                                ->visible(fn ($record) => (bool) ($record && $record->isLocked()))
+                                ->content(function ($record) {
+                                    $quote = $record->currentClientQuote ?? $record->clientQuotes()->where('status', '!=', 'archived')->latest()->first();
+                                    $quoteNumber = $quote ? " #{$quote->quote_number}" : '';
+
+                                    return new HtmlString(
+                                        '<div style="background-color: rgba(30, 58, 138, 0.06); border: 1px solid rgba(37, 99, 235, 0.25); border-left: 4px solid #2563eb; padding: 14px 18px; border-radius: 8px; margin-bottom: 8px; font-size: 13px; color: #1e3a8a; display: flex; align-items: flex-start; gap: 12px;">' .
+                                        '<span style="font-size: 20px; line-height: 1;">🔒</span>' .
+                                        '<div>' .
+                                        '<strong style="font-size: 14px; display: block; margin-bottom: 2px;">Maintenance Request Locked</strong>' .
+                                        '<span>The Maintenance Quotation' . e($quoteNumber) . ' for this ticket has been approved. Target property, issue details, defect items, and financial responsibility are permanently locked to preserve contract and billing integrity. Track ongoing repairs in the Repair Execution tab.</span>' .
+                                        '</div>' .
+                                        '</div>'
+                                    );
+                                }),
+
                             // 📍 Section 1: Target Property & Context
                             Section::make('📍 Target Property & Context')
                                 ->schema([
@@ -43,6 +62,7 @@ class MaintenanceRequestForm
                                         ->searchable()
                                         ->required()
                                         ->live()
+                                        ->disabled(fn ($record) => (bool) ($record && $record->isLocked()))
                                         ->afterStateUpdated(function ($state, Get $get, Set $set) {
                                             if ($state) {
                                                 $property = Property::find($state);
@@ -58,7 +78,12 @@ class MaintenanceRequestForm
                                                 }
                                             }
                                         })
-                                        ->helperText('Select the property where maintenance is required.'),
+                                        ->helperText(function ($record) {
+                                            if ($record && $record->isLocked()) {
+                                                return '🔒 Locked: Target property cannot be changed because the quotation has been approved.';
+                                            }
+                                            return 'Select the property where maintenance is required.';
+                                        }),
 
                                     Placeholder::make('property_summary')
                                         ->label('')
@@ -102,12 +127,14 @@ class MaintenanceRequestForm
 
                             // 🛠 Section 2: Issue Details
                             Section::make('🛠 Issue Details')
+                                ->description(fn ($record) => (bool) ($record && $record->isLocked()) ? '🔒 Issue details are locked because the maintenance quotation has been approved.' : null)
                                 ->columns(2)
                                 ->schema([
                                     TextInput::make('title')
                                         ->label('Issue Title')
                                         ->placeholder('e.g. Kitchen Pipe Leakage / Master Bedroom AC Not Cooling')
                                         ->required()
+                                        ->disabled(fn ($record) => (bool) ($record && $record->isLocked()))
                                         ->columnSpanFull(),
 
                                     Select::make('priority')
@@ -119,7 +146,8 @@ class MaintenanceRequestForm
                                             'emergency' => '🔴 Emergency',
                                         ])
                                         ->default('medium')
-                                        ->required(),
+                                        ->required()
+                                        ->disabled(fn ($record) => (bool) ($record && $record->isLocked())),
 
                                     Select::make('reporter_type')
                                         ->label('Reported By')
@@ -148,13 +176,15 @@ class MaintenanceRequestForm
                                             return $options;
                                         })
                                         ->default('staff')
-                                        ->required(),
+                                        ->required()
+                                        ->disabled(fn ($record) => (bool) ($record && $record->isLocked())),
 
                                     Textarea::make('description')
                                         ->label('Detailed Description')
                                         ->placeholder('Describe the issue, specific damage symptoms, affected areas, or emergency instructions...')
                                         ->rows(5)
                                         ->required()
+                                        ->disabled(fn ($record) => (bool) ($record && $record->isLocked()))
                                         ->columnSpanFull(),
                                 ]),
 
@@ -186,6 +216,9 @@ class MaintenanceRequestForm
                                             if (! $record) {
                                                 return false;
                                             }
+                                            if ($record->isQuotationApproved()) {
+                                                return true;
+                                            }
                                             $quote = $record->currentClientQuote ?? $record->clientQuotes()->where('status', '!=', 'archived')->latest()->first();
                                             $hasWorkOrders = ($quote && ! empty($quote->awarded_vendor_quote_ids))
                                                 || $record->vendorQuotes()->where('is_awarded', true)->exists()
@@ -196,6 +229,9 @@ class MaintenanceRequestForm
                                         ->tooltip(function ($record) {
                                             if (! $record) {
                                                 return null;
+                                            }
+                                            if ($record->isQuotationApproved()) {
+                                                return 'Cannot unlock financial responsibility after quotation is approved.';
                                             }
                                             $quote = $record->currentClientQuote ?? $record->clientQuotes()->where('status', '!=', 'archived')->latest()->first();
                                             $hasWorkOrders = ($quote && ! empty($quote->awarded_vendor_quote_ids))
@@ -482,6 +518,12 @@ class MaintenanceRequestForm
                                     SpatieMediaLibraryFileUpload::make('direct_payment_receipts')
                                         ->collection('direct_payment_receipts')
                                         ->multiple()
+                                        ->panelLayout('grid')
+                                        ->imagePreviewHeight('140')
+                                        ->reorderable()
+                                        ->openable()
+                                        ->downloadable()
+                                        ->previewable()
                                         ->label('Direct Payment Receipts / Invoices')
                                         ->columnSpanFull(),
                                 ]),
@@ -499,7 +541,11 @@ class MaintenanceRequestForm
                                         ->content(function ($record) {
                                             $status = $record?->status ?? MaintenanceStatus::SUBMITTED;
                                             $label = e($status->getLabel());
-                                            return new HtmlString("<span class=\"inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-200\">{$label}</span>");
+                                            $lockedBadge = ($record && $record->isLocked())
+                                                ? ' <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200">🔒 Locked</span>'
+                                                : '';
+
+                                            return new HtmlString("<div class=\"flex items-center gap-1.5 flex-wrap\"><span class=\"inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-200\">{$label}</span>{$lockedBadge}</div>");
                                         }),
 
                                     Placeholder::make('quotation_status_badge')

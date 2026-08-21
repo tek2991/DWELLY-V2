@@ -14,11 +14,13 @@ use Filament\Actions\EditAction;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\SpatieMediaLibraryImageColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -37,50 +39,33 @@ class RepairExecutionRelationManager extends RelationManager
     {
         return $schema
             ->components([
-                Section::make('Defect Context')
-                    ->schema([
-                        Placeholder::make('item_summary')
-                            ->label('Target Area & Defect')
-                            ->content(function ($record) {
-                                if (!$record) return '';
-                                $name = 'General Area';
-                                if ($record->itemable instanceof PropertyRoom) {
-                                    $name = 'Room: ' . ($record->itemable->custom_name ?: ($record->itemable->roomDefinition?->name ?? "Room #{$record->itemable->id}"));
-                                } elseif ($record->itemable instanceof PropertyInventory) {
-                                    $name = 'Inventory: ' . ($record->itemable->inventoryType?->name ?? "Item #{$record->itemable->id}");
-                                } elseif ($record->itemable instanceof PropertyUtility) {
-                                    $name = 'Utility: ' . ($record->itemable->utilityType?->name ?? "Utility #{$record->itemable->id}");
-                                }
-                                $desc = e($record->issue_description);
-                                return new HtmlString("<strong>{$name}</strong><br><span style=\"color: gray;\">Reported Defect: {$desc}</span>");
-                            }),
-                    ]),
+                // 1. Previous Before-Repair Photos Thumbnails & Interactive Swipe Gallery Lightbox
+                View::make('filament.forms.components.defect-photos-lightbox')
+                    ->columnSpanFull(),
 
-                Section::make('Completed Repair Work & Proof')
-                    ->columns(2)
-                    ->schema([
-                        TextInput::make('repair_action')
-                            ->label('Action Taken / Resolution Notes')
-                            ->placeholder('e.g. Replaced leaking valve, renewed sealants, tested water flow')
-                            ->required()
-                            ->columnSpanFull(),
+                // 2. Action Taken / Resolution Notes
+                Textarea::make('repair_action')
+                    ->label('Action Taken / Resolution Notes')
+                    ->placeholder('Describe physical repair work, parts replaced, sealants applied, or testing performed...')
+                    ->rows(3)
+                    ->required()
+                    ->columnSpanFull(),
 
-                        TextInput::make('actual_cost')
-                            ->label('Actual Completed Cost (₹)')
-                            ->numeric()
-                            ->prefix('₹')
-                            ->default(0.00)
-                            ->required()
-                            ->columnSpanFull(),
-
-                        SpatieMediaLibraryFileUpload::make('repaired_photos')
-                            ->collection('repaired_photos')
-                            ->multiple()
-                            ->required()
-                            ->label('Repaired Photos / Videos (After Repair Proof)')
-                            ->helperText('Upload clear photos/videos proving the physical work has been completed.')
-                            ->columnSpanFull(),
-                    ]),
+                // 3. Upload Repaired Photos / Videos
+                SpatieMediaLibraryFileUpload::make('repaired_photos')
+                    ->collection('repaired_photos')
+                    ->multiple()
+                    ->panelLayout('grid')
+                    ->imagePreviewHeight('140')
+                    ->reorderable()
+                    ->required()
+                    ->label('Repaired Photos / Videos (After Repair Proof)')
+                    ->helperText('Upload clear photos/videos proving the physical work has been completed.')
+                    ->openable()
+                    ->downloadable()
+                    ->previewable()
+                    ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/quicktime'])
+                    ->columnSpanFull(),
             ]);
     }
 
@@ -89,7 +74,7 @@ class RepairExecutionRelationManager extends RelationManager
         return $table
             ->recordTitleAttribute('issue_description')
             ->heading('On-Site Repair Execution Tracking')
-            ->description('Update repair details and upload after-repair proof for all items. All items must be updated to mark the work completed and trigger the verification audit.')
+            ->description('Update repair details and upload after-repair proof for all defect items.')
             ->columns([
                 TextColumn::make('item_name')
                     ->label('Target Item')
@@ -114,28 +99,48 @@ class RepairExecutionRelationManager extends RelationManager
                     ->label('Defect Description')
                     ->limit(40),
 
-                SpatieMediaLibraryImageColumn::make('issue_photos')
-                    ->collection('issue_photos')
-                    ->label('Before Photos')
-                    ->circular()
-                    ->stacked()
-                    ->limit(2),
+                TextColumn::make('photos_summary')
+                    ->label('Evidence Photos')
+                    ->html()
+                    ->state(function (MaintenanceRequestItem $record) {
+                        $beforeCount = $record->getMedia('issue_photos')->count();
+                        $afterCount = $record->getMedia('repaired_photos')->count();
+
+                        $beforeHtml = "<span style=\"display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600; background: rgba(37, 99, 235, 0.1); color: #2563eb;\">📸 {$beforeCount} Before</span>";
+
+                        $afterHtml = $afterCount > 0
+                            ? "<span style=\"display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600; background: rgba(5, 150, 105, 0.1); color: #059669;\">🛠 {$afterCount} After</span>"
+                            : "<span style=\"display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 500; background: rgba(128, 128, 128, 0.1); color: #94a3b8;\">⏳ Pending</span>";
+
+                        return "<div style=\"display: inline-flex; align-items: center; gap: 6px; cursor: pointer;\" title=\"Click to inspect before & after gallery\">{$beforeHtml}{$afterHtml}</div>";
+                    })
+                    ->action(
+                        Action::make('viewEvidenceModal')
+                            ->label('Inspect Evidence Photos')
+                            ->modalHeading(fn (MaintenanceRequestItem $record) => 'Evidence & Proof: ' . ($record->issue_description ?: 'Defect Item'))
+                            ->modalDescription(function (MaintenanceRequestItem $record) {
+                                $target = 'General Property Area';
+                                if ($record->itemable instanceof PropertyRoom) {
+                                    $target = '🚪 Room: ' . ($record->itemable->custom_name ?: ($record->itemable->roomDefinition?->name ?? "Room #{$record->itemable->id}"));
+                                } elseif ($record->itemable instanceof PropertyInventory) {
+                                    $target = '📦 Inventory: ' . ($record->itemable->inventoryType?->name ?? "Item #{$record->itemable->id}");
+                                } elseif ($record->itemable instanceof PropertyUtility) {
+                                    $target = '⚡ Utility: ' . ($record->itemable->utilityType?->name ?? "Utility #{$record->itemable->id}");
+                                }
+                                return "Target: {$target} &bull; Click any thumbnail to launch fullscreen swipe lightbox.";
+                            })
+                            ->modalWidth('4xl')
+                            ->modalSubmitAction(false)
+                            ->modalCancelActionLabel('Close')
+                            ->schema([
+                                View::make('filament.forms.components.defect-before-after-gallery'),
+                            ])
+                    ),
 
                 TextColumn::make('repair_action')
                     ->label('Resolution / Work Done')
                     ->placeholder('Pending Work Log')
                     ->limit(35),
-
-                TextColumn::make('actual_cost')
-                    ->label('Cost (₹)')
-                    ->money('INR'),
-
-                SpatieMediaLibraryImageColumn::make('repaired_photos')
-                    ->collection('repaired_photos')
-                    ->label('After Photos')
-                    ->circular()
-                    ->stacked()
-                    ->limit(3),
 
                 TextColumn::make('status')
                     ->label('Repair Status')
@@ -159,105 +164,29 @@ class RepairExecutionRelationManager extends RelationManager
                         };
                     }),
             ])
-            ->headerActions([
-                Action::make('markWorkCompletedAndTriggerAudit')
-                    ->label('Mark Work Completed & Trigger Audit')
-                    ->icon('heroicon-o-check-badge')
-                    ->color('success')
-                    ->button()
-                    ->size('sm')
-                    ->visible(function (RelationManager $livewire) {
-                        $ticket = $livewire->getOwnerRecord();
-                        if (!$ticket) return false;
-
-                        return empty($ticket->triggered_audit_id) && in_array($ticket->status, [
-                            MaintenanceStatus::IN_PROGRESS,
-                            MaintenanceStatus::SUBMITTED,
-                            MaintenanceStatus::VENDOR_ASSIGNED,
-                            MaintenanceStatus::QUOTED,
-                            MaintenanceStatus::QUOTATION_APPROVED,
-                        ]);
-                    })
-                    ->requiresConfirmation()
-                    ->modalHeading('Mark Repairs Completed & Initiate Verification Audit')
-                    ->modalDescription('Confirm that on-site technicians have finished all repairs and uploaded after-repair proof for all items. This will create a Post-Repair Verification Audit for quality inspection.')
-                    ->modalSubmitActionLabel('Confirm & Trigger Audit')
-                    ->action(function (RelationManager $livewire) {
-                        $ticket = $livewire->getOwnerRecord();
-                        $ticket->loadMissing('items');
-
-                        if ($ticket->items->isEmpty()) {
-                            Notification::make()
-                                ->title('No Items Found')
-                                ->body('There are no defect items recorded on this maintenance ticket.')
-                                ->warning()
-                                ->persistent()
-                                ->send();
-                            return;
-                        }
-
-                        // Validate that ALL items have repair work and repaired photos uploaded
-                        $incompleteItems = [];
-                        foreach ($ticket->items as $index => $item) {
-                            $itemNum = $index + 1;
-                            $hasPhotos = $item->hasMedia('repaired_photos');
-                            $hasAction = filled($item->repair_action);
-
-                            if (!$hasPhotos || !$hasAction) {
-                                $targetName = 'Item #' . $itemNum;
-                                if ($item->itemable instanceof PropertyRoom) {
-                                    $targetName = $item->itemable->custom_name ?: ($item->itemable->roomDefinition?->name ?? "Room #{$itemNum}");
-                                } elseif ($item->itemable instanceof PropertyInventory) {
-                                    $targetName = $item->itemable->inventoryType?->name ?? "Inventory #{$itemNum}";
-                                }
-                                $missing = [];
-                                if (!$hasAction) $missing[] = 'work resolution notes';
-                                if (!$hasPhotos) $missing[] = 'after-repair photos';
-                                $incompleteItems[] = "<strong>{$targetName}</strong> (missing " . implode(' & ', $missing) . ")";
-                            }
-                        }
-
-                        if (!empty($incompleteItems)) {
-                            $listHtml = implode('<br>&bull; ', $incompleteItems);
-                            Notification::make()
-                                ->title('Incomplete Repair Items')
-                                ->body(new HtmlString("All repair items must be updated with work details and after-repair photos before completing work:<br>&bull; {$listHtml}"))
-                                ->danger()
-                                ->persistent()
-                                ->send();
-                            return;
-                        }
-
-                        // Mark all items as completed
-                        foreach ($ticket->items as $item) {
-                            $item->update(['status' => 'completed']);
-                        }
-
-                        // Trigger Audit using the service
-                        $service = app(MaintenanceAuditTriggerService::class);
-                        $audit = $service->triggerAudit($ticket);
-
-                        Notification::make()
-                            ->title('Repair Work Completed')
-                            ->body("All items verified. Post-Repair Verification Audit #{$audit->audit_number} created successfully.")
-                            ->success()
-                            ->send();
-
-                        $livewire->dispatch('$refresh');
-                    }),
-            ])
+            ->headerActions([])
             ->recordActions([
                 EditAction::make('updateRepairWork')
                     ->label('Update Repair Work')
                     ->icon('heroicon-o-wrench')
                     ->color('primary')
-                    ->modalHeading('Update Completed Repair Details & Photos')
+                    ->modalHeading(fn (MaintenanceRequestItem $record) => 'Reported Defect: ' . ($record->issue_description ?: 'Defect Item'))
+                    ->modalDescription(function (MaintenanceRequestItem $record) {
+                        $target = 'General Property Area';
+                        if ($record->itemable instanceof PropertyRoom) {
+                            $target = '🚪 Room: ' . ($record->itemable->custom_name ?: ($record->itemable->roomDefinition?->name ?? "Room #{$record->itemable->id}"));
+                        } elseif ($record->itemable instanceof PropertyInventory) {
+                            $target = '📦 Inventory: ' . ($record->itemable->inventoryType?->name ?? "Item #{$record->itemable->id}");
+                        } elseif ($record->itemable instanceof PropertyUtility) {
+                            $target = '⚡ Utility: ' . ($record->itemable->utilityType?->name ?? "Utility #{$record->itemable->id}");
+                        }
+                        return "Target Location: {$target}";
+                    })
                     ->modalWidth('3xl')
                     ->after(function (MaintenanceRequestItem $record, RelationManager $livewire) {
                         if ($record->hasMedia('repaired_photos')) {
                             $record->update(['status' => 'completed']);
                         }
-                        $livewire->getOwnerRecord()->syncQuotationTotals();
                         $livewire->dispatch('$refresh');
                     }),
             ])

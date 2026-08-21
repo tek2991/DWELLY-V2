@@ -462,7 +462,7 @@ class MaintenanceRequestTest extends TestCase
         $this->assertFalse($formUnlocked->getComponent('payer_type')->isDisabled());
         $this->assertFalse($formUnlocked->getComponent('is_direct_vendor')->isDisabled());
 
-        // 5. If work orders are issued, unlocking throws exception
+        // 5. If quotation is approved, unlocking throws exception
         $newQuote = \App\Domain\Maintenance\Models\MaintenanceClientQuote::create([
             'quote_number' => 'QTE-2026-HILL-2',
             'maintenance_request_id' => $request->id,
@@ -473,7 +473,214 @@ class MaintenanceRequestTest extends TestCase
         $request->update(['current_client_quote_id' => $newQuote->id, 'status' => MaintenanceStatus::IN_PROGRESS]);
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Cannot unlock financial responsibility after Work Orders have been issued.');
+        $this->expectExceptionMessage('Cannot unlock financial responsibility after Quotation has been approved or Work Orders have been issued.');
         $billingService->archiveQuotationAndUnlock($request);
+    }
+
+    public function test_maintenance_request_is_locked_when_quotation_is_approved(): void
+    {
+        $property = Property::create([
+            'building_name' => 'Palm Grove 404',
+            'status' => 'active',
+        ]);
+
+        $request = MaintenanceRequest::create([
+            'property_id' => $property->id,
+            'title' => 'Master Bathroom Water Heater Replacement',
+            'description' => 'Geyser is short circuiting and leaking from the base.',
+            'priority' => MaintenancePriority::HIGH,
+            'reporter_type' => 'staff',
+            'payer_type' => PayerType::OWNER,
+            'is_direct_vendor' => false,
+            'status' => MaintenanceStatus::SUBMITTED,
+        ]);
+
+        $item = \App\Domain\Maintenance\Models\MaintenanceRequestItem::create([
+            'maintenance_request_id' => $request->id,
+            'issue_description' => 'Geyser base leakage and rust damage',
+            'repair_action' => 'Replace geyser unit',
+            'status' => 'pending',
+        ]);
+
+        $user = \App\Models\User::factory()->create();
+
+        // 1. Initial State: Request is NOT locked
+        $this->assertFalse($request->isQuotationApproved());
+        $this->assertFalse($request->isLocked());
+
+        $testInitial = \Livewire\Livewire::actingAs($user)
+            ->test(\App\Filament\Resources\Operations\MaintenanceRequestResource\Pages\EditMaintenanceRequest::class, [
+                'record' => $request->getRouteKey(),
+            ])
+            ->assertSuccessful()
+            ->assertDontSee('Maintenance Request Locked');
+
+        $initialForm = $testInitial->instance()->getSchema('form');
+        $this->assertFalse($initialForm->getComponent('property_id')->isDisabled());
+        $this->assertFalse($initialForm->getComponent('title')->isDisabled());
+        $this->assertFalse($initialForm->getComponent('priority')->isDisabled());
+        $this->assertFalse($initialForm->getComponent('reporter_type')->isDisabled());
+        $this->assertFalse($initialForm->getComponent('description')->isDisabled());
+
+        // 2. Create and Approve Client Quotation
+        $quote = \App\Domain\Maintenance\Models\MaintenanceClientQuote::create([
+            'quote_number' => 'QTE-2026-PALM-1',
+            'maintenance_request_id' => $request->id,
+            'status' => 'approved',
+            'total_amount' => 7500.00,
+            'approved_at' => now(),
+            'approval_notes' => 'Approved via Email by Owner Mr. David',
+        ]);
+
+        $request->update([
+            'current_client_quote_id' => $quote->id,
+            'quotation_status' => 'approved',
+            'quotation_approved_at' => now(),
+            'status' => MaintenanceStatus::QUOTATION_APPROVED,
+        ]);
+        $request->refresh();
+
+        // 3. Verify Model lock helpers
+        $this->assertTrue($request->isQuotationApproved());
+        $this->assertTrue($request->isLocked());
+
+        // 4. Verify Form inputs are disabled (locked)
+        $testLocked = \Livewire\Livewire::actingAs($user)
+            ->test(\App\Filament\Resources\Operations\MaintenanceRequestResource\Pages\EditMaintenanceRequest::class, [
+                'record' => $request->getRouteKey(),
+            ])
+            ->assertSuccessful()
+            ->assertSee('Maintenance Request Locked')
+            ->assertSee('Ticket Locked');
+
+        $lockedForm = $testLocked->instance()->getSchema('form');
+        $this->assertTrue($lockedForm->getComponent('property_id')->isDisabled());
+        $this->assertTrue($lockedForm->getComponent('title')->isDisabled());
+        $this->assertTrue($lockedForm->getComponent('priority')->isDisabled());
+        $this->assertTrue($lockedForm->getComponent('reporter_type')->isDisabled());
+        $this->assertTrue($lockedForm->getComponent('description')->isDisabled());
+        $this->assertTrue($lockedForm->getComponent('payer_type')->isDisabled());
+        $this->assertTrue($lockedForm->getComponent('is_direct_vendor')->isDisabled());
+
+        // 5. Verify Defect Items Relation Manager has create/edit hidden and view active
+        $testItems = \Livewire\Livewire::actingAs($user)
+            ->test(\App\Filament\Resources\Operations\MaintenanceRequestResource\RelationManagers\ItemsRelationManager::class, [
+                'ownerRecord' => $request,
+                'pageClass' => \App\Filament\Resources\Operations\MaintenanceRequestResource\Pages\EditMaintenanceRequest::class,
+            ])
+            ->assertSuccessful()
+            ->assertTableActionHidden('create')
+            ->assertTableActionHidden('edit', $item)
+            ->assertTableActionVisible('view', $item);
+
+        // 6. Attempting to unlock financial responsibility throws RuntimeException
+        $billingService = app(\App\Domain\Maintenance\Services\MaintenanceBillingService::class);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Cannot unlock financial responsibility after Quotation has been approved or Work Orders have been issued.');
+        $billingService->archiveQuotationAndUnlock($request);
+    }
+
+    public function test_maintenance_request_pdf_generation_service(): void
+    {
+        $property = Property::create([
+            'building_name' => 'Palm Grove 404',
+            'status' => 'active',
+        ]);
+
+        $user = \App\Models\User::factory()->create();
+
+        $request = MaintenanceRequest::create([
+            'property_id' => $property->id,
+            'title' => 'Electrical Panel Repair',
+            'description' => 'Circuit breaker tripping repeatedly in kitchen.',
+            'status' => MaintenanceStatus::IN_PROGRESS,
+            'payer_type' => PayerType::OWNER,
+            'owner_amount' => 3500.00,
+            'total_cost' => 3500.00,
+        ]);
+
+        $item = MaintenanceRequestItem::create([
+            'maintenance_request_id' => $request->id,
+            'issue_description' => 'Damaged 32A MCB switch',
+            'repair_action' => 'Replaced with new Schneider 32A MCB and tested load',
+            'status' => 'completed',
+        ]);
+
+        $pdfService = app(\App\Domain\Maintenance\Services\MaintenanceRequestPdfService::class);
+        $pdfInstance = $pdfService->buildPdfInstance($request);
+
+        $output = $pdfInstance->output();
+        $this->assertNotEmpty($output);
+        $this->assertStringStartsWith('%PDF-', $output);
+
+        // Test stream endpoint
+        $response = $this->actingAs($user)->get(route('operations.maintenance_requests.pdf', ['record' => $request]));
+        $response->assertSuccessful();
+        $this->assertEquals('application/pdf', $response->headers->get('Content-Type'));
+
+        // Test modal component view renders iframe and download button
+        $modalHtml = view('filament.forms.components.maintenance-report-modal', ['ticket' => $request])->render();
+        $this->assertStringContainsString('<iframe', $modalHtml);
+        $this->assertStringContainsString(route('operations.maintenance_requests.pdf.download', ['record' => $request]), $modalHtml);
+        $this->assertStringContainsString('Download PDF', $modalHtml);
+        $this->assertStringNotContainsString('Unable to load maintenance request preview', $modalHtml);
+    }
+
+    public function test_mark_work_completed_with_client_acceptance_proof(): void
+    {
+        $property = Property::create([
+            'building_name' => 'Palm Grove 404',
+            'status' => 'active',
+        ]);
+
+        $user = \App\Models\User::factory()->create();
+
+        $request = MaintenanceRequest::create([
+            'property_id' => $property->id,
+            'title' => 'Plumbing Leak Fix',
+            'status' => MaintenanceStatus::IN_PROGRESS,
+            'payer_type' => PayerType::OWNER,
+        ]);
+
+        $item = MaintenanceRequestItem::create([
+            'maintenance_request_id' => $request->id,
+            'issue_description' => 'Kitchen sink drain pipe leak',
+            'repair_action' => 'Replaced trap and PVC pipe with new seals',
+        ]);
+
+        // Attach dummy after-repair photo and acceptance proof so validation passes
+        $dummyImagePath = tempnam(sys_get_temp_dir(), 'test_img') . '.jpg';
+        imagejpeg(imagecreatetruecolor(10, 10), $dummyImagePath);
+        $item->addMedia($dummyImagePath)->toMediaCollection('repaired_photos');
+
+        $proofImagePath = tempnam(sys_get_temp_dir(), 'test_proof') . '.jpg';
+        imagejpeg(imagecreatetruecolor(10, 10), $proofImagePath);
+        $request->addMedia($proofImagePath)->toMediaCollection('client_acceptance_proofs');
+
+        $this->assertFalse($request->isWorkCompleted());
+        $this->assertTrue($request->hasClientAcceptance());
+
+        $testRelation = \Livewire\Livewire::actingAs($user)
+            ->test(\App\Filament\Resources\Operations\MaintenanceRequestResource\RelationManagers\VerificationAuditRelationManager::class, [
+                'ownerRecord' => $request,
+                'pageClass' => \App\Filament\Resources\Operations\MaintenanceRequestResource\Pages\EditMaintenanceRequest::class,
+            ])
+            ->assertSuccessful()
+            ->callTableAction('recordClientAcceptanceAndComplete', null, [
+                'client_accepted_by_name' => 'John Doe (Owner)',
+                'client_accepted_at' => now()->toDateTimeString(),
+                'client_acceptance_notes' => 'Inspected work in person and signed handover.',
+            ])
+            ->assertHasNoTableActionErrors();
+
+        $request->refresh();
+        $this->assertEquals(MaintenanceStatus::WORK_COMPLETED, $request->status);
+        $this->assertNotNull($request->completed_at);
+        $this->assertEquals('John Doe (Owner)', $request->client_accepted_by_name);
+        $this->assertNotNull($request->client_accepted_at);
+        $this->assertTrue($request->isWorkCompleted());
+        $this->assertTrue($request->hasClientAcceptance());
+        // Verify that on-site quality audit is NOT mandatory to complete work
+        $this->assertNull($request->triggered_audit_id);
     }
 }

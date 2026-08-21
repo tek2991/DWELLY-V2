@@ -30,6 +30,8 @@ class MaintenanceRequest extends DomainModel implements HasMedia
         $this->addMediaCollection('quotation_files');
         $this->addMediaCollection('quotation_approval_proofs');
         $this->addMediaCollection('direct_payment_receipts');
+        $this->addMediaCollection('client_acceptance_proofs');
+        $this->addMediaCollection('generated_maintenance_pdf')->singleFile();
     }
 
     protected $fillable = [
@@ -68,6 +70,9 @@ class MaintenanceRequest extends DomainModel implements HasMedia
         'triggered_audit_id',
         'assigned_at',
         'completed_at',
+        'client_accepted_at',
+        'client_accepted_by_name',
+        'client_acceptance_notes',
         'resolved_at',
         'created_by_id',
     ];
@@ -88,6 +93,8 @@ class MaintenanceRequest extends DomainModel implements HasMedia
         'tenant_amount' => 'decimal:2',
         'quotation_approved_at' => 'datetime',
         'assigned_at' => 'datetime',
+        'completed_at' => 'datetime',
+        'client_accepted_at' => 'datetime',
         'completed_at' => 'datetime',
         'resolved_at' => 'datetime',
     ];
@@ -199,6 +206,63 @@ class MaintenanceRequest extends DomainModel implements HasMedia
         return !$this->is_direct_vendor;
     }
 
+    public function isQuotationApproved(): bool
+    {
+        if ($this->quotation_status === 'approved') {
+            return true;
+        }
+
+        if ($this->currentClientQuote && $this->currentClientQuote->status === 'approved') {
+            return true;
+        }
+
+        $statusVal = $this->status instanceof MaintenanceStatus ? $this->status->value : (string) $this->status;
+
+        return in_array($statusVal, [
+            MaintenanceStatus::QUOTATION_APPROVED->value,
+            MaintenanceStatus::IN_PROGRESS->value,
+            MaintenanceStatus::WORK_COMPLETED->value,
+            MaintenanceStatus::AUDIT_PENDING->value,
+            MaintenanceStatus::AUDIT_APPROVED->value,
+            MaintenanceStatus::INVOICED->value,
+            MaintenanceStatus::RESOLVED->value,
+            MaintenanceStatus::CLOSED->value,
+        ]);
+    }
+
+    public function isLocked(): bool
+    {
+        if ($this->isQuotationApproved()) {
+            return true;
+        }
+
+        $statusVal = $this->status instanceof MaintenanceStatus ? $this->status->value : (string) $this->status;
+
+        return in_array($statusVal, [
+            MaintenanceStatus::CLOSED->value,
+            MaintenanceStatus::CANCELLED->value,
+        ]);
+    }
+
+    public function hasClientAcceptance(): bool
+    {
+        return filled($this->client_accepted_at) || $this->hasMedia('client_acceptance_proofs');
+    }
+
+    public function isWorkCompleted(): bool
+    {
+        $statusVal = $this->status instanceof MaintenanceStatus ? $this->status->value : (string) $this->status;
+
+        return in_array($statusVal, [
+            MaintenanceStatus::WORK_COMPLETED->value,
+            MaintenanceStatus::AUDIT_PENDING->value,
+            MaintenanceStatus::AUDIT_APPROVED->value,
+            MaintenanceStatus::INVOICED->value,
+            MaintenanceStatus::RESOLVED->value,
+            MaintenanceStatus::CLOSED->value,
+        ]);
+    }
+
     public function syncQuotationTotals(): void
     {
         $totalVendor = (float) $this->vendorQuotes()->sum('quoted_cost');
@@ -238,6 +302,11 @@ class MaintenanceRequest extends DomainModel implements HasMedia
     public function triggeredAudit(): BelongsTo
     {
         return $this->belongsTo(Audit::class, 'triggered_audit_id');
+    }
+
+    public function verificationAudits(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Audit::class, 'id', 'triggered_audit_id');
     }
 
     public function createdBy(): BelongsTo

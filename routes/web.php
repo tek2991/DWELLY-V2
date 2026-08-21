@@ -34,4 +34,9 @@ Route::middleware(['auth'])->group(function () {
         ->name('operations.audits.pdf');
     Route::get('/operations/audits/{audit}/pdf/download', [AuditReportController::class, 'download'])
         ->name('operations.audits.pdf.download');
+
+    Route::get('/operations/maintenance-requests/{record}/pdf', [\App\Http\Controllers\MaintenancePdfController::class, 'stream'])
+        ->name('operations.maintenance_requests.pdf');
+    Route::get('/operations/maintenance-requests/{record}/pdf/download', [\App\Http\Controllers\MaintenancePdfController::class, 'download'])
+        ->name('operations.maintenance_requests.pdf.download');
 });
