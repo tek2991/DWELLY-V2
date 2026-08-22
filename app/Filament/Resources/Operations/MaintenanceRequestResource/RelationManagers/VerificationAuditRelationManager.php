@@ -79,6 +79,7 @@ class VerificationAuditRelationManager extends RelationManager
             ->headerActions([
                 $this->getViewPdfModalAction(),
                 $this->getMarkWorkCompletedAction(),
+                $this->getManageClientAcceptanceAction(),
                 $this->getTriggerOptionalAuditAction(),
             ])
             ->recordActions([
@@ -121,6 +122,7 @@ class VerificationAuditRelationManager extends RelationManager
             ->color('success')
             ->button()
             ->size('sm')
+            ->record(fn (RelationManager $livewire) => $livewire->getOwnerRecord())
             ->visible(function (RelationManager $livewire) {
                 $ticket = $livewire->getOwnerRecord();
                 if (!$ticket) return false;
@@ -214,7 +216,6 @@ class VerificationAuditRelationManager extends RelationManager
                     ->openable()
                     ->downloadable()
                     ->previewable()
-                    ->required(fn (RelationManager $livewire) => !$livewire->getOwnerRecord()?->hasMedia('client_acceptance_proofs'))
                     ->columnSpanFull(),
             ])
             ->action(function (array $data, RelationManager $livewire) {
@@ -271,6 +272,23 @@ class VerificationAuditRelationManager extends RelationManager
                     'status' => MaintenanceStatus::WORK_COMPLETED,
                 ]);
 
+                // Attach any uploaded media files
+                if (!empty($data['client_acceptance_proofs'])) {
+                    foreach ((array) $data['client_acceptance_proofs'] as $file) {
+                        if (is_string($file)) {
+                            if (\Illuminate\Support\Facades\Storage::disk('public')->exists($file)) {
+                                $ticket->addMediaFromDisk($file, 'public')->toMediaCollection('client_acceptance_proofs');
+                            } elseif (\Illuminate\Support\Facades\Storage::disk('local')->exists($file)) {
+                                $ticket->addMediaFromDisk($file, 'local')->toMediaCollection('client_acceptance_proofs');
+                            } elseif (\Illuminate\Support\Facades\Storage::disk('local')->exists('livewire-tmp/' . $file)) {
+                                $ticket->addMediaFromDisk('livewire-tmp/' . $file, 'local')->toMediaCollection('client_acceptance_proofs');
+                            } elseif (file_exists($file)) {
+                                $ticket->addMedia($file)->toMediaCollection('client_acceptance_proofs');
+                            }
+                        }
+                    }
+                }
+
                 // Mark all defect items as completed
                 foreach ($ticket->items as $item) {
                     $item->update(['status' => 'completed']);
@@ -279,6 +297,91 @@ class VerificationAuditRelationManager extends RelationManager
                 Notification::make()
                     ->title('Work Marked Completed')
                     ->body("Paying party acceptance confirmed for Ticket #{$ticket->ticket_number}. Work marked as completed.")
+                    ->success()
+                    ->send();
+
+                $livewire->dispatch('$refresh');
+            });
+    }
+
+    protected function getManageClientAcceptanceAction(): Action
+    {
+        return Action::make('manageClientAcceptance')
+            ->label('Manage Acceptance Proof')
+            ->icon('heroicon-o-paper-clip')
+            ->color('primary')
+            ->button()
+            ->size('sm')
+            ->record(fn (RelationManager $livewire) => $livewire->getOwnerRecord())
+            ->visible(fn (RelationManager $livewire) => (bool) ($livewire->getOwnerRecord()?->isWorkCompleted() || $livewire->getOwnerRecord()?->hasClientAcceptance()))
+            ->modalHeading('Paying Party Acceptance Proof & Remarks')
+            ->modalDescription('View, upload, or update client acceptance proof documents (signed sheets, WhatsApp confirmations, emails) and sign-off notes.')
+            ->modalSubmitActionLabel('Save Acceptance Proof')
+            ->modalWidth('2xl')
+            ->fillForm(function (RelationManager $livewire): array {
+                $ticket = $livewire->getOwnerRecord();
+                return [
+                    'client_accepted_by_name' => $ticket->client_accepted_by_name,
+                    'client_accepted_at' => $ticket->client_accepted_at ?: now(),
+                    'client_acceptance_notes' => $ticket->client_acceptance_notes,
+                ];
+            })
+            ->form([
+                TextInput::make('client_accepted_by_name')
+                    ->label('Paying Party / Client Name')
+                    ->placeholder('e.g. Rahul Sharma (Owner / Tenant)')
+                    ->required(),
+
+                DateTimePicker::make('client_accepted_at')
+                    ->label('Acceptance Date & Time')
+                    ->required(),
+
+                Textarea::make('client_acceptance_notes')
+                    ->label('Acceptance Remarks / Client Feedback')
+                    ->placeholder('e.g. Client inspected master bathroom seepage fix and confirmed satisfaction via WhatsApp.')
+                    ->rows(2),
+
+                SpatieMediaLibraryFileUpload::make('client_acceptance_proofs')
+                    ->collection('client_acceptance_proofs')
+                    ->label('Documentary Proof of Acceptance (Images / PDFs)')
+                    ->helperText('Upload clear photos or PDFs of the signed confirmation, WhatsApp screenshot, or email.')
+                    ->multiple()
+                    ->panelLayout('grid')
+                    ->imagePreviewHeight('140')
+                    ->reorderable()
+                    ->openable()
+                    ->downloadable()
+                    ->previewable()
+                    ->columnSpanFull(),
+            ])
+            ->action(function (array $data, RelationManager $livewire) {
+                $ticket = $livewire->getOwnerRecord();
+
+                $ticket->update([
+                    'client_accepted_by_name' => $data['client_accepted_by_name'] ?? $ticket->client_accepted_by_name,
+                    'client_accepted_at' => $data['client_accepted_at'] ?? ($ticket->client_accepted_at ?? now()),
+                    'client_acceptance_notes' => $data['client_acceptance_notes'] ?? $ticket->client_acceptance_notes,
+                ]);
+
+                if (!empty($data['client_acceptance_proofs'])) {
+                    foreach ((array) $data['client_acceptance_proofs'] as $file) {
+                        if (is_string($file)) {
+                            if (\Illuminate\Support\Facades\Storage::disk('public')->exists($file)) {
+                                $ticket->addMediaFromDisk($file, 'public')->toMediaCollection('client_acceptance_proofs');
+                            } elseif (\Illuminate\Support\Facades\Storage::disk('local')->exists($file)) {
+                                $ticket->addMediaFromDisk($file, 'local')->toMediaCollection('client_acceptance_proofs');
+                            } elseif (\Illuminate\Support\Facades\Storage::disk('local')->exists('livewire-tmp/' . $file)) {
+                                $ticket->addMediaFromDisk('livewire-tmp/' . $file, 'local')->toMediaCollection('client_acceptance_proofs');
+                            } elseif (file_exists($file)) {
+                                $ticket->addMedia($file)->toMediaCollection('client_acceptance_proofs');
+                            }
+                        }
+                    }
+                }
+
+                Notification::make()
+                    ->title('Acceptance Proof Updated')
+                    ->body("Client acceptance proof documents and notes for Ticket #{$ticket->ticket_number} have been saved successfully.")
                     ->success()
                     ->send();
 
