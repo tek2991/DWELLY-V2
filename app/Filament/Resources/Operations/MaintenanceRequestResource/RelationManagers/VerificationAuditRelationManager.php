@@ -6,6 +6,7 @@ use App\Domain\Audit\Enums\AuditStatus;
 use App\Domain\Audit\Enums\AuditType;
 use App\Domain\Audit\Models\Audit;
 use App\Domain\Maintenance\Enums\MaintenanceStatus;
+use App\Domain\Maintenance\Enums\PayerType;
 use App\Domain\Maintenance\Models\MaintenanceRequest;
 use App\Domain\Maintenance\Services\MaintenanceAuditTriggerService;
 use App\Domain\Property\Models\PropertyInventory;
@@ -101,11 +102,6 @@ class VerificationAuditRelationManager extends RelationManager
             ->emptyStateHeading('No Quality Verification Audit Initiated')
             ->emptyStateDescription('On-site quality audits are optional. Upload paying party acceptance proof to mark work completed directly, or trigger a quality audit if inspection is required.')
             ->emptyStateIcon('heroicon-o-clipboard-document-check')
-            ->emptyStateActions([
-                $this->getViewPdfModalAction(),
-                $this->getMarkWorkCompletedAction(),
-                $this->getTriggerOptionalAuditAction(),
-            ])
             ->toolbarActions([
                 BulkActionGroup::make([]),
             ]);
@@ -158,11 +154,17 @@ class VerificationAuditRelationManager extends RelationManager
             ->modalWidth('2xl')
             ->fillForm(function (RelationManager $livewire): array {
                 $ticket = $livewire->getOwnerRecord();
+                $ticket->loadMissing(['owner', 'tenant']);
+
                 $defaultName = '';
-                if ($ticket->payer_type?->value === 'owner' && $ticket->owner) {
-                    $defaultName = $ticket->owner->name;
-                } elseif ($ticket->payer_type?->value === 'tenant' && $ticket->tenant) {
-                    $defaultName = $ticket->tenant->name;
+                $payerType = $ticket->payer_type instanceof PayerType ? $ticket->payer_type->value : (string) $ticket->payer_type;
+
+                if ($payerType === 'owner') {
+                    $defaultName = $ticket->owner?->display_name ?: ($ticket->owner?->name ?: 'Property Owner');
+                } elseif ($payerType === 'tenant') {
+                    $defaultName = $ticket->tenant?->display_name ?: ($ticket->tenant?->name ?: 'Tenant');
+                } elseif ($payerType === 'dwelly') {
+                    $defaultName = 'Dwelly Operations';
                 }
 
                 return [
@@ -182,6 +184,23 @@ class VerificationAuditRelationManager extends RelationManager
 
                 TextInput::make('client_accepted_by_name')
                     ->label('Paying Party / Client Name')
+                    ->default(function (RelationManager $livewire): string {
+                        $ticket = $livewire->getOwnerRecord();
+                        if (!$ticket) return '';
+                        $ticket->loadMissing(['owner', 'tenant']);
+                        if (filled($ticket->client_accepted_by_name)) {
+                            return $ticket->client_accepted_by_name;
+                        }
+                        $payerType = $ticket->payer_type instanceof PayerType ? $ticket->payer_type->value : (string) $ticket->payer_type;
+                        if ($payerType === 'owner') {
+                            return $ticket->owner?->display_name ?: ($ticket->owner?->name ?: 'Property Owner');
+                        } elseif ($payerType === 'tenant') {
+                            return $ticket->tenant?->display_name ?: ($ticket->tenant?->name ?: 'Tenant');
+                        } elseif ($payerType === 'dwelly') {
+                            return 'Dwelly Operations';
+                        }
+                        return '';
+                    })
                     ->placeholder('e.g. Rahul Sharma (Owner / Tenant)')
                     ->required(),
 

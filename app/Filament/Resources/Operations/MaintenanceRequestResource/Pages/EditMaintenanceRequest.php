@@ -211,23 +211,23 @@ class EditMaintenanceRequest extends EditRecord
                 ->visible(fn () => !in_array($this->record->status, [MaintenanceStatus::CLOSED, MaintenanceStatus::CANCELLED]))
                 ->requiresConfirmation()
                 ->modalHeading('Close Maintenance Ticket')
-                ->modalDescription('Confirm that on-site repairs are verified, the post-repair audit is approved, and the ticket is ready to be closed. Closing the ticket will permanently lock the verification audit.')
+                ->modalDescription('Confirm that on-site repairs are verified, client acceptance is recorded, and the ticket is ready to be closed.')
                 ->action(function () {
                     $record = $this->getRecord();
                     $audit = $record->triggeredAudit;
 
-                    // Check audit approval
-                    if (!$audit || (!in_array($audit->status?->value ?? (string)$audit->status, ['approved', 'completed']) && !$audit->is_locked)) {
+                    // If an optional audit was initiated, ensure it is approved before closing
+                    if ($audit && (!in_array($audit->status?->value ?? (string)$audit->status, ['approved', 'completed']) && !$audit->is_locked)) {
                         Notification::make()
-                            ->title('Audit Verification Required')
-                            ->body('You cannot close this maintenance ticket until the post-repair verification audit has been inspected and approved.')
+                            ->title('Audit Verification Incomplete')
+                            ->body('The linked post-repair verification audit is currently in progress. Please approve or complete the audit before closing.')
                             ->warning()
                             ->persistent()
                             ->send();
                         return;
                     }
 
-                    // Permanently lock the audit
+                    // Permanently lock the audit if present
                     if ($audit && !$audit->is_locked) {
                         $audit->update([
                             'status' => \App\Domain\Audit\Enums\AuditStatus::APPROVED,
@@ -239,11 +239,15 @@ class EditMaintenanceRequest extends EditRecord
 
                     $record->update([
                         'status' => MaintenanceStatus::CLOSED,
+                        'resolved_at' => $record->resolved_at ?? now(),
+                        'completed_at' => $record->completed_at ?? now(),
                     ]);
 
+                    $auditMsg = $audit ? " and Verification Audit #{$audit->audit_number} is locked." : ".";
+
                     Notification::make()
-                        ->title('Ticket Closed & Audit Locked')
-                        ->body("Maintenance ticket #{$record->ticket_number} is closed and Verification Audit #{$audit?->audit_number} is permanently locked.")
+                        ->title('Ticket Closed')
+                        ->body("Maintenance ticket #{$record->ticket_number} has been closed successfully{$auditMsg}")
                         ->success()
                         ->send();
 

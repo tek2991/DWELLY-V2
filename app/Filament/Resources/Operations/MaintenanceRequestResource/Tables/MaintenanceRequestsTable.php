@@ -120,27 +120,13 @@ class MaintenanceRequestsTable
                     ->modalDescription('Are you sure you want to close this maintenance ticket?')
                     ->visible(fn ($record) => !in_array($record->status, [MaintenanceStatus::CLOSED, MaintenanceStatus::CANCELLED]))
                     ->action(function ($record) {
-                        $service = app(MaintenanceAuditTriggerService::class);
-                        $errors = $service->validateForAuditTrigger($record);
-
-                        if (!empty($errors)) {
-                            $bulletList = implode("<br>&bull; ", $errors);
-                            Notification::make()
-                                ->title('Cannot Close Maintenance Request')
-                                ->body(new HtmlString("Please complete all mandatory information before closing the ticket:<br>&bull; {$bulletList}"))
-                                ->danger()
-                                ->persistent()
-                                ->send();
-                            return;
-                        }
-
                         if ($record->triggered_audit_id && $record->triggeredAudit) {
                             $auditStatus = $record->triggeredAudit->status;
                             $statusVal = $auditStatus instanceof \App\Domain\Audit\Enums\AuditStatus ? $auditStatus->value : (string) $auditStatus;
-                            if (!in_array($statusVal, ['approved', 'completed'])) {
+                            if (!in_array($statusVal, ['approved', 'completed']) && !$record->triggeredAudit->is_locked) {
                                 Notification::make()
                                     ->title('Cannot Close Maintenance Request')
-                                    ->body('The linked post-repair verification audit is still pending approval. Please approve the audit first.')
+                                    ->body('The linked post-repair verification audit is currently in progress. Please approve or complete the audit first.')
                                     ->warning()
                                     ->persistent()
                                     ->send();
@@ -150,11 +136,11 @@ class MaintenanceRequestsTable
 
                         $record->update([
                             'status' => MaintenanceStatus::CLOSED,
-                            'resolved_at' => now(),
+                            'resolved_at' => $record->resolved_at ?? now(),
                             'completed_at' => $record->completed_at ?? now(),
                         ]);
 
-                        if ($record->triggered_audit_id && $record->triggeredAudit) {
+                        if ($record->triggered_audit_id && $record->triggeredAudit && !$record->triggeredAudit->is_locked) {
                             app(\App\Domain\Audit\Services\AuditReviewService::class)->lockAudit($record->triggeredAudit, auth()->user());
                         }
 

@@ -682,5 +682,17 @@ class MaintenanceRequestTest extends TestCase
         $this->assertTrue($request->hasClientAcceptance());
         // Verify that on-site quality audit is NOT mandatory to complete work
         $this->assertNull($request->triggered_audit_id);
+
+        // Verify that ticket can be closed directly without requiring an audit
+        $testPage = \Livewire\Livewire::actingAs($user)
+            ->test(\App\Filament\Resources\Operations\MaintenanceRequestResource\Pages\EditMaintenanceRequest::class, [
+                'record' => $request->getRouteKey(),
+            ])
+            ->assertSuccessful()
+            ->callAction('closeTicket')
+            ->assertHasNoActionErrors();
+
+        $request->refresh();
+        $this->assertEquals(MaintenanceStatus::CLOSED, $request->status);
     }
 }
