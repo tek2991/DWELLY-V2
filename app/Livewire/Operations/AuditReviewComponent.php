@@ -102,8 +102,83 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
         $this->audit->refresh();
         $this->audit->unsetRelation('categories');
         $this->audit->unsetRelation('items');
-        $this->audit->load('categories.items.evidence', 'categories.items.reviews', 'categories.items.category', 'items.category', 'media');
+        $this->audit->load('categories.items.evidence', 'categories.items.reviews', 'categories.items.category', 'items.category', 'media', 'videoReviewedBy');
         $this->loadReferenceItems();
+    }
+
+    public function approveVideoAction(): Action
+    {
+        return Action::make('approveVideo')
+            ->label('Approve Video')
+            ->color('success')
+            ->icon('heroicon-o-check-circle')
+            ->button()
+            ->visible(fn () => $this->audit->canReview())
+            ->action(function () {
+                app(\App\Domain\Audit\Services\AuditReviewService::class)->approveVideo($this->audit, auth()->user());
+                $this->refreshAuditRelations();
+                \Filament\Notifications\Notification::make()
+                    ->title('Property layout video approved.')
+                    ->success()
+                    ->send();
+            });
+    }
+
+    public function rejectVideoAction(): Action
+    {
+        return Action::make('rejectVideo')
+            ->label('Reject Video')
+            ->color('danger')
+            ->icon('heroicon-o-x-circle')
+            ->button()
+            ->visible(fn () => $this->audit->canReview())
+            ->form([
+                Select::make('comment_type')
+                    ->label('Issue Type')
+                    ->options([
+                        'QUALITY' => 'Video Quality Issue',
+                        'INCOMPLETE' => 'Incomplete Walkthrough / Missing Areas',
+                        'AUDIO' => 'Audio / Narration Issue',
+                        'GENERAL' => 'General Issue',
+                        'OTHER' => 'Other',
+                    ])
+                    ->required(),
+                Textarea::make('reason')
+                    ->label('Reason for Rejection')
+                    ->placeholder('Specify why the layout video is being rejected...')
+                    ->required(),
+            ])
+            ->action(function (array $data) {
+                app(\App\Domain\Audit\Services\AuditReviewService::class)->rejectVideo(
+                    $this->audit,
+                    auth()->user(),
+                    $data['reason'],
+                    $data['comment_type']
+                );
+                $this->refreshAuditRelations();
+                \Filament\Notifications\Notification::make()
+                    ->title('Property layout video rejected.')
+                    ->danger()
+                    ->send();
+            });
+    }
+
+    public function resetVideoAction(): Action
+    {
+        return Action::make('resetVideo')
+            ->label('Reset Decision')
+            ->color('gray')
+            ->icon('heroicon-o-arrow-path')
+            ->button()
+            ->visible(fn () => $this->audit->canReview())
+            ->action(function () {
+                app(\App\Domain\Audit\Services\AuditReviewService::class)->resetVideo($this->audit, auth()->user());
+                $this->refreshAuditRelations();
+                \Filament\Notifications\Notification::make()
+                    ->title('Property layout video decision reset to pending.')
+                    ->info()
+                    ->send();
+            });
     }
 
     public function acceptAllAction(): Action
@@ -152,6 +227,52 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
                 $this->refreshAuditRelations();
                 \Filament\Notifications\Notification::make()
                     ->title('All items accepted successfully.')
+                    ->success()
+                    ->send();
+            });
+    }
+
+    public function approveAuditAction(): Action
+    {
+        $canApprove = $this->audit->canApprove();
+
+        $tooltip = null;
+        if (!$canApprove) {
+            $totalItems = $this->audit->items->count();
+            $approvedItems = $this->audit->items->where('status', \App\Domain\Audit\Enums\ItemStatus::APPROVED)->count();
+            $requiresVideo = $this->audit->audit_type !== \App\Domain\Audit\Enums\AuditType::MAINTENANCE;
+            $hasVideo = $this->audit->getFirstMedia('layout_video') !== null;
+            $videoApproved = $hasVideo ? ($this->audit->video_status === 'approved') : !$requiresVideo;
+
+            if ($totalItems === 0) {
+                $tooltip = 'No items in audit to approve.';
+            } elseif ($approvedItems < $totalItems && !$videoApproved) {
+                $tooltip = 'All items and property layout video must be approved before approving the audit.';
+            } elseif ($approvedItems < $totalItems) {
+                $unapproved = $totalItems - $approvedItems;
+                $tooltip = "{$unapproved} item(s) must be approved before approving the audit.";
+            } elseif (!$videoApproved) {
+                $tooltip = 'Property layout video must be approved before approving the audit.';
+            }
+        }
+
+        return Action::make('approveAudit')
+            ->label('Approve Audit')
+            ->color('success')
+            ->icon('heroicon-o-check-circle')
+            ->button()
+            ->disabled(!$canApprove)
+            ->tooltip($tooltip)
+            ->requiresConfirmation()
+            ->modalHeading('Approve & Finalize Audit')
+            ->modalDescription('Are you sure you want to approve this audit? This will finalize the audit report and sync approved staged items to the property.')
+            ->modalSubmitActionLabel('Yes, Approve Audit')
+            ->visible(fn () => $this->audit->canReview())
+            ->action(function () {
+                app(\App\Domain\Audit\Services\AuditReviewService::class)->approveAudit($this->audit, auth()->user());
+                $this->refreshAuditRelations();
+                \Filament\Notifications\Notification::make()
+                    ->title('Audit approved successfully.')
                     ->success()
                     ->send();
             });

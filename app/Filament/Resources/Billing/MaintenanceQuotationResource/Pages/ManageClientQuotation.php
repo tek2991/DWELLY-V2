@@ -26,4 +26,9 @@ class ManageClientQuotation extends EditRecord
     {
         return MaintenanceQuotationForm::configurePricingForm($schema);
     }
+
+    protected function getFormActions(): array
+    {
+        return [];
+    }
 }

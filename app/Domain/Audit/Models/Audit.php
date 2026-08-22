@@ -5,6 +5,7 @@ namespace App\Domain\Audit\Models;
 use App\Domain\Shared\Models\DomainModel;
 use App\Domain\Audit\Enums\AuditType;
 use App\Domain\Audit\Enums\AuditStatus;
+use App\Domain\Audit\Enums\ItemStatus;
 use App\Domain\Property\Models\Property;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -40,6 +41,11 @@ class Audit extends DomainModel implements HasMedia
         'approved_at',
         'approved_by_id',
         'notes',
+        'video_status',
+        'video_rejection_reason',
+        'video_rejection_type',
+        'video_reviewed_at',
+        'video_reviewed_by_id',
         'reviewer_id',
         'review_round',
         'submitted_at',
@@ -57,6 +63,7 @@ class Audit extends DomainModel implements HasMedia
         'approved_at' => 'datetime',
         'submitted_at' => 'datetime',
         'review_started_at' => 'datetime',
+        'video_reviewed_at' => 'datetime',
         'is_locked' => 'boolean',
         'locked_at' => 'datetime',
     ];
@@ -164,6 +171,26 @@ class Audit extends DomainModel implements HasMedia
         return $this->belongsTo(User::class, 'reviewer_id');
     }
 
+    public function videoReviewedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'video_reviewed_by_id');
+    }
+
+    public function isVideoApproved(): bool
+    {
+        return $this->video_status === 'approved';
+    }
+
+    public function isVideoRejected(): bool
+    {
+        return $this->video_status === 'rejected';
+    }
+
+    public function isVideoPending(): bool
+    {
+        return $this->getFirstMedia('layout_video') !== null && $this->video_status !== 'approved' && $this->video_status !== 'rejected';
+    }
+
     // Policy Methods
 
     public function isInspector(?User $user = null): bool
@@ -199,7 +226,25 @@ class Audit extends DomainModel implements HasMedia
 
     public function canApprove(): bool
     {
-        return !$this->is_locked && $this->status === AuditStatus::IN_REVIEW;
+        if ($this->is_locked || !in_array($this->status, [AuditStatus::PENDING_REVIEW, AuditStatus::IN_REVIEW, AuditStatus::PARTIALLY_APPROVED])) {
+            return false;
+        }
+
+        $items = $this->items;
+        if ($items->isEmpty() || $items->where('status', '!=', ItemStatus::APPROVED)->isNotEmpty()) {
+            return false;
+        }
+
+        $requiresVideo = $this->audit_type !== AuditType::MAINTENANCE;
+        $hasVideo = $this->getFirstMedia('layout_video') !== null;
+        if ($hasVideo && $this->video_status !== 'approved') {
+            return false;
+        }
+        if ($requiresVideo && !$hasVideo) {
+            return false;
+        }
+
+        return true;
     }
 
     public function canReopen(): bool

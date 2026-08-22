@@ -2,22 +2,70 @@
 
 namespace App\Filament\Resources\Operations\MOUResource\Pages;
 
-use App\Filament\Resources\Operations\MOUResource;
-use Filament\Actions;
-use Filament\Resources\Pages\ViewRecord;
-use Filament\Forms;
+use App\Domain\Mou\Enums\MouType;
 use App\Domain\Mou\Models\Mou;
-use App\Domain\Opportunity\Enums\MouStatus;
 use App\Domain\Mou\Services\MouWorkflowService;
+use App\Domain\Opportunity\Enums\MouStatus;
+use App\Domain\Property\Services\PropertyOnboardingService;
+use App\Filament\Resources\Operations\MOUResource;
+use App\Filament\Resources\Properties\PropertyResource;
+use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
+use Filament\Actions\EditAction;
+use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
+use Filament\Resources\Pages\ViewRecord;
+use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\HtmlString;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 class ViewMOU extends ViewRecord
 {
     protected static string $resource = MOUResource::class;
 
+    public function getSubheading(): ?Htmlable
+    {
+        /** @var Mou $record */
+        $record = $this->getRecord();
+        $status = $record->status ?? MouStatus::DRAFT;
+        $statusLabel = e($status->getLabel());
+
+        $typeBadge = $record->type
+            ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-200">' . e($record->type->getLabel()) . '</span>'
+            : '';
+
+        $partyBadge = $record->party
+            ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200">👤 ' . e($record->party->display_name) . '</span>'
+            : '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">⚠️ Unresolved Party</span>';
+
+        $rent = $record->legal_terms['rent_amount'] ?? $record->opportunity?->expected_rent;
+        $rentBadge = $rent > 0
+            ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200">💰 ₹' . number_format((float) $rent) . ' /mo</span>'
+            : '';
+
+        $propertyName = $record->property?->building_name ?? $record->property?->address_line_1 ?? 'Property';
+        $propertyBadge = $record->property
+            ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-teal-100 text-teal-800 dark:bg-teal-900/60 dark:text-teal-200">🏢 ' . e($propertyName) . '</span>'
+            : '';
+
+        return new HtmlString(
+            '<div class="flex items-center gap-2 text-sm text-gray-500 mt-1 flex-wrap">' .
+            '<span>Status: <strong class="text-gray-900 dark:text-gray-100">' . $statusLabel . '</strong></span>' .
+            ($typeBadge ? '<span class="text-gray-300 dark:text-gray-700">&bull;</span>' . $typeBadge : '') .
+            ($partyBadge ? '<span class="text-gray-300 dark:text-gray-700">&bull;</span>' . $partyBadge : '') .
+            ($rentBadge ? '<span class="text-gray-300 dark:text-gray-700">&bull;</span>' . $rentBadge : '') .
+            ($propertyBadge ? '<span class="text-gray-300 dark:text-gray-700">&bull;</span>' . $propertyBadge : '') .
+            '</div>'
+        );
+    }
+
     protected function getHeaderActions(): array
     {
         return [
-            Actions\Action::make('viewHistoryPdf')
+            Action::make('viewHistoryPdf')
                 ->extraAttributes(['style' => 'display: none !important;']) // Hide from header visually, but keep mountable
                 ->modalHeading(fn (?array $arguments = null) => $arguments['title'] ?? 'View Document')
                 ->modalWidth('7xl')
@@ -25,162 +73,57 @@ class ViewMOU extends ViewRecord
                 ->modalCancelActionLabel('Close')
                 ->modalContent(function (?array $arguments = null) {
                     $mediaId = $arguments['mediaId'] ?? null;
-                    if (!$mediaId) return null;
-                    
-                    $media = \Spatie\MediaLibrary\MediaCollections\Models\Media::find($mediaId);
-                    if (!$media) return null;
-                    
+                    if (! $mediaId) {
+                        return null;
+                    }
+
+                    $media = Media::find($mediaId);
+                    if (! $media) {
+                        return null;
+                    }
+
                     return view('components.pdf-viewer-raw', [
-                        'path' => $media->getPath()
+                        'path' => $media->getPath(),
                     ]);
                 })
                 ->action(function (?array $arguments = null, ?Mou $record = null) {
                     $mediaId = $arguments['mediaId'] ?? null;
-                    if (!$mediaId) return;
-                    
-                    $media = \Spatie\MediaLibrary\MediaCollections\Models\Media::find($mediaId);
-                    if (!$media) return;
-                    
+                    if (! $mediaId) {
+                        return;
+                    }
+
+                    $media = Media::find($mediaId);
+                    if (! $media) {
+                        return;
+                    }
+
                     if ($media->collection_name === 'draft_pdf' && $record->status === MouStatus::PDF_GENERATED) {
                         app(MouWorkflowService::class)->markAsDownloaded($record);
                         $record->refresh();
                     }
-                    
+
                     // Use a clean filename for the download
                     $filename = $record->number . '-' . $media->file_name;
+
                     return response()->download($media->getPath(), $filename);
                 }),
-                
-            Actions\ActionGroup::make([
-                Actions\EditAction::make()
-                    ->visible(fn ($record) => MOUResource::canEdit($record)),
 
+            MOUResource::getVerifyAction(),
+            MOUResource::getConvertToPropertyAction(),
+
+            EditAction::make()
+                ->visible(fn ($record) => MOUResource::canEdit($record)),
+
+            ActionGroup::make([
+                MOUResource::getResolvePartyAction(),
                 MOUResource::getUpdatePartyAction(),
-
-                Actions\Action::make('provisionAccounting')
-                    ->label('Provision Accounting')
-                    ->icon('heroicon-o-banknotes')
-                    ->color('primary')
-                    ->visible(fn (?Mou $record) => $record && $record->party_id && empty($record->bank_details) && $record->status === MouStatus::DRAFT)
-                    ->form([
-                        Forms\Components\TextInput::make('bank_name')->required(),
-                        Forms\Components\TextInput::make('account_holder_name')->required(),
-                        Forms\Components\TextInput::make('account_number')->required(),
-                        Forms\Components\TextInput::make('ifsc_code')->required(),
-                        Forms\Components\Textarea::make('branch_address')->label('Address of the Bank')->required()->columnSpanFull(),
-                    ])
-                    ->action(function (Mou $record, array $data) {
-                        app(\App\Domain\Mou\Services\MouService::class)->provisionAccounting($record, $data);
-                        $record->refresh();
-                        \Filament\Notifications\Notification::make()->title('Accounting Provisioned')->success()->send();
-                    }),
-
-                Actions\Action::make('generatePdf')
-                    ->label(fn (?Mou $record) => $record?->hasMedia('draft_pdf') ? 'Regenerate PDF' : 'Generate PDF')
-                    ->icon('heroicon-o-document-arrow-down')
-                    ->color('warning')
-                    ->visible(fn (?Mou $record) => $record && in_array($record->status, [
-                        MouStatus::DRAFT, 
-                        MouStatus::PARTY_PENDING, 
-                        MouStatus::READY_TO_GENERATE, 
-                        MouStatus::PDF_GENERATED, 
-                        MouStatus::DOWNLOADED,
-                        MouStatus::SIGNED_COPY_UPLOADED
-                    ]))
-                    ->requiresConfirmation(fn (?Mou $record) => (bool) $record?->hasMedia('draft_pdf'))
-                    ->modalHeading(fn (?Mou $record) => $record?->hasMedia('draft_pdf') ? 'Regenerate Draft PDF' : 'Generate Draft PDF')
-                    ->modalDescription(fn (?Mou $record) => $record?->hasMedia('signed_pdf') 
-                        ? 'Are you sure you want to regenerate the draft PDF? The currently uploaded signed PDF will be archived, and the MOU status will revert to "PDF Generated".' 
-                        : 'Are you sure you want to generate a new draft PDF? This will increment the document version.')
-                    ->action(function (Mou $record) {
-                        try {
-                            app(MouWorkflowService::class)->generatePdf($record);
-                            $record->refresh();
-                            \Filament\Notifications\Notification::make()->title('PDF Generated')->success()->send();
-                        } catch (\Exception $e) {
-                            \Filament\Notifications\Notification::make()->title('Cannot Generate PDF')->body($e->getMessage())->danger()->send();
-                        }
-                    }),
-                    
-                Actions\Action::make('uploadSignedCopy')
-                    ->label('Upload Signed PDF')
-                    ->icon('heroicon-o-document-arrow-up')
-                    ->color('info')
-                    ->visible(fn (?Mou $record) => $record && in_array($record->status, [MouStatus::PDF_GENERATED, MouStatus::DOWNLOADED, MouStatus::SIGNED_COPY_UPLOADED]))
-                    ->form([
-                        Forms\Components\FileUpload::make('signed_pdf')
-                            ->label('Signed PDF File')
-                            ->directory('temp-signed-pdfs')
-                            ->acceptedFileTypes(['application/pdf'])
-                            ->required(),
-                    ])
-                    ->action(function (Mou $record, array $data) {
-                        app(MouWorkflowService::class)->uploadSignedCopy($record, $data['signed_pdf']);
-                        $record->refresh();
-                        \Filament\Notifications\Notification::make()->title('Signed Copy Uploaded')->success()->send();
-                    }),
-                    
-                Actions\Action::make('verify')
-                    ->label('Verify Agreement')
-                    ->icon('heroicon-o-check-badge')
-                    ->color('success')
-                    ->visible(fn (?Mou $record) => $record?->status === MouStatus::SIGNED_COPY_UPLOADED)
-                    ->requiresConfirmation()
-                    ->action(function (Mou $record) {
-                        app(MouWorkflowService::class)->verify($record);
-                        $record->refresh();
-                        \Filament\Notifications\Notification::make()->title('Agreement Verified')->success()->send();
-                    }),
-                    
-                Actions\Action::make('convertToProperty')
-                    ->label('Convert to Property')
-                    ->icon('heroicon-o-building-office')
-                    ->color('success')
-                    ->visible(fn (?Mou $record) => $record?->status === MouStatus::VERIFIED && ($record?->type === \App\Domain\Mou\Enums\MouType::ONBOARDING || $record?->type === null))
-                    ->requiresConfirmation()
-                    ->action(function (?Mou $record = null) {
-                        $property = app(\App\Domain\Property\Services\PropertyOnboardingService::class)->createPropertyFromMou($record);
-                        app(MouWorkflowService::class)->convert($record);
-                        
-                        \Filament\Notifications\Notification::make()->title('Property Created')->success()->send();
-                        
-                        return redirect(\App\Filament\Resources\Properties\PropertyResource::getUrl('edit', ['record' => $property]));
-                    }),
-
-                Actions\Action::make('archive')
-                    ->label('Archive')
-                    ->icon('heroicon-o-archive-box')
-                    ->color('danger')
-                    ->visible(fn (?Mou $record) => $record && $record->verified_at === null && !in_array($record->status, [
-                        MouStatus::VERIFIED,
-                        MouStatus::CONVERTED,
-                        MouStatus::COMPLETED,
-                        MouStatus::CANCELLED
-                    ]))
-                    ->requiresConfirmation()
-                    ->modalHeading('Archive MOU')
-                    ->modalDescription('Are you sure you want to archive this MOU? The corresponding opportunity will also be marked as Closed Lost.')
-                    ->modalSubmitActionLabel('Archive')
-                    ->action(function (Mou $record) {
-                        try {
-                            app(MouWorkflowService::class)->archive($record);
-                            \Filament\Notifications\Notification::make()
-                                ->title('MOU Archived')
-                                ->body('The MOU has been archived and the opportunity marked as Closed Lost.')
-                                ->success()
-                                ->send();
-                            $this->redirect(MOUResource::getUrl('index'));
-                        } catch (\Exception $e) {
-                            \Filament\Notifications\Notification::make()
-                                ->title('Cannot Archive MOU')
-                                ->body($e->getMessage())
-                                ->danger()
-                                ->send();
-                        }
-                    }),
+                MOUResource::getProvisionAccountingAction(),
+                MOUResource::getGeneratePdfAction(),
+                MOUResource::getUploadSignedCopyAction(),
+                MOUResource::getArchiveAction(),
             ])
-            ->label('Actions')
-            ->icon('heroicon-m-ellipsis-vertical'),
+                ->label('Actions')
+                ->icon('heroicon-m-ellipsis-vertical'),
         ];
     }
 }

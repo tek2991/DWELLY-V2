@@ -2,11 +2,14 @@
 
 namespace App\Filament\Pages\Properties;
 
+use App\Domain\Property\Enums\OnboardingStatus;
 use App\Domain\Property\Models\Property;
 use App\Domain\Property\Services\PropertyOnboardingValidator;
 use App\Filament\Resources\Properties\PropertyResource;
+use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Pages\Page;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
@@ -20,6 +23,8 @@ class OnboardingQueue extends Page implements HasTable
     protected string $view = 'filament.pages.properties.onboarding-queue';
 
     protected static ?string $cluster = \App\Filament\Clusters\PropertiesCluster::class;
+
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentList;
 
     protected static ?string $navigationLabel = 'Onboarding Queue';
 
@@ -44,46 +49,72 @@ class OnboardingQueue extends Page implements HasTable
                         $query->where('status', 'Onboarding')
                             ->orWhereHas('onboardingProject', fn (Builder $q) => $q->where('status', '!=', 'Activated'));
                     })
-                    ->with(['localityRef', 'onboardingProject', 'owner'])
+                    ->with(['localityRef.city', 'onboardingProject', 'owner'])
                     ->latest('updated_at')
             )
             ->columns([
                 TextColumn::make('code')
-                    ->label('Property Code')
-                    ->sortable()
+                    ->label('Code')
                     ->searchable()
+                    ->sortable()
+                    ->weight('bold')
+                    ->copyable()
+                    ->copyMessage('Property code copied')
+                    ->tooltip('Click to copy Property Code')
                     ->placeholder('Unassigned'),
 
-                TextColumn::make('title')
+                TextColumn::make('building_name')
                     ->label('Property / Building')
-                    ->sortable()
                     ->searchable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->sortable()
+                    ->weight('semibold')
+                    ->description(function (Property $record): ?string {
+                        $locality = $record->localityRef?->name;
+                        $city = $record->localityRef?->city?->name ?? $record->city;
+                        if ($locality && $city) {
+                            return "📍 {$locality}, {$city}";
+                        }
+                        if ($locality) {
+                            return "📍 {$locality}";
+                        }
 
-                TextColumn::make('localityRef.name')
-                    ->label('Locality')
-                    ->placeholder('N/A')
-                    ->searchable(),
+                        return $record->address_line_1 ? "📍 {$record->address_line_1}" : null;
+                    }),
 
                 TextColumn::make('onboarding_progress')
                     ->label('Progress')
                     ->state(function (Property $record): string {
                         $validator = app(PropertyOnboardingValidator::class);
                         $data = $validator->validate($record);
+
                         return $data['progress'] . '%';
                     })
                     ->badge()
-                    ->color(fn (string $state): string => (int)$state === 100 ? 'success' : 'warning'),
+                    ->color(fn (string $state): string => (int) $state === 100 ? 'success' : ((int) $state >= 50 ? 'warning' : 'danger')),
 
                 TextColumn::make('onboardingProject.status')
                     ->label('Stage')
                     ->placeholder('Draft')
                     ->badge()
-                    ->color(fn (?string $state): string => match ($state) {
-                        'Pending Review' => 'warning',
-                        'Changes Requested' => 'danger',
-                        'Activated' => 'success',
-                        default => 'gray',
+                    ->formatStateUsing(function ($state) {
+                        $enum = OnboardingStatus::fromValue((string) $state);
+
+                        return $enum?->getLabel() ?? ucfirst((string) $state);
+                    })
+                    ->color(function ($state) {
+                        $enum = OnboardingStatus::fromValue((string) $state);
+
+                        return $enum?->getColor() ?? match ($state) {
+                            'Pending Review' => 'warning',
+                            'Changes Requested' => 'danger',
+                            'Activated' => 'success',
+                            default => 'gray',
+                        };
+                    })
+                    ->icon(function ($state) {
+                        $enum = OnboardingStatus::fromValue((string) $state);
+
+                        return $enum?->getIcon();
                     }),
 
                 TextColumn::make('owner.display_name')
@@ -108,7 +139,7 @@ class OnboardingQueue extends Page implements HasTable
                         }
 
                         $user = auth()->user();
-                        if (!$user) {
+                        if (! $user) {
                             return false;
                         }
 

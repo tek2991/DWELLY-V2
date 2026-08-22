@@ -192,12 +192,8 @@ class MaintenanceClientQuote extends DomainModel implements HasMedia
             $clientRate = (float) ($item->unit_price ?? $item->unit_rate ?? 0);
             $subtotal += (float) ($item->total_price ?? round($qty * $clientRate, 2));
 
-            $vCost = (float) ($item->vendor_cost ?? $item->vendorQuote?->quoted_cost ?? 0);
+            $vCost = (float) ($item->vendor_cost ?? 0);
             $vendorTotal += round($qty * $vCost, 2);
-        }
-
-        if ($vendorTotal <= 0) {
-            $vendorTotal = (float) $this->vendorQuotes()->sum('quoted_cost');
         }
 
         $marginPct = (float) ($this->margin_percentage ?: \App\Domain\Shared\Services\SettingService::get('financials.default_margin_percentage', 10.00));
@@ -228,6 +224,17 @@ class MaintenanceClientQuote extends DomainModel implements HasMedia
             $this->dwelly_amount = $total;
             $this->owner_amount = 0.00;
             $this->tenant_amount = 0.00;
+        } elseif ($payer === 'split' || $payer === 'dwelly_invoice_split') {
+            $currOwner = (float) ($this->owner_amount ?? 0);
+            $currTenant = (float) ($this->tenant_amount ?? 0);
+            if ($currOwner + $currTenant > 0 && abs(($currOwner + $currTenant) - $total) < 0.01) {
+                // Keep existing split amounts
+            } else {
+                $half = round($total / 2, 2);
+                $this->owner_amount = $half;
+                $this->tenant_amount = round($total - $half, 2);
+            }
+            $this->dwelly_amount = 0.00;
         }
 
         $this->save();

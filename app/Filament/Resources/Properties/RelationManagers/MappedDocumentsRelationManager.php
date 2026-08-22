@@ -46,21 +46,30 @@ class MappedDocumentsRelationManager extends Component implements HasActions, Ha
             ->query(function () {
                 $mouIds = $this->ownerRecord->mous()->pluck('id')->toArray();
                 
-                $query = Media::query();
-                
-                if (!empty($mouIds)) {
-                    $query->where('model_type', \App\Domain\Mou\Models\Mou::class)
-                          ->whereIn('model_id', $mouIds);
-                } else {
-                    $query->where('id', 0); // Empty query if no MOU
-                }
-                
-                return $query;
+                return Media::query()
+                    ->where(function ($query) use ($mouIds) {
+                        if (!empty($mouIds)) {
+                            $query->where(function ($sub) use ($mouIds) {
+                                $sub->where('model_type', \App\Domain\Mou\Models\Mou::class)
+                                    ->whereIn('model_id', $mouIds);
+                            });
+                        }
+                        $query->orWhere(function ($sub) {
+                            $sub->where('model_type', get_class($this->ownerRecord))
+                                ->where('model_id', $this->ownerRecord->id);
+                        });
+                    });
             })
             ->columns([
-                TextColumn::make('model.type')
-                    ->label('MOU Type')
-                    ->formatStateUsing(fn ($state) => $state instanceof \App\Domain\Mou\Enums\MouType ? $state->label() : str($state)->headline())
+                TextColumn::make('source')
+                    ->label('Source')
+                    ->getStateUsing(function (Media $record) {
+                        if ($record->model instanceof \App\Domain\Mou\Models\Mou) {
+                            $type = $record->model->type;
+                            return ($type instanceof \App\Domain\Mou\Enums\MouType ? $type->label() : str($type)->headline()) . ' (#' . $record->model->number . ')';
+                        }
+                        return 'Property Profile';
+                    })
                     ->badge(),
                 TextColumn::make('collection_name')
                     ->label('Document Type')

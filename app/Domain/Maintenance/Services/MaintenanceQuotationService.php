@@ -72,7 +72,9 @@ class MaintenanceQuotationService
                 MaintenanceClientQuoteItem::create([
                     'maintenance_client_quote_id' => $clientQuote->id,
                     'vendor_quote_id' => $item['vendor_quote_id'] ?? null,
-                    'maintenance_request_item_id' => $item['maintenance_request_item_id'] ?? null,
+                    'maintenance_request_item_id' => $item['maintenance_request_item_id'] ?? ($item['maintenance_request_item_ids'][0] ?? null),
+                    'maintenance_request_item_ids' => $item['maintenance_request_item_ids'] ?? (! empty($item['maintenance_request_item_id']) ? [$item['maintenance_request_item_id']] : null),
+                    'vendor_cost' => $item['vendor_cost'] ?? 0.00,
                     'description' => $item['description'] ?? 'Repair Service',
                     'quantity' => $qty,
                     'unit_price' => $unitPrice,

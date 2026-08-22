@@ -3,24 +3,28 @@
 namespace App\Filament\Resources\Operations;
 
 use App\Domain\Opportunity\Models\Opportunity;
-use App\Domain\Opportunity\Enums\OpportunityStatus;
+use App\Filament\Resources\Operations\MOUResource;
 use App\Filament\Resources\Operations\OpportunityResource\Pages;
-use Filament\Forms;
-use Filament\Schemas\Schema;
+use App\Filament\Resources\Operations\OpportunityResource\Schemas\OpportunityForm;
+use App\Filament\Resources\Operations\OpportunityResource\Tables\OpportunitiesTable;
+use App\Filament\Resources\Properties\PropertyResource;
+use BackedEnum;
+use Filament\Infolists\Components\IconEntry;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
-use Filament\Tables;
+use Filament\Schemas\Components\Group;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use App\Domain\Opportunity\Services\OpportunityWorkflowService;
-use App\Domain\Opportunity\Services\OpportunityReadinessService;
-use App\Domain\Mou\Models\Mou;
-use App\Filament\Resources\Operations\MOUResource;
+use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class OpportunityResource extends Resource
 {
     protected static ?string $model = Opportunity::class;
 
-    protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-briefcase';
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSparkles;
     
     protected static \UnitEnum|string|null $navigationGroup = 'Sales & CRM';
     
@@ -28,240 +32,21 @@ class OpportunityResource extends Resource
 
     public static function canEdit(?\Illuminate\Database\Eloquent\Model $record = null): bool
     {
-        if (!$record) return true;
+        if (! $record) {
+            return true;
+        }
 
-        return !$record->mou()->exists();
+        return ! $record->mou()->exists();
     }
 
     public static function form(Schema $schema): Schema
     {
-        return $schema
-            ->schema([
-                \Filament\Schemas\Components\Group::make()->schema([
-                    \Filament\Schemas\Components\Section::make('Basic Information')
-                        ->schema([
-                            Forms\Components\TextInput::make('title')
-                                ->required()
-                                ->maxLength(255),
-                            Forms\Components\Select::make('opportunity_source_id')
-                                ->relationship('opportunitySource', 'name')
-                                ->searchable()
-                                ->preload(),
-                            Forms\Components\TextInput::make('source_phone')
-                                ->label('Source Phone Number')
-                                ->tel()
-                                ->maxLength(255),
-                            Forms\Components\Select::make('assigned_user_id')
-                                ->relationship('assignedUser', 'name')
-                                ->searchable()
-                                ->preload()
-                                ->required()
-                                ->default(fn () => auth()->id()),
-                        ])->columns(2),
-
-                    \Filament\Schemas\Components\Section::make('Property Estimates')
-                        ->schema([
-                            Forms\Components\Select::make('estimated_property_type_id')
-                                ->relationship('estimatedPropertyType', 'name')
-                                ->searchable()
-                                ->preload()
-                                ->disabled(fn (?Opportunity $record) => $record && $record->status === OpportunityStatus::READY_FOR_MOU),
-                            Forms\Components\Select::make('estimated_bhk')
-                                ->options([
-                                    '1 RK' => '1 RK',
-                                    '1 BHK' => '1 BHK',
-                                    '2 BHK' => '2 BHK',
-                                    '3 BHK' => '3 BHK',
-                                    '4 BHK' => '4 BHK',
-                                    '5+ BHK' => '5+ BHK',
-                                    'Villa' => 'Villa',
-                                    'Independent House' => 'Independent House',
-                                ])
-                                ->searchable(),
-                            Forms\Components\TextInput::make('estimated_size')
-                                ->numeric(),
-                            Forms\Components\Toggle::make('estimated_is_furnished'),
-                        ])->columns(2),
-
-                    \Filament\Schemas\Components\Section::make('Commercials & Dates')
-                        ->schema([
-                            Forms\Components\TextInput::make('expected_rent')
-                                ->numeric()
-                                ->prefix('₹')
-                                ->disabled(fn (?Opportunity $record) => $record && $record->status === OpportunityStatus::READY_FOR_MOU),
-                            Forms\Components\Select::make('expected_financial_model_id')
-                                ->relationship('expectedFinancialModel', 'name')
-                                ->searchable()
-                                ->preload(),
-                            Forms\Components\DatePicker::make('expected_onboarding_date'),
-                        ])->columns(2),
-                        
-                    \Filament\Schemas\Components\Section::make('Internal Summary')
-                        ->schema([
-                            Forms\Components\Textarea::make('internal_summary')
-                                ->maxLength(65535)
-                                ->columnSpanFull(),
-                        ]),
-                ])->columnSpan(['lg' => 2]),
-
-                \Filament\Schemas\Components\Group::make()->schema([
-                    \Filament\Schemas\Components\Section::make('Owner Information')
-                        ->schema([
-                            Forms\Components\TextInput::make('owner_name')
-                                ->label('Owner Name')
-                                ->maxLength(255)
-                                ->required(),
-                            Forms\Components\TextInput::make('owner_phone')
-                                ->label('Owner Phone')
-                                ->tel()
-                                ->maxLength(255)
-                                ->required(),
-                            Forms\Components\TextInput::make('owner_email')
-                                ->label('Owner Email')
-                                ->email()
-                                ->maxLength(255),
-                            
-                            Forms\Components\Textarea::make('address')
-                                ->label('Address')
-                                ->columnSpanFull(),
-                        ]),
-                        
-                    \Filament\Schemas\Components\Section::make('Status')
-                        ->schema([
-                            Forms\Components\Placeholder::make('number')
-                                ->content(fn (?Opportunity $record): string => $record?->number ?? 'Auto-generated'),
-                            Forms\Components\Placeholder::make('status')
-                                ->content(fn (?Opportunity $record): string => $record?->status?->getLabel() ?? 'New'),
-                            Forms\Components\Placeholder::make('mou')
-                                ->label('Associated MOU')
-                                ->content(function (?Opportunity $record): ?\Illuminate\Support\HtmlString {
-                                    if ($record?->mou) {
-                                        return new \Illuminate\Support\HtmlString("<span class=\"font-medium text-gray-900 dark:text-white\">{$record->mou->number}</span>");
-                                    }
-                                    return null;
-                                })
-                                ->hintAction(
-                                    \Filament\Actions\Action::make('viewMou')
-                                        ->icon('heroicon-m-arrow-top-right-on-square')
-                                        ->tooltip('View MOU')
-                                        ->url(fn (?Opportunity $record) => $record?->mou ? \App\Filament\Resources\Operations\MOUResource::getUrl('view', ['record' => $record->mou]) : null)
-                                )
-                                ->visible(fn (?Opportunity $record) => $record?->mou !== null),
-                            Forms\Components\Placeholder::make('property')
-                                ->label('Associated Property')
-                                ->content(function (?Opportunity $record): ?\Illuminate\Support\HtmlString {
-                                    if ($record?->mou?->property) {
-                                        $url = \App\Filament\Resources\Properties\PropertyResource::getUrl('edit', ['record' => $record->mou->property]);
-                                        return new \Illuminate\Support\HtmlString("<a href=\"{$url}\" class=\"text-primary-600 underline\">{$record->mou->property->code}</a>");
-                                    }
-                                    return null;
-                                })
-                                ->visible(fn (?Opportunity $record) => $record?->mou?->property !== null),
-                        ])->hiddenOn('create'),
-                ])->columnSpan(['lg' => 1]),
-            ])
-            ->columns(3);
+        return OpportunityForm::configure($schema);
     }
 
     public static function table(Table $table): Table
     {
-        return $table
-            ->columns([
-                Tables\Columns\TextColumn::make('number')
-                    ->searchable()
-                    ->sortable(),
-                Tables\Columns\TextColumn::make('title')
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('status')
-                    ->badge(),
-                Tables\Columns\TextColumn::make('owner_name')
-                    ->label('Owner')
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('opportunitySource.name')
-                    ->label('Source')
-                    ->placeholder('-'),
-                Tables\Columns\TextColumn::make('source_phone')
-                    ->label('Source Phone')
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('assignedUser.name')
-                    ->label('Assigned To'),
-                Tables\Columns\TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-            ])
-            ->recordUrl(
-                fn (Opportunity $record): string => static::getUrl('view', ['record' => $record]),
-            )
-            ->filters([
-                Tables\Filters\TrashedFilter::make(),
-                Tables\Filters\SelectFilter::make('status')
-                    ->options(OpportunityStatus::class),
-            ])
-            ->actions([
-                \Filament\Actions\ViewAction::make(),
-                \Filament\Actions\EditAction::make()
-                    ->visible(fn ($record) => static::canEdit($record)),
-                // Workflow Actions
-                \Filament\Actions\ActionGroup::make([
-                    \Filament\Actions\Action::make('markReadyForMou')
-                        ->label('Ready For MOU')
-                        ->icon('heroicon-o-check-badge')
-                        ->color('success')
-                        ->requiresConfirmation()
-                        ->modalHeading('Mark as Ready for MOU')
-                        ->modalDescription('Are you sure you want to mark this opportunity as Ready for MOU?')
-                        ->modalSubmitActionLabel('Confirm')
-                        ->visible(fn (Opportunity $record) => $record->status === OpportunityStatus::NEW)
-                        ->action(function (Opportunity $record) {
-                            $readiness = app(OpportunityReadinessService::class)->canCreateMOU($record);
-                            if (!$readiness['is_ready']) {
-                                \Filament\Notifications\Notification::make()
-                                    ->title('Cannot Mark as Ready')
-                                    ->body(implode(' ', $readiness['errors']))
-                                    ->danger()
-                                    ->send();
-                                return;
-                            }
-                            app(OpportunityWorkflowService::class)->markReadyForMou($record);
-                            \Filament\Notifications\Notification::make()->title('Opportunity marked as Ready for MOU')->success()->send();
-                        }),
-
-                    \Filament\Actions\Action::make('manageMou')
-                        ->label(fn (Opportunity $record) => Mou::where('opportunity_id', $record->id)->exists() ? 'Open MOU' : 'Create MOU')
-                        ->icon('heroicon-o-document-text')
-                        ->color('primary')
-                        ->visible(fn (Opportunity $record) => in_array($record->status, [OpportunityStatus::READY_FOR_MOU, OpportunityStatus::CONVERTED]))
-                        ->requiresConfirmation(fn (Opportunity $record) => !Mou::where('opportunity_id', $record->id)->exists())
-                        ->modalHeading('Create MOU')
-                        ->modalDescription('Are you sure you want to create an MOU for this opportunity?')
-                        ->modalSubmitActionLabel('Create')
-                        ->action(function (Opportunity $record) {
-                            $mou = Mou::where('opportunity_id', $record->id)->first();
-                            if ($mou) {
-                                return redirect(MOUResource::getUrl('view', ['record' => $mou]));
-                            }
-                            return redirect(MOUResource::getUrl('create', ['opportunity_id' => $record->id]));
-                        }),
-                        
-                    \Filament\Actions\Action::make('closeLost')
-                        ->label('Close Lost')
-                        ->icon('heroicon-o-x-circle')
-                        ->color('danger')
-                        ->visible(fn (Opportunity $record) => !in_array($record->status, [OpportunityStatus::CONVERTED, OpportunityStatus::CLOSED_LOST, OpportunityStatus::CANCELLED, OpportunityStatus::MOU_SIGNED]))
-                        ->form([
-                            Forms\Components\Textarea::make('notes')->label('Reason for losing'),
-                        ])
-                        ->action(fn (Opportunity $record, array $data) => app(OpportunityWorkflowService::class)->closeLost($record, $data['notes'] ?? null)),
-                ])->label('Actions'),
-            ])
-            ->bulkActions([
-                \Filament\Actions\BulkActionGroup::make([
-                    \Filament\Actions\DeleteBulkAction::make(),
-                    \Filament\Actions\ForceDeleteBulkAction::make(),
-                    \Filament\Actions\RestoreBulkAction::make(),
-                ]),
-            ]);
+        return OpportunitiesTable::configure($table);
     }
 
     public static function getRelations(): array
@@ -271,57 +56,75 @@ class OpportunityResource extends Resource
         ];
     }
 
-    public static function infolist(\Filament\Schemas\Schema $schema): \Filament\Schemas\Schema
+    public static function infolist(Schema $schema): Schema
     {
         return $schema
             ->components([
-                \Filament\Schemas\Components\Group::make([
-                    \Filament\Schemas\Components\Section::make('Opportunity Details')
+                Group::make([
+                    Section::make('📍 Lead & Opportunity Overview')
                         ->schema([
-                            \Filament\Infolists\Components\TextEntry::make('number')->label('Number'),
-                            \Filament\Infolists\Components\TextEntry::make('status')
+                            TextEntry::make('number')
+                                ->label('Opportunity #')
+                                ->weight('bold')
+                                ->copyable(),
+                            TextEntry::make('status')
                                 ->badge(),
-                            \Filament\Infolists\Components\TextEntry::make('opportunitySource.name')->label('Source'),
-                            \Filament\Infolists\Components\TextEntry::make('source_phone')->label('Source Phone'),
-                            \Filament\Infolists\Components\TextEntry::make('assignedUser.name')->label('Assigned To'),
-                            \Filament\Infolists\Components\TextEntry::make('mou.number')
+                            TextEntry::make('opportunitySource.name')
+                                ->label('Lead Source')
+                                ->placeholder('—'),
+                            TextEntry::make('source_phone')
+                                ->label('Source Phone')
+                                ->placeholder('—'),
+                            TextEntry::make('assignedUser.name')
+                                ->label('Assigned Relationship Manager')
+                                ->placeholder('Unassigned'),
+                            TextEntry::make('expected_onboarding_date')
+                                ->label('Target Onboarding Date')
+                                ->date()
+                                ->placeholder('—'),
+                            TextEntry::make('mou.number')
                                 ->label('Associated MOU')
-                                ->url(fn (Opportunity $record) => $record->mou ? \App\Filament\Resources\Operations\MOUResource::getUrl('view', ['record' => $record->mou]) : null)
+                                ->url(fn (Opportunity $record) => $record->mou ? MOUResource::getUrl('view', ['record' => $record->mou]) : null)
+                                ->badge()
+                                ->color('info')
                                 ->visible(fn (Opportunity $record) => $record->mou !== null),
-                            \Filament\Infolists\Components\TextEntry::make('mou.property.code')
-                                ->label('Associated Property')
-                                ->url(fn (Opportunity $record) => $record->mou?->property ? \App\Filament\Resources\Properties\PropertyResource::getUrl('edit', ['record' => $record->mou->property]) : null)
+                            TextEntry::make('mou.property.code')
+                                ->label('Converted Property')
+                                ->url(fn (Opportunity $record) => $record->mou?->property ? PropertyResource::getUrl('edit', ['record' => $record->mou->property]) : null)
+                                ->badge()
+                                ->color('success')
                                 ->visible(fn (Opportunity $record) => $record->mou?->property !== null),
                         ])->columns(3),
-                        
-                    \Filament\Schemas\Components\Section::make('Owner Information')
+
+                    Section::make('👤 Owner Contact Profile')
                         ->schema([
-                            \Filament\Infolists\Components\TextEntry::make('owner_name')->label('Name'),
-                            \Filament\Infolists\Components\TextEntry::make('owner_phone')->label('Phone'),
-                            \Filament\Infolists\Components\TextEntry::make('owner_email')->label('Email'),
-                            \Filament\Infolists\Components\TextEntry::make('address')->label('Address')->columnSpanFull(),
+                            TextEntry::make('owner_name')->label('Owner Name')->weight('bold'),
+                            TextEntry::make('owner_phone')->label('Phone')->copyable(),
+                            TextEntry::make('owner_email')->label('Email')->placeholder('—')->copyable(),
+                            TextEntry::make('address')->label('Address')->columnSpanFull()->placeholder('—'),
                         ])->columns(3),
-                        
-                    \Filament\Schemas\Components\Section::make('Property Estimate')
+
+                    Section::make('🏢 Property & Commercial Estimates')
                         ->schema([
-                            \Filament\Infolists\Components\TextEntry::make('estimatedPropertyType.name')->label('Type'),
-                            \Filament\Infolists\Components\TextEntry::make('estimated_bhk')->label('BHK'),
-                            \Filament\Infolists\Components\TextEntry::make('estimated_size')->label('Size (Sq.Ft.)'),
-                            \Filament\Infolists\Components\IconEntry::make('estimated_is_furnished')->boolean()->label('Furnished'),
-                            \Filament\Infolists\Components\TextEntry::make('expected_rent')->money('INR')->label('Expected Rent'),
-                            \Filament\Infolists\Components\TextEntry::make('expectedFinancialModel.name')->label('Financial Model'),
+                            TextEntry::make('estimatedPropertyType.name')->label('Property Type')->placeholder('—'),
+                            TextEntry::make('estimated_bhk')->label('BHK Configuration')->badge()->color('gray')->placeholder('—'),
+                            TextEntry::make('estimated_size')->label('Size (Sq.Ft.)')->placeholder('—')->suffix(' Sq.Ft.'),
+                            IconEntry::make('estimated_is_furnished')->boolean()->label('Furnished'),
+                            TextEntry::make('expected_rent')->money('INR')->label('Expected Rent')->weight('bold'),
+                            TextEntry::make('expectedFinancialModel.name')->label('Financial Model')->placeholder('—'),
                         ])->columns(3),
-                        
-                    \Filament\Schemas\Components\Section::make('Internal Summary')
+
+                    Section::make('📝 Internal Notes & Summary')
                         ->schema([
-                            \Filament\Infolists\Components\TextEntry::make('internal_summary')
+                            TextEntry::make('internal_summary')
                                 ->hiddenLabel()
-                                ->columnSpanFull(),
+                                ->columnSpanFull()
+                                ->placeholder('No internal notes recorded.'),
                         ]),
                 ])->columnSpan(['lg' => 2]),
 
-                \Filament\Schemas\Components\Group::make([
-                    \Filament\Schemas\Components\Section::make('Activity Timeline')
+                Group::make([
+                    Section::make('🕒 Activity & History')
                         ->schema([
                             \App\Filament\Infolists\Components\ActivityTimeline::make('activities'),
                         ]),

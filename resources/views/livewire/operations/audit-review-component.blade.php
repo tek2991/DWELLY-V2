@@ -17,6 +17,7 @@
 
                     @if($audit->canReview())
                         {{ $this->acceptAllAction }}
+                        {{ $this->approveAuditAction }}
                         {{ $this->requestChangesAction }}
                     @endif
                     @if($audit->canReopen())
@@ -63,14 +64,31 @@
         <!-- Tabs -->
         <x-filament::tabs label="Audit Categories">
             @if($requiresVideo)
+                @php
+                    $hasLayoutVideo = $audit->getFirstMedia('layout_video') !== null;
+                    $videoBadgeText = '0 / 1';
+                    $videoBadgeColor = 'gray';
+                    if ($hasLayoutVideo) {
+                        if ($audit->video_status === 'approved') {
+                            $videoBadgeText = 'Approved';
+                            $videoBadgeColor = 'success';
+                        } elseif ($audit->video_status === 'rejected') {
+                            $videoBadgeText = 'Rejected';
+                            $videoBadgeColor = 'danger';
+                        } else {
+                            $videoBadgeText = 'Pending';
+                            $videoBadgeColor = 'warning';
+                        }
+                    }
+                @endphp
                 <x-filament::tabs.item
                     :active="$activeCategoryId === 'layout_video'"
                     wire:click="setActiveCategory('layout_video')"
                     icon="heroicon-o-video-camera"
                 >
                     Property Video
-                    <x-slot name="badge">
-                        {{ $audit->getFirstMedia('layout_video') ? '1 / 1' : '0 / 1' }}
+                    <x-slot name="badge" :color="$videoBadgeColor">
+                        {{ $videoBadgeText }}
                     </x-slot>
                 </x-filament::tabs.item>
             @endif
@@ -134,17 +152,63 @@
                     <x-filament::section>
                         <x-slot name="heading">
                             <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; flex-wrap: wrap; gap: 0.5rem;">
-                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                                     <x-filament::icon icon="heroicon-o-video-camera" style="width: 1.25rem; height: 1.25rem; color: var(--primary-600, #4f46e5);" />
                                     <span style="font-size: 1.125rem; font-weight: 600;">Overall Property Layout Video</span>
+                                    @if($audit->video_status === 'approved')
+                                        <x-filament::badge color="success" size="sm">
+                                            Approved
+                                        </x-filament::badge>
+                                    @elseif($audit->video_status === 'rejected')
+                                        <x-filament::badge color="danger" size="sm">
+                                            Rejected
+                                        </x-filament::badge>
+                                    @else
+                                        <x-filament::badge color="info" size="sm">
+                                            Awaiting Review
+                                        </x-filament::badge>
+                                    @endif
                                 </div>
-                                <span style="font-size: 0.75rem; color: rgba(107, 114, 128, 1); background: rgba(243, 244, 246, 1); padding: 0.25rem 0.625rem; border-radius: 0.375rem;">
-                                    Layout Context
-                                </span>
+                                <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                    @if($audit->canReview())
+                                        @if($audit->video_status === 'approved')
+                                            {{ $this->rejectVideoAction }}
+                                            {{ $this->resetVideoAction }}
+                                        @elseif($audit->video_status === 'rejected')
+                                            {{ $this->approveVideoAction }}
+                                            {{ $this->resetVideoAction }}
+                                        @else
+                                            {{ $this->approveVideoAction }}
+                                            {{ $this->rejectVideoAction }}
+                                        @endif
+                                    @endif
+                                </div>
                             </div>
                         </x-slot>
 
                         <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                            @if($audit->video_status === 'rejected')
+                                <div style="font-size: 0.875rem; color: #991b1b; background: #fef2f2; padding: 0.75rem 1rem; border-radius: 0.375rem; border: 1px solid #fecaca; display: flex; flex-direction: column; gap: 0.25rem;">
+                                    <div style="font-weight: 600; display: flex; align-items: center; gap: 0.375rem;">
+                                        <x-filament::icon icon="heroicon-o-exclamation-triangle" style="width: 1rem; height: 1rem; color: #dc2626;" />
+                                        <span>Reviewer Rejected ({{ $audit->video_rejection_type ?? 'Issue' }}):</span>
+                                    </div>
+                                    <div style="color: #7f1d1d; line-height: 1.4;">
+                                        {{ $audit->video_rejection_reason }}
+                                    </div>
+                                    @if($audit->videoReviewedBy || $audit->video_reviewed_at)
+                                        <div style="font-size: 0.75rem; color: #b91c1c; margin-top: 0.25rem;">
+                                            Rejected by {{ $audit->videoReviewedBy?->name ?? 'Reviewer' }} on {{ $audit->video_reviewed_at?->format('d M Y, h:i A') }}
+                                        </div>
+                                    @endif
+                                </div>
+                            @elseif($audit->video_status === 'approved' && ($audit->videoReviewedBy || $audit->video_reviewed_at))
+                                <div style="font-size: 0.8125rem; color: #166534; background: #f0fdf4; padding: 0.5rem 0.75rem; border-radius: 0.375rem; border: 1px solid #bbf7d0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+                                    <span>✓ Video approved by <strong>{{ $audit->videoReviewedBy?->name ?? 'Reviewer' }}</strong></span>
+                                    <span>{{ $audit->video_reviewed_at?->format('d M Y, h:i A') }}</span>
+                                </div>
+                            @endif
+
                             <div style="position: relative; width: 100%; max-height: 450px; background-color: #000; border-radius: 0.5rem; overflow: hidden; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(229, 231, 235, 1);">
                                 <video controls preload="metadata" style="max-height: 450px; width: 100%; object-fit: contain;">
                                     <source src="{{ $layoutVideoUrl }}" type="{{ $layoutVideoMedia->mime_type ?? 'video/mp4' }}">

@@ -9,13 +9,13 @@
 @if($ticket)
 <div style="width: 100%; display: flex; flex-direction: column; gap: 0.75rem;">
     <!-- Top Action Bar inside Modal -->
-    <div style="display: flex; justify-content: space-between; align-items: center; background-color: #f8fafc; padding: 0.625rem 0.875rem; border-radius: 0.375rem; border: 1px solid #e2e8f0; flex-wrap: wrap; gap: 8px;">
-        <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="font-size: 0.875rem; font-weight: 700; color: #1e3a8a;">
+    <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(128, 128, 128, 0.04); padding: 0.75rem 1rem; border-radius: 0.5rem; border: 1px solid rgba(128, 128, 128, 0.15); flex-wrap: wrap; gap: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="font-size: 0.875rem; font-weight: 700; color: inherit;">
                 📄 Maintenance Dossier: #{{ $ticket->ticket_number }}
             </span>
             @if($ticket->property?->building_name || $ticket->property?->name || $ticket->property?->code)
-                <span style="font-size: 0.75rem; color: #64748b;">
+                <span style="font-size: 0.75rem; color: #6b7280;">
                     ({{ ($ticket->property->code ? '[' . $ticket->property->code . '] ' : '') . ($ticket->property->building_name ?: $ticket->property->name) }})
                 </span>
             @endif
@@ -45,7 +45,7 @@
     </div>
 
     <!-- Embedded PDF Viewer -->
-    <div style="width: 100%; height: 75vh; border: 1px solid #e2e8f0; border-radius: 0.375rem; overflow: hidden; background: #ffffff;">
+    <div style="width: 100%; height: 75vh; border: 1px solid rgba(128, 128, 128, 0.2); border-radius: 0.5rem; overflow: hidden; background: inherit; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
         <iframe
             src="{{ route('operations.maintenance_requests.pdf', ['record' => $ticket]) }}"
             style="width: 100%; height: 100%; border: none;"
@@ -54,7 +54,7 @@
     </div>
 </div>
 @else
-<div style="padding: 1rem; color: #64748b; font-size: 0.875rem;">
+<div style="padding: 1rem; color: #6b7280; font-size: 0.875rem;">
     Unable to load maintenance request preview.
 </div>
 @endif

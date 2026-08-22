@@ -123,3 +123,53 @@ test('contractor work order pdf streaming and downloading routes work properly',
     $downloadResponse->assertHeader('Content-Type', 'application/pdf');
 });
 
+test('maintenance quotation pdf renders multiple defect items per line item', function () {
+    $owner = Party::create(['display_name' => 'Jane Owner', 'party_type' => 'individual']);
+    $property = Property::create(['building_name' => 'Lotus Enclave 303', 'status' => 'active']);
+
+    $ticket = MaintenanceRequest::create([
+        'ticket_number' => 'MR-2026-MULTI-DEF',
+        'title' => 'Multi-Area Refurbishment',
+        'property_id' => $property->id,
+        'owner_party_id' => $owner->id,
+        'payer_type' => 'owner',
+        'status' => \App\Domain\Maintenance\Enums\MaintenanceStatus::DRAFT,
+        'is_direct_vendor' => false,
+    ]);
+
+    $defect1 = \App\Domain\Maintenance\Models\MaintenanceRequestItem::create([
+        'maintenance_request_id' => $ticket->id,
+        'issue_description' => 'Kitchen Cabinet Hinge Repair',
+    ]);
+
+    $defect2 = \App\Domain\Maintenance\Models\MaintenanceRequestItem::create([
+        'maintenance_request_id' => $ticket->id,
+        'issue_description' => 'Balcony Sliding Door Alignment',
+    ]);
+
+    $quote = MaintenanceClientQuote::create([
+        'maintenance_request_id' => $ticket->id,
+        'quote_number' => 'QTE-2026-MULTI-DEF',
+        'version' => 1,
+        'status' => 'draft',
+    ]);
+
+    MaintenanceClientQuoteItem::create([
+        'maintenance_client_quote_id' => $quote->id,
+        'maintenance_request_item_ids' => [$defect1->id, $defect2->id],
+        'description' => 'Carpentry & Door Alignment Package',
+        'quantity' => 1,
+        'unit_price' => 4500.00,
+        'total_price' => 4500.00,
+    ]);
+
+    $viewHtml = view('pdf.maintenance_quotation', [
+        'quote' => $quote->fresh(),
+        'ticket' => $ticket,
+    ])->render();
+
+    expect($viewHtml)->toContain('Carpentry &amp; Door Alignment Package');
+    expect($viewHtml)->toContain('Kitchen Cabinet Hinge Repair');
+    expect($viewHtml)->toContain('Balcony Sliding Door Alignment');
+});
+

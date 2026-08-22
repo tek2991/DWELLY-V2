@@ -44,6 +44,16 @@ class PropertyFinancials extends Page implements HasForms
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-currency-rupee';
 
+    public static function canAccess(array $parameters = []): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        return $user->can('finance.access') || $user->hasAnyRole(['Business Owner', 'Operations Manager', 'Accountant']);
+    }
+
     public ?array $data = [];
 
     public function mount(int | string $record): void
@@ -80,11 +90,16 @@ class PropertyFinancials extends Page implements HasForms
     protected function loadFormData(): void
     {
         $latestPricing = $this->record->financialTerms()->latest('effective_from')->first();
-        $mou = $this->record->mous()->latest()->first();
+        $activePricingMou = $this->activePricingMou;
+        $activeBankMou = $this->activeBankMou;
+        $activeSignatoryMou = $this->activeSignatoryMou;
 
-        // Bank Details
-        $ownerParty = $this->record->mous()->whereNotNull('party_id')->latest()->first()?->party;
+        // Bank Details: check linked owner party first, then active bank MOU
+        $ownerParty = $this->record->owner_party_id 
+            ? \App\Domain\Party\Models\Party::find($this->record->owner_party_id) 
+            : $this->record->mous()->whereNotNull('party_id')->latest()->first()?->party;
         $primaryBankAccount = $ownerParty?->bankAccounts()->where('is_primary', true)->first();
+        
         $bankDetails = [];
         if ($primaryBankAccount) {
             $bankDetails = [
@@ -94,8 +109,8 @@ class PropertyFinancials extends Page implements HasForms
                 'bank_name' => $primaryBankAccount->bank_name,
                 'bank_address' => $primaryBankAccount->bank_address,
             ];
-        } elseif ($mou?->bank_details) {
-            $bankDetails = $mou->bank_details;
+        } elseif ($activeBankMou?->bank_details) {
+            $bankDetails = $activeBankMou->bank_details;
             if (isset($bankDetails['bank_details']) && is_array($bankDetails['bank_details'])) {
                 $bankDetails = $bankDetails['bank_details'];
             }
@@ -103,27 +118,33 @@ class PropertyFinancials extends Page implements HasForms
 
         // Pricing details
         $financialModelName = $latestPricing?->pricing_model
-            ?? $mou?->legal_terms['financial_model_name']
-            ?? $mou?->legal_terms['pricing_model']
-            ?? (isset($mou?->legal_terms['financial_model_id']) ? FinancialModel::find($mou->legal_terms['financial_model_id'])?->name : null)
-            ?? $mou?->opportunity?->expectedFinancialModel?->name;
+            ?? $activePricingMou?->legal_terms['financial_model_name']
+            ?? $activePricingMou?->legal_terms['pricing_model']
+            ?? (isset($activePricingMou?->legal_terms['financial_model_id']) ? FinancialModel::find($activePricingMou->legal_terms['financial_model_id'])?->name : null)
+            ?? $activePricingMou?->opportunity?->expectedFinancialModel?->name;
 
         $feePercentage = $latestPricing?->fee_percentage
-            ?? $mou?->legal_terms['fee_percentage']
+            ?? $activePricingMou?->legal_terms['fee_percentage']
             ?? null;
+
+        $startDate = $latestPricing?->effective_from?->format('Y-m-d') 
+            ?? $activePricingMou?->start_date?->format('Y-m-d');
+
+        $isSignatoryDiff = $activeSignatoryMou ? (bool) $activeSignatoryMou->is_signatory_different : false;
+        $signatoryDetails = $activeSignatoryMou?->signatory_details ?? [];
 
         $this->form->fill([
             'pricing_model' => $financialModelName,
             'fee_percentage' => $feePercentage,
             'bank_details' => $bankDetails,
-            'start_date' => $latestPricing?->effective_from?->format('Y-m-d') ?? $mou?->start_date?->format('Y-m-d'),
-            'is_signatory_different' => $mou?->is_signatory_different ?? false,
-            'signatory_name' => $mou?->signatory_details['name'] ?? null,
-            'signatory_relation' => $mou?->signatory_details['relation'] ?? null,
-            'signatory_phone' => $mou?->signatory_details['phone'] ?? null,
-            'signatory_email' => $mou?->signatory_details['email'] ?? null,
-            'signatory_aadhar_number' => $mou?->signatory_details['aadhar_number'] ?? null,
-            'signatory_pan_number' => $mou?->signatory_details['pan_number'] ?? null,
+            'start_date' => $startDate,
+            'is_signatory_different' => $isSignatoryDiff,
+            'signatory_name' => $signatoryDetails['name'] ?? null,
+            'signatory_relation' => $signatoryDetails['relation'] ?? null,
+            'signatory_phone' => $signatoryDetails['phone'] ?? null,
+            'signatory_email' => $signatoryDetails['email'] ?? null,
+            'signatory_aadhar_number' => $signatoryDetails['aadhar_number'] ?? null,
+            'signatory_pan_number' => $signatoryDetails['pan_number'] ?? null,
         ]);
     }
 
@@ -145,14 +166,14 @@ class PropertyFinancials extends Page implements HasForms
     public function getActivePricingMouProperty(): ?Mou
     {
         $latestPricing = $this->record->financialTerms()->latest('effective_from')->first();
-        if ($latestPricing?->mou) {
+        if ($latestPricing?->mou && in_array($latestPricing->mou->status, [MouStatus::VERIFIED, MouStatus::CONVERTED])) {
             return $latestPricing->mou;
         }
         return $this->record->mous()
             ->whereIn('type', [MouType::PRICING_UPDATE, MouType::ONBOARDING])
             ->whereIn('status', [MouStatus::VERIFIED, MouStatus::CONVERTED])
             ->latest('verified_at')
-            ->first() ?? $this->record->mous()->latest()->first();
+            ->first();
     }
 
     public function getActiveBankMouProperty(): ?Mou
@@ -161,7 +182,7 @@ class PropertyFinancials extends Page implements HasForms
             ->whereIn('type', [MouType::BANK_DETAILS_UPDATE, MouType::ONBOARDING])
             ->whereIn('status', [MouStatus::VERIFIED, MouStatus::CONVERTED])
             ->latest('verified_at')
-            ->first() ?? $this->record->mous()->latest()->first();
+            ->first();
     }
 
     public function getActiveSignatoryMouProperty(): ?Mou
@@ -170,7 +191,7 @@ class PropertyFinancials extends Page implements HasForms
             ->whereIn('type', [MouType::SIGN_AUTHORITY_UPDATE, MouType::ONBOARDING])
             ->whereIn('status', [MouStatus::VERIFIED, MouStatus::CONVERTED])
             ->latest('verified_at')
-            ->first() ?? $this->record->mous()->latest()->first();
+            ->first();
     }
 
     public function form(Schema $schema): Schema
@@ -192,7 +213,7 @@ class PropertyFinancials extends Page implements HasForms
                                                 $sourceHtml = 'Source MOU: <strong>' . e($mou->number) . '</strong>';
                                             }
                                         } else {
-                                            $sourceHtml = 'Source MOU: <strong>N/A</strong>';
+                                            $sourceHtml = 'Source MOU: <span class="text-gray-500 font-normal italic">None (Pending Onboarding / Verification)</span>';
                                         }
                                         return new HtmlString('Current active pricing terms for this property. ' . $sourceHtml);
                                     })
@@ -372,7 +393,7 @@ class PropertyFinancials extends Page implements HasForms
                                                 $sourceHtml = 'Source MOU: <strong>' . e($mou->number) . '</strong>';
                                             }
                                         } else {
-                                            $sourceHtml = 'Source MOU: <strong>N/A</strong>';
+                                            $sourceHtml = 'Source MOU: <span class="text-gray-500 font-normal italic">None (Pending Onboarding / Verification)</span>';
                                         }
                                         return new HtmlString('Current active bank account for remittances. ' . $sourceHtml);
                                     })
@@ -598,7 +619,7 @@ class PropertyFinancials extends Page implements HasForms
                                                 $sourceHtml = 'Source MOU: <strong>' . e($mou->number) . '</strong>';
                                             }
                                         } else {
-                                            $sourceHtml = 'Source MOU: <strong>N/A</strong>';
+                                            $sourceHtml = 'Source MOU: <span class="text-gray-500 font-normal italic">None (Pending Onboarding / Verification)</span>';
                                         }
                                         return new HtmlString('Current active signatory authority for this property. ' . $sourceHtml);
                                     })
@@ -658,13 +679,22 @@ class PropertyFinancials extends Page implements HasForms
                                             ->schema([
                                                 Placeholder::make('owner_name')
                                                     ->label('Owner Name')
-                                                    ->content(fn () => $this->record->mous()->whereNotNull('party_id')->latest()->first()?->party?->display_name ?? $this->record->mous()->latest()->first()?->owner_details['name'] ?? 'N/A'),
+                                                    ->content(function () {
+                                                        $party = $this->record->owner_party_id ? \App\Domain\Party\Models\Party::find($this->record->owner_party_id) : $this->record->mous()->whereNotNull('party_id')->latest()->first()?->party;
+                                                        return $party?->display_name ?? $this->record->mous()->latest()->first()?->owner_details['name'] ?? 'N/A';
+                                                    }),
                                                 Placeholder::make('owner_email')
                                                     ->label('Owner Email')
-                                                    ->content(fn () => $this->record->mous()->whereNotNull('party_id')->latest()->first()?->party?->email ?? $this->record->mous()->latest()->first()?->owner_details['email'] ?? 'N/A'),
+                                                    ->content(function () {
+                                                        $party = $this->record->owner_party_id ? \App\Domain\Party\Models\Party::find($this->record->owner_party_id) : $this->record->mous()->whereNotNull('party_id')->latest()->first()?->party;
+                                                        return $party?->email ?? $this->record->mous()->latest()->first()?->owner_details['email'] ?? 'N/A';
+                                                    }),
                                                 Placeholder::make('owner_phone')
                                                     ->label('Owner Phone')
-                                                    ->content(fn () => $this->record->mous()->whereNotNull('party_id')->latest()->first()?->party?->phone ?? $this->record->mous()->latest()->first()?->owner_details['phone'] ?? 'N/A'),
+                                                    ->content(function () {
+                                                        $party = $this->record->owner_party_id ? \App\Domain\Party\Models\Party::find($this->record->owner_party_id) : $this->record->mous()->whereNotNull('party_id')->latest()->first()?->party;
+                                                        return $party?->phone ?? $this->record->mous()->latest()->first()?->owner_details['phone'] ?? 'N/A';
+                                                    }),
                                             ])
                                             ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => !$get('is_signatory_different')),
                                     ]),
@@ -801,7 +831,8 @@ class PropertyFinancials extends Page implements HasForms
                                     ]),
                             ]),
 
-                        Tabs\Tab::make('Additional Documents')
+                        Tabs\Tab::make('KYC & Supporting Documents')
+                            ->icon('heroicon-o-identification')
                             ->schema([
                                 \Filament\Schemas\Components\Livewire::make(
                                     \App\Filament\Resources\Properties\RelationManagers\AdditionalDocumentsRelationManager::class,
@@ -809,7 +840,8 @@ class PropertyFinancials extends Page implements HasForms
                                 )->key('additional-documents-relation-manager'),
                             ]),
 
-                        Tabs\Tab::make('MOU Documents')
+                        Tabs\Tab::make('MOU Agreements & History')
+                            ->icon('heroicon-o-document-duplicate')
                             ->schema([
                                 \Filament\Schemas\Components\Livewire::make(
                                     \App\Filament\Resources\Properties\RelationManagers\MappedDocumentsRelationManager::class,

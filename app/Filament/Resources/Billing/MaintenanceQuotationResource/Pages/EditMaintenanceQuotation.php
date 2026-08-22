@@ -26,4 +26,9 @@ class EditMaintenanceQuotation extends EditRecord
     {
         return MaintenanceQuotationForm::configureVendorQuotesForm($schema);
     }
+
+    protected function getFormActions(): array
+    {
+        return [];
+    }
 }

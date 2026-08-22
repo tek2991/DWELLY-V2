@@ -2,10 +2,14 @@
 
 namespace App\Domain\Opportunity\Enums;
 
-use Filament\Support\Contracts\HasLabel;
+use BackedEnum;
 use Filament\Support\Contracts\HasColor;
+use Filament\Support\Contracts\HasIcon;
+use Filament\Support\Contracts\HasLabel;
+use Filament\Support\Icons\Heroicon;
+use Illuminate\Contracts\Support\Htmlable;
 
-enum OpportunityStatus: string implements HasLabel, HasColor
+enum OpportunityStatus: string implements HasLabel, HasColor, HasIcon
 {
     case NEW = 'new';
     case CONTACTED = 'contacted';
@@ -22,7 +26,7 @@ enum OpportunityStatus: string implements HasLabel, HasColor
     public function getLabel(): ?string
     {
         return match ($this) {
-            self::NEW => 'New',
+            self::NEW => 'New Lead',
             self::CONTACTED => 'Contacted',
             self::SITE_VISIT_SCHEDULED => 'Site Visit Scheduled',
             self::SITE_VISIT_COMPLETED => 'Site Visit Completed',
@@ -30,7 +34,7 @@ enum OpportunityStatus: string implements HasLabel, HasColor
             self::READY_FOR_MOU => 'Ready For MOU',
             self::MOU_CREATED => 'MOU Created',
             self::MOU_SIGNED => 'MOU Signed',
-            self::CONVERTED => 'Converted',
+            self::CONVERTED => 'Converted to Property',
             self::CLOSED_LOST => 'Closed Lost',
             self::CANCELLED => 'Cancelled',
         };
@@ -41,11 +45,32 @@ enum OpportunityStatus: string implements HasLabel, HasColor
         return match ($this) {
             self::NEW => 'info',
             self::CONTACTED => 'primary',
-            self::SITE_VISIT_SCHEDULED, self::SITE_VISIT_COMPLETED => 'warning',
+            self::SITE_VISIT_SCHEDULED => 'warning',
+            self::SITE_VISIT_COMPLETED => 'teal',
             self::NEGOTIATION => 'purple',
-            self::READY_FOR_MOU, self::MOU_CREATED => 'success',
-            self::MOU_SIGNED, self::CONVERTED => 'success',
-            self::CLOSED_LOST, self::CANCELLED => 'danger',
+            self::READY_FOR_MOU => 'emerald',
+            self::MOU_CREATED => 'sky',
+            self::MOU_SIGNED => 'success',
+            self::CONVERTED => 'success',
+            self::CLOSED_LOST => 'danger',
+            self::CANCELLED => 'gray',
+        };
+    }
+
+    public function getIcon(): string|BackedEnum|Htmlable|null
+    {
+        return match ($this) {
+            self::NEW => Heroicon::OutlinedSparkles,
+            self::CONTACTED => Heroicon::OutlinedPhone,
+            self::SITE_VISIT_SCHEDULED => Heroicon::OutlinedCalendarDays,
+            self::SITE_VISIT_COMPLETED => Heroicon::OutlinedMapPin,
+            self::NEGOTIATION => Heroicon::OutlinedChatBubbleLeftRight,
+            self::READY_FOR_MOU => Heroicon::OutlinedCheckBadge,
+            self::MOU_CREATED => Heroicon::OutlinedDocumentPlus,
+            self::MOU_SIGNED => Heroicon::OutlinedDocumentCheck,
+            self::CONVERTED => Heroicon::OutlinedBuildingOffice2,
+            self::CLOSED_LOST => Heroicon::OutlinedXCircle,
+            self::CANCELLED => Heroicon::OutlinedNoSymbol,
         };
     }
 }

@@ -104,6 +104,75 @@ class AuditReviewService
     }
 
     /**
+     * Approve the overall property layout video.
+     */
+    public function approveVideo(Audit $audit, User $reviewer): void
+    {
+        DB::transaction(function () use ($audit, $reviewer) {
+            $audit->update([
+                'video_status' => 'approved',
+                'video_reviewed_at' => now(),
+                'video_reviewed_by_id' => $reviewer->id,
+                'video_rejection_reason' => null,
+                'video_rejection_type' => null,
+            ]);
+
+            $this->evaluateWorkflowState($audit, true);
+        });
+
+        activity()
+            ->performedOn($audit)
+            ->by($reviewer)
+            ->log('Review: Overall layout video approved');
+    }
+
+    /**
+     * Reject the overall property layout video.
+     */
+    public function rejectVideo(Audit $audit, User $reviewer, string $reason, string $commentType): void
+    {
+        DB::transaction(function () use ($audit, $reviewer, $reason, $commentType) {
+            $audit->update([
+                'video_status' => 'rejected',
+                'video_reviewed_at' => now(),
+                'video_reviewed_by_id' => $reviewer->id,
+                'video_rejection_reason' => $reason,
+                'video_rejection_type' => $commentType,
+            ]);
+
+            $this->evaluateWorkflowState($audit, true);
+        });
+
+        activity()
+            ->performedOn($audit)
+            ->by($reviewer)
+            ->log('Review: Overall layout video rejected');
+    }
+
+    /**
+     * Reset the review decision on overall property layout video.
+     */
+    public function resetVideo(Audit $audit, User $reviewer): void
+    {
+        DB::transaction(function () use ($audit, $reviewer) {
+            $audit->update([
+                'video_status' => 'pending',
+                'video_reviewed_at' => null,
+                'video_reviewed_by_id' => null,
+                'video_rejection_reason' => null,
+                'video_rejection_type' => null,
+            ]);
+
+            $this->evaluateWorkflowState($audit, true);
+        });
+
+        activity()
+            ->performedOn($audit)
+            ->by($reviewer)
+            ->log('Review: Overall layout video reset to pending');
+    }
+
+    /**
      * Request changes from the inspector.
      */
     public function requestChanges(Audit $audit)
@@ -118,8 +187,8 @@ class AuditReviewService
     }
 
     /**
-     * Re-evaluate the workflow state based on item statuses.
-     * This is the ONLY method that should transition the Audit status automatically during review.
+     * Re-evaluate the workflow state based on item and video statuses.
+     * This method handles review start and demotion of approved audits if items/video change.
      */
     public function evaluateWorkflowState(Audit $audit, bool $fromUserAction = false)
     {
@@ -133,17 +202,26 @@ class AuditReviewService
         $approvedItems = $items->where('status', ItemStatus::APPROVED)->count();
         $rejectedItems = $items->where('status', ItemStatus::REJECTED)->count();
 
-        // Check if we need to start the review
-        if ($audit->status === AuditStatus::PENDING_REVIEW && ($approvedItems > 0 || $rejectedItems > 0)) {
+        $requiresVideo = $audit->audit_type !== \App\Domain\Audit\Enums\AuditType::MAINTENANCE;
+        $hasVideo = $audit->getFirstMedia('layout_video') !== null;
+        $videoApproved = $hasVideo ? ($audit->video_status === 'approved') : !$requiresVideo;
+        $videoRejected = $hasVideo && ($audit->video_status === 'rejected');
+
+        // Check if we need to start the review or transition from partially approved back to in_review
+        if ($audit->status === AuditStatus::PENDING_REVIEW && ($approvedItems > 0 || $rejectedItems > 0 || in_array($audit->video_status, ['approved', 'rejected']))) {
             $audit->update([
                 'status' => AuditStatus::IN_REVIEW,
                 'review_started_at' => now(),
             ]);
+        } elseif ($audit->status === AuditStatus::PARTIALLY_APPROVED && $rejectedItems === 0 && !$videoRejected) {
+            $audit->update([
+                'status' => AuditStatus::IN_REVIEW,
+            ]);
         }
 
-        // If audit was previously APPROVED but items are no longer all approved (e.g. decision was reset or item rejected)
-        if ($audit->status === AuditStatus::APPROVED && $approvedItems < $totalItems) {
-            $newStatus = $rejectedItems > 0 ? AuditStatus::PARTIALLY_APPROVED : AuditStatus::IN_REVIEW;
+        // If audit was previously APPROVED but items or video are no longer all approved
+        if ($audit->status === AuditStatus::APPROVED && ($approvedItems < $totalItems || !$videoApproved)) {
+            $newStatus = ($rejectedItems > 0 || $videoRejected) ? AuditStatus::PARTIALLY_APPROVED : AuditStatus::IN_REVIEW;
             $audit->update([
                 'status' => $newStatus,
                 'approved_at' => null,
@@ -152,23 +230,33 @@ class AuditReviewService
 
             activity()
                 ->performedOn($audit)
-                ->log("Workflow: Audit status demoted from Approved to {$newStatus->getLabel()} due to item decision change");
+                ->log("Workflow: Audit status demoted from Approved to {$newStatus->getLabel()} due to item or video decision change");
+        }
+    }
+
+    /**
+     * Explicitly approve an audit after all items and layout video are approved.
+     */
+    public function approveAudit(Audit $audit, User $reviewer): void
+    {
+        if (!$audit->canApprove()) {
+            throw new \Exception("Cannot approve audit. Ensure all items and layout video are approved.");
         }
 
-        // If all items are approved, auto-approve the audit and sync items to property only when triggered from a user action
-        if ($fromUserAction && $approvedItems === $totalItems) {
+        DB::transaction(function () use ($audit, $reviewer) {
             $audit->update([
                 'status' => AuditStatus::APPROVED,
                 'approved_at' => now(),
-                'approved_by_id' => auth()->id() ?? $audit->reviewer_id,
+                'approved_by_id' => $reviewer->id,
             ]);
 
             $this->syncApprovedItemsToProperty($audit);
+        });
 
-            activity()
-                ->performedOn($audit)
-                ->log('Workflow: Audit approved');
-        }
+        activity()
+            ->performedOn($audit)
+            ->by($reviewer)
+            ->log('Workflow: Audit approved');
     }
 
     /**
@@ -192,12 +280,23 @@ class AuditReviewService
                 }
             }
 
+            if ($audit->getFirstMedia('layout_video') !== null && $audit->video_status !== 'approved') {
+                $audit->update([
+                    'video_status' => 'approved',
+                    'video_reviewed_at' => now(),
+                    'video_reviewed_by_id' => $reviewer->id,
+                    'video_rejection_reason' => null,
+                    'video_rejection_type' => null,
+                ]);
+            }
+
             $this->evaluateWorkflowState($audit, true);
         });
 
         activity()
             ->performedOn($audit)
-            ->log('Review: All items approved by reviewer');
+            ->by($reviewer)
+            ->log('Review: All items and layout video approved by reviewer');
     }
 
     /**

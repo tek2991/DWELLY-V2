@@ -39,7 +39,11 @@ class PropertyUpdateMouService
     public function initiateUpdate(Property $property, MouType $type, array $proposedData): Mou
     {
         return DB::transaction(function () use ($property, $type, $proposedData) {
-            $latestMou = $property->mous()->latest()->first();
+            $latestVerifiedMou = $property->mous()
+                ->whereIn('status', [MouStatus::VERIFIED, MouStatus::CONVERTED])
+                ->latest('verified_at')
+                ->first();
+            $latestMou = $latestVerifiedMou ?? $property->mous()->latest()->first();
             $partyId = $property->owner_party_id ?? $latestMou?->party_id;
 
             $pendingMou = $this->getPendingUpdateMou($property, $type);
@@ -52,9 +56,16 @@ class PropertyUpdateMouService
                 'address' => $property->address_line_1,
             ];
 
+            // Resolve latest verified signatory details for baseline
+            $signatoryMou = $property->mous()
+                ->whereIn('type', [MouType::SIGN_AUTHORITY_UPDATE, MouType::ONBOARDING])
+                ->whereIn('status', [MouStatus::VERIFIED, MouStatus::CONVERTED])
+                ->latest('verified_at')
+                ->first() ?? $latestMou;
+
             $bankDetails = $latestMou?->bank_details ?? [];
-            $signatoryDetails = $latestMou?->signatory_details ?? [];
-            $isSignatoryDifferent = $latestMou?->is_signatory_different ?? false;
+            $signatoryDetails = $signatoryMou?->signatory_details ?? [];
+            $isSignatoryDifferent = $signatoryMou?->is_signatory_different ?? false;
 
             if ($type === MouType::PRICING_UPDATE) {
                 if (!empty($proposedData['financial_model_id'])) {
@@ -179,9 +190,17 @@ class PropertyUpdateMouService
                     }
                 }
             } elseif ($type === MouType::SIGN_AUTHORITY_UPDATE) {
-                // Signatory details are preserved directly on the verified MOU and linked Party
-                if ($mou->party && $mou->is_signatory_different && !empty($mou->signatory_details)) {
-                    // Logged on MOU
+                // Record activity log on Property for auditability
+                if ($mou->property) {
+                    activity()
+                        ->performedOn($mou->property)
+                        ->causedBy(auth()->user())
+                        ->withProperties([
+                            'mou_number' => $mou->number,
+                            'is_signatory_different' => $mou->is_signatory_different,
+                            'signatory_details' => $mou->signatory_details,
+                        ])
+                        ->log('Signatory authority updated via verified MOU Addendum #' . $mou->number);
                 }
             }
         });

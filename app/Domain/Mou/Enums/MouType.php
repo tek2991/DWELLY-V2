@@ -2,10 +2,14 @@
 
 namespace App\Domain\Mou\Enums;
 
-use Filament\Support\Contracts\HasLabel;
+use BackedEnum;
 use Filament\Support\Contracts\HasColor;
+use Filament\Support\Contracts\HasIcon;
+use Filament\Support\Contracts\HasLabel;
+use Filament\Support\Icons\Heroicon;
+use Illuminate\Contracts\Support\Htmlable;
 
-enum MouType: string implements HasLabel, HasColor
+enum MouType: string implements HasLabel, HasColor, HasIcon
 {
     case ONBOARDING = 'onboarding';
     case SIGN_AUTHORITY_UPDATE = 'sign_authority_update';
@@ -21,7 +25,7 @@ enum MouType: string implements HasLabel, HasColor
     public function label(): string
     {
         return match($this) {
-            self::ONBOARDING => 'Onboarding',
+            self::ONBOARDING => 'Onboarding MOU',
             self::SIGN_AUTHORITY_UPDATE => 'Sign Authority Update',
             self::BANK_DETAILS_UPDATE => 'Bank Details Update',
             self::KYC_UPDATE => 'KYC Update',
@@ -37,6 +41,17 @@ enum MouType: string implements HasLabel, HasColor
             self::BANK_DETAILS_UPDATE => 'info',
             self::KYC_UPDATE => 'purple',
             self::PRICING_UPDATE => 'success',
+        };
+    }
+
+    public function getIcon(): string|BackedEnum|Htmlable|null
+    {
+        return match($this) {
+            self::ONBOARDING => Heroicon::OutlinedHome,
+            self::SIGN_AUTHORITY_UPDATE => Heroicon::OutlinedPencilSquare,
+            self::BANK_DETAILS_UPDATE => Heroicon::OutlinedBanknotes,
+            self::KYC_UPDATE => Heroicon::OutlinedIdentification,
+            self::PRICING_UPDATE => Heroicon::OutlinedCurrencyRupee,
         };
     }
 }

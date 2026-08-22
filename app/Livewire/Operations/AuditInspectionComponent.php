@@ -152,12 +152,15 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
         $totalItems = $this->audit->items()->count();
         $requiresVideo = $this->audit->audit_type !== \App\Domain\Audit\Enums\AuditType::MAINTENANCE;
         $hasVideo = !$requiresVideo || ($this->audit->getFirstMedia('layout_video') !== null);
-        $isComplete = ($pendingCount === 0) && ($totalItems > 0) && $hasVideo;
+        $videoRejected = ($this->audit->video_status === 'rejected');
+        $isComplete = ($pendingCount === 0) && ($totalItems > 0) && $hasVideo && !$videoRejected;
 
         $tooltip = null;
         if (!$isComplete) {
             if ($totalItems === 0) {
                 $tooltip = 'No items in audit to inspect.';
+            } elseif ($videoRejected) {
+                $tooltip = 'Rejected property layout video must be replaced before submitting for approval.';
             } elseif (!$hasVideo && $pendingCount > 0) {
                 $tooltip = "Property layout video must be uploaded and {$pendingCount} item(s) pending inspection.";
             } elseif (!$hasVideo) {
@@ -183,11 +186,14 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
                 $totalItems = $this->audit->items()->count();
                 $requiresVideo = $this->audit->audit_type !== \App\Domain\Audit\Enums\AuditType::MAINTENANCE;
                 $hasVideo = !$requiresVideo || ($this->audit->getFirstMedia('layout_video') !== null);
+                $videoRejected = ($this->audit->video_status === 'rejected');
 
-                if ($pendingCount > 0 || $totalItems === 0 || !$hasVideo) {
-                    $msg = !$hasVideo 
-                        ? "Property layout video must be uploaded before submitting for review." 
-                        : "All audit items have to be inspected before submitting for review.";
+                if ($pendingCount > 0 || $totalItems === 0 || !$hasVideo || $videoRejected) {
+                    $msg = $videoRejected
+                        ? "The rejected property layout video must be replaced before submitting for review."
+                        : (!$hasVideo 
+                            ? "Property layout video must be uploaded before submitting for review." 
+                            : "All audit items have to be inspected before submitting for review.");
 
                     \Filament\Notifications\Notification::make()
                         ->title('Cannot Submit Audit')
@@ -846,6 +852,14 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
             ->usingFileName($this->videoUpload->getClientOriginalName())
             ->toMediaCollection('layout_video');
 
+        $this->audit->update([
+            'video_status' => 'pending',
+            'video_rejection_reason' => null,
+            'video_rejection_type' => null,
+            'video_reviewed_at' => null,
+            'video_reviewed_by_id' => null,
+        ]);
+
         $this->videoUpload = null;
         $this->audit->refresh();
 
@@ -862,6 +876,13 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
         }
 
         $this->audit->clearMediaCollection('layout_video');
+        $this->audit->update([
+            'video_status' => null,
+            'video_rejection_reason' => null,
+            'video_rejection_type' => null,
+            'video_reviewed_at' => null,
+            'video_reviewed_by_id' => null,
+        ]);
         $this->audit->refresh();
 
         \Filament\Notifications\Notification::make()

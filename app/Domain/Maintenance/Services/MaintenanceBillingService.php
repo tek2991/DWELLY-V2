@@ -426,15 +426,6 @@ class MaintenanceBillingService
 
                 // Automatically generate work order PDF document
                 app(MaintenanceWorkOrderPdfService::class)->generatePdf($vq, $quote);
-
-                // Automatically generate Vendor Bill in accounting if not already created
-                if (empty($vq->bill_id)) {
-                    try {
-                        $this->createVendorBillForQuote($vq);
-                    } catch (\Throwable $e) {
-                        \Illuminate\Support\Facades\Log::warning("Could not auto-generate vendor bill for quote #{$vq->id}: " . $e->getMessage());
-                    }
-                }
             }
 
             if ($request) {

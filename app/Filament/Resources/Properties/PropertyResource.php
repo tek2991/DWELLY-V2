@@ -20,6 +20,8 @@ class PropertyResource extends Resource
 
     protected static ?string $cluster = \App\Filament\Clusters\PropertiesCluster::class;
 
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBuildingOffice2;
+
     protected static ?string $navigationLabel = 'All Properties';
 
     protected static ?int $navigationSort = 1;

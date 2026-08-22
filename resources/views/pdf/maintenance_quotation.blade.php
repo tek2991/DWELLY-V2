@@ -315,8 +315,27 @@
                 <td style="color: #64748b; font-weight: bold;">{{ $index + 1 }}</td>
                 <td>
                     <strong>{{ $item->description }}</strong>
-                    @if($item->defectItem)
-                        <div style="font-size: 8px; color: #64748b; margin-top: 2px;">Defect Item: {{ \Illuminate\Support\Str::limit($item->defectItem->issue_description, 45) }}</div>
+                    @php
+                        $defects = $item->defect_items;
+                    @endphp
+                    @if($defects->isNotEmpty())
+                        <div style="margin-top: 3px;">
+                            @foreach($defects as $defect)
+                                @php
+                                    $loc = '';
+                                    if ($defect->itemable instanceof \App\Domain\Property\Models\PropertyRoom) {
+                                        $loc = ($defect->itemable->custom_name ?: ($defect->itemable->roomDefinition?->name ?? 'Room')) . ': ';
+                                    } elseif ($defect->itemable instanceof \App\Domain\Property\Models\PropertyInventory) {
+                                        $loc = ($defect->itemable->inventoryType?->name ?? 'Item') . ': ';
+                                    } elseif ($defect->itemable instanceof \App\Domain\Property\Models\PropertyUtility) {
+                                        $loc = ($defect->itemable->utilityType?->name ?? 'Utility') . ': ';
+                                    }
+                                @endphp
+                                <div style="font-size: 8.5px; color: #475569; margin-top: 1px;">
+                                    <span style="color: #2563eb; font-weight: bold;">•</span> {{ $loc }}{{ $defect->issue_description }}
+                                </div>
+                            @endforeach
+                        </div>
                     @endif
                 </td>
                 <td style="text-align: center;">{{ number_format($item->quantity, 0) }}</td>

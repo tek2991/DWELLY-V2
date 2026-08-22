@@ -543,10 +543,10 @@ class MaintenanceRequestForm
                                             $status = $record?->status ?? MaintenanceStatus::SUBMITTED;
                                             $label = e($status->getLabel());
                                             $lockedBadge = ($record && $record->isLocked())
-                                                ? ' <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200">🔒 Locked</span>'
+                                                ? ' <span style="display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 700; background: rgba(128, 128, 128, 0.15); color: #374151; border: 1px solid rgba(128, 128, 128, 0.3);">🔒 Locked</span>'
                                                 : '';
 
-                                            return new HtmlString("<div class=\"flex items-center gap-1.5 flex-wrap\"><span class=\"inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-200\">{$label}</span>{$lockedBadge}</div>");
+                                            return new HtmlString("<div style=\"display: flex; align-items: center; gap: 6px; flex-wrap: wrap;\"><span style=\"display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 9999px; font-size: 12px; font-weight: 700; background: rgba(37, 99, 235, 0.15); color: #1e40af; border: 1px solid rgba(37, 99, 235, 0.3);\">{$label}</span>{$lockedBadge}</div>");
                                         }),
 
                                     Placeholder::make('quotation_status_badge')
@@ -555,22 +555,22 @@ class MaintenanceRequestForm
                                         ->content(function ($record) {
                                             $quote = $record->currentClientQuote ?? $record->clientQuotes()->latest()->first();
                                             if (!$quote) {
-                                                return new HtmlString('<span class="text-xs text-gray-500 font-medium">Not Created Yet</span>');
+                                                return new HtmlString('<span style="font-size: 12px; color: #6b7280; font-weight: 500;">Not Created Yet</span>');
                                             }
                                             if ($quote->status === 'approved') {
-                                                return new HtmlString('<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/60 dark:text-green-200">✅ Approved</span>');
+                                                return new HtmlString('<span style="display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 9999px; font-size: 12px; font-weight: 600; background: rgba(16, 185, 129, 0.15); color: #047857; border: 1px solid rgba(16, 185, 129, 0.3);">✅ Approved</span>');
                                             }
                                             if ($quote->status === 'rejected') {
-                                                return new HtmlString('<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800 dark:bg-red-900/60 dark:text-red-200">❌ Rejected</span>');
+                                                return new HtmlString('<span style="display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 9999px; font-size: 12px; font-weight: 600; background: rgba(239, 68, 68, 0.15); color: #b91c1c; border: 1px solid rgba(239, 68, 68, 0.3);">❌ Rejected</span>');
                                             }
-                                            return new HtmlString('<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200 animate-pulse">⏳ Pending Approval</span>');
+                                            return new HtmlString('<span style="display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 9999px; font-size: 12px; font-weight: 600; background: rgba(245, 158, 11, 0.15); color: #b45309; border: 1px solid rgba(245, 158, 11, 0.3);">⏳ Pending Approval</span>');
                                         }),
 
                                     Placeholder::make('ticket_info')
                                         ->label('')
                                         ->content(function ($record) {
                                             $ticketNum = $record?->ticket_number ?? 'Generated after creation';
-                                            return new HtmlString("<div class=\"text-xs text-gray-500\">Ticket #: <strong>{$ticketNum}</strong></div>");
+                                            return new HtmlString("<div style=\"font-size: 12px; color: #6b7280;\">Ticket #: <strong>{$ticketNum}</strong></div>");
                                         }),
 
                                     Select::make('assigned_inspector_id')

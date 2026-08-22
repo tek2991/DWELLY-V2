@@ -109,14 +109,28 @@
         <!-- Tabs -->
         <x-filament::tabs label="Audit Categories">
             @if($requiresVideo)
+                @php
+                    $hasLayoutVideo = $audit->getFirstMedia('layout_video') !== null;
+                    $videoBadgeText = '0 / 1';
+                    $videoBadgeColor = 'gray';
+                    if ($hasLayoutVideo) {
+                        if ($audit->video_status === 'rejected') {
+                            $videoBadgeText = 'Rejected';
+                            $videoBadgeColor = 'danger';
+                        } else {
+                            $videoBadgeText = '1 / 1';
+                            $videoBadgeColor = 'success';
+                        }
+                    }
+                @endphp
                 <x-filament::tabs.item
                     :active="$activeCategoryId === 'layout_video'"
                     wire:click="setActiveCategory('layout_video')"
                     icon="heroicon-o-video-camera"
                 >
                     Property Video
-                    <x-slot name="badge">
-                        {{ ($audit->getFirstMedia('layout_video') !== null) ? '1 / 1' : '0 / 1' }}
+                    <x-slot name="badge" :color="$videoBadgeColor">
+                        {{ $videoBadgeText }}
                     </x-slot>
                 </x-filament::tabs.item>
             @endif
@@ -193,6 +207,21 @@
                     @endphp
 
                     <div style="display: flex; flex-direction: column; gap: 1rem;">
+                        @if($audit->video_status === 'rejected')
+                            <div style="font-size: 0.875rem; color: #991b1b; background: #fef2f2; padding: 0.75rem 1rem; border-radius: 0.375rem; border: 1px solid #fecaca; display: flex; flex-direction: column; gap: 0.25rem;">
+                                <div style="font-weight: 600; display: flex; align-items: center; gap: 0.375rem;">
+                                    <x-filament::icon icon="heroicon-o-exclamation-triangle" style="width: 1rem; height: 1rem; color: #dc2626;" />
+                                    <span>Reviewer Rejected Layout Video ({{ $audit->video_rejection_type ?? 'Issue' }}):</span>
+                                </div>
+                                <div style="color: #7f1d1d; line-height: 1.4;">
+                                    {{ $audit->video_rejection_reason }}
+                                </div>
+                                <div style="font-size: 0.75rem; color: #b91c1c; margin-top: 0.25rem; font-weight: 500;">
+                                    Please replace the property layout video with a revised recording before resubmitting the audit.
+                                </div>
+                            </div>
+                        @endif
+
                         @if($layoutVideoUrl)
                             <div style="position: relative; width: 100%; max-height: 450px; background-color: #000; border-radius: 0.5rem; overflow: hidden; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(229, 231, 235, 1);">
                                 <video controls preload="metadata" style="max-height: 450px; width: 100%; object-fit: contain;">

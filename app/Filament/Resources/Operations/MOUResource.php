@@ -2,25 +2,34 @@
 
 namespace App\Filament\Resources\Operations;
 
+use App\Domain\Mou\Enums\MouType;
 use App\Domain\Mou\Models\Mou;
 use App\Domain\Opportunity\Enums\MouStatus;
+use App\Domain\Mou\Services\MouWorkflowService;
+use App\Domain\Property\Services\PropertyOnboardingService;
 use App\Filament\Resources\Operations\MOUResource\Pages;
+use App\Filament\Resources\Operations\MOUResource\Schemas\MOUForm;
+use App\Filament\Resources\Operations\MOUResource\Tables\MOUsTable;
+use App\Filament\Resources\Properties\PropertyResource;
+use BackedEnum;
 use Filament\Forms;
-use Filament\Schemas\Schema;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
-use Filament\Tables;
+use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
-use App\Domain\Mou\Services\MouWorkflowService;
 
 class MOUResource extends Resource
 {
     protected static ?string $model = Mou::class;
 
-    protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-document-check';
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDocumentCheck;
+
     protected static \UnitEnum|string|null $navigationGroup = 'Sales & CRM';
-    protected static ?int $navigationSort = 1;
+
+    protected static ?int $navigationSort = 2;
 
     public static function canViewAny(): bool
     {
@@ -29,11 +38,13 @@ class MOUResource extends Resource
 
     public static function canEdit(?\Illuminate\Database\Eloquent\Model $record = null): bool
     {
-        if (!$record) return true;
+        if (! $record) {
+            return true;
+        }
 
-        return !in_array($record->status, [
+        return ! in_array($record->status, [
             \App\Domain\Opportunity\Enums\MouStatus::VERIFIED,
-            \App\Domain\Opportunity\Enums\MouStatus::CONVERTED
+            \App\Domain\Opportunity\Enums\MouStatus::CONVERTED,
         ]);
     }
 
@@ -52,656 +63,14 @@ class MOUResource extends Resource
         return false;
     }
 
-
     public static function form(Schema $schema): Schema
     {
-        return $schema
-            ->schema([
-                \Filament\Schemas\Components\Group::make()->schema([
-                    \Filament\Schemas\Components\Section::make('MOU Summary')
-                        ->key('mou_summary')
-                        ->headerActions([
-                            static::getResolvePartyAction(),
-                        ])
-                        ->schema([
-                            Forms\Components\TextInput::make('number')
-                                ->disabled()
-                                ->dehydrated(false),
-                            Forms\Components\Select::make('opportunity_id')
-                                ->relationship('opportunity', 'title')
-                                ->searchable()
-                                ->preload()
-                                ->required()
-                                ->disabled(fn (string $operation): bool => $operation !== 'create')
-                                ->hintAction(
-                                    \Filament\Actions\Action::make('viewOpportunity')
-                                        ->icon('heroicon-m-eye')
-                                        ->tooltip('View Opportunity Details')
-                                        ->modalHeading(fn (?Mou $record) => new \Illuminate\Support\HtmlString(
-                                            '<div class="flex items-center gap-3">
-                                                <span>Opportunity Details</span>
-                                                ' . ($record?->opportunity ? '<a href="' . \App\Filament\Resources\Operations\OpportunityResource::getUrl('view', ['record' => $record->opportunity]) . '" class="text-sm font-medium text-primary-600 hover:underline dark:text-primary-400">Open Full Page &rarr;</a>' : '') . '
-                                            </div>'
-                                        ))
-                                        ->modalSubmitAction(false)
-                                        ->modalCancelActionLabel('Close')
-                                        ->infolist([
-                                            \Filament\Schemas\Components\Section::make('General Information')
-                                                ->schema([
-                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.title')->label('Title'),
-                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.status')->label('Status')->badge(),
-                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.opportunitySource.name')->label('Source'),
-                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.source_phone')->label('Source Phone'),
-                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.assignedUser.name')->label('Assigned To'),
-                                                ])->columns(2),
-                                                
-                                            \Filament\Schemas\Components\Section::make('Owner Information')
-                                                ->schema([
-                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.owner_name')->label('Owner Name'),
-                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.owner_phone')->label('Owner Phone'),
-                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.owner_email')->label('Owner Email'),
-                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.address')->label('Address')->columnSpanFull(),
-                                                ])->columns(2),
-                                                
-                                            \Filament\Schemas\Components\Section::make('Property & Commercial Estimates')
-                                                ->schema([
-                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.estimatedPropertyType.name')->label('Property Type'),
-                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.estimated_bhk')->label('BHK'),
-                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.estimated_size')->label('Size (Sq.Ft)'),
-                                                    \Filament\Infolists\Components\IconEntry::make('opportunity.estimated_is_furnished')->label('Furnished')->boolean(),
-                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.expected_rent')->label('Expected Rent')->money('INR'),
-                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.expectedFinancialModel.name')->label('Financial Model'),
-                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.expected_onboarding_date')->label('Expected Onboarding')->date(),
-                                                ])->columns(3),
-                                                
-                                            \Filament\Schemas\Components\Section::make('Internal Summary')
-                                                ->schema([
-                                                    \Filament\Infolists\Components\TextEntry::make('opportunity.internal_summary')
-                                                        ->label('')
-                                                        ->columnSpanFull()
-                                                        ->default('No summary provided.'),
-                                                ]),
-                                        ])
-                                        ->visible(fn (?Mou $record) => $record?->opportunity !== null)
-                                ),
-                            Forms\Components\Placeholder::make('party')
-                                ->label('Associated Party')
-                                ->content(function (?Mou $record): ?\Illuminate\Support\HtmlString {
-                                    if ($record?->party) {
-                                        return new \Illuminate\Support\HtmlString("<span class=\"font-medium text-gray-900 dark:text-white\">{$record->party->display_name}</span>");
-                                    }
-                                    return new \Illuminate\Support\HtmlString("<span class=\"text-gray-500\">Unresolved</span>");
-                                })
-                                ->hintActions([
-                                    \Filament\Actions\Action::make('viewParty')
-                                        ->icon('heroicon-m-eye')
-                                        ->tooltip('View Party Details')
-                                        ->modalHeading(fn (?Mou $record) => new \Illuminate\Support\HtmlString(
-                                            '<div class="flex items-center gap-3">
-                                                <span>Party Details</span>
-                                                ' . ($record?->party ? '<a href="' . \App\Filament\Resources\Parties\PartyResource::getUrl('edit', ['record' => $record->party]) . '" class="text-sm font-medium text-primary-600 hover:underline dark:text-primary-400">Open Full Page &rarr;</a>' : '') . '
-                                            </div>'
-                                        ))
-                                        ->modalSubmitAction(false)
-                                        ->modalCancelActionLabel('Close')
-                                        ->infolist([
-                                            \Filament\Schemas\Components\Section::make('General Information')
-                                                ->schema([
-                                                    \Filament\Infolists\Components\TextEntry::make('party.party_type')
-                                                        ->label('Type')
-                                                        ->formatStateUsing(fn ($state) => ucfirst($state))
-                                                        ->badge(),
-                                                    \Filament\Infolists\Components\TextEntry::make('party.display_name')->label('Name'),
-                                                    \Filament\Infolists\Components\TextEntry::make('party.phone')->label('Phone')->default('-'),
-                                                    \Filament\Infolists\Components\TextEntry::make('party.email')->label('Email')->default('-'),
-                                                ])->columns(2),
-                                            
-                                            \Filament\Schemas\Components\Section::make('Individual Details')
-                                                ->schema([
-                                                    \Filament\Infolists\Components\TextEntry::make('party.individual.pan_number')->label('PAN Number')->default('-'),
-                                                    \Filament\Infolists\Components\TextEntry::make('party.individual.aadhaar_number')->label('Aadhar Number')->default('-'),
-                                                    \Filament\Infolists\Components\TextEntry::make('party.individual.address_line_1')->label('Address')->columnSpanFull()->default('-'),
-                                                ])->columns(2)
-                                                ->visible(fn (?Mou $record) => $record?->party?->party_type === 'individual'),
-                                                
-                                            \Filament\Schemas\Components\Section::make('Organization Details')
-                                                ->schema([
-                                                    \Filament\Infolists\Components\TextEntry::make('party.organization.pan')->label('PAN Number')->default('-'),
-                                                    \Filament\Infolists\Components\TextEntry::make('party.organization.gstin')->label('GSTIN')->default('-'),
-                                                    \Filament\Infolists\Components\TextEntry::make('party.organization.contact_person_name')->label('Contact Person')->default('-'),
-                                                    \Filament\Infolists\Components\TextEntry::make('party.organization.contact_person_phone')->label('Contact Phone')->default('-'),
-                                                    \Filament\Infolists\Components\TextEntry::make('party.organization.registered_address')->label('Address')->columnSpanFull()->default('-'),
-                                                ])->columns(2)
-                                                ->visible(fn (?Mou $record) => $record?->party?->party_type === 'organization'),
-                                        ])
-                                        ->visible(fn (?Mou $record) => $record?->party !== null),
-
-                                    static::getUpdatePartyAction('editPartyFromHint')
-                                        ->tooltip('Update Party Details')
-                                        ->icon('heroicon-m-pencil-square'),
-                                ]),
-                            Forms\Components\Placeholder::make('property')
-                                ->label('Associated Property')
-                                ->content(function (?Mou $record): ?\Illuminate\Support\HtmlString {
-                                    if ($record?->property) {
-                                        $code = $record->property->code ?? 'No_Property_Code_Assigned';
-                                        return new \Illuminate\Support\HtmlString("<span class=\"font-medium text-gray-900 dark:text-white\">{$code}</span>");
-                                    }
-                                    return new \Illuminate\Support\HtmlString("<span class=\"text-gray-500\">No_Property_Code_Assigned</span>");
-                                })
-                                ->hintAction(
-                                    \Filament\Actions\Action::make('viewProperty')
-                                        ->icon('heroicon-m-eye')
-                                        ->tooltip('View Property Details')
-                                        ->modalHeading(fn (?Mou $record) => new \Illuminate\Support\HtmlString(
-                                            '<div class="flex items-center gap-3">
-                                                <span>Property Details</span>
-                                                ' . ($record?->property ? '<a href="' . \App\Filament\Resources\Properties\PropertyResource::getUrl('edit', ['record' => $record->property]) . '" class="text-sm font-medium text-primary-600 hover:underline dark:text-primary-400">Open Full Page &rarr;</a>' : '') . '
-                                            </div>'
-                                        ))
-                                        ->modalSubmitAction(false)
-                                        ->modalCancelActionLabel('Close')
-                                        ->infolist([
-                                            \Filament\Schemas\Components\Section::make('General Information')
-                                                ->schema([
-                                                    \Filament\Infolists\Components\TextEntry::make('property.code')->label('Code')->default('-'),
-                                                    \Filament\Infolists\Components\TextEntry::make('property.status')->label('Status')->formatStateUsing(fn ($state) => ucfirst($state))->badge(),
-                                                    \Filament\Infolists\Components\TextEntry::make('property.building_name')->label('Building Name')->default('-'),
-                                                ])->columns(3),
-                                            \Filament\Schemas\Components\Section::make('Location Details')
-                                                ->schema([
-                                                    \Filament\Infolists\Components\TextEntry::make('property.address_line_1')->label('Address Line 1')->columnSpanFull()->default('-'),
-                                                    \Filament\Infolists\Components\TextEntry::make('property.locality.name')->label('Locality')->default('-'),
-                                                    \Filament\Infolists\Components\TextEntry::make('property.city')->label('City')->default('-'),
-                                                ])->columns(2),
-                                        ])
-                                        ->visible(fn (?Mou $record) => $record?->property !== null)
-                                ),
-                        ])->columns(2),
-
-                    \Filament\Schemas\Components\Section::make('Property & Commercial Details')
-                        ->description('These details are mapped to the MOU Document and can be modified here without affecting the original Opportunity.')
-                        ->schema([
-                            Forms\Components\Select::make('legal_terms.city_id')
-                                ->label('City')
-                                ->options(fn () => \App\Domain\Geographic\Models\City::pluck('name', 'id'))
-                                ->searchable()
-                                ->preload()
-                                ->required(),
-                            Forms\Components\Textarea::make('legal_terms.address')
-                                ->label('Property Address')
-                                ->required()
-                                ->columnSpanFull(),
-                            Forms\Components\TextInput::make('legal_terms.rent_amount')
-                                ->label('Rent Amount')
-                                ->numeric(),
-                            Forms\Components\TextInput::make('legal_terms.fee_percentage')
-                                ->label('Fee Percentage')
-                                ->numeric()
-                                ->suffix('%')
-                                ->step(0.01)
-                                ->minValue(0)
-                                ->maxValue(100),
-                            Forms\Components\Select::make('legal_terms.financial_model_id')
-                                ->label('Financial Model')
-                                ->options(fn () => \App\Domain\Opportunity\Models\FinancialModel::pluck('name', 'id'))
-                                ->required(),
-                            Forms\Components\Select::make('legal_terms.electricity_provider_id')
-                                ->label('Electricity Provider')
-                                ->options(function () {
-                                    return \App\Domain\Property\Models\UtilityProvider::whereHas('utilityType', function ($query) {
-                                        $query->where('slug', 'electricity');
-                                    })->pluck('name', 'id');
-                                })
-                                ->searchable()
-                                ->required(),
-                            Forms\Components\TextInput::make('legal_terms.electricity_consumer_id')
-                                ->label('Connection Number')
-                                ->maxLength(255)
-                                ->required(),
-                        ])->columns(2),
-
-                    \Filament\Schemas\Components\Section::make('Owner KYC & Verification Documents')
-                        ->schema([
-                            Forms\Components\DatePicker::make('start_date')
-                                ->label('Start Date')
-                                ->required(),
-                                
-                            \Filament\Schemas\Components\Grid::make(2)
-                                ->schema([
-                                    \Filament\Forms\Components\SpatieMediaLibraryFileUpload::make('owner_aadhaar')
-                                        ->collection('owner_aadhaar')
-                                        ->label('Owner Aadhaar Card')
-                                        ->helperText('Front & Back image or PDF')
-                                        ->required(),
-
-                                    \Filament\Forms\Components\SpatieMediaLibraryFileUpload::make('owner_pan')
-                                        ->collection('owner_pan')
-                                        ->label('Owner PAN Card')
-                                        ->helperText('Clear image or PDF')
-                                        ->required(),
-
-                                    \Filament\Forms\Components\SpatieMediaLibraryFileUpload::make('cancelled_cheque')
-                                        ->collection('cancelled_cheque')
-                                        ->label('Cancelled Cheque / Bank Proof')
-                                        ->helperText('Cancelled Cheque or Passbook')
-                                        ->required(),
-
-                                    \Filament\Forms\Components\SpatieMediaLibraryFileUpload::make('electricity_bill')
-                                        ->collection('electricity_bill')
-                                        ->label('Electricity Bill')
-                                        ->helperText('Recent electricity bill image or PDF')
-                                        ->required(),
-                                ]),
-
-                            \Filament\Schemas\Components\Actions::make([
-                                \Filament\Actions\Action::make('uploadDocumentModal')
-                                    ->label('Upload additional documents')
-                                    ->icon('heroicon-o-arrow-up-tray')
-                                    ->color('primary')
-                                    ->button()
-                                    ->modalHeading('Upload Document (Select Type & File)')
-                                    ->modalDescription('Select document type (Passport, Voter ID, MGNREGA Card, Sale Deed, etc.) and attach file.')
-                                    ->form([
-                                        Forms\Components\Select::make('document_type')
-                                            ->label('Document Type')
-                                            ->options(\App\Domain\Shared\Enums\DocumentType::class)
-                                            ->required()
-                                            ->searchable(),
-                                        Forms\Components\FileUpload::make('files')
-                                            ->label('Files (Images / PDF)')
-                                            ->multiple()
-                                            ->preserveFilenames()
-                                            ->required(),
-                                    ])
-                                    ->action(function (array $data, ?Mou $record, \Filament\Schemas\Components\Utilities\Set $set, \Filament\Schemas\Components\Utilities\Get $get) {
-                                        $collection = match($data['document_type']) {
-                                            'aadhaar', 'owner_aadhaar' => 'owner_aadhaar',
-                                            'pan', 'owner_pan' => 'owner_pan',
-                                            'cancelled_cheque' => 'cancelled_cheque',
-                                            'electricity_bill' => 'electricity_bill',
-                                            'power_of_attorney' => 'signatory_poa',
-                                            default => 'mou_attachments',
-                                        };
-
-                                        if ($record && $record->exists) {
-                                            foreach ($data['files'] as $path) {
-                                                $fullPath = \Illuminate\Support\Facades\Storage::disk(config('filament.default_filesystem_disk'))->path($path);
-                                                if (!file_exists($fullPath)) {
-                                                    $fullPath = \Illuminate\Support\Facades\Storage::disk('public')->path($path);
-                                                }
-
-                                                $record->addMedia($fullPath)
-                                                    ->withCustomProperties([
-                                                        'document_type' => $data['document_type'],
-                                                    ])
-                                                    ->toMediaCollection($collection);
-                                            }
-                                            $record->refresh();
-                                            \Filament\Notifications\Notification::make()->title('Document Uploaded Successfully')->success()->send();
-                                        } else {
-                                            $existing = $get($collection) ?? [];
-                                            if (is_string($existing)) {
-                                                $existing = [$existing];
-                                            }
-                                            $merged = array_values(array_unique(array_merge((array)$existing, (array)$data['files'])));
-                                            $set($collection, $merged);
-                                            \Filament\Notifications\Notification::make()
-                                                ->title('Document Attached')
-                                                ->body('File added to form. It will be saved when you submit the MOU.')
-                                                ->success()
-                                                ->send();
-                                        }
-                                    }),
-                            ]),
-
-                            Forms\Components\Toggle::make('is_signatory_different')
-                                ->label('Is Signatory Authority different from Property Owner?')
-                                ->default(false)
-                                ->live(),
-
-                            \Filament\Schemas\Components\Grid::make(2)
-                                ->schema([
-                                    Forms\Components\TextInput::make('signatory_details.name')
-                                        ->label('Signatory Full Name')
-                                        ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
-                                    Forms\Components\TextInput::make('signatory_details.relation')
-                                        ->label('Relation to Owner (e.g. POA, Son)')
-                                        ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
-                                    Forms\Components\TextInput::make('signatory_details.phone')
-                                        ->label('Phone Number')
-                                        ->tel()
-                                        ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
-                                    Forms\Components\TextInput::make('signatory_details.email')
-                                        ->label('Email Address')
-                                        ->email()
-                                        ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
-                                    Forms\Components\TextInput::make('signatory_details.aadhar_number')
-                                        ->label('Aadhaar Number')
-                                        ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
-                                    Forms\Components\TextInput::make('signatory_details.pan_number')
-                                        ->label('PAN Number')
-                                        ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
-                                ])
-                                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
-
-                            \Filament\Schemas\Components\Grid::make(3)
-                                ->schema([
-                                    \Filament\Forms\Components\SpatieMediaLibraryFileUpload::make('signatory_aadhaar')
-                                        ->collection('signatory_aadhaar')
-                                        ->label('Signatory Aadhaar Card')
-                                        ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
-
-                                    \Filament\Forms\Components\SpatieMediaLibraryFileUpload::make('signatory_pan')
-                                        ->collection('signatory_pan')
-                                        ->label('Signatory PAN Card')
-                                        ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
-
-                                    \Filament\Forms\Components\SpatieMediaLibraryFileUpload::make('signatory_poa')
-                                        ->collection('signatory_poa')
-                                        ->label('Power of Attorney (POA)')
-                                        ->required(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
-                                ])
-                                ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
-
-                            \Filament\Schemas\Components\Actions::make([
-                                \Filament\Actions\Action::make('uploadSignatoryDocumentModal')
-                                    ->label('Upload additional documents')
-                                    ->icon('heroicon-o-arrow-up-tray')
-                                    ->color('primary')
-                                    ->button()
-                                    ->modalHeading('Upload Signatory Document (Select Type & File)')
-                                    ->modalDescription('Select document type (Passport, Voter ID, Power of Attorney, etc.) and attach file for Signatory Authority.')
-                                    ->form([
-                                        Forms\Components\Select::make('document_type')
-                                            ->label('Document Type')
-                                            ->options(\App\Domain\Shared\Enums\DocumentType::class)
-                                            ->required()
-                                            ->searchable(),
-                                        Forms\Components\FileUpload::make('files')
-                                            ->label('Files (Images / PDF)')
-                                            ->multiple()
-                                            ->preserveFilenames()
-                                            ->required(),
-                                    ])
-                                    ->action(function (array $data, ?Mou $record, \Filament\Schemas\Components\Utilities\Set $set, \Filament\Schemas\Components\Utilities\Get $get) {
-                                        $collection = match($data['document_type']) {
-                                            'aadhaar' => 'signatory_aadhaar',
-                                            'pan' => 'signatory_pan',
-                                            'power_of_attorney' => 'signatory_poa',
-                                            default => 'signatory_documents',
-                                        };
-
-                                        if ($record && $record->exists) {
-                                            foreach ($data['files'] as $path) {
-                                                $fullPath = \Illuminate\Support\Facades\Storage::disk(config('filament.default_filesystem_disk'))->path($path);
-                                                if (!file_exists($fullPath)) {
-                                                    $fullPath = \Illuminate\Support\Facades\Storage::disk('public')->path($path);
-                                                }
-
-                                                $record->addMedia($fullPath)
-                                                    ->withCustomProperties([
-                                                        'document_type' => $data['document_type'],
-                                                        'entity_type' => 'signatory',
-                                                    ])
-                                                    ->toMediaCollection($collection);
-                                            }
-                                            $record->refresh();
-                                            \Filament\Notifications\Notification::make()->title('Signatory Document Uploaded Successfully')->success()->send();
-                                        } else {
-                                            $existing = $get($collection) ?? [];
-                                            if (is_string($existing)) {
-                                                $existing = [$existing];
-                                            }
-                                            $merged = array_values(array_unique(array_merge((array)$existing, (array)$data['files'])));
-                                            $set($collection, $merged);
-                                            \Filament\Notifications\Notification::make()
-                                                ->title('Signatory Document Attached')
-                                                ->body('File added to form. It will be saved when you submit the MOU.')
-                                                ->success()
-                                                ->send();
-                                        }
-                                    }),
-                            ])
-                            ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
-                        ])->columns(1)
-                        ->collapsible(),
-
-                    \Filament\Schemas\Components\Section::make('Bank Details')
-                        ->schema([
-                            Forms\Components\TextInput::make('bank_details.bank_name')
-                                ->label('Bank Name')
-                                ->required(),
-                            Forms\Components\TextInput::make('bank_details.beneficiary_name')
-                                ->label('Beneficiary Name')
-                                ->required(),
-                            Forms\Components\TextInput::make('bank_details.account_number')
-                                ->label('Account Number')
-                                ->required(),
-                            Forms\Components\Select::make('bank_details.account_type')
-                                ->label('Account Type')
-                                ->options([
-                                    'Saving' => 'Savings Account',
-                                    'Current' => 'Current Account',
-                                ])
-                                ->default('Current'),
-                            Forms\Components\TextInput::make('bank_details.ifsc_code')
-                                ->label('IFSC Code')
-                                ->required(),
-                            Forms\Components\Textarea::make('bank_details.bank_address')
-                                ->label('Address of the Bank')
-                                ->required()
-                                ->columnSpanFull(),
-                        ])->columns(2),
-                ])->columnSpan(['lg' => 2]),
-
-                \Filament\Schemas\Components\Group::make()->schema([
-                    \Filament\Schemas\Components\Section::make('Status & Documents')
-                        ->headerActions([
-                            static::getGeneratePdfAction(),
-                        ])
-                        ->schema([
-                            Forms\Components\Placeholder::make('status')
-                                ->content(fn (?Mou $record): string => $record?->status?->getLabel() ?? 'Draft'),
-                            Forms\Components\Placeholder::make('versions')
-                                ->label('Document History')
-                                ->content(fn (?Mou $record): \Illuminate\Contracts\View\View => view('mou.version-history', ['record' => $record])),
-                        ]),
-                ])->columnSpan(['lg' => 1]),
-            ])
-            ->columns(3);
+        return MOUForm::configure($schema);
     }
 
     public static function table(Table $table): Table
     {
-        return $table
-            ->columns([
-                Tables\Columns\TextColumn::make('number')
-                    ->searchable()
-                    ->sortable(),
-                Tables\Columns\TextColumn::make('type')
-                    ->label('Type')
-                    ->badge()
-                    ->sortable(),
-                Tables\Columns\TextColumn::make('opportunity.title')
-                    ->label('Opportunity')
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('party.display_name')
-                    ->label('Party')
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('status')
-                    ->badge(),
-                Tables\Columns\TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-            ])
-            ->filters([
-                Tables\Filters\TrashedFilter::make(),
-                Tables\Filters\SelectFilter::make('type')
-                    ->options(\App\Domain\Mou\Enums\MouType::class),
-                Tables\Filters\SelectFilter::make('status')
-                    ->options(MouStatus::class),
-            ])
-            ->actions([
-                \Filament\Actions\ViewAction::make(),
-                \Filament\Actions\ActionGroup::make([
-                    \Filament\Actions\EditAction::make()
-                        ->visible(fn ($record) => static::canEdit($record)),
-                    \Filament\Actions\Action::make('uploadDocument')
-                        ->label('Upload additional documents')
-                        ->icon('heroicon-o-arrow-up-tray')
-                        ->color('primary')
-                        ->visible(fn (Mou $record) => static::canEdit($record))
-                        ->form([
-                            Forms\Components\Select::make('document_type')
-                                ->label('Document Type')
-                                ->options(\App\Domain\Shared\Enums\DocumentType::class)
-                                ->required()
-                                ->searchable(),
-                            Forms\Components\FileUpload::make('files')
-                                ->label('Files (Images / PDF)')
-                                ->multiple()
-                                ->preserveFilenames()
-                                ->required(),
-                        ])
-                        ->action(function (Mou $record, array $data) {
-                            $collection = match($data['document_type']) {
-                                'aadhaar', 'owner_aadhaar' => 'owner_aadhaar',
-                                'pan', 'owner_pan' => 'owner_pan',
-                                'cancelled_cheque' => 'cancelled_cheque',
-                                'electricity_bill' => 'electricity_bill',
-                                'power_of_attorney' => 'signatory_poa',
-                                default => 'mou_attachments',
-                            };
-
-                            foreach ($data['files'] as $path) {
-                                $fullPath = \Illuminate\Support\Facades\Storage::disk(config('filament.default_filesystem_disk'))->path($path);
-                                if (!file_exists($fullPath)) {
-                                    $fullPath = \Illuminate\Support\Facades\Storage::disk('public')->path($path);
-                                }
-
-                                $record->addMedia($fullPath)
-                                    ->withCustomProperties([
-                                        'document_type' => $data['document_type'],
-                                    ])
-                                    ->toMediaCollection($collection);
-                            }
-
-                            $record->refresh();
-                            \Filament\Notifications\Notification::make()->title('Document Uploaded Successfully')->success()->send();
-                        }),
-                    static::getResolvePartyAction(),
-                    static::getUpdatePartyAction(),
-
-                    \Filament\Actions\Action::make('provisionAccounting')
-                        ->label('Provision Accounting')
-                        ->icon('heroicon-o-banknotes')
-                        ->color('primary')
-                        ->visible(fn (Mou $record) => $record->party_id && empty($record->bank_details) && $record->status === MouStatus::DRAFT)
-                        ->form([
-                            Forms\Components\TextInput::make('bank_name')->required(),
-                            Forms\Components\TextInput::make('account_holder_name')->required(),
-                            Forms\Components\TextInput::make('account_number')->required(),
-                            Forms\Components\Select::make('account_type')
-                                ->label('Account Type')
-                                ->options([
-                                    'Saving' => 'Savings Account',
-                                    'Current' => 'Current Account',
-                                ])
-                                ->default('Current')
-                                ->required(),
-                            Forms\Components\TextInput::make('ifsc_code')->required(),
-                            Forms\Components\Textarea::make('bank_address')->label('Address of the Bank')->required()->columnSpanFull(),
-                        ])
-                        ->action(function (Mou $record, array $data) {
-                            app(\App\Domain\Mou\Services\MouService::class)->provisionAccounting($record, $data);
-                            $record->refresh();
-                            \Filament\Notifications\Notification::make()->title('Accounting Provisioned')->success()->send();
-                        }),
-
-                    static::getGeneratePdfAction(),
-                        
-                    \Filament\Actions\Action::make('uploadSignedCopy')
-                        ->label('Upload Signed PDF')
-                        ->icon('heroicon-o-document-arrow-up')
-                        ->color('info')
-                        ->visible(fn (Mou $record) => in_array($record->status, [MouStatus::PDF_GENERATED, MouStatus::DOWNLOADED, MouStatus::SIGNED_COPY_UPLOADED]))
-                        ->form([
-                            Forms\Components\FileUpload::make('signed_pdf')
-                                ->label('Signed PDF File')
-                                ->directory('temp-signed-pdfs')
-                                ->acceptedFileTypes(['application/pdf'])
-                                ->required(),
-                        ])
-                        ->action(function (Mou $record, array $data) {
-                            app(MouWorkflowService::class)->uploadSignedCopy($record, $data['signed_pdf']);
-                            $record->refresh();
-                            \Filament\Notifications\Notification::make()->title('Signed Copy Uploaded')->success()->send();
-                        }),
-                        
-                    \Filament\Actions\Action::make('verify')
-                        ->label('Verify Agreement')
-                        ->icon('heroicon-o-check-badge')
-                        ->color('success')
-                        ->visible(fn (Mou $record) => $record->status === MouStatus::SIGNED_COPY_UPLOADED)
-                        ->requiresConfirmation()
-                        ->action(function (Mou $record) {
-                            app(MouWorkflowService::class)->verify($record);
-                            $record->refresh();
-                            \Filament\Notifications\Notification::make()->title('Agreement Verified')->success()->send();
-                        }),
-                        
-                    \Filament\Actions\Action::make('convertToProperty')
-                        ->label('Convert to Property')
-                        ->icon('heroicon-o-building-office')
-                        ->color('success')
-                        ->visible(fn (Mou $record) => $record->status === MouStatus::VERIFIED && ($record->type === \App\Domain\Mou\Enums\MouType::ONBOARDING || $record->type === null))
-                        ->requiresConfirmation()
-                        ->action(function (Mou $record) {
-                            $property = app(\App\Domain\Property\Services\PropertyOnboardingService::class)->createPropertyFromMou($record);
-                            app(MouWorkflowService::class)->convert($record);
-                            
-                            \Filament\Notifications\Notification::make()->title('Property Created')->success()->send();
-                            
-                            return redirect(\App\Filament\Resources\Properties\PropertyResource::getUrl('edit', ['record' => $property]));
-                        }),
-
-                    \Filament\Actions\Action::make('archive')
-                        ->label('Archive')
-                        ->icon('heroicon-o-archive-box')
-                        ->color('danger')
-                        ->visible(fn (Mou $record) => $record->verified_at === null && !in_array($record->status, [
-                            MouStatus::VERIFIED,
-                            MouStatus::CONVERTED,
-                            MouStatus::COMPLETED,
-                            MouStatus::CANCELLED
-                        ]))
-                        ->requiresConfirmation()
-                        ->modalHeading('Archive MOU')
-                        ->modalDescription('Are you sure you want to archive this MOU? The corresponding opportunity will also be marked as Closed Lost.')
-                        ->modalSubmitActionLabel('Archive')
-                        ->action(function (Mou $record) {
-                            try {
-                                app(MouWorkflowService::class)->archive($record);
-                                \Filament\Notifications\Notification::make()
-                                    ->title('MOU Archived')
-                                    ->body('The MOU has been archived and the opportunity marked as Closed Lost.')
-                                    ->success()
-                                    ->send();
-                            } catch (\Exception $e) {
-                                \Filament\Notifications\Notification::make()
-                                    ->title('Cannot Archive MOU')
-                                    ->body($e->getMessage())
-                                    ->danger()
-                                    ->send();
-                            }
-                        }),
-                ])
-                ->label('Actions')
-                ->icon('heroicon-m-ellipsis-vertical'),
-            ])
-            ->bulkActions([]);
+        return MOUsTable::configure($table);
     }
 
     public static function getPages(): array
@@ -728,6 +97,7 @@ class MOUResource extends Resource
             ->label(fn (?Mou $record) => $record?->hasMedia('draft_pdf') ? 'Regenerate PDF' : 'Generate PDF')
             ->icon('heroicon-o-document-arrow-down')
             ->color('warning')
+            ->size('sm')
             ->visible(fn (?Mou $record) => $record && in_array($record->status, [
                 MouStatus::DRAFT, 
                 MouStatus::PARTY_PENDING, 
@@ -749,6 +119,32 @@ class MOUResource extends Resource
                 } catch (\Exception $e) {
                     \Filament\Notifications\Notification::make()->title('Cannot Generate PDF')->body($e->getMessage())->danger()->send();
                 }
+            });
+    }
+
+    public static function getUploadSignedCopyAction(string $name = 'uploadSignedCopy'): \Filament\Actions\Action
+    {
+        return \Filament\Actions\Action::make($name)
+            ->label('Upload Signed PDF')
+            ->icon('heroicon-o-document-arrow-up')
+            ->color('info')
+            ->size('sm')
+            ->visible(fn (?Mou $record) => $record && in_array($record->status, [
+                MouStatus::PDF_GENERATED, 
+                MouStatus::DOWNLOADED, 
+                MouStatus::SIGNED_COPY_UPLOADED
+            ]))
+            ->form([
+                Forms\Components\FileUpload::make('signed_pdf')
+                    ->label('Signed PDF File')
+                    ->directory('temp-signed-pdfs')
+                    ->acceptedFileTypes(['application/pdf'])
+                    ->required(),
+            ])
+            ->action(function (Mou $record, array $data) {
+                app(MouWorkflowService::class)->uploadSignedCopy($record, $data['signed_pdf']);
+                $record->refresh();
+                \Filament\Notifications\Notification::make()->title('Signed Copy Uploaded')->success()->send();
             });
     }
 
@@ -816,6 +212,111 @@ class MOUResource extends Resource
                 app(\App\Domain\Mou\Services\MouService::class)->updatePartyDetails($record, $data);
                 $record->refresh();
                 \Filament\Notifications\Notification::make()->title('Party Details Updated')->success()->send();
+            });
+    }
+
+    public static function getVerifyAction(string $name = 'verify'): \Filament\Actions\Action
+    {
+        return \Filament\Actions\Action::make($name)
+            ->label('Verify Agreement')
+            ->icon('heroicon-o-check-badge')
+            ->color('success')
+            ->visible(fn (?Mou $record) => $record?->status === MouStatus::SIGNED_COPY_UPLOADED)
+            ->requiresConfirmation()
+            ->modalHeading('Verify & Legally Approve MOU')
+            ->modalDescription('Confirming verification will lock all legal terms and unlock property conversion.')
+            ->modalSubmitActionLabel('Yes, Verify Agreement')
+            ->action(function (Mou $record) {
+                app(MouWorkflowService::class)->verify($record);
+                $record->refresh();
+                Notification::make()->title('Agreement Verified')->success()->send();
+            });
+    }
+
+    public static function getConvertToPropertyAction(string $name = 'convertToProperty'): \Filament\Actions\Action
+    {
+        return \Filament\Actions\Action::make($name)
+            ->label('Convert to Property')
+            ->icon('heroicon-o-building-office')
+            ->color('success')
+            ->visible(fn (?Mou $record) => $record?->status === MouStatus::VERIFIED && ($record?->type === MouType::ONBOARDING || $record?->type === null))
+            ->requiresConfirmation()
+            ->modalHeading('Convert Verified MOU into Active Property')
+            ->modalDescription('This will create an official property record, establish unit structures, and transition onboarding workflow.')
+            ->modalSubmitActionLabel('Yes, Convert to Property')
+            ->action(function (?Mou $record = null) {
+                $property = app(PropertyOnboardingService::class)->createPropertyFromMou($record);
+                app(MouWorkflowService::class)->convert($record);
+
+                Notification::make()->title('Property Created')->success()->send();
+
+                return redirect(PropertyResource::getUrl('edit', ['record' => $property]));
+            });
+    }
+
+    public static function getArchiveAction(string $name = 'archive'): \Filament\Actions\Action
+    {
+        return \Filament\Actions\Action::make($name)
+            ->label('Archive')
+            ->icon('heroicon-o-archive-box')
+            ->color('danger')
+            ->visible(fn (?Mou $record) => $record && $record->verified_at === null && ! in_array($record->status, [
+                MouStatus::VERIFIED,
+                MouStatus::CONVERTED,
+                MouStatus::COMPLETED,
+                MouStatus::CANCELLED,
+            ]))
+            ->requiresConfirmation()
+            ->modalHeading('Archive MOU')
+            ->modalDescription('Are you sure you want to archive this MOU? The corresponding opportunity will also be marked as Closed Lost.')
+            ->modalSubmitActionLabel('Archive')
+            ->action(function (Mou $record, $livewire = null) {
+                try {
+                    app(MouWorkflowService::class)->archive($record);
+                    Notification::make()
+                        ->title('MOU Archived')
+                        ->body('The MOU has been archived and the opportunity marked as Closed Lost.')
+                        ->success()
+                        ->send();
+                    if ($livewire && method_exists($livewire, 'redirect')) {
+                        $livewire->redirect(static::getUrl('index'));
+                    }
+                } catch (\Exception $e) {
+                    Notification::make()
+                        ->title('Cannot Archive MOU')
+                        ->body($e->getMessage())
+                        ->danger()
+                        ->send();
+                }
+            });
+    }
+
+    public static function getProvisionAccountingAction(string $name = 'provisionAccounting'): \Filament\Actions\Action
+    {
+        return \Filament\Actions\Action::make($name)
+            ->label('Provision Accounting')
+            ->icon('heroicon-o-banknotes')
+            ->color('primary')
+            ->visible(fn (?Mou $record) => $record && $record->party_id && empty($record->bank_details) && $record->status === MouStatus::DRAFT)
+            ->form([
+                Forms\Components\TextInput::make('bank_name')->required(),
+                Forms\Components\TextInput::make('account_holder_name')->required(),
+                Forms\Components\TextInput::make('account_number')->required(),
+                Forms\Components\Select::make('account_type')
+                    ->label('Account Type')
+                    ->options([
+                        'Saving' => 'Savings Account',
+                        'Current' => 'Current Account',
+                    ])
+                    ->default('Current')
+                    ->required(),
+                Forms\Components\TextInput::make('ifsc_code')->required(),
+                Forms\Components\Textarea::make('bank_address')->label('Address of the Bank')->required()->columnSpanFull(),
+            ])
+            ->action(function (Mou $record, array $data) {
+                app(\App\Domain\Mou\Services\MouService::class)->provisionAccounting($record, $data);
+                $record->refresh();
+                Notification::make()->title('Accounting Provisioned')->success()->send();
             });
     }
 

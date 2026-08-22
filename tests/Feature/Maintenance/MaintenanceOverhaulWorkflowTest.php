@@ -592,6 +592,202 @@ class MaintenanceOverhaulWorkflowTest extends TestCase
         $this->assertEquals(\App\Domain\Audit\Enums\AuditStatus::APPROVED, $audit->fresh()->status);
         $this->assertEquals(MaintenanceStatus::CLOSED, $request->fresh()->status);
     }
+
+    public function test_maintenance_request_accounting_relationships_and_vendor_alias(): void
+    {
+        $request = MaintenanceRequest::create([
+            'property_id' => $this->property->id,
+            'owner_id' => $this->ownerParty->id,
+            'tenant_id' => $this->tenantParty->id,
+            'title' => 'Electrical Short Circuit',
+            'status' => MaintenanceStatus::SUBMITTED,
+            'payer_type' => PayerType::OWNER,
+            'total_cost' => 5000.00,
+        ]);
+
+        $vendorParty = Party::create([
+            'party_type' => 'organization',
+            'display_name' => 'Fast Electric Ltd',
+            'email' => 'fast@electric.test',
+        ]);
+        $request->update(['vendor_party_id' => $vendorParty->id]);
+
+        $this->assertNotNull($request->vendor);
+        $this->assertNotNull($request->vendorParty);
+        $this->assertEquals($vendorParty->id, $request->vendor->id);
+        $this->assertEquals($vendorParty->id, $request->vendorParty->id);
+
+        $billingService = app(MaintenanceBillingService::class);
+        $invoice = $billingService->createMaintenanceInvoice($request, 'owner_invoice');
+
+        $request->refresh();
+        $this->assertEquals((string) $invoice->id, $request->owner_invoice_id);
+        $this->assertInstanceOf(\Tek2991\Accounting\Models\Invoice::class, $request->ownerInvoice);
+        $this->assertEquals($invoice->id, $request->ownerInvoice->id);
+
+        $vendorQuote = MaintenanceVendorQuote::create([
+            'maintenance_request_id' => $request->id,
+            'vendor_party_id' => $vendorParty->id,
+            'trade_title' => 'Electrical Rewiring',
+            'quoted_cost' => 3500.00,
+        ]);
+
+        $bill = $billingService->createVendorBillForQuote($vendorQuote);
+        $request->refresh();
+        $this->assertEquals((string) $bill->id, $request->bill_id);
+        $this->assertInstanceOf(\Tek2991\Accounting\Models\Bill::class, $request->bill);
+        $this->assertEquals($bill->id, $request->bill->id);
+        $this->assertInstanceOf(\Tek2991\Accounting\Models\Bill::class, $vendorQuote->fresh()->bill);
+    }
+
+    public function test_client_quote_recalculate_totals_handles_split_payer(): void
+    {
+        $request = MaintenanceRequest::create([
+            'property_id' => $this->property->id,
+            'owner_id' => $this->ownerParty->id,
+            'tenant_id' => $this->tenantParty->id,
+            'title' => 'Roof Leak Fix',
+            'status' => MaintenanceStatus::SUBMITTED,
+            'payer_type' => PayerType::SPLIT,
+        ]);
+
+        $quote = MaintenanceClientQuote::create([
+            'maintenance_request_id' => $request->id,
+            'quote_number' => 'QTE-2026-SPLIT',
+            'margin_percentage' => 10.00,
+            'gst_percentage' => 18.00,
+            'status' => 'draft',
+        ]);
+
+        \App\Domain\Maintenance\Models\MaintenanceClientQuoteItem::create([
+            'maintenance_client_quote_id' => $quote->id,
+            'description' => 'Roof Waterproofing Treatment',
+            'quantity' => 1,
+            'unit_price' => 10000.00,
+            'total_price' => 10000.00,
+            'sort_order' => 1,
+        ]);
+
+        $quote->refresh();
+        $quote->recalculateTotals();
+
+        $this->assertEquals(10000.00, (float) $quote->subtotal_amount);
+        $this->assertEquals(1800.00, (float) $quote->tax_amount);
+        $this->assertEquals(11800.00, (float) $quote->total_amount);
+
+        // Split 50/50: 11800 / 2 = 5900
+        $this->assertEquals(5900.00, (float) $quote->owner_amount);
+        $this->assertEquals(5900.00, (float) $quote->tenant_amount);
+        $this->assertEquals(0.00, (float) $quote->dwelly_amount);
+    }
+
+    public function test_quotation_approval_processes_livewire_temporary_upload_files(): void
+    {
+        $request = MaintenanceRequest::create([
+            'property_id' => $this->property->id,
+            'owner_id' => $this->ownerParty->id,
+            'tenant_id' => $this->tenantParty->id,
+            'title' => 'AC Compressor Replacement',
+            'status' => MaintenanceStatus::QUOTATION_PENDING,
+            'payer_type' => PayerType::OWNER,
+            'total_cost' => 8000.00,
+        ]);
+
+        $quote = MaintenanceClientQuote::create([
+            'maintenance_request_id' => $request->id,
+            'quote_number' => 'QTE-2026-AC01',
+            'total_amount' => 8000.00,
+            'owner_amount' => 8000.00,
+            'status' => 'pending_approval',
+        ]);
+
+        $request->update(['current_client_quote_id' => $quote->id]);
+
+        $fakeProofFile = tempnam(sys_get_temp_dir(), 'approval_proof_') . '.pdf';
+        file_put_contents($fakeProofFile, '%PDF-1.4 mock pdf content');
+
+        $this->assertFalse($quote->hasMedia('approval_proof_files'));
+
+        \Livewire\Livewire::actingAs($this->inspector)
+            ->test(\App\Filament\Resources\Billing\MaintenanceQuotationResource\Pages\ManageQuotationApproval::class, [
+                'record' => $quote->getRouteKey(),
+            ])
+            ->set('data.approval_notes', 'Owner authorized via WhatsApp message.')
+            ->set('data.approved_at', now()->toDateTimeString())
+            ->set('data.approval_channel', 'whatsapp')
+            ->set('data.approval_proof_files', [$fakeProofFile])
+            ->callAction('approveQuoteInTab')
+            ->assertHasNoActionErrors();
+
+        $quote->refresh();
+        $this->assertEquals('approved', $quote->status);
+        $this->assertTrue($quote->hasMedia('approval_proof_files'));
+        $this->assertEquals('approved', $request->fresh()->quotation_status);
+        $this->assertEquals(MaintenanceStatus::QUOTATION_APPROVED, $request->fresh()->status);
+    }
+
+    public function test_maintenance_request_pdf_service_loads_vendor_without_errors(): void
+    {
+        $vendorParty = Party::create([
+            'party_type' => 'organization',
+            'display_name' => 'City Plumbing Care',
+        ]);
+
+        $request = MaintenanceRequest::create([
+            'property_id' => $this->property->id,
+            'owner_id' => $this->ownerParty->id,
+            'vendor_party_id' => $vendorParty->id,
+            'title' => 'Bathroom Pipeline Leakage',
+            'description' => 'Major seepage in walls',
+            'status' => MaintenanceStatus::IN_PROGRESS,
+            'payer_type' => PayerType::OWNER,
+        ]);
+
+        $item = MaintenanceRequestItem::create([
+            'maintenance_request_id' => $request->id,
+            'issue_description' => 'Concealed pipe ruptured behind tiles',
+            'repair_action' => 'Tile excavation and pipe replacement',
+        ]);
+
+        $fakePhoto = tempnam(sys_get_temp_dir(), 'test_photo_') . '.jpg';
+        imagejpeg(imagecreatetruecolor(10, 10), $fakePhoto);
+        $item->addMedia($fakePhoto)->toMediaCollection('issue_photos');
+
+        $pdfService = app(\App\Domain\Maintenance\Services\MaintenanceRequestPdfService::class);
+        $pdf = $pdfService->buildPdfInstance($request);
+
+        $this->assertInstanceOf(\Barryvdh\DomPDF\PDF::class, $pdf);
+        $output = $pdf->output();
+        $this->assertNotEmpty($output);
+    }
+
+    public function test_generate_client_invoice_action_advances_status_to_invoiced(): void
+    {
+        $request = MaintenanceRequest::create([
+            'property_id' => $this->property->id,
+            'owner_id' => $this->ownerParty->id,
+            'title' => 'Ceiling Fan Repair',
+            'status' => MaintenanceStatus::WORK_COMPLETED,
+            'payer_type' => PayerType::OWNER,
+            'total_cost' => 1500.00,
+            'client_accepted_at' => now(),
+            'client_accepted_by_name' => 'Owner Representative',
+        ]);
+
+        $this->assertNull($request->owner_invoice_id);
+
+        \Livewire\Livewire::actingAs($this->inspector)
+            ->test(\App\Filament\Resources\Operations\MaintenanceRequestResource\RelationManagers\VerificationAuditRelationManager::class, [
+                'ownerRecord' => $request,
+                'pageClass' => \App\Filament\Resources\Operations\MaintenanceRequestResource\Pages\EditMaintenanceRequest::class,
+            ])
+            ->callTableAction('generateClientInvoice')
+            ->assertHasNoTableActionErrors();
+
+        $request->refresh();
+        $this->assertNotNull($request->owner_invoice_id);
+        $this->assertEquals(MaintenanceStatus::INVOICED, $request->status);
+    }
 }
 
 

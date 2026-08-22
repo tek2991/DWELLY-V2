@@ -91,6 +91,55 @@ trait HasMaintenanceQuotationWorkflowHeader
 
                     return response()->download($media->getPath(), $media->file_name);
                 }),
+
+            Action::make('viewWorkOrderPdf')
+                ->extraAttributes(['style' => 'display: none !important;'])
+                ->modalHeading(fn (?array $arguments = null) => $arguments['title'] ?? 'Contractor Work Order Document')
+                ->modalWidth('7xl')
+                ->modalSubmitActionLabel('Download Work Order PDF')
+                ->modalCancelActionLabel('Close')
+                ->modalContent(function (?array $arguments = null) {
+                    $vendorQuoteId = $arguments['vendorQuoteId'] ?? null;
+                    if (! $vendorQuoteId) {
+                        return null;
+                    }
+
+                    $vendorQuote = \App\Domain\Maintenance\Models\MaintenanceVendorQuote::find($vendorQuoteId);
+                    if (! $vendorQuote) {
+                        return null;
+                    }
+
+                    $service = app(\App\Domain\Maintenance\Services\MaintenanceWorkOrderPdfService::class);
+                    $media = $service->generatePdf($vendorQuote, $this->getRecord());
+
+                    if (! $media || ! file_exists($media->getPath())) {
+                        return null;
+                    }
+
+                    return view('components.pdf-viewer-raw', [
+                        'path' => $media->getPath(),
+                    ]);
+                })
+                ->action(function (?array $arguments = null) {
+                    $vendorQuoteId = $arguments['vendorQuoteId'] ?? null;
+                    if (! $vendorQuoteId) {
+                        return null;
+                    }
+
+                    $vendorQuote = \App\Domain\Maintenance\Models\MaintenanceVendorQuote::find($vendorQuoteId);
+                    if (! $vendorQuote) {
+                        return null;
+                    }
+
+                    $service = app(\App\Domain\Maintenance\Services\MaintenanceWorkOrderPdfService::class);
+                    $media = $service->generatePdf($vendorQuote, $this->getRecord());
+
+                    if (! $media || ! file_exists($media->getPath())) {
+                        return null;
+                    }
+
+                    return response()->download($media->getPath(), $media->file_name);
+                }),
         ];
     }
 
@@ -149,6 +198,18 @@ trait HasMaintenanceQuotationWorkflowHeader
                 $data['dwelly_amount'] = $total;
                 $data['owner_amount'] = 0.00;
                 $data['tenant_amount'] = 0.00;
+            } elseif ($payer === 'split' || $payer === 'dwelly_invoice_split') {
+                $ownerAmt = (float) ($data['owner_amount'] ?? $record?->owner_amount ?? 0);
+                $tenantAmt = (float) ($data['tenant_amount'] ?? $record?->tenant_amount ?? 0);
+                if ($ownerAmt + $tenantAmt > 0 && abs(($ownerAmt + $tenantAmt) - $total) < 0.01) {
+                    $data['owner_amount'] = $ownerAmt;
+                    $data['tenant_amount'] = $tenantAmt;
+                } else {
+                    $half = round($total / 2, 2);
+                    $data['owner_amount'] = $half;
+                    $data['tenant_amount'] = round($total - $half, 2);
+                }
+                $data['dwelly_amount'] = 0.00;
             }
         }
 
@@ -158,11 +219,13 @@ trait HasMaintenanceQuotationWorkflowHeader
     protected function getFormActions(): array
     {
         $record = $this->getRecord();
-        if ($record && in_array($record->status, ['archived'])) {
+        if ($record && in_array($record->status, ['approved', 'archived', 'settled'])) {
             return [];
         }
 
-        return parent::getFormActions();
+        return [
+            $this->getSaveFormAction(),
+        ];
     }
 
     protected function afterSave(): void

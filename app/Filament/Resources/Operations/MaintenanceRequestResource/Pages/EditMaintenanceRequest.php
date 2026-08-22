@@ -27,30 +27,30 @@ class EditMaintenanceRequest extends EditRecord
             $quote = $this->record->currentClientQuote ?? $this->record->clientQuotes()->where('status', '!=', 'archived')->latest()->first();
             if ($quote) {
                 if ($quote->status === 'approved') {
-                    $quoteBadge = '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/60 dark:text-green-200">✅ Quotation Approved</span>';
+                    $quoteBadge = '<span style="display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600; background: rgba(16, 185, 129, 0.15); color: #047857; border: 1px solid rgba(16, 185, 129, 0.3);">✅ Quotation Approved</span>';
                 } elseif ($quote->status === 'rejected') {
-                    $quoteBadge = '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800 dark:bg-red-900/60 dark:text-red-200">❌ Quotation Rejected</span>';
+                    $quoteBadge = '<span style="display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600; background: rgba(239, 68, 68, 0.15); color: #b91c1c; border: 1px solid rgba(239, 68, 68, 0.3);">❌ Quotation Rejected</span>';
                 } else {
-                    $quoteBadge = '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200 animate-pulse">⏳ Quotation Approval Pending</span>';
+                    $quoteBadge = '<span style="display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600; background: rgba(245, 158, 11, 0.15); color: #b45309; border: 1px solid rgba(245, 158, 11, 0.3);">⏳ Quotation Approval Pending</span>';
                 }
             } elseif (filled($this->record->payer_type)) {
-                $quoteBadge = '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200">📝 Quotation Required</span>';
+                $quoteBadge = '<span style="display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600; background: rgba(37, 99, 235, 0.15); color: #1e40af; border: 1px solid rgba(37, 99, 235, 0.3);">📝 Quotation Required</span>';
             }
         } else {
-            $quoteBadge = '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">🛠 Direct Repair Route</span>';
+            $quoteBadge = '<span style="display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600; background: rgba(100, 116, 139, 0.15); color: #334155; border: 1px solid rgba(100, 116, 139, 0.3);">🛠 Direct Repair Route</span>';
         }
 
         $lockedBadge = '';
         if ($this->record->isLocked()) {
-            $lockedBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200">🔒 Ticket Locked</span>';
+            $lockedBadge = '<span style="display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600; background: rgba(128, 128, 128, 0.15); color: #374151; border: 1px solid rgba(128, 128, 128, 0.3);">🔒 Ticket Locked</span>';
         }
 
         return new HtmlString(
-            '<div class="flex items-center gap-2 text-sm text-gray-500 mt-1 flex-wrap">' .
-            '<span>Status: <strong class="text-gray-900 dark:text-gray-100">' . $statusLabel . '</strong></span>' .
-            '<span class="text-gray-300 dark:text-gray-700">&bull;</span>' .
+            '<div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; color: #6b7280; margin-top: 0.25rem; flex-wrap: wrap;">' .
+            '<span>Status: <strong style="color: inherit; font-weight: 700;">' . $statusLabel . '</strong></span>' .
+            '<span style="color: #cbd5e1;">&bull;</span>' .
             $quoteBadge .
-            ($lockedBadge ? '<span class="text-gray-300 dark:text-gray-700">&bull;</span>' . $lockedBadge : '') .
+            ($lockedBadge ? '<span style="color: #cbd5e1;">&bull;</span>' . $lockedBadge : '') .
             '</div>'
         );
     }

@@ -265,11 +265,19 @@ class MaintenanceRequest extends DomainModel implements HasMedia
 
     public function syncQuotationTotals(): void
     {
-        $totalVendor = (float) $this->vendorQuotes()->sum('quoted_cost');
+        $clientQuote = $this->currentClientQuote ?? $this->clientQuotes()->latest()->first();
+
+        if ($clientQuote && $clientQuote->items()->count() > 0) {
+            $totalVendor = (float) $clientQuote->items()->get()->sum(function ($it) {
+                return round(((float) ($it->quantity ?? 1)) * ((float) ($it->vendor_cost ?? 0)), 2);
+            });
+        } else {
+            $totalVendor = (float) $this->vendorQuotes()->sum('quoted_cost');
+        }
+
         $this->total_vendor_cost = $totalVendor;
         $this->vendor_cost = $totalVendor;
 
-        $clientQuote = $this->currentClientQuote ?? $this->clientQuotes()->latest()->first();
         if ($clientQuote) {
             $this->total_client_cost = (float) $clientQuote->total_amount;
             $this->quotation_amount = (float) $clientQuote->total_amount;
@@ -284,19 +292,24 @@ class MaintenanceRequest extends DomainModel implements HasMedia
         $this->saveQuietly();
     }
 
+    public function vendorParty(): BelongsTo
+    {
+        return $this->belongsTo(Party::class, 'vendor_party_id');
+    }
+
     public function bill(): BelongsTo
     {
-        return $this->belongsTo(VendorBill::class, 'bill_id');
+        return $this->belongsTo(\Tek2991\Accounting\Models\Bill::class, 'bill_id');
     }
 
     public function ownerInvoice(): BelongsTo
     {
-        return $this->belongsTo(\App\Domain\Finance\Models\JournalEntry::class, 'owner_invoice_id'); // Or invoice model
+        return $this->belongsTo(\Tek2991\Accounting\Models\Invoice::class, 'owner_invoice_id');
     }
 
     public function tenantInvoice(): BelongsTo
     {
-        return $this->belongsTo(\App\Domain\Finance\Models\RentPayment::class, 'tenant_invoice_id'); // Or invoice model
+        return $this->belongsTo(\Tek2991\Accounting\Models\Invoice::class, 'tenant_invoice_id');
     }
 
     public function triggeredAudit(): BelongsTo

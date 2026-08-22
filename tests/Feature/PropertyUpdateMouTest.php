@@ -179,4 +179,133 @@ class PropertyUpdateMouTest extends TestCase
         ])
             ->assertFormSet(['pricing_model' => 'Standard 12%']);
     }
+
+    public function test_access_control_on_property_financials_page()
+    {
+        // 1. Business Owner has access
+        $this->actingAs($this->user);
+        $this->assertTrue(PropertyFinancials::canAccess());
+
+        // 2. Operations Manager has access
+        \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'Operations Manager', 'guard_name' => 'web']);
+        $manager = User::factory()->create();
+        $manager->assignRole('Operations Manager');
+        $this->actingAs($manager);
+        $this->assertTrue(PropertyFinancials::canAccess());
+
+        // 3. Accountant has access
+        \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'Accountant', 'guard_name' => 'web']);
+        $accountant = User::factory()->create();
+        $accountant->assignRole('Accountant');
+        $this->actingAs($accountant);
+        $this->assertTrue(PropertyFinancials::canAccess());
+
+        // 4. Operations Executive without finance.access is forbidden
+        \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'Operations Executive', 'guard_name' => 'web']);
+        $executive = User::factory()->create();
+        $executive->assignRole('Operations Executive');
+        $this->actingAs($executive);
+        $this->assertFalse(PropertyFinancials::canAccess());
+    }
+
+    public function test_can_initiate_and_verify_signatory_authority_update_and_persist_baseline()
+    {
+        $this->actingAs($this->user);
+        $service = app(PropertyUpdateMouService::class);
+        $mouWorkflow = app(MouWorkflowService::class);
+
+        // 1. Initiate signatory update
+        $updateMou = $service->initiateUpdate($this->property, MouType::SIGN_AUTHORITY_UPDATE, [
+            'is_signatory_different' => true,
+            'signatory_details' => [
+                'name' => 'Robert Smith',
+                'relation' => 'Power of Attorney',
+                'phone' => '9988776655',
+                'email' => 'robert@example.com',
+                'aadhar_number' => '123456789012',
+                'pan_number' => 'ABCDE1234F',
+            ],
+        ]);
+
+        $this->assertEquals(MouType::SIGN_AUTHORITY_UPDATE, $updateMou->type);
+        $this->assertTrue($updateMou->is_signatory_different);
+        $this->assertEquals('Robert Smith', $updateMou->signatory_details['name']);
+
+        // 2. Generate PDF & upload signed
+        $mouWorkflow->generatePdf($updateMou);
+        $file = UploadedFile::fake()->create('signed_signatory_addendum.pdf', 100, 'application/pdf');
+        $path = $file->store('temp-signed-pdfs', 'public');
+        $mouWorkflow->uploadSignedCopy($updateMou, $path);
+
+        // 3. Verify signatory MOU
+        $mouWorkflow->verify($updateMou);
+        $updateMou->refresh();
+        $this->assertEquals(MouStatus::VERIFIED, $updateMou->status);
+
+        // 4. Test PropertyFinancials form reflects verified signatory
+        Livewire::test(PropertyFinancials::class, [
+            'record' => $this->property->getKey(),
+        ])
+            ->assertFormSet([
+                'is_signatory_different' => true,
+                'signatory_name' => 'Robert Smith',
+                'signatory_relation' => 'Power of Attorney',
+            ]);
+
+        // 5. Subsequent Pricing update inherits verified signatory baseline
+        $pricingUpdateMou = $service->initiateUpdate($this->property, MouType::PRICING_UPDATE, [
+            'financial_model_id' => $this->financialModel->id,
+            'fee_percentage' => 14,
+            'start_date' => now()->format('Y-m-d'),
+        ]);
+
+        $this->assertTrue($pricingUpdateMou->is_signatory_different);
+        $this->assertEquals('Robert Smith', $pricingUpdateMou->signatory_details['name']);
+    }
+
+    public function test_active_mou_getters_return_null_when_only_draft_or_cancelled_mou_exists()
+    {
+        $newOpportunity = Opportunity::create([
+            'number' => 'OPP-999',
+            'title' => 'Test Opportunity 999',
+            'owner_name' => 'John Owner',
+            'owner_phone' => '9988771122',
+            'assigned_user_id' => $this->user->id,
+            'status' => \App\Domain\Opportunity\Enums\OpportunityStatus::NEW,
+        ]);
+
+        $newProperty = Property::create([
+            'code' => 'PROP-999',
+            'building_name' => 'Unverified Building',
+            'address_line_1' => '999 North St',
+            'status' => 'draft',
+        ]);
+
+        // Create only a DRAFT MOU
+        Mou::create([
+            'number' => 'MOU-2026-9999',
+            'opportunity_id' => $newOpportunity->id,
+            'property_id' => $newProperty->id,
+            'type' => MouType::PRICING_UPDATE,
+            'status' => MouStatus::DRAFT,
+            'legal_terms' => ['fee_percentage' => 10],
+        ]);
+
+        $component = Livewire::test(PropertyFinancials::class, [
+            'record' => $newProperty->getKey(),
+        ]);
+
+        $this->assertNull($component->instance()->activePricingMou);
+        $this->assertNull($component->instance()->activeBankMou);
+        $this->assertNull($component->instance()->activeSignatoryMou);
+    }
+
+    public function test_raw_viewers_gracefully_handle_missing_file_on_disk()
+    {
+        $renderedPdfViewer = (string) $this->blade('<x-pdf-viewer-raw path="/nonexistent/file.pdf" />');
+        $this->assertStringContainsString('Document file not found on disk', $renderedPdfViewer);
+
+        $renderedDocViewer = (string) $this->blade('<x-document-viewer-raw path="/nonexistent/file.pdf" mimeType="application/pdf" />');
+        $this->assertStringContainsString('Document file not found on disk', $renderedDocViewer);
+    }
 }

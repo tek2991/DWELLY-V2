@@ -26,4 +26,24 @@ class ManageQuotationApproval extends EditRecord
     {
         return MaintenanceQuotationForm::configureApprovalForm($schema);
     }
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            MaintenanceQuotationForm::getApproveQuotationAction(),
+            ...parent::getHeaderActions(),
+        ];
+    }
+
+    protected function getFormActions(): array
+    {
+        $record = $this->getRecord();
+        if ($record && in_array($record->status, ['approved', 'archived', 'settled'])) {
+            return [];
+        }
+
+        return [
+            $this->getSaveFormAction(),
+        ];
+    }
 }

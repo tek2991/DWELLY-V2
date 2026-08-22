@@ -31,6 +31,7 @@ use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
@@ -58,15 +59,52 @@ class MaintenanceQuotationForm
             Section::make('📋 Multi-Vendor Bids & Trade Estimates')
                 ->description('Collect, compare, and upload estimates from trade contractors for the ticket defect items.')
                 ->columnSpanFull()
+                ->headerActions([
+                    Action::make('saveHeader')
+                        ->label('Save Changes')
+                        ->icon('heroicon-o-check')
+                        ->color('success')
+                        ->button()
+                        ->size('sm')
+                        ->visible(fn ($record) => ! in_array($record?->status, ['approved', 'archived']))
+                        ->action(function ($livewire) {
+                            if (method_exists($livewire, 'save')) {
+                                $livewire->save(shouldRedirect: false);
+                            }
+
+                            Notification::make()
+                                ->title('Quotation Saved')
+                                ->body('Quotation and vendor estimates have been saved successfully.')
+                                ->success()
+                                ->send();
+                        }),
+                ])
                 ->schema([
                     Repeater::make('vendorQuotes')
                         ->relationship('vendorQuotes')
                         ->columns(3)
                         ->defaultItems(0)
                         ->disabled(fn ($record) => in_array($record?->status, ['approved', 'archived']))
-                        ->addable(fn ($record) => ! in_array($record?->status, ['approved', 'archived']))
+                        ->addable(false)
                         ->deletable(fn ($record) => ! in_array($record?->status, ['approved', 'archived']))
                         ->reorderable(fn ($record) => ! in_array($record?->status, ['approved', 'archived']))
+                        ->partiallyRenderAfterActionsCalled(false)
+                        ->deleteAction(
+                            fn (Action $action) => $action
+                                ->requiresConfirmation()
+                                ->modalHeading('Delete Vendor Quote Estimate?')
+                                ->modalDescription('Are you sure you want to remove this contractor trade estimate? Any attached quotation documents and cost bases will be removed.')
+                                ->modalSubmitActionLabel('Yes, Delete Quote')
+                                ->after(function ($livewire, $record) {
+                                    if (method_exists($livewire, 'save')) {
+                                        $livewire->save(shouldRedirect: false);
+                                    }
+                                    if ($record && method_exists($record, 'recalculateTotals')) {
+                                        $record->recalculateTotals();
+                                    }
+                                })
+                        )
+                        ->addActionLabel('Save and add vendor quote')
                         ->schema([
                             Select::make('maintenance_request_item_ids')
                                 ->label('Target Defect Items')
@@ -261,6 +299,57 @@ class MaintenanceQuotationForm
                                 ->helperText('Attach official contractor quote, rate card, or estimate screenshot.')
                                 ->columnSpanFull(),
                         ]),
+
+                    Actions::make([
+                        Action::make('saveAndAddVendorQuoteBottom')
+                            ->label('Save and add vendor quote')
+                            ->icon('heroicon-o-plus-circle')
+                            ->color('primary')
+                            ->button()
+                            ->visible(fn ($record) => ! in_array($record?->status, ['approved', 'archived']))
+                            ->action(function ($livewire) {
+                                if (method_exists($livewire, 'save')) {
+                                    $livewire->save(shouldRedirect: false);
+                                }
+
+                                $schema = method_exists($livewire, 'getSchema') ? $livewire->getSchema('form') : null;
+                                $repeater = $schema?->getComponent('vendorQuotes');
+                                if ($repeater instanceof Repeater) {
+                                    $newUuid = $repeater->generateUuid();
+                                    $items = $repeater->getRawState();
+                                    if ($newUuid) {
+                                        $items[$newUuid] = [];
+                                    } else {
+                                        $items[] = [];
+                                    }
+                                    $repeater->rawState($items);
+                                    $repeater->getChildSchema($newUuid ?? array_key_last($items))->fill();
+                                    $repeater->collapsed(false, shouldMakeComponentCollapsible: false);
+                                    $repeater->callAfterStateUpdated();
+                                    $repeater->shouldPartiallyRenderAfterActionsCalled() ? $repeater->partiallyRender() : null;
+                                }
+                            }),
+
+                        Action::make('saveChangesBottom')
+                            ->label('Save Changes')
+                            ->icon('heroicon-o-check')
+                            ->color('success')
+                            ->button()
+                            ->visible(fn ($record) => ! in_array($record?->status, ['approved', 'archived']))
+                            ->action(function ($livewire) {
+                                if (method_exists($livewire, 'save')) {
+                                    $livewire->save(shouldRedirect: false);
+                                }
+
+                                Notification::make()
+                                    ->title('Quotation Saved')
+                                    ->body('Quotation and vendor estimates have been saved successfully.')
+                                    ->success()
+                                    ->send();
+                            }),
+                    ])
+                        ->alignment(\Filament\Support\Enums\Alignment::Center)
+                        ->columnSpanFull(),
                 ]),
         ]);
     }
@@ -286,7 +375,7 @@ class MaintenanceQuotationForm
                         ->modalDescription('This will recalculate the Client Unit Price for all line items based on their Vendor Quoted Rate and the current Margin Markup (%). Any custom values manually entered will be overwritten.')
                         ->modalSubmitActionLabel('Yes, Apply & Overwrite')
                         ->visible(fn ($record) => ! in_array($record?->status, ['approved', 'archived']))
-                        ->action(function (Get $get, Set $set) {
+                        ->action(function (Get $get, Set $set, $livewire) {
                             $marginPct = (float) ($get('margin_percentage') ?? SettingService::get('financials.default_margin_percentage', 10.00));
                             $items = $get('items') ?? [];
                             $updatedCount = 0;
@@ -313,9 +402,13 @@ class MaintenanceQuotationForm
                             $set('items', $items);
                             static::recalculateQuotationTotals($get, $set);
 
+                            if (method_exists($livewire, 'save')) {
+                                $livewire->save(shouldRedirect: false);
+                            }
+
                             Notification::make()
-                                ->title('Margin Markup Applied')
-                                ->body("Recalculated client prices for {$updatedCount} line items using {$marginPct}% margin markup.")
+                                ->title('Margin Markup Applied & Saved')
+                                ->body("Recalculated client prices for {$updatedCount} line items using {$marginPct}% margin markup and saved changes.")
                                 ->success()
                                 ->send();
                         }),
@@ -397,12 +490,12 @@ class MaintenanceQuotationForm
                         ->label('')
                         ->columnSpanFull()
                         ->content(function (Get $get, $record) {
-                            $items = $get('items') ?? [];
+                            $itemsState = $get('items');
                             $subtotal = 0.0;
                             $vendorCost = 0.0;
 
-                            if (! empty($items)) {
-                                foreach ($items as $item) {
+                            if (is_array($itemsState)) {
+                                foreach ($itemsState as $item) {
                                     $qty = (float) ($item['quantity'] ?? 1);
                                     $clientRate = (float) ($item['unit_price'] ?? $item['unit_rate'] ?? 0);
                                     $vCost = (float) ($item['vendor_cost'] ?? 0);
@@ -413,16 +506,12 @@ class MaintenanceQuotationForm
                                 foreach ($record->items as $item) {
                                     $qty = (float) ($item->quantity ?? 1);
                                     $clientRate = (float) ($item->unit_price ?? $item->unit_rate ?? 0);
-                                    $vCost = (float) ($item->vendor_cost ?? $item->vendorQuote?->quoted_cost ?? 0);
+                                    $vCost = (float) ($item->vendor_cost ?? 0);
                                     $subtotal += (float) ($item->total_price ?? round($qty * $clientRate, 2));
                                     $vendorCost += round($qty * $vCost, 2);
                                 }
                             } else {
                                 $subtotal = (float) ($get('subtotal_amount') ?? $record?->subtotal_amount ?? 0);
-                            }
-
-                            if ($vendorCost <= 0 && $record) {
-                                $vendorCost = (float) $record->vendorQuotes()->sum('quoted_cost');
                             }
 
                             $marginPct = (float) ($get('margin_percentage') ?? $record?->margin_percentage ?? SettingService::get('financials.default_margin_percentage', 10.00));
@@ -489,12 +578,90 @@ class MaintenanceQuotationForm
                 ->description('Review contractor trade estimates, configure client unit prices before taxes, and preview formal customer charges.')
                 ->columnSpanFull()
                 ->headerActions([
+                    Action::make('saveItemsHeader')
+                        ->label('Save Changes')
+                        ->icon('heroicon-o-check')
+                        ->color('success')
+                        ->button()
+                        ->size('sm')
+                        ->visible(fn ($record) => ! in_array($record?->status, ['approved', 'archived']))
+                        ->action(function ($livewire) {
+                            if (method_exists($livewire, 'save')) {
+                                $livewire->save(shouldRedirect: false);
+                            }
+
+                            Notification::make()
+                                ->title('Quotation Saved')
+                                ->body('Quotation and line items have been saved successfully.')
+                                ->success()
+                                ->send();
+                        }),
+
+                    Action::make('syncVendorCosts')
+                        ->label('Sync Vendor Costs')
+                        ->icon('heroicon-o-arrow-path')
+                        ->color('warning')
+                        ->button()
+                        ->size('sm')
+                        ->visible(fn ($record) => ! in_array($record?->status, ['approved', 'archived']))
+                        ->requiresConfirmation()
+                        ->modalHeading('Sync Line Item Costs with Tab 1?')
+                        ->modalDescription('This will update the contractor vendor cost base for all linked line items using the latest quotes from Tab 1 and recalculate client pricing. Existing custom line descriptions will be preserved.')
+                        ->modalSubmitActionLabel('Yes, Sync Costs')
+                        ->action(function (Get $get, Set $set, $record, $livewire) {
+                            $ticketId = $record?->maintenance_request_id
+                                ?? $livewire->record?->maintenance_request_id
+                                ?? $get('maintenance_request_id');
+
+                            if (! $ticketId) {
+                                return;
+                            }
+
+                            $marginPct = (float) ($get('margin_percentage') ?? SettingService::get('financials.default_margin_percentage', 10.00));
+                            $dbQuotes = MaintenanceVendorQuote::where('maintenance_request_id', $ticketId)->get()->keyBy('id');
+                            $items = $get('items') ?? [];
+                            $syncedCount = 0;
+
+                            foreach ($items as $index => $item) {
+                                $vQuoteId = $item['vendor_quote_id'] ?? null;
+                                if ($vQuoteId && isset($dbQuotes[$vQuoteId])) {
+                                    $newCost = (float) $dbQuotes[$vQuoteId]->quoted_cost;
+                                    $qty = (float) ($item['quantity'] ?? 1);
+                                    $items[$index]['vendor_cost'] = $newCost;
+                                    $newClientPrice = round($newCost * (1 + $marginPct / 100), 2);
+                                    $newTotal = round($qty * $newClientPrice, 2);
+                                    $items[$index]['unit_price'] = $newClientPrice;
+                                    $items[$index]['unit_rate'] = $newClientPrice;
+                                    $items[$index]['total_price'] = $newTotal;
+                                    $items[$index]['total_cost'] = $newTotal;
+                                    $syncedCount++;
+                                }
+                            }
+
+                            $set('items', $items);
+                            static::recalculateQuotationTotals($get, $set);
+
+                            if (method_exists($livewire, 'save')) {
+                                $livewire->save(shouldRedirect: false);
+                            }
+
+                            Notification::make()
+                                ->title('Vendor Costs Synchronized & Saved')
+                                ->body("Updated vendor cost base, recalculated pricing, and saved {$syncedCount} linked line items.")
+                                ->success()
+                                ->send();
+                        }),
+
                     Action::make('importFromVendorQuotes')
                         ->label('Import Vendor Quotes')
                         ->icon('heroicon-o-arrow-down-tray')
                         ->color('info')
                         ->button()
                         ->size('sm')
+                        ->requiresConfirmation()
+                        ->modalHeading('Import Vendor Quotes to Line Items?')
+                        ->modalDescription('This will import contractor trade estimates from Tab 1 and append them as itemized line items with markup applied. Are you sure you want to proceed?')
+                        ->modalSubmitActionLabel('Yes, Import Quotes')
                         ->visible(fn ($record) => ! in_array($record?->status, ['approved', 'archived']))
                         ->action(function (Get $get, Set $set, $record, $livewire) {
                             $ticketId = $record?->maintenance_request_id
@@ -506,17 +673,17 @@ class MaintenanceQuotationForm
                                 $marginPct = (float) ($get('margin_percentage') ?? SettingService::get('financials.default_margin_percentage', 10.00));
                                 $dbQuotes = MaintenanceVendorQuote::where('maintenance_request_id', $ticketId)->get();
                                 foreach ($dbQuotes as $q) {
-                                    $targetItemId = null;
+                                    $targetItemIds = [];
                                     if (! empty($q->maintenance_request_item_ids) && is_array($q->maintenance_request_item_ids)) {
-                                        $targetItemId = $q->maintenance_request_item_ids[0] ?? null;
+                                        $targetItemIds = $q->maintenance_request_item_ids;
                                     } elseif ($q->maintenance_request_item_id) {
-                                        $targetItemId = $q->maintenance_request_item_id;
+                                        $targetItemIds = [$q->maintenance_request_item_id];
                                     }
 
-                                    if (! $targetItemId) {
+                                    if (empty($targetItemIds)) {
                                         $ticketItemCount = MaintenanceRequestItem::where('maintenance_request_id', $ticketId)->count();
                                         if ($ticketItemCount === 1) {
-                                            $targetItemId = MaintenanceRequestItem::where('maintenance_request_id', $ticketId)->value('id');
+                                            $targetItemIds = [MaintenanceRequestItem::where('maintenance_request_id', $ticketId)->value('id')];
                                         }
                                     }
 
@@ -525,7 +692,8 @@ class MaintenanceQuotationForm
 
                                     $quotes[] = [
                                         'vendor_quote_id' => $q->id,
-                                        'maintenance_request_item_id' => $targetItemId,
+                                        'maintenance_request_item_ids' => $targetItemIds,
+                                        'maintenance_request_item_id' => $targetItemIds[0] ?? null,
                                         'description' => $q->trade_title ?: 'Trade Work',
                                         'quantity' => 1,
                                         'unit' => 'job',
@@ -541,15 +709,19 @@ class MaintenanceQuotationForm
                             if (! empty($quotes)) {
                                 $currentItems = $get('items') ?? [];
                                 $filteredCurrentItems = array_filter($currentItems, function ($it) {
-                                    return ! empty($it['description']) || ! empty($it['unit_price']) || ! empty($it['unit_rate']) || ! empty($it['total_price']) || ! empty($it['total_cost']) || ! empty($it['maintenance_request_item_id']);
+                                    return ! empty($it['description']) || ! empty($it['unit_price']) || ! empty($it['unit_rate']) || ! empty($it['total_price']) || ! empty($it['total_cost']) || ! empty($it['maintenance_request_item_id']) || ! empty($it['maintenance_request_item_ids']);
                                 });
                                 $set('items', array_values(array_merge($filteredCurrentItems, $quotes)));
 
                                 static::recalculateQuotationTotals($get, $set);
 
+                                if (method_exists($livewire, 'save')) {
+                                    $livewire->save(shouldRedirect: false);
+                                }
+
                                 Notification::make()
-                                    ->title('Line Items Imported')
-                                    ->body(count($quotes).' vendor trade quote items added with client prices calculated.')
+                                    ->title('Line Items Imported & Saved')
+                                    ->body(count($quotes).' vendor trade quote items added, calculated, and saved.')
                                     ->success()
                                     ->send();
                             } else {
@@ -562,6 +734,36 @@ class MaintenanceQuotationForm
                         }),
                 ])
                 ->schema([
+                    // Vendor Cost Discrepancy Alert Banner
+                    Placeholder::make('vendor_cost_discrepancy_alert')
+                        ->label('')
+                        ->columnSpanFull()
+                        ->visible(fn (Get $get, $record) => ! empty(static::getVendorCostDiscrepanciesSummary($record, $get)))
+                        ->content(function (Get $get, $record) {
+                            $discrepancies = static::getVendorCostDiscrepanciesSummary($record, $get);
+                            if (empty($discrepancies)) {
+                                return null;
+                            }
+
+                            $list = '<ul style="margin: 4px 0 0 16px; padding: 0; list-style-type: disc;">';
+                            foreach ($discrepancies as $disc) {
+                                $list .= '<li style="margin-bottom: 2px;">'.e($disc).'</li>';
+                            }
+                            $list .= '</ul>';
+
+                            return new HtmlString('
+                                <div style="border-radius: 0.75rem; border: 1px solid rgba(245, 158, 11, 0.35); border-left: 4px solid #f59e0b; background-color: rgba(245, 158, 11, 0.08); padding: 0.875rem 1rem; margin-bottom: 0.5rem; font-size: 0.75rem; color: #92400e;">
+                                    <div style="display: flex; align-items: center; gap: 0.5rem; font-weight: 700; font-size: 0.875rem; margin-bottom: 0.25rem; color: #78350f;">
+                                        <span>🔄 Contractor Estimate Updates Detected</span>
+                                    </div>
+                                    <div style="line-height: 1.5;">
+                                        Contractor quotes in Tab 1 have been updated since line items were imported. Click <strong>"Sync Vendor Costs"</strong> above to refresh cost bases:
+                                        '.$list.'
+                                    </div>
+                                </div>
+                            ');
+                        }),
+
                     // Duplicate Items Alert Banner
                     Placeholder::make('duplicate_items_alert')
                         ->label('')
@@ -578,16 +780,16 @@ class MaintenanceQuotationForm
 
                             $itemsList = '<ul style="margin: 4px 0 0 16px; padding: 0; list-style-type: disc;">';
                             foreach ($duplicates as $dup) {
-                                $itemsList .= '<li style="margin-bottom: 2px;">'.$dup.'</li>';
+                                $itemsList .= '<li style="margin-bottom: 2px;">'.e($dup).'</li>';
                             }
                             $itemsList .= '</ul>';
 
                             return new HtmlString('
-                                <div style="background-color: #fffbeb; border: 1px solid #fde68a; border-left: 4px solid #f59e0b; border-radius: 6px; padding: 12px 16px; margin-bottom: 8px; color: #92400e; font-size: 13px;">
-                                    <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; margin-bottom: 4px;">
+                                <div style="border-radius: 0.75rem; border: 1px solid rgba(245, 158, 11, 0.35); border-left: 4px solid #f59e0b; background-color: rgba(245, 158, 11, 0.08); padding: 0.875rem 1rem; margin-bottom: 0.5rem; font-size: 0.75rem; color: #92400e;">
+                                    <div style="display: flex; align-items: center; gap: 0.5rem; font-weight: 700; font-size: 0.875rem; margin-bottom: 0.25rem; color: #78350f;">
                                         <span>⚠️ Potential Duplicate Line Items Detected</span>
                                     </div>
-                                    <div style="line-height: 1.4;">
+                                    <div style="line-height: 1.5;">
                                         Duplicate entries may cause redundant contractor costs or overbilling the customer:
                                         '.$itemsList.'
                                     </div>
@@ -600,13 +802,33 @@ class MaintenanceQuotationForm
                         ->columns(12)
                         ->defaultItems(1)
                         ->disabled(fn ($record) => in_array($record?->status, ['approved', 'archived']))
-                        ->addable(fn ($record) => ! in_array($record?->status, ['approved', 'archived']))
+                        ->addable(false)
                         ->deletable(fn ($record) => ! in_array($record?->status, ['approved', 'archived']))
                         ->reorderable(fn ($record) => ! in_array($record?->status, ['approved', 'archived']))
+                        ->partiallyRenderAfterActionsCalled(false)
+                        ->deleteAction(
+                            fn (Action $action) => $action
+                                ->requiresConfirmation()
+                                ->modalHeading('Delete Line Item?')
+                                ->modalDescription('Are you sure you want to remove this itemized quote line from the client pricing breakdown?')
+                                ->modalSubmitActionLabel('Yes, Delete Line Item')
+                                ->after(function ($livewire, Get $get, Set $set, $record) {
+                                    static::recalculateQuotationTotals($get, $set);
+                                    if (method_exists($livewire, 'save')) {
+                                        $livewire->save(shouldRedirect: false);
+                                    }
+                                    if ($record && method_exists($record, 'recalculateTotals')) {
+                                        $record->recalculateTotals();
+                                    }
+                                })
+                        )
+                        ->afterStateUpdated(fn (Get $get, Set $set) => static::recalculateQuotationTotals($get, $set))
+                        ->addActionLabel('Save and add line item')
                         ->schema([
-                            Select::make('maintenance_request_item_id')
-                                ->label('Defect Item')
-                                ->placeholder('Map to Defect Item')
+                            Select::make('maintenance_request_item_ids')
+                                ->label('Target Defect Items')
+                                ->placeholder('Select Defect Items')
+                                ->multiple()
                                 ->options(function (Get $get, $record, $livewire) {
                                     $ticketId = $record?->maintenance_request_id
                                         ?? $livewire->record?->maintenance_request_id
@@ -638,7 +860,7 @@ class MaintenanceQuotationForm
                                 ->preload()
                                 ->live()
                                 ->nullable()
-                                ->columnSpan(4),
+                                ->columnSpan(3),
 
                             TextInput::make('description')
                                 ->label('Line Description / Scope')
@@ -663,6 +885,29 @@ class MaintenanceQuotationForm
                                 })
                                 ->columnSpan(1),
 
+                            TextInput::make('vendor_cost')
+                                ->label('Vendor / Base Cost (₹)')
+                                ->helperText('Contractor rate or internal base cost')
+                                ->numeric()
+                                ->prefix('₹')
+                                ->default(0.00)
+                                ->live(debounce: 500)
+                                ->afterStateUpdated(function (Get $get, Set $set) {
+                                    $vendorCost = (float) ($get('vendor_cost') ?? 0);
+                                    $currentClientPrice = (float) ($get('unit_price') ?? 0);
+                                    if ($vendorCost > 0 && $currentClientPrice <= 0) {
+                                        $marginPct = (float) ($get('../../margin_percentage') ?? SettingService::get('financials.default_margin_percentage', 10.00));
+                                        $suggestedPrice = round($vendorCost * (1 + $marginPct / 100), 2);
+                                        $qty = (float) ($get('quantity') ?? 1);
+                                        $set('unit_price', $suggestedPrice);
+                                        $set('unit_rate', $suggestedPrice);
+                                        $set('total_price', round($qty * $suggestedPrice, 2));
+                                        $set('total_cost', round($qty * $suggestedPrice, 2));
+                                    }
+                                    static::recalculateQuotationTotals($get, $set);
+                                })
+                                ->columnSpan(2),
+
                             TextInput::make('unit_price')
                                 ->label('Client Unit Price (₹)')
                                 ->helperText('Price quoted to client (excl. tax)')
@@ -678,9 +923,8 @@ class MaintenanceQuotationForm
                                     $set('total_cost', $total);
                                     static::recalculateQuotationTotals($get, $set);
                                 })
-                                ->columnSpan(3),
+                                ->columnSpan(2),
 
-                            Hidden::make('vendor_cost')->dehydrated(),
                             Hidden::make('vendor_quote_id')->dehydrated(),
                             Hidden::make('total_price')->dehydrated(),
                             Hidden::make('total_cost')->dehydrated(),
@@ -695,9 +939,6 @@ class MaintenanceQuotationForm
                                     $clientSubtotal = round($qty * $clientUnitPrice, 2);
 
                                     $vendorUnitPrice = (float) ($get('vendor_cost') ?? 0);
-                                    if ($vendorUnitPrice <= 0 && $get('vendor_quote_id')) {
-                                        $vendorUnitPrice = (float) (MaintenanceVendorQuote::find($get('vendor_quote_id'))?->quoted_cost ?? 0);
-                                    }
                                     $vendorTotal = round($qty * $vendorUnitPrice, 2);
 
                                     $marginPct = (float) ($get('../../margin_percentage') ?? $record?->margin_percentage ?? SettingService::get('financials.default_margin_percentage', 10.00));
@@ -750,6 +991,65 @@ class MaintenanceQuotationForm
                                 ->columnSpanFull(),
                         ])
                         ->columnSpanFull(),
+
+                    Actions::make([
+                        Action::make('saveAndAddItemBottom')
+                            ->label('Save and add line item')
+                            ->icon('heroicon-o-plus-circle')
+                            ->color('primary')
+                            ->button()
+                            ->visible(fn ($record) => ! in_array($record?->status, ['approved', 'archived']))
+                            ->action(function ($livewire) {
+                                if (method_exists($livewire, 'save')) {
+                                    $livewire->save(shouldRedirect: false);
+                                }
+
+                                $schema = method_exists($livewire, 'getSchema') ? $livewire->getSchema('form') : null;
+                                $repeater = $schema?->getComponent('items');
+                                if ($repeater instanceof Repeater) {
+                                    $newUuid = $repeater->generateUuid();
+                                    $items = $repeater->getRawState();
+                                    if ($newUuid) {
+                                        $items[$newUuid] = [
+                                            'quantity' => 1,
+                                            'vendor_cost' => 0.00,
+                                            'unit_price' => 0.00,
+                                        ];
+                                    } else {
+                                        $items[] = [
+                                            'quantity' => 1,
+                                            'vendor_cost' => 0.00,
+                                            'unit_price' => 0.00,
+                                        ];
+                                    }
+                                    $repeater->rawState($items);
+                                    $repeater->getChildSchema($newUuid ?? array_key_last($items))->fill();
+                                    $repeater->collapsed(false, shouldMakeComponentCollapsible: false);
+                                    $repeater->callAfterStateUpdated();
+                                    $repeater->shouldPartiallyRenderAfterActionsCalled() ? $repeater->partiallyRender() : null;
+                                }
+                            }),
+
+                        Action::make('saveItemsChangesBottom')
+                            ->label('Save Changes')
+                            ->icon('heroicon-o-check')
+                            ->color('success')
+                            ->button()
+                            ->visible(fn ($record) => ! in_array($record?->status, ['approved', 'archived']))
+                            ->action(function ($livewire) {
+                                if (method_exists($livewire, 'save')) {
+                                    $livewire->save(shouldRedirect: false);
+                                }
+
+                                Notification::make()
+                                    ->title('Quotation Saved')
+                                    ->body('Quotation and line items have been saved successfully.')
+                                    ->success()
+                                    ->send();
+                            }),
+                    ])
+                        ->alignment(\Filament\Support\Enums\Alignment::Center)
+                        ->columnSpanFull(),
                 ]),
 
             // PDF Preview & Generation Card
@@ -798,6 +1098,11 @@ class MaintenanceQuotationForm
                             }
 
                             try {
+                                if (method_exists($livewire, 'save')) {
+                                    $livewire->save(shouldRedirect: false);
+                                }
+
+                                $record->refresh();
                                 app(MaintenanceQuotationPdfService::class)->generatePdf($record);
 
                                 Notification::make()
@@ -846,55 +1151,7 @@ class MaintenanceQuotationForm
                 ->description('Enter customer authorization remarks and upload approval proof files directly below, then confirm approval.')
                 ->columnSpanFull()
                 ->headerActions([
-                    Action::make('approveQuoteInTab')
-                        ->label('Confirm Quotation Approval')
-                        ->icon('heroicon-o-check-circle')
-                        ->color('success')
-                        ->button()
-                        ->size('sm')
-                        ->visible(fn ($record) => $record && in_array($record->status, ['draft', 'pending_approval']))
-                        ->requiresConfirmation()
-                        ->modalHeading('Approve Client Quotation')
-                        ->modalDescription('Are you sure you want to approve this quotation? Please ensure you have entered the approval remarks and uploaded the proof files in this tab.')
-                        ->modalSubmitActionLabel('Confirm Approval')
-                        ->action(function ($record, $livewire) {
-                            $notes = $livewire->data['approval_notes'] ?? $record->approval_notes;
-                            $approvedAt = $livewire->data['approved_at'] ?? $record->approved_at;
-                            $channel = $livewire->data['approval_channel'] ?? $record->approval_channel;
-
-                            if (blank($notes) || blank($approvedAt) || blank($channel) || ! $record->hasMedia('approval_proof_files')) {
-                                Notification::make()
-                                    ->title('All Approval Details Required')
-                                    ->body('Please fill in all mandatory fields (Approval Method, Confirmation Remarks, Approval Date & Time, and Approval Proof document) before confirming approval.')
-                                    ->warning()
-                                    ->persistent()
-                                    ->send();
-
-                                return;
-                            }
-
-                            $billingService = app(MaintenanceBillingService::class);
-                            $payer = $record->maintenanceRequest?->payer_type;
-                            $payerVal = $payer instanceof \App\Domain\Maintenance\Enums\PayerType ? $payer->value : (string) $payer;
-                            $defaultApprover = in_array($payerVal, ['tenant', 'tenant_direct', 'dwelly_invoice_tenant']) ? 'tenant' : (in_array($payerVal, ['dwelly', 'dwelly_direct_absorbed']) ? 'dwelly' : 'owner');
-
-                            $billingService->recordClientApproval($record, [
-                                'approved_by_type' => $livewire->data['approved_by_type'] ?? $record->approved_by_type ?? $defaultApprover,
-                                'approval_channel' => $channel,
-                                'approval_notes' => $notes,
-                                'approved_at' => $approvedAt,
-                            ]);
-
-                            Notification::make()
-                                ->title('Quotation Approved Successfully')
-                                ->body('Client quotation is approved! You may now award winning contractor quote(s) and issue official Work Orders in the Work Orders tab.')
-                                ->success()
-                                ->send();
-
-                            $livewire->redirect(
-                                \App\Filament\Resources\Billing\MaintenanceQuotationResource::getUrl('work-orders', ['record' => $record])
-                            );
-                        }),
+                    static::getApproveQuotationAction(),
                 ])
                 ->schema([
                     Grid::make(3)
@@ -1120,33 +1377,23 @@ class MaintenanceQuotationForm
     public static function configureSettlementForm(Schema $schema): Schema
     {
         return $schema->components([
-            Section::make('📊 Accounting Bridge (Vendor Bills & Client Invoices)')
-                ->description('Generate and sync accounting documents (Vendor Bills and Client Invoices) with the financial ledger.')
+            Section::make('📊 Settlement & Accounting Workflow (Client Invoices & Vendor Bills)')
+                ->description('Official accounting documents (Client Invoices and Vendor Bills) are generated on the Maintenance Request page after work completion and verification audit.')
                 ->columnSpanFull()
                 ->headerActions([
                     Action::make('viewAuditInTab')
                         ->label(fn ($record) => $record?->maintenanceRequest?->triggeredAudit ? ('View Audit #'.$record->maintenanceRequest->triggeredAudit->audit_number) : 'View Verification Audit')
                         ->icon('heroicon-o-clipboard-document-check')
-                        ->color('info')
+                        ->color('gray')
                         ->button()
                         ->size('sm')
                         ->visible(fn ($record) => filled($record?->maintenanceRequest?->triggered_audit_id) && (bool) $record?->maintenanceRequest?->triggeredAudit)
                         ->url(fn ($record) => $record?->maintenanceRequest?->triggeredAudit ? AuditResource::getUrl('inspect', ['record' => $record->maintenanceRequest->triggeredAudit]) : null)
                         ->openUrlInNewTab(),
-
-                    Action::make('viewTicketInTab5')
-                        ->label(fn ($record) => $record?->maintenanceRequest ? ('View Ticket #'.$record->maintenanceRequest->ticket_number) : 'View Ticket')
-                        ->icon('heroicon-o-arrow-top-right-on-square')
-                        ->color('gray')
-                        ->button()
-                        ->size('sm')
-                        ->visible(fn ($record) => filled($record?->maintenance_request_id))
-                        ->url(fn ($record) => $record?->maintenanceRequest ? MaintenanceRequestResource::getUrl('edit', ['record' => $record->maintenanceRequest]) : null)
-                        ->openUrlInNewTab(),
                 ])
                 ->schema([
                     Placeholder::make('accounting_summary')
-                        ->label('')
+                        ->hiddenLabel()
                         ->columnSpanFull()
                         ->content(function ($record) {
                             if (! $record) {
@@ -1154,6 +1401,8 @@ class MaintenanceQuotationForm
                             }
 
                             $ticket = $record->maintenanceRequest;
+                            $ticketNumber = $ticket?->ticket_number ?? 'N/A';
+                            $ticketUrl = $ticket ? MaintenanceRequestResource::getUrl('edit', ['record' => $ticket, 'relation' => 2]) : '#';
                             $payer = $ticket?->payer_type?->getLabel() ?? ucfirst((string) ($ticket?->payer_type ?? 'N/A'));
                             $totalClient = number_format((float) $record->total_amount, 2);
                             $subtotalVendor = number_format((float) $record->subtotal_amount, 2);
@@ -1161,21 +1410,62 @@ class MaintenanceQuotationForm
                             $isDirect = (bool) ($ticket?->is_direct_vendor ?? false);
 
                             return new HtmlString('
-                                <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 12px;">
-                                    <div style="background: white; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; padding: 14px;">
-                                        <span style="color: gray; font-size: 11px;">Receivable / Client Invoice</span><br>
-                                        <strong style="font-size: 18px; color: #1e40af;">₹'.$totalClient.'</strong><br>
-                                        <span style="font-size: 11px; color: #3b82f6;">Payer: '.$payer.'</span>
+                                <div style="display: flex; flex-direction: column; gap: 1.25rem; width: 100%;">
+                                    <div style="padding: 1.25rem 1.375rem; border-radius: 0.75rem; background: linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(99, 102, 241, 0.05) 100%); border: 1px solid rgba(37, 99, 235, 0.28); display: flex; flex-direction: column; gap: 1rem;">
+                                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 1.25rem; flex-wrap: wrap;">
+                                            <div style="display: flex; align-items: flex-start; gap: 0.875rem; max-width: 680px;">
+                                                <div style="display: inline-flex; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem; border-radius: 0.5rem; background: #2563eb; color: #ffffff; flex-shrink: 0; font-size: 1.125rem;">
+                                                    ℹ️
+                                                </div>
+                                                <div>
+                                                    <div style="font-weight: 700; font-size: 0.9375rem; color: #1e3a8a;">
+                                                        Invoice &amp; Vendor Bill Generation Workflow
+                                                    </div>
+                                                    <div style="font-size: 0.8125rem; color: #475569; margin-top: 0.25rem; line-height: 1.45;">
+                                                        Official accounting documents (<strong>Client Invoices</strong> and <strong>Vendor Bills</strong>) are generated from the operational <strong>Maintenance Request</strong> page under the <strong>Completion, Report &amp; Verification</strong> tab once repair work is completed and verified.
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <a href="'.$ticketUrl.'" target="_blank" style="display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.625rem 1.125rem; border-radius: 0.5rem; background-color: #2563eb; color: #ffffff; font-weight: 700; font-size: 0.8125rem; text-decoration: none; box-shadow: 0 1px 2px rgba(0,0,0,0.08); white-space: nowrap;">
+                                                    <span>Open Ticket #'.e($ticketNumber).' (Completion &amp; Billing)</span>
+                                                    <svg style="width: 1rem; height: 1rem;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                                                </a>
+                                            </div>
+                                        </div>
+
+                                        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(37, 99, 235, 0.15);">
+                                            <div style="padding: 0.625rem 0.875rem; border-radius: 0.5rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); font-size: 0.75rem;">
+                                                <span style="font-weight: 700; color: #047857;">Step 1: Quotation Approved</span><br>
+                                                <span style="color: #065f46; font-size: 0.6875rem;">Rates &amp; base costs finalized in Tab 2</span>
+                                            </div>
+                                            <div style="padding: 0.625rem 0.875rem; border-radius: 0.5rem; background: rgba(37, 99, 235, 0.1); border: 1px solid rgba(37, 99, 235, 0.25); font-size: 0.75rem;">
+                                                <span style="font-weight: 700; color: #1e40af;">Step 2: Work Orders Awarded</span><br>
+                                                <span style="color: #1e3a8a; font-size: 0.6875rem;">Contractors authorized in Tab 4</span>
+                                            </div>
+                                            <div style="padding: 0.625rem 0.875rem; border-radius: 0.5rem; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); font-size: 0.75rem;">
+                                                <span style="font-weight: 700; color: #92400e;">Step 3: Verification &amp; Invoicing</span><br>
+                                                <span style="color: #78350f; font-size: 0.6875rem;">Executed on Maintenance Request page</span>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div style="background: white; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; padding: 14px;">
-                                        <span style="color: gray; font-size: 11px;">Payable / Vendor Bills</span><br>
-                                        <strong style="font-size: 18px; color: #b91c1c;">₹'.$subtotalVendor.'</strong><br>
-                                        <span style="font-size: 11px; color: #ef4444;">Route: '.($isDirect ? 'Direct Client Payment' : 'Dwelly Coordinated').'</span>
-                                    </div>
-                                    <div style="background: white; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; padding: 14px;">
-                                        <span style="color: gray; font-size: 11px;">Net Dwelly Margin</span><br>
-                                        <strong style="font-size: 18px; color: #16a34a;">₹'.$margin.'</strong><br>
-                                        <span style="font-size: 11px; color: #10b981;">Markup: '.$record->margin_percentage.'%</span>
+
+                                    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px;">
+                                        <div style="background: rgba(128, 128, 128, 0.03); border: 1px solid rgba(128, 128, 128, 0.18); border-radius: 8px; padding: 14px;">
+                                            <span style="color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">Receivable / Client Invoice</span><br>
+                                            <strong style="font-size: 18px; color: #1e40af;">₹'.$totalClient.'</strong><br>
+                                            <span style="font-size: 11px; color: #3b82f6;">Payer: '.e($payer).'</span>
+                                        </div>
+                                        <div style="background: rgba(128, 128, 128, 0.03); border: 1px solid rgba(128, 128, 128, 0.18); border-radius: 8px; padding: 14px;">
+                                            <span style="color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">Payable / Vendor Bills</span><br>
+                                            <strong style="font-size: 18px; color: #b91c1c;">₹'.$subtotalVendor.'</strong><br>
+                                            <span style="font-size: 11px; color: #ef4444;">Route: '.($isDirect ? 'Direct Client Payment' : 'Dwelly Coordinated').'</span>
+                                        </div>
+                                        <div style="background: rgba(128, 128, 128, 0.03); border: 1px solid rgba(128, 128, 128, 0.18); border-radius: 8px; padding: 14px;">
+                                            <span style="color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">Net Dwelly Margin</span><br>
+                                            <strong style="font-size: 18px; color: #16a34a;">₹'.$margin.'</strong><br>
+                                            <span style="font-size: 11px; color: #10b981;">Markup: '.$record->margin_percentage.'%</span>
+                                        </div>
                                     </div>
                                 </div>
                             ');
@@ -1235,18 +1525,18 @@ class MaintenanceQuotationForm
 
         $getStepStyle = function (bool $isValid, string $title, string $desc) {
             $bg = $isValid ? 'rgba(16, 185, 129, 0.08)' : 'rgba(128, 128, 128, 0.04)';
-            $border = $isValid ? 'rgba(16, 185, 129, 0.3)' : 'rgba(128, 128, 128, 0.18)';
+            $border = $isValid ? 'rgba(16, 185, 129, 0.35)' : 'rgba(128, 128, 128, 0.18)';
             $titleColor = $isValid ? '#059669' : 'inherit';
             $descColor = $isValid ? '#10b981' : 'rgba(128, 128, 128, 0.75)';
             $icon = $isValid ? '✓' : '○';
-            $iconColor = $isValid ? '#10b981' : 'rgba(128, 128, 128, 0.6)';
+            $iconColor = $isValid ? '#059669' : 'rgba(128, 128, 128, 0.6)';
 
-            return '<div style="padding: 0.85rem; border-radius: 0.75rem; border: 1px solid '.$border.'; background-color: '.$bg.';">'.
+            return '<div style="padding: 0.75rem 0.875rem; border-radius: 0.75rem; border: 1px solid '.$border.'; background-color: '.$bg.'; min-width: 0;">'.
                 '<div style="display: flex; align-items: center; gap: 0.5rem;">'.
-                '<span style="font-size: 1rem; font-weight: 700; color: '.$iconColor.';">'.$icon.'</span>'.
-                '<h4 style="font-size: 0.875rem; font-weight: 600; margin: 0; color: '.$titleColor.';">'.e($title).'</h4>'.
+                '<span style="font-size: 0.875rem; font-weight: 800; color: '.$iconColor.'; flex-shrink: 0;">'.$icon.'</span>'.
+                '<h4 style="font-size: 0.8125rem; font-weight: 700; margin: 0; color: '.$titleColor.'; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">'.e($title).'</h4>'.
                 '</div>'.
-                '<div style="font-size: 0.75rem; margin-top: 0.35rem; color: '.$descColor.';">'.e($desc).'</div>'.
+                '<div style="font-size: 0.75rem; margin-top: 0.25rem; color: '.$descColor.'; line-height: 1.35;">'.e($desc).'</div>'.
                 '</div>';
         };
 
@@ -1255,13 +1545,13 @@ class MaintenanceQuotationForm
         $card3 = $getStepStyle($s3, '3. Client Approval', $s3 ? 'Customer approved & signed' : 'Pending client authorization');
         $card4 = $getStepStyle($s4, '4. Work Orders', $s4 ? 'Work order(s) awarded' : 'Award winning vendor quotes');
 
-        $statusColor = match ($status) {
+        $badgeBg = match ($status) {
             'approved' => '#10b981',
-            'settled' => '#059669',
+            'settled' => '#047857',
             'pending_approval' => '#f59e0b',
-            'rejected' => '#ef4444',
-            'archived' => '#64748b',
-            default => '#3b82f6',
+            'rejected' => '#e11d48',
+            'archived' => '#6b7280',
+            default => '#2563eb',
         };
 
         $statusLabel = match ($status) {
@@ -1286,43 +1576,43 @@ class MaintenanceQuotationForm
 
         $archivedBanner = '';
         if ($status === 'archived') {
-            $archivedBanner = '<div style="background-color: rgba(239, 68, 68, 0.08); border-left: 4px solid #ef4444; border-radius: 6px; padding: 12px 16px; margin-bottom: 1rem; font-size: 13px; color: #991b1b; font-weight: 500;">🗄️ <strong>Quotation Archived & Locked:</strong> This financial quotation has been archived and locked. All fields, calculation tools, and approval actions are permanently disabled.</div>';
+            $archivedBanner = '<div style="margin-bottom: 0.75rem; padding: 0.75rem 1rem; border-radius: 0.5rem; border: 1px solid rgba(239, 68, 68, 0.3); border-left: 4px solid #ef4444; background-color: rgba(239, 68, 68, 0.08); font-size: 0.75rem; color: #991b1b;">🗄️ <strong>Quotation Archived & Locked:</strong> This financial quotation has been archived and locked. All fields, calculation tools, and approval actions are permanently disabled.</div>';
         }
 
-        $html = '<div style="background-color: var(--fi-section-bg, #ffffff); border: 1px solid var(--fi-section-border, rgba(0,0,0,0.1)); border-radius: 0.75rem; padding: 1.25rem; margin-bottom: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">';
+        $html = '<div style="background-color: rgba(128, 128, 128, 0.03); border: 1px solid rgba(128, 128, 128, 0.18); border-radius: 0.875rem; padding: 1.125rem; margin-bottom: 1rem; font-family: ui-sans-serif, system-ui, sans-serif; color: inherit;">';
         $html .= $archivedBanner;
-        $html .= '<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 1rem; border-bottom: 1px solid rgba(128,128,128,0.15); padding-bottom: 0.75rem;">';
-        $html .= '<div>';
-        $html .= '<span style="font-size: 1.25rem; font-weight: 800; letter-spacing: -0.02em;">Quotation '.e($quoteNumber).'</span>';
-        $html .= '<span style="margin-left: 10px; display: inline-block; padding: 3px 10px; border-radius: 9999px; font-size: 12px; font-weight: 700; color: white; background-color: '.$statusColor.';">'.$statusLabel.'</span>';
+        $html .= '<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.875rem; border-bottom: 1px solid rgba(128, 128, 128, 0.12); padding-bottom: 0.75rem;">';
+        $html .= '<div style="display: flex; align-items: center; gap: 0.625rem; flex-wrap: wrap;">';
+        $html .= '<span style="font-size: 1.125rem; font-weight: 800; letter-spacing: -0.02em; color: inherit;">Quotation '.e($quoteNumber).'</span>';
+        $html .= '<span style="display: inline-block; padding: 0.2rem 0.625rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 700; background-color: '.$badgeBg.'; color: #ffffff;">'.$statusLabel.'</span>';
         $html .= '</div>';
-        $html .= '<div style="display: flex; align-items: center; gap: 16px; font-size: 13px;">';
-        $html .= '<div><span style="color: gray;">Client Quote:</span> <strong style="font-size: 16px; color: #1e40af;">₹'.$totalAmount.'</strong></div>';
-        $html .= '<div><span style="color: gray;">Margin:</span> <strong style="font-size: 16px; color: #16a34a;">₹'.$marginAmount.'</strong></div>';
+        $html .= '<div style="display: flex; align-items: center; gap: 1rem; font-size: 0.8125rem;">';
+        $html .= '<div><span style="color: rgba(128, 128, 128, 0.9);">Client Quote:</span> <strong style="font-size: 0.9375rem; font-weight: 800; color: #2563eb; margin-left: 0.25rem;">₹'.$totalAmount.'</strong></div>';
+        $html .= '<div><span style="color: rgba(128, 128, 128, 0.9);">Margin:</span> <strong style="font-size: 0.9375rem; font-weight: 800; color: #16a34a; margin-left: 0.25rem;">₹'.$marginAmount.'</strong></div>';
         $html .= '</div>';
         $html .= '</div>';
 
         // Context grid
-        $html .= '<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; font-size: 12px; margin-bottom: 1rem;">';
-        $html .= '<div><span style="color: gray;">Linked Ticket:</span><br>'.$ticketLink.'</div>';
-        $html .= '<div><span style="color: gray;">Property:</span><br>'.$propertyLink.'</div>';
-        $html .= '<div><span style="color: gray;">Owner:</span><br>'.$ownerLink.'</div>';
-        $html .= '<div><span style="color: gray;">Payer:</span><br><strong style="color: #2563eb;">'.$payerLabel.'</strong> (Tenant: '.$tenantLink.')</div>';
+        $html .= '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; font-size: 0.8125rem; margin-bottom: 0.875rem;">';
+        $html .= '<div><span style="font-size: 0.6875rem; font-weight: 700; color: rgba(128, 128, 128, 0.7); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 0.125rem;">Linked Ticket:</span>'.$ticketLink.'</div>';
+        $html .= '<div><span style="font-size: 0.6875rem; font-weight: 700; color: rgba(128, 128, 128, 0.7); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 0.125rem;">Property:</span>'.$propertyLink.'</div>';
+        $html .= '<div><span style="font-size: 0.6875rem; font-weight: 700; color: rgba(128, 128, 128, 0.7); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 0.125rem;">Owner:</span>'.$ownerLink.'</div>';
+        $html .= '<div><span style="font-size: 0.6875rem; font-weight: 700; color: rgba(128, 128, 128, 0.7); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 0.125rem;">Payer:</span><strong style="color: #2563eb;">'.$payerLabel.'</strong> <span style="color: rgba(128, 128, 128, 0.7); font-size: 0.6875rem;">(Tenant: '.$tenantLink.')</span></div>';
         $html .= '</div>';
 
         // Progress bar
-        $html .= '<div style="margin-bottom: 1rem;">';
-        $html .= '<div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; margin-bottom: 4px; color: gray;">';
+        $html .= '<div style="margin-bottom: 0.875rem;">';
+        $html .= '<div style="display: flex; justify-content: space-between; font-size: 0.75rem; font-weight: 600; margin-bottom: 0.25rem; color: rgba(128, 128, 128, 0.9);">';
         $html .= '<span>Quotation Workflow Progress</span>';
-        $html .= '<span style="color: '.$progressColor.'; font-weight: 700;">'.$progress.'% Completed</span>';
+        $html .= '<span style="color: '.$progressColor.'; font-weight: 800;">'.$progress.'% Completed</span>';
         $html .= '</div>';
-        $html .= '<div style="width: 100%; height: 6px; background-color: rgba(128,128,128,0.15); border-radius: 9999px; overflow: hidden;">';
-        $html .= '<div style="width: '.$progress.'%; height: 100%; background-color: '.$progressColor.'; transition: width 0.3s ease;"></div>';
+        $html .= '<div style="width: 100%; height: 0.5rem; background-color: rgba(128, 128, 128, 0.15); border-radius: 9999px; overflow: hidden;">';
+        $html .= '<div style="width: '.$progress.'%; height: 100%; background-color: '.$progressColor.'; border-radius: 9999px; transition: width 400ms ease;"></div>';
         $html .= '</div>';
         $html .= '</div>';
 
         // Step cards
-        $html .= '<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px;">';
+        $html .= '<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.625rem;">';
         $html .= $card1.$card2.$card3.$card4;
         $html .= '</div>';
 
@@ -1390,9 +1680,11 @@ class MaintenanceQuotationForm
 
         foreach ($items as $it) {
             $lineNumber = $counter++;
-            $defId = $it['maintenance_request_item_id'] ?? null;
-            if ($defId) {
-                $defectCounts[$defId][] = $lineNumber;
+            $defIds = (array) ($it['maintenance_request_item_ids'] ?? ($it['maintenance_request_item_id'] ? [$it['maintenance_request_item_id']] : []));
+            foreach ($defIds as $defId) {
+                if ($defId) {
+                    $defectCounts[$defId][] = $lineNumber;
+                }
             }
 
             $desc = trim(strtolower((string) ($it['description'] ?? '')));
@@ -1425,5 +1717,116 @@ class MaintenanceQuotationForm
         }
 
         return $duplicates;
+    }
+
+    /**
+     * Helper to detect differences between line item vendor_cost and Tab 1 contractor estimates
+     */
+    public static function getVendorCostDiscrepanciesSummary(?MaintenanceClientQuote $record, ?Get $get = null): array
+    {
+        $items = $get ? ($get('items') ?? []) : [];
+        if (empty($items) && $record) {
+            $items = $record->items()->get()->toArray();
+        }
+
+        $ticketId = $record?->maintenance_request_id ?? ($get ? $get('maintenance_request_id') : null);
+        if (! $ticketId || empty($items)) {
+            return [];
+        }
+
+        $dbQuotes = MaintenanceVendorQuote::where('maintenance_request_id', $ticketId)->get()->keyBy('id');
+        $discrepancies = [];
+        $counter = 1;
+
+        foreach ($items as $item) {
+            $lineNum = $counter++;
+            $vQuoteId = $item['vendor_quote_id'] ?? null;
+            if ($vQuoteId && isset($dbQuotes[$vQuoteId])) {
+                $currentDbCost = (float) $dbQuotes[$vQuoteId]->quoted_cost;
+                $lineVendorCost = (float) ($item['vendor_cost'] ?? 0);
+                if (abs($currentDbCost - $lineVendorCost) >= 0.01) {
+                    $trade = $dbQuotes[$vQuoteId]->trade_title ?: "Vendor Quote #{$vQuoteId}";
+                    $discrepancies[] = "Line {$lineNum} ({$trade}): Tab 1 estimate is ₹" . number_format($currentDbCost, 2) . " but line item cost base is ₹" . number_format($lineVendorCost, 2);
+                }
+            }
+        }
+
+        return $discrepancies;
+    }
+
+    /**
+     * Action to approve client quotation
+     */
+    public static function getApproveQuotationAction(): Action
+    {
+        return Action::make('approveQuoteInTab')
+            ->label('Confirm Quotation Approval')
+            ->icon('heroicon-o-check-circle')
+            ->color('success')
+            ->button()
+            ->size('sm')
+            ->visible(fn ($record) => $record && in_array($record->status, ['draft', 'pending_approval']))
+            ->requiresConfirmation()
+            ->modalHeading('Approve Client Quotation')
+            ->modalDescription('Are you sure you want to approve this quotation? Please ensure you have entered the approval remarks and uploaded the proof files in this tab.')
+            ->modalSubmitActionLabel('Confirm Approval')
+            ->action(function ($record, $livewire) {
+                $notes = $livewire->data['approval_notes'] ?? $record->approval_notes;
+                $approvedAt = $livewire->data['approved_at'] ?? $record->approved_at;
+                $channel = $livewire->data['approval_channel'] ?? $record->approval_channel;
+
+                $hasProofMedia = $record->hasMedia('approval_proof_files') || ! empty($livewire->data['approval_proof_files']);
+
+                if (blank($notes) || blank($approvedAt) || blank($channel) || ! $hasProofMedia) {
+                    Notification::make()
+                        ->title('All Approval Details Required')
+                        ->body('Please fill in all mandatory fields (Approval Method, Confirmation Remarks, Approval Date & Time, and Approval Proof document) before confirming approval.')
+                        ->warning()
+                        ->persistent()
+                        ->send();
+
+                    return;
+                }
+
+                if (! empty($livewire->data['approval_proof_files'])) {
+                    foreach ((array) $livewire->data['approval_proof_files'] as $file) {
+                        if (is_string($file)) {
+                            if (\Illuminate\Support\Facades\Storage::disk('public')->exists($file)) {
+                                $record->addMediaFromDisk($file, 'public')->toMediaCollection('approval_proof_files');
+                            } elseif (\Illuminate\Support\Facades\Storage::disk('local')->exists($file)) {
+                                $record->addMediaFromDisk($file, 'local')->toMediaCollection('approval_proof_files');
+                            } elseif (\Illuminate\Support\Facades\Storage::disk('local')->exists('livewire-tmp/' . $file)) {
+                                $record->addMediaFromDisk('livewire-tmp/' . $file, 'local')->toMediaCollection('approval_proof_files');
+                            } elseif (file_exists($file)) {
+                                $record->addMedia($file)->toMediaCollection('approval_proof_files');
+                            }
+                        } elseif ($file instanceof \Livewire\Features\SupportFileUploads\TemporaryUploadedFile) {
+                            $record->addMedia($file->getRealPath())->toMediaCollection('approval_proof_files');
+                        }
+                    }
+                }
+
+                $billingService = app(MaintenanceBillingService::class);
+                $payer = $record->maintenanceRequest?->payer_type;
+                $payerVal = $payer instanceof \App\Domain\Maintenance\Enums\PayerType ? $payer->value : (string) $payer;
+                $defaultApprover = in_array($payerVal, ['tenant', 'tenant_direct', 'dwelly_invoice_tenant']) ? 'tenant' : (in_array($payerVal, ['dwelly', 'dwelly_direct_absorbed']) ? 'dwelly' : 'owner');
+
+                $billingService->recordClientApproval($record, [
+                    'approved_by_type' => $livewire->data['approved_by_type'] ?? $record->approved_by_type ?? $defaultApprover,
+                    'approval_channel' => $channel,
+                    'approval_notes' => $notes,
+                    'approved_at' => $approvedAt,
+                ]);
+
+                Notification::make()
+                    ->title('Quotation Approved Successfully')
+                    ->body('Client quotation is approved! You may now award winning contractor quote(s) and issue official Work Orders in the Work Orders tab.')
+                    ->success()
+                    ->send();
+
+                $livewire->redirect(
+                    \App\Filament\Resources\Billing\MaintenanceQuotationResource::getUrl('work-orders', ['record' => $record])
+                );
+            });
     }
 }
