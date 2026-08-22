@@ -6,6 +6,7 @@ use App\Domain\Finance\Services\AccountingProvisioningService;
 use App\Domain\Maintenance\Enums\MaintenanceStatus;
 use App\Domain\Maintenance\Models\MaintenanceClientQuote;
 use App\Domain\Maintenance\Models\MaintenanceRequest;
+use App\Domain\Maintenance\Models\MaintenanceVendorQuote;
 use Illuminate\Support\Facades\DB;
 use Tek2991\Accounting\Enums\BillStatus;
 use Tek2991\Accounting\Enums\DocumentLineType;
@@ -108,6 +109,8 @@ class MaintenanceBillingService
                 'branch_id' => $branchId,
                 'contact_id' => $contact->id,
                 'invoice_number' => $invoiceNumber,
+                'reference_type' => MaintenanceRequest::class,
+                'reference_id' => $request->id,
                 'status' => InvoiceStatus::Sent,
                 'issue_date' => $options['issue_date'] ?? now()->toDateString(),
                 'due_date' => $options['due_date'] ?? now()->addDays(7)->toDateString(),
@@ -219,6 +222,8 @@ class MaintenanceBillingService
                 'contact_id' => $contact->id,
                 'bill_number' => $billNumber,
                 'vendor_reference' => $vendorQuote->vendor_quote_number ?: $vendorQuote->work_order_number,
+                'reference_type' => MaintenanceRequest::class,
+                'reference_id' => $request->id,
                 'status' => BillStatus::Received,
                 'issue_date' => $options['issue_date'] ?? now()->toDateString(),
                 'due_date' => $options['due_date'] ?? now()->addDays(14)->toDateString(),
@@ -319,6 +324,8 @@ class MaintenanceBillingService
             $bill = Bill::create([
                 'contact_id' => $contact->id,
                 'bill_number' => $billNumber,
+                'reference_type' => MaintenanceRequest::class,
+                'reference_id' => $request->id,
                 'status' => BillStatus::Received,
                 'issue_date' => $options['issue_date'] ?? now()->toDateString(),
                 'due_date' => $options['due_date'] ?? now()->addDays(14)->toDateString(),
@@ -419,6 +426,15 @@ class MaintenanceBillingService
 
                 // Automatically generate work order PDF document
                 app(MaintenanceWorkOrderPdfService::class)->generatePdf($vq, $quote);
+
+                // Automatically generate Vendor Bill in accounting if not already created
+                if (empty($vq->bill_id)) {
+                    try {
+                        $this->createVendorBillForQuote($vq);
+                    } catch (\Throwable $e) {
+                        \Illuminate\Support\Facades\Log::warning("Could not auto-generate vendor bill for quote #{$vq->id}: " . $e->getMessage());
+                    }
+                }
             }
 
             if ($request) {

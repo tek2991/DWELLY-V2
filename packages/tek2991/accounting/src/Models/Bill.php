@@ -51,6 +51,8 @@ class Bill extends Model
         'balance_due',
         'default_expense_account_id',
         'place_of_supply_state_id',
+        'reference_type',
+        'reference_id',
     ];
 
     protected $casts = [

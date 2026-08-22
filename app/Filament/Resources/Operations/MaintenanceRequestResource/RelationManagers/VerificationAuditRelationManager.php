@@ -79,6 +79,8 @@ class VerificationAuditRelationManager extends RelationManager
             ->headerActions([
                 $this->getViewPdfModalAction(),
                 $this->getMarkWorkCompletedAction(),
+                $this->getGenerateClientInvoiceAction(),
+                $this->getGenerateVendorBillsAction(),
                 $this->getManageClientAcceptanceAction(),
                 $this->getTriggerOptionalAuditAction(),
             ])
@@ -294,11 +296,128 @@ class VerificationAuditRelationManager extends RelationManager
                     $item->update(['status' => 'completed']);
                 }
 
+                // Auto-generate client invoice for the paying party
+                $invoiceMsg = '';
+                $payerVal = $ticket->payer_type instanceof PayerType
+                    ? $ticket->payer_type->value
+                    : (string) $ticket->payer_type;
+
+                $billType = match ($payerVal) {
+                    'tenant' => 'tenant_invoice',
+                    default => 'owner_invoice',
+                };
+
+                if (empty($ticket->owner_invoice_id) && empty($ticket->tenant_invoice_id)) {
+                    try {
+                        $billingService = app(\App\Domain\Maintenance\Services\MaintenanceBillingService::class);
+                        $invoice = $billingService->createMaintenanceInvoice($ticket, $billType);
+                        $invoiceMsg = " Client Invoice #{$invoice->invoice_number} has been generated.";
+                    } catch (\Throwable $e) {
+                        \Illuminate\Support\Facades\Log::warning("Could not auto-generate invoice for ticket {$ticket->ticket_number}: " . $e->getMessage());
+                    }
+                }
+
                 Notification::make()
                     ->title('Work Marked Completed')
-                    ->body("Paying party acceptance confirmed for Ticket #{$ticket->ticket_number}. Work marked as completed.")
+                    ->body("Paying party acceptance confirmed for Ticket #{$ticket->ticket_number}. Work marked as completed.{$invoiceMsg}")
                     ->success()
                     ->send();
+
+                $livewire->dispatch('$refresh');
+            });
+    }
+
+    protected function getGenerateClientInvoiceAction(): Action
+    {
+        return Action::make('generateClientInvoice')
+            ->label('Generate Client Invoice')
+            ->icon('heroicon-o-document-currency-rupee')
+            ->color('success')
+            ->button()
+            ->size('sm')
+            ->visible(function (RelationManager $livewire) {
+                $ticket = $livewire->getOwnerRecord();
+                if (!$ticket) return false;
+                $hasInvoice = filled($ticket->owner_invoice_id) || filled($ticket->tenant_invoice_id);
+                return !$hasInvoice && ($ticket->isWorkCompleted() || $ticket->hasClientAcceptance());
+            })
+            ->requiresConfirmation()
+            ->modalHeading('Generate Client Maintenance Invoice')
+            ->modalDescription(function (RelationManager $livewire) {
+                $ticket = $livewire->getOwnerRecord();
+                $payer = $ticket->payer_type?->getLabel() ?? ucfirst((string) $ticket->payer_type);
+                return "Generate the formal accounting invoice for ticket #{$ticket->ticket_number} to {$payer}.";
+            })
+            ->action(function (RelationManager $livewire) {
+                $ticket = $livewire->getOwnerRecord();
+                $billingService = app(\App\Domain\Maintenance\Services\MaintenanceBillingService::class);
+                $payerVal = $ticket->payer_type instanceof PayerType
+                    ? $ticket->payer_type->value
+                    : (string) $ticket->payer_type;
+
+                $billType = match ($payerVal) {
+                    'tenant' => 'tenant_invoice',
+                    default => 'owner_invoice',
+                };
+
+                try {
+                    $invoice = $billingService->createMaintenanceInvoice($ticket, $billType);
+                    Notification::make()
+                        ->title('Client Invoice Generated')
+                        ->body("Invoice #{$invoice->invoice_number} generated for Ticket #{$ticket->ticket_number}.")
+                        ->success()
+                        ->send();
+                } catch (\Throwable $e) {
+                    Notification::make()
+                        ->title('Invoice Generation Error')
+                        ->body($e->getMessage())
+                        ->danger()
+                        ->persistent()
+                        ->send();
+                }
+
+                $livewire->dispatch('$refresh');
+            });
+    }
+
+    protected function getGenerateVendorBillsAction(): Action
+    {
+        return Action::make('generateVendorBills')
+            ->label('Generate Vendor Bills')
+            ->icon('heroicon-o-receipt-percent')
+            ->color('warning')
+            ->button()
+            ->size('sm')
+            ->visible(function (RelationManager $livewire) {
+                $ticket = $livewire->getOwnerRecord();
+                if (!$ticket || $ticket->is_direct_vendor) return false;
+                
+                $unbilledQuotes = $ticket->vendorQuotes()->whereNull('bill_id')->count();
+                return $unbilledQuotes > 0 || (empty($ticket->bill_id) && $ticket->vendor_party_id);
+            })
+            ->requiresConfirmation()
+            ->modalHeading('Generate Vendor Bills')
+            ->modalDescription('Generate payable bills for awarded service contractors and sync them with accounting.')
+            ->action(function (RelationManager $livewire) {
+                $ticket = $livewire->getOwnerRecord();
+                $billingService = app(\App\Domain\Maintenance\Services\MaintenanceBillingService::class);
+
+                try {
+                    $bills = $billingService->createAllVendorBillsForRequest($ticket);
+                    $count = count($bills);
+                    Notification::make()
+                        ->title('Vendor Bills Generated')
+                        ->body("{$count} Vendor Bill(s) generated successfully for Ticket #{$ticket->ticket_number}.")
+                        ->success()
+                        ->send();
+                } catch (\Throwable $e) {
+                    Notification::make()
+                        ->title('Bill Generation Error')
+                        ->body($e->getMessage())
+                        ->danger()
+                        ->persistent()
+                        ->send();
+                }
 
                 $livewire->dispatch('$refresh');
             });

@@ -47,6 +47,8 @@ class Invoice extends Model
         'notes',
         'terms',
         'place_of_supply_state_id',
+        'reference_type',
+        'reference_id',
     ];
 
     protected $casts = [
