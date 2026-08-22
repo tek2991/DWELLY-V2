@@ -15,6 +15,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\View;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
@@ -580,6 +581,13 @@ class MaintenanceRequestForm
                                         ->nullable()
                                         ->default(auth()->id())
                                         ->helperText('Field staff responsible for coordinating and inspecting this ticket.'),
+                                ]),
+
+                            // ✍️ Client Repair Acceptance Summary & Proof
+                            Section::make('✍️ Client Repair Acceptance')
+                                ->visible(fn ($record) => (bool) ($record && ($record->hasClientAcceptance() || $record->isWorkCompleted())))
+                                ->schema([
+                                    View::make('filament.forms.components.client-acceptance-summary-card'),
                                 ]),
                         ]),
                 ]),

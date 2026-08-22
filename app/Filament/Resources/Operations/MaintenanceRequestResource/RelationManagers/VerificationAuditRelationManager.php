@@ -45,20 +45,9 @@ class VerificationAuditRelationManager extends RelationManager
         return $table
             ->recordTitleAttribute('audit_number')
             ->heading('Quality Verification Audits (Optional)')
-            ->description(function (RelationManager $livewire) {
-                $ticket = $livewire->getOwnerRecord();
-                if (!$ticket) return '';
-
-                $completionText = $ticket->isWorkCompleted()
-                    ? '✅ Work marked completed with client acceptance.'
-                    : '⏳ Awaiting paying party documentary acceptance to finalize ticket completion.';
-
-                $auditText = filled($ticket->triggered_audit_id)
-                    ? 'Quality verification audit is active.'
-                    : 'Quality audits are optional.';
-
-                return "{$completionText} {$auditText}";
-            })
+            ->header(fn (RelationManager $livewire) => view('filament.forms.components.client-acceptance-summary-card', [
+                'ticket' => $livewire->getOwnerRecord(),
+            ]))
             ->columns([
                 TextColumn::make('audit_number')
                     ->label('Audit Number')
