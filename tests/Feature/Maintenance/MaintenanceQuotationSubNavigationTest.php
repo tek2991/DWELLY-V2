@@ -1332,5 +1332,141 @@ class MaintenanceQuotationSubNavigationTest extends TestCase
 
         $this->assertNull($ticketAction);
     }
+
+    public function test_dwelly_absorbed_quotation_skips_step2_and_step3_in_sub_navigation(): void
+    {
+        $user = User::factory()->create();
+
+        $property = Property::create([
+            'building_name' => 'Rose Villa 101',
+            'status' => 'active',
+        ]);
+
+        $request = MaintenanceRequest::create([
+            'ticket_number' => 'MNT-2026-DWELLY-SUBNAV',
+            'property_id' => $property->id,
+            'title' => 'Structural Repair (Absorbed by Dwelly)',
+            'status' => MaintenanceStatus::SUBMITTED,
+            'payer_type' => PayerType::DWELLY,
+        ]);
+
+        $quote = MaintenanceClientQuote::create([
+            'quote_number' => 'QT-2026-DWELLY-SUBNAV',
+            'maintenance_request_id' => $request->id,
+            'status' => 'draft',
+            'subtotal_amount' => 5000.00,
+        ]);
+
+        // 1. Edit page for Dwelly-absorbed quote only generates 3 sub-navigation items
+        $testEdit = Livewire::actingAs($user)
+            ->test(EditMaintenanceQuotation::class, [
+                'record' => $quote->getRouteKey(),
+            ])
+            ->assertSuccessful();
+
+        $subNav = MaintenanceQuotationResource::getRecordSubNavigation($testEdit->instance());
+        $this->assertCount(3, $subNav);
+
+        // 2. Accessing ManageClientQuotation (Step 2) directly redirects to ManageQuotationWorkOrders
+        $testPricingRedirect = Livewire::actingAs($user)
+            ->test(ManageClientQuotation::class, [
+                'record' => $quote->getRouteKey(),
+            ])
+            ->assertRedirect(ManageQuotationWorkOrders::getUrl(['record' => $quote]));
+
+        // 3. Accessing ManageQuotationApproval (Step 3) directly redirects to ManageQuotationWorkOrders
+        $testApprovalRedirect = Livewire::actingAs($user)
+            ->test(ManageQuotationApproval::class, [
+                'record' => $quote->getRouteKey(),
+            ])
+            ->assertRedirect(ManageQuotationWorkOrders::getUrl(['record' => $quote]));
+    }
+
+    public function test_dwelly_absorbed_quotation_direct_work_order_issuance(): void
+    {
+        $user = User::factory()->create();
+
+        $vendorParty = \App\Domain\Party\Models\Party::create([
+            'display_name' => 'FastFix Services',
+            'party_type' => 'organization',
+        ]);
+
+        $property = Property::create([
+            'building_name' => 'Sunrise Heights 502',
+            'status' => 'active',
+        ]);
+
+        $request = MaintenanceRequest::create([
+            'ticket_number' => 'MNT-2026-DWELLY-WO',
+            'property_id' => $property->id,
+            'title' => 'Plumbing Main Line Overhaul',
+            'status' => MaintenanceStatus::SUBMITTED,
+            'payer_type' => PayerType::DWELLY,
+        ]);
+
+        $quote = MaintenanceClientQuote::create([
+            'quote_number' => 'QT-2026-DWELLY-WO',
+            'maintenance_request_id' => $request->id,
+            'status' => 'draft',
+            'subtotal_amount' => 8500.00,
+        ]);
+
+        $vendorQuote = \App\Domain\Maintenance\Models\MaintenanceVendorQuote::create([
+            'maintenance_client_quote_id' => $quote->id,
+            'maintenance_request_id' => $request->id,
+            'vendor_party_id' => $vendorParty->id,
+            'trade_title' => 'Plumbing Main Line',
+            'quoted_cost' => 8500.00,
+            'status' => 'received',
+        ]);
+
+        // 1. In ManageQuotationWorkOrders, issueWorkOrderInTab is visible on section while quote is draft
+        $testWorkOrders = Livewire::actingAs($user)
+            ->test(ManageQuotationWorkOrders::class, [
+                'record' => $quote->getRouteKey(),
+            ])
+            ->assertSuccessful()
+            ->assertSee('100% Absorbed by Dwelly')
+            ->assertSee('₹0.00')
+            ->fillForm([
+                'awarded_vendor_quote_ids' => [$vendorQuote->id],
+            ]);
+
+        $schema = $testWorkOrders->instance()->getSchema('form');
+        $section = collect($schema->getComponents())->first(fn ($c) => $c instanceof \Filament\Schemas\Components\Section && str_contains($c->getHeading(), 'Contractor Work Orders'));
+        $issueAction = collect($section->getHeaderActions())->first(fn ($a) => $a->getName() === 'issueWorkOrderInTab');
+        $this->assertNotNull($issueAction);
+        $this->assertTrue($issueAction->isVisible());
+
+        $issueAction->call([
+            'record' => $quote,
+            'livewire' => $testWorkOrders->instance(),
+        ]);
+
+        $quote->refresh();
+        $this->assertEquals('approved', $quote->status);
+        $this->assertEquals('dwelly', $quote->approved_by_type);
+        $this->assertEquals(8500.00, (float) $quote->dwelly_amount);
+        $this->assertEquals([$vendorQuote->id], (array) $quote->awarded_vendor_quote_ids);
+
+        $vendorQuote->refresh();
+        $this->assertEquals('awarded', $vendorQuote->status);
+        $this->assertTrue((bool) $vendorQuote->is_awarded);
+        $this->assertNotNull($vendorQuote->work_order_number);
+
+        $request->refresh();
+        $this->assertEquals(MaintenanceStatus::IN_PROGRESS, $request->status);
+
+        // Verify Settlement & Billing tab renders the awarded vendor quote cost (₹8,500.00)
+        Livewire::actingAs($user)
+            ->test(ManageQuotationSettlement::class, [
+                'record' => $quote->getRouteKey(),
+            ])
+            ->assertSuccessful()
+            ->assertSee('₹8,500.00')
+            ->assertSee('-₹8,500.00')
+            ->assertSee('₹0.00');
+    }
 }
+
 

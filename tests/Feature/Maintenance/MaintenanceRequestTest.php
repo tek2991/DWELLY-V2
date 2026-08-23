@@ -669,6 +669,9 @@ class MaintenanceRequestTest extends TestCase
                 'pageClass' => \App\Filament\Resources\Operations\MaintenanceRequestResource\Pages\EditMaintenanceRequest::class,
             ])
             ->assertSuccessful()
+            ->assertSee('Financial Quick Reference')
+            ->assertSee('Client Invoice (Receivable)')
+            ->assertSee('Contractor Bills (Payable)')
             ->callTableAction('recordClientAcceptanceAndComplete', null, [
                 'client_accepted_by_name' => 'John Doe (Owner)',
                 'client_accepted_at' => now()->toDateTimeString(),
@@ -788,6 +791,12 @@ class MaintenanceRequestTest extends TestCase
         $this->assertEquals(7500, (float) $bill->grand_total);
         $this->assertEquals(\App\Domain\Maintenance\Models\MaintenanceRequest::class, $bill->reference_type);
         $this->assertEquals($request->id, $bill->reference_id);
+
+        // Verify bill PDF downloads successfully
+        $this->actingAs($user)
+            ->get(route('billing.bill.pdf', $bill))
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
     }
 
     public function test_start_repair_action_locks_repair_decision_and_financial_responsibility_for_direct_route(): void
@@ -861,7 +870,7 @@ class MaintenanceRequestTest extends TestCase
             'title' => 'Direct Route Paint Touchup',
             'payer_type' => PayerType::OWNER,
             'is_direct_vendor' => true,
-            'status' => MaintenanceStatus::IN_PROGRESS,
+            'status' => MaintenanceStatus::WORK_COMPLETED,
             'client_accepted_at' => now(),
             'client_accepted_by_name' => 'Alice',
         ]);
@@ -877,7 +886,9 @@ class MaintenanceRequestTest extends TestCase
             ->assertSuccessful()
             ->assertTableActionHidden('generateClientInvoice')
             ->assertTableActionHidden('generateVendorBills')
-            ->assertSee('Work completed &amp; accepted by Alice', false);
+            ->assertSee('Financial Quick Reference')
+            ->assertSee('Direct Repair (Dwelly Audits Only)')
+            ->assertSee('Work completed and verified');
 
         // 2. In EditMaintenanceRequest sidebar, client acceptance summary card is rendered
         $testEdit = \Livewire\Livewire::actingAs($user)
@@ -891,7 +902,7 @@ class MaintenanceRequestTest extends TestCase
         // 3. Calling createMaintenanceInvoice on direct request throws InvalidArgumentException
         $billingService = app(\App\Domain\Maintenance\Services\MaintenanceBillingService::class);
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Cannot generate client invoice for direct repair tickets');
+        $this->expectExceptionMessage('Cannot generate client invoice for direct or Dwelly-absorbed maintenance tickets');
         $billingService->createMaintenanceInvoice($request, 'owner_invoice');
     }
 

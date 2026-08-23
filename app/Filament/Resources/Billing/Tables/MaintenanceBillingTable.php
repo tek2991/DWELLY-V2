@@ -2,14 +2,11 @@
 
 namespace App\Filament\Resources\Billing\Tables;
 
-use App\Domain\Maintenance\Models\MaintenanceRequest;
-use App\Domain\Maintenance\Services\MaintenanceBillingService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
@@ -137,87 +134,6 @@ class MaintenanceBillingTable
                 EditAction::make(),
             ])
             ->toolbarActions([
-                Action::make('raise_maintenance_invoice')
-                    ->label('Raise Maintenance Invoice')
-                    ->icon('heroicon-o-wrench-screwdriver')
-                    ->color('primary')
-                    ->form([
-                        Select::make('maintenance_request_id')
-                            ->label('Maintenance Ticket')
-                            ->options(fn () => MaintenanceRequest::where('is_direct_vendor', false)->get()->mapWithKeys(fn ($req) => [
-                                $req->id => "{$req->ticket_number} - {$req->title} (" . ($req->property?->building_name ?: ($req->property?->name ?? 'Property')) . ")"
-                            ]))
-                            ->searchable()
-                            ->required()
-                            ->reactive()
-                            ->afterStateUpdated(function ($state, callable $set) {
-                                if ($state) {
-                                    $req = MaintenanceRequest::find($state);
-                                    if ($req) {
-                                        $set('cost', $req->total_cost > 0 ? $req->total_cost : 0);
-                                    }
-                                }
-                            }),
-
-                        Select::make('bill_type')
-                            ->label('Bill Type')
-                            ->options([
-                                'tenant_invoice' => 'Invoice to Tenant',
-                                'owner_invoice' => 'Invoice to Owner',
-                                'vendor_bill' => 'Vendor Bill',
-                            ])
-                            ->default('tenant_invoice')
-                            ->required(),
-
-                        TextInput::make('cost')
-                            ->label('Total Cost (₹)')
-                            ->numeric()
-                            ->prefix('₹')
-                            ->required(),
-
-                        DatePicker::make('due_date')
-                            ->label('Due Date')
-                            ->default(now()->addDays(7)),
-
-                        Textarea::make('notes')
-                            ->label('Invoice / Work Notes'),
-                    ])
-                    ->action(function (array $data, MaintenanceBillingService $service) {
-                        $req = MaintenanceRequest::findOrFail($data['maintenance_request_id']);
-
-                        if ($data['bill_type'] === 'vendor_bill') {
-                            $bill = $service->createVendorBill($req, [
-                                [
-                                    'description' => "Vendor Maintenance Work: {$req->title} ({$req->ticket_number})",
-                                    'quantity' => 1,
-                                    'unit_price' => (float) $data['cost'],
-                                    'total' => (float) $data['cost'],
-                                ]
-                            ], ['notes' => $data['notes'] ?? null, 'due_date' => $data['due_date'] ?? null]);
-
-                            Notification::make()
-                                ->title('Vendor Bill Created')
-                                ->body("Created Bill {$bill->bill_number} for Ticket {$req->ticket_number}")
-                                ->success()
-                                ->send();
-                        } else {
-                            $invoice = $service->createMaintenanceInvoice($req, $data['bill_type'], [
-                                [
-                                    'description' => "Maintenance Service: {$req->title} ({$req->ticket_number})",
-                                    'quantity' => 1,
-                                    'unit_price' => (float) $data['cost'],
-                                    'total' => (float) $data['cost'],
-                                ]
-                            ], ['notes' => $data['notes'] ?? null, 'due_date' => $data['due_date'] ?? null]);
-
-                            Notification::make()
-                                ->title('Maintenance Invoice Raised')
-                                ->body("Created Invoice {$invoice->invoice_number} for Ticket {$req->ticket_number}")
-                                ->success()
-                                ->send();
-                        }
-                    }),
-
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),

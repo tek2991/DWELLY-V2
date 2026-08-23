@@ -7,10 +7,11 @@
 
     $includedIds = $record ? (array) $record->getIncludedVendorQuoteIds() : [];
     $awardedIds = $record ? (array) ($record->awarded_vendor_quote_ids ?? []) : [];
+    $isDwelly = (bool) ($ticket?->payer_type?->isDwellyAbsorbed() ?? false);
     $isApproved = ($record?->status === 'approved');
     $isArchived = ($record?->status === 'archived');
     $hasAwardedOrders = ! empty($awardedIds);
-    $canSelect = ($isApproved && ! $hasAwardedOrders && ! $isArchived);
+    $canSelect = (($isApproved || $isDwelly) && ! $hasAwardedOrders && ! $isArchived);
 @endphp
 
 <div style="display: flex; flex-direction: column; gap: 1rem; width: 100%;">
@@ -23,12 +24,20 @@
                 Work orders cannot be modified or issued for an archived quotation.
             </div>
         </div>
-    @elseif(! $isApproved)
+    @elseif(! $isApproved && ! $isDwelly)
         <div style="padding: 0.875rem 1rem; border-radius: 0.75rem; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); font-size: 0.75rem; color: #92400e; display: flex; align-items: center; gap: 0.75rem;">
             <x-filament::icon icon="heroicon-o-lock-closed" style="width: 1.25rem; height: 1.25rem; color: #f59e0b; flex-shrink: 0;" />
             <div>
                 <strong style="font-weight: 700; color: #78350f;">🔒 Work Orders Locked:</strong>
                 Client quotation must be approved in <strong style="text-decoration: underline; font-weight: 600;">Tab 3 (Client Approval)</strong> before contractor work orders can be awarded.
+            </div>
+        </div>
+    @elseif($isDwelly && ! $hasAwardedOrders)
+        <div style="padding: 0.875rem 1rem; border-radius: 0.75rem; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); font-size: 0.75rem; color: #065f46; display: flex; align-items: center; gap: 0.75rem;">
+            <x-filament::icon icon="heroicon-o-check-circle" style="width: 1.25rem; height: 1.25rem; color: #10b981; flex-shrink: 0;" />
+            <div>
+                <strong style="font-weight: 700; color: #047857;">🏢 Dwelly Absorbed Direct Workflow:</strong>
+                Cost is absorbed 100% by Dwelly. No client quotation approval is required. Select the winning contractor estimate(s) below and click <strong style="font-weight: 700;">"Issue Work Order(s)"</strong> to award.
             </div>
         </div>
     @endif
@@ -141,7 +150,11 @@
 
                             {{-- Client Quote Basis --}}
                             <div style="text-align: center;">
-                                @if($isIncluded)
+                                @if($isDwelly)
+                                    <span style="display: inline-flex; align-items: center; padding: 0.125rem 0.625rem; border-radius: 9999px; font-size: 0.6875rem; font-weight: 600; background-color: rgba(37, 99, 235, 0.1); color: #1e40af; border: 1px solid rgba(37, 99, 235, 0.2);">
+                                        🏢 Dwelly Scope
+                                    </span>
+                                @elseif($isIncluded)
                                     <span style="display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 700; background-color: rgba(16, 185, 129, 0.15); color: #047857; border: 1px solid rgba(16, 185, 129, 0.3);">
                                         ⭐ Included in Client Quote
                                     </span>

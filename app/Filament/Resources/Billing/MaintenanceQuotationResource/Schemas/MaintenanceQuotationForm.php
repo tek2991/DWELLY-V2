@@ -1281,7 +1281,10 @@ class MaintenanceQuotationForm
     {
         return $schema->components([
             Section::make('🛠 Contractor Work Orders & Awarding')
-                ->description('Select winning contractor quotations in the table below and click "Issue Work Order(s)" to authorize on-site repair work.')
+                ->description(fn ($record) => $record?->maintenanceRequest?->payer_type?->isDwellyAbsorbed()
+                    ? 'Select winning contractor quotation(s) below and click "Issue Work Order(s)" to authorize technicians directly without client approval.'
+                    : 'Select winning contractor quotations in the table below and click "Issue Work Order(s)" to authorize on-site repair work.'
+                )
                 ->columnSpanFull()
                 ->headerActions([
                     Action::make('issueWorkOrderInTab')
@@ -1290,16 +1293,27 @@ class MaintenanceQuotationForm
                         ->color('primary')
                         ->button()
                         ->size('sm')
-                        ->visible(fn ($record) => $record && $record->status === 'approved' && empty($record->awarded_vendor_quote_ids))
+                        ->visible(function ($record) {
+                            if (! $record) return false;
+                            if (! empty($record->awarded_vendor_quote_ids)) return false;
+
+                            $isDwelly = (bool) $record->maintenanceRequest?->payer_type?->isDwellyAbsorbed();
+                            if ($isDwelly) {
+                                return $record->vendorQuotes()->count() > 0;
+                            }
+
+                            return $record->status === 'approved';
+                        })
                         ->requiresConfirmation()
                         ->modalHeading('Issue Contractor Work Order(s)')
                         ->modalDescription(function ($record, $livewire) {
+                            $isDwelly = (bool) $record?->maintenanceRequest?->payer_type?->isDwellyAbsorbed();
                             $selectedIds = (array) ($livewire->data['awarded_vendor_quote_ids'] ?? $record?->awarded_vendor_quote_ids ?? []);
                             $includedIds = (array) ($record?->getIncludedVendorQuoteIds() ?? []);
                             $unapprovedSelectedIds = array_values(array_diff($selectedIds, $includedIds));
 
                             $alertHtml = '';
-                            if (! empty($unapprovedSelectedIds)) {
+                            if (! $isDwelly && ! empty($unapprovedSelectedIds)) {
                                 $unapprovedQuotes = MaintenanceVendorQuote::whereIn('id', $unapprovedSelectedIds)->with('vendor')->get();
                                 $itemsList = $unapprovedQuotes->map(function ($q) {
                                     $name = e($q->vendor?->display_name ?? 'Contractor');
@@ -1327,13 +1341,11 @@ class MaintenanceQuotationForm
                                 ';
                             }
 
-                            return new HtmlString(
-                                $alertHtml.'
-                                <p style="font-size: 13px; color: #475569;">
-                                    Confirm issuance of official Work Orders for the selected contractor quotation(s). This will generate work order reference numbers and authorize technicians for on-site repair work.
-                                </p>
-                            '
-                            );
+                            $msg = $isDwelly
+                                ? 'Confirm issuance of official Work Orders for the selected contractor quotation(s). Cost is 100% absorbed by Dwelly.'
+                                : 'Confirm issuance of official Work Orders for the selected contractor quotation(s). This will generate work order reference numbers and authorize technicians for on-site repair work.';
+
+                            return new HtmlString($alertHtml . '<p style="font-size: 13px; color: #475569;">' . $msg . '</p>');
                         })
                         ->modalSubmitActionLabel('Confirm & Issue Work Orders')
                         ->action(function ($record, $livewire) {
@@ -1348,6 +1360,27 @@ class MaintenanceQuotationForm
                                     ->send();
 
                                 return;
+                            }
+
+                            $isDwelly = (bool) $record->maintenanceRequest?->payer_type?->isDwellyAbsorbed();
+                            if ($isDwelly && $record->status !== 'approved') {
+                                $vendorQuotes = MaintenanceVendorQuote::whereIn('id', $selectedIds)->get();
+                                $awardedCost = (float) $vendorQuotes->sum('quoted_cost');
+
+                                $record->update([
+                                    'status' => 'approved',
+                                    'approved_by_type' => 'dwelly',
+                                    'approval_channel' => 'internal',
+                                    'approval_notes' => $record->approval_notes ?: 'Direct internal authorization (Dwelly-absorbed repair).',
+                                    'approved_at' => now(),
+                                    'subtotal_amount' => $awardedCost,
+                                    'total_amount' => $awardedCost,
+                                    'dwelly_amount' => $awardedCost,
+                                    'owner_amount' => 0.00,
+                                    'tenant_amount' => 0.00,
+                                    'margin_amount' => 0.00,
+                                    'margin_percentage' => 0.00,
+                                ]);
                             }
 
                             $billingService = app(MaintenanceBillingService::class);
@@ -1400,14 +1433,28 @@ class MaintenanceQuotationForm
                                 return null;
                             }
 
+                            $record->loadMissing(['vendorQuotes', 'items', 'maintenanceRequest.vendorQuotes']);
                             $ticket = $record->maintenanceRequest;
                             $ticketNumber = $ticket?->ticket_number ?? 'N/A';
                             $ticketUrl = $ticket ? MaintenanceRequestResource::getUrl('edit', ['record' => $ticket, 'relation' => 2]) : '#';
                             $payer = $ticket?->payer_type?->getLabel() ?? ucfirst((string) ($ticket?->payer_type ?? 'N/A'));
-                            $totalClient = number_format((float) $record->total_amount, 2);
-                            $subtotalVendor = number_format((float) $record->subtotal_amount, 2);
-                            $margin = number_format((float) $record->margin_amount, 2);
                             $isDirect = (bool) ($ticket?->is_direct_vendor ?? false);
+                            $isDwelly = (bool) ($ticket?->payer_type?->isDwellyAbsorbed() ?? false);
+
+                            $allQuotes = $record->vendorQuotes->isNotEmpty() ? $record->vendorQuotes : ($ticket?->vendorQuotes ?? collect());
+                            $awardedQuotes = $allQuotes->filter(fn ($vq) => $vq->work_order_awarded || ! empty($vq->work_order_number) || ! empty($vq->bill_id));
+                            if ($awardedQuotes->isEmpty()) {
+                                $awardedQuotes = $allQuotes;
+                            }
+                            $vendorCost = (float) $awardedQuotes->sum('quoted_cost');
+                            if ($vendorCost === 0.0 && (float) ($record->subtotal_amount ?? 0) > 0) {
+                                $vendorCost = (float) $record->subtotal_amount;
+                            }
+
+                            $clientTotalAmount = $isDwelly ? 0.0 : (float) ($record->total_amount ?: 0);
+                            $totalClient = number_format($clientTotalAmount, 2);
+                            $subtotalVendor = number_format($vendorCost, 2);
+                            $margin = number_format((float) ($record->margin_amount ?? ($clientTotalAmount - $vendorCost)), 2);
 
                             return new HtmlString('
                                 <div style="display: flex; flex-direction: column; gap: 1.25rem; width: 100%;">
@@ -1419,10 +1466,12 @@ class MaintenanceQuotationForm
                                                 </div>
                                                 <div>
                                                     <div style="font-weight: 700; font-size: 0.9375rem; color: #1e3a8a;">
-                                                        Invoice &amp; Vendor Bill Generation Workflow
+                                                        '.($isDwelly ? 'Vendor Bill Accounting Workflow (Dwelly Absorbed)' : 'Invoice &amp; Vendor Bill Generation Workflow').'
                                                     </div>
                                                     <div style="font-size: 0.8125rem; color: #475569; margin-top: 0.25rem; line-height: 1.45;">
-                                                        Official accounting documents (<strong>Client Invoices</strong> and <strong>Vendor Bills</strong>) are generated from the operational <strong>Maintenance Request</strong> page under the <strong>Completion, Report &amp; Verification</strong> tab once repair work is completed and verified.
+                                                        '.($isDwelly
+                                                            ? 'Cost is absorbed 100% by Dwelly. <strong>No Client Invoice</strong> is generated. <strong>Vendor Bills</strong> to pay winning contractors are generated from the <strong>Maintenance Request</strong> page upon work completion.'
+                                                            : 'Official accounting documents (<strong>Client Invoices</strong> and <strong>Vendor Bills</strong>) are generated from the operational <strong>Maintenance Request</strong> page under the <strong>Completion, Report &amp; Verification</strong> tab once repair work is completed and verified.').'
                                                     </div>
                                                 </div>
                                             </div>
@@ -1436,15 +1485,15 @@ class MaintenanceQuotationForm
 
                                         <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(37, 99, 235, 0.15);">
                                             <div style="padding: 0.625rem 0.875rem; border-radius: 0.5rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); font-size: 0.75rem;">
-                                                <span style="font-weight: 700; color: #047857;">Step 1: Quotation Approved</span><br>
-                                                <span style="color: #065f46; font-size: 0.6875rem;">Rates &amp; base costs finalized in Tab 2</span>
+                                                <span style="font-weight: 700; color: #047857;">'.($isDwelly ? 'Step 1: Estimates Collected' : 'Step 1: Quotation Approved').'</span><br>
+                                                <span style="color: #065f46; font-size: 0.6875rem;">'.($isDwelly ? 'Vendor trade quotes logged' : 'Rates &amp; base costs finalized in Tab 2').'</span>
                                             </div>
                                             <div style="padding: 0.625rem 0.875rem; border-radius: 0.5rem; background: rgba(37, 99, 235, 0.1); border: 1px solid rgba(37, 99, 235, 0.25); font-size: 0.75rem;">
                                                 <span style="font-weight: 700; color: #1e40af;">Step 2: Work Orders Awarded</span><br>
-                                                <span style="color: #1e3a8a; font-size: 0.6875rem;">Contractors authorized in Tab 4</span>
+                                                <span style="color: #1e3a8a; font-size: 0.6875rem;">Contractors authorized directly</span>
                                             </div>
                                             <div style="padding: 0.625rem 0.875rem; border-radius: 0.5rem; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); font-size: 0.75rem;">
-                                                <span style="font-weight: 700; color: #92400e;">Step 3: Verification &amp; Invoicing</span><br>
+                                                <span style="font-weight: 700; color: #92400e;">'.($isDwelly ? 'Step 3: Verification &amp; Vendor Bills' : 'Step 3: Verification &amp; Invoicing').'</span><br>
                                                 <span style="color: #78350f; font-size: 0.6875rem;">Executed on Maintenance Request page</span>
                                             </div>
                                         </div>
@@ -1453,8 +1502,8 @@ class MaintenanceQuotationForm
                                     <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px;">
                                         <div style="background: rgba(128, 128, 128, 0.03); border: 1px solid rgba(128, 128, 128, 0.18); border-radius: 8px; padding: 14px;">
                                             <span style="color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">Receivable / Client Invoice</span><br>
-                                            <strong style="font-size: 18px; color: #1e40af;">₹'.$totalClient.'</strong><br>
-                                            <span style="font-size: 11px; color: #3b82f6;">Payer: '.e($payer).'</span>
+                                            <strong style="font-size: 18px; color: '.($isDwelly ? '#059669' : '#1e40af').';">'.($isDwelly ? '₹0.00' : '₹'.$totalClient).'</strong><br>
+                                            <span style="font-size: 11px; color: '.($isDwelly ? '#047857' : '#3b82f6').';">'.($isDwelly ? '🏢 Absorbed by Dwelly' : 'Payer: '.e($payer)).'</span>
                                         </div>
                                         <div style="background: rgba(128, 128, 128, 0.03); border: 1px solid rgba(128, 128, 128, 0.18); border-radius: 8px; padding: 14px;">
                                             <span style="color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">Payable / Vendor Bills</span><br>
@@ -1462,9 +1511,9 @@ class MaintenanceQuotationForm
                                             <span style="font-size: 11px; color: #ef4444;">Route: '.($isDirect ? 'Direct Client Payment' : 'Dwelly Coordinated').'</span>
                                         </div>
                                         <div style="background: rgba(128, 128, 128, 0.03); border: 1px solid rgba(128, 128, 128, 0.18); border-radius: 8px; padding: 14px;">
-                                            <span style="color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">Net Dwelly Margin</span><br>
-                                            <strong style="font-size: 18px; color: #16a34a;">₹'.$margin.'</strong><br>
-                                            <span style="font-size: 11px; color: #10b981;">Markup: '.$record->margin_percentage.'%</span>
+                                            <span style="color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">'.($isDwelly ? 'Internal Cost Impact' : 'Net Dwelly Margin').'</span><br>
+                                            <strong style="font-size: 18px; color: '.($isDwelly ? '#be123c' : '#16a34a').';">'.($isDwelly ? '-₹'.$subtotalVendor : '₹'.$margin).'</strong><br>
+                                            <span style="font-size: 11px; color: '.($isDwelly ? '#9f1239' : '#10b981').';">'.($isDwelly ? 'Company Maintenance Budget' : 'Markup: '.$record->margin_percentage.'%').'</span>
                                         </div>
                                     </div>
                                 </div>
@@ -1483,9 +1532,25 @@ class MaintenanceQuotationForm
             return null;
         }
 
+        $record->loadMissing(['vendorQuotes', 'items', 'maintenanceRequest.vendorQuotes']);
         $quoteNumber = $record->quote_number ?? ('QT-'.$record->id);
         $status = $record->status ?? 'draft';
         $ticket = $record->maintenanceRequest;
+        $isDwelly = (bool) ($ticket?->payer_type?->isDwellyAbsorbed() ?? false);
+
+        $allQuotes = $record->vendorQuotes->isNotEmpty() ? $record->vendorQuotes : ($ticket?->vendorQuotes ?? collect());
+        $awardedQuotes = $allQuotes->filter(fn ($vq) => $vq->work_order_awarded || ! empty($vq->work_order_number) || ! empty($vq->bill_id));
+        if ($awardedQuotes->isEmpty()) {
+            $awardedQuotes = $allQuotes;
+        }
+        $vendorCost = (float) $awardedQuotes->sum('quoted_cost');
+        if ($vendorCost === 0.0 && (float) ($record->subtotal_amount ?? 0) > 0) {
+            $vendorCost = (float) $record->subtotal_amount;
+        }
+
+        $totalAmount = number_format($isDwelly ? 0.0 : (float) ($record->total_amount ?? 0), 2);
+        $subtotalVendor = number_format($vendorCost, 2);
+        $marginAmount = number_format($isDwelly ? -$vendorCost : (float) ($record->margin_amount ?? 0), 2);
 
         $ticketNumber = $ticket?->ticket_number ?? 'N/A';
         $ticketTitle = $ticket?->title ?? 'Maintenance Ticket';
@@ -1506,22 +1571,10 @@ class MaintenanceQuotationForm
 
         $payerLabel = $ticket?->payer_type?->getLabel() ?? ucfirst((string) ($ticket?->payer_type ?? 'N/A'));
 
-        $totalAmount = number_format((float) ($record->total_amount ?? 0), 2);
-        $marginAmount = number_format((float) ($record->margin_amount ?? 0), 2);
-
         $vendorQuotesCount = $record->vendorQuotes()->count();
         $itemsCount = $record->items()->count();
         $isApproved = in_array($status, ['approved', 'settled', 'invoiced']);
         $hasWorkOrders = ! empty($record->awarded_vendor_quote_ids);
-
-        $s1 = $vendorQuotesCount > 0;
-        $s2 = $itemsCount > 0;
-        $s3 = $isApproved;
-        $s4 = $hasWorkOrders;
-
-        $completedCount = ($s1 ? 1 : 0) + ($s2 ? 1 : 0) + ($s3 ? 1 : 0) + ($s4 ? 1 : 0);
-        $progress = (int) round(($completedCount / 4) * 100);
-        $progressColor = $progress === 100 ? '#10b981' : ($progress >= 50 ? '#3b82f6' : '#f59e0b');
 
         $getStepStyle = function (bool $isValid, string $title, string $desc) {
             $bg = $isValid ? 'rgba(16, 185, 129, 0.08)' : 'rgba(128, 128, 128, 0.04)';
@@ -1540,10 +1593,33 @@ class MaintenanceQuotationForm
                 '</div>';
         };
 
-        $card1 = $getStepStyle($s1, '1. Vendor Estimates', $s1 ? "{$vendorQuotesCount} quotes recorded" : 'Add contractor trade quotes');
-        $card2 = $getStepStyle($s2, '2. Client Pricing', $s2 ? "{$itemsCount} items (₹{$totalAmount})" : 'Set client line items & rates');
-        $card3 = $getStepStyle($s3, '3. Client Approval', $s3 ? 'Customer approved & signed' : 'Pending client authorization');
-        $card4 = $getStepStyle($s4, '4. Work Orders', $s4 ? 'Work order(s) awarded' : 'Award winning vendor quotes');
+        if ($isDwelly) {
+            $s1 = $vendorQuotesCount > 0;
+            $s2 = $hasWorkOrders;
+
+            $completedCount = ($s1 ? 1 : 0) + ($s2 ? 1 : 0);
+            $progress = (int) round(($completedCount / 2) * 100);
+            $progressColor = $progress === 100 ? '#10b981' : ($progress >= 50 ? '#3b82f6' : '#f59e0b');
+
+            $card1 = $getStepStyle($s1, '1. Vendor Estimates', $s1 ? "{$vendorQuotesCount} quotes recorded" : 'Add contractor trade quotes');
+            $card2 = $getStepStyle($s2, '2. Contractor Work Orders', $s2 ? 'Work order(s) awarded' : 'Award winning vendor quotes');
+            $stepCardsHtml = '<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.625rem;">'.$card1.$card2.'</div>';
+        } else {
+            $s1 = $vendorQuotesCount > 0;
+            $s2 = $itemsCount > 0;
+            $s3 = $isApproved;
+            $s4 = $hasWorkOrders;
+
+            $completedCount = ($s1 ? 1 : 0) + ($s2 ? 1 : 0) + ($s3 ? 1 : 0) + ($s4 ? 1 : 0);
+            $progress = (int) round(($completedCount / 4) * 100);
+            $progressColor = $progress === 100 ? '#10b981' : ($progress >= 50 ? '#3b82f6' : '#f59e0b');
+
+            $card1 = $getStepStyle($s1, '1. Vendor Estimates', $s1 ? "{$vendorQuotesCount} quotes recorded" : 'Add contractor trade quotes');
+            $card2 = $getStepStyle($s2, '2. Client Pricing', $s2 ? "{$itemsCount} items (₹{$totalAmount})" : 'Set client line items & rates');
+            $card3 = $getStepStyle($s3, '3. Client Approval', $s3 ? 'Customer approved & signed' : 'Pending client authorization');
+            $card4 = $getStepStyle($s4, '4. Work Orders', $s4 ? 'Work order(s) awarded' : 'Award winning vendor quotes');
+            $stepCardsHtml = '<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.625rem;">'.$card1.$card2.$card3.$card4.'</div>';
+        }
 
         $badgeBg = match ($status) {
             'approved' => '#10b981',
@@ -1555,12 +1631,12 @@ class MaintenanceQuotationForm
         };
 
         $statusLabel = match ($status) {
-            'approved' => '✅ Client Approved',
+            'approved' => ($isDwelly ? '✅ Work Orders Authorized' : '✅ Client Approved'),
             'settled' => '💳 Settled',
-            'pending_approval' => '⏳ Pending Client Approval',
+            'pending_approval' => '⏳ Pending Approval',
             'rejected' => '❌ Rejected',
             'archived' => '🗄️ Archived & Locked',
-            default => '📝 Draft Quotation',
+            default => ($isDwelly ? '📝 Internal Estimate' : '📝 Draft Quotation'),
         };
 
         $ownerLink = $ownerUrl
@@ -1585,10 +1661,18 @@ class MaintenanceQuotationForm
         $html .= '<div style="display: flex; align-items: center; gap: 0.625rem; flex-wrap: wrap;">';
         $html .= '<span style="font-size: 1.125rem; font-weight: 800; letter-spacing: -0.02em; color: inherit;">Quotation '.e($quoteNumber).'</span>';
         $html .= '<span style="display: inline-block; padding: 0.2rem 0.625rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 700; background-color: '.$badgeBg.'; color: #ffffff;">'.$statusLabel.'</span>';
+        if ($isDwelly) {
+            $html .= '<span style="display: inline-block; padding: 0.2rem 0.625rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 700; background-color: rgba(225, 29, 72, 0.1); color: #be123c; border: 1px solid rgba(225, 29, 72, 0.25);">🏢 100% Absorbed by Dwelly</span>';
+        }
         $html .= '</div>';
         $html .= '<div style="display: flex; align-items: center; gap: 1rem; font-size: 0.8125rem;">';
-        $html .= '<div><span style="color: rgba(128, 128, 128, 0.9);">Client Quote:</span> <strong style="font-size: 0.9375rem; font-weight: 800; color: #2563eb; margin-left: 0.25rem;">₹'.$totalAmount.'</strong></div>';
-        $html .= '<div><span style="color: rgba(128, 128, 128, 0.9);">Margin:</span> <strong style="font-size: 0.9375rem; font-weight: 800; color: #16a34a; margin-left: 0.25rem;">₹'.$marginAmount.'</strong></div>';
+        if ($isDwelly) {
+            $html .= '<div><span style="color: rgba(128, 128, 128, 0.9);">Client Cost:</span> <strong style="font-size: 0.9375rem; font-weight: 800; color: #059669; margin-left: 0.25rem;">₹0.00</strong></div>';
+            $html .= '<div><span style="color: rgba(128, 128, 128, 0.9);">Contractor Estimate:</span> <strong style="font-size: 0.9375rem; font-weight: 800; color: #be123c; margin-left: 0.25rem;">₹'.$subtotalVendor.'</strong></div>';
+        } else {
+            $html .= '<div><span style="color: rgba(128, 128, 128, 0.9);">Client Quote:</span> <strong style="font-size: 0.9375rem; font-weight: 800; color: #2563eb; margin-left: 0.25rem;">₹'.$totalAmount.'</strong></div>';
+            $html .= '<div><span style="color: rgba(128, 128, 128, 0.9);">Margin:</span> <strong style="font-size: 0.9375rem; font-weight: 800; color: #16a34a; margin-left: 0.25rem;">₹'.$marginAmount.'</strong></div>';
+        }
         $html .= '</div>';
         $html .= '</div>';
 
@@ -1612,9 +1696,7 @@ class MaintenanceQuotationForm
         $html .= '</div>';
 
         // Step cards
-        $html .= '<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.625rem;">';
-        $html .= $card1.$card2.$card3.$card4;
-        $html .= '</div>';
+        $html .= $stepCardsHtml;
 
         $html .= '</div>';
 

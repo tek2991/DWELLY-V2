@@ -27,6 +27,15 @@ class ManageQuotationApproval extends EditRecord
         return MaintenanceQuotationForm::configureApprovalForm($schema);
     }
 
+    public function mount(int|string $record): void
+    {
+        parent::mount($record);
+
+        if ($this->getRecord()?->maintenanceRequest?->payer_type?->isDwellyAbsorbed()) {
+            redirect(ManageQuotationWorkOrders::getUrl(['record' => $this->getRecord()]));
+        }
+    }
+
     protected function getHeaderActions(): array
     {
         return [

@@ -128,11 +128,15 @@ class EditMaintenanceRequest extends EditRecord
 
                     // Dwelly-coordinated route: disabled if quotation is not officially approved or work order is not issued
                     $quote = $this->record->currentClientQuote ?? $this->record->clientQuotes()->where('status', '!=', 'archived')->latest()->first();
-                    if (!$quote || $quote->status !== 'approved') {
+                    if (!$quote) {
                         return true;
                     }
 
                     if (empty($quote->awarded_vendor_quote_ids)) {
+                        return true;
+                    }
+
+                    if (!$this->record->payer_type?->isDwellyAbsorbed() && $quote->status !== 'approved') {
                         return true;
                     }
 
@@ -146,9 +150,9 @@ class EditMaintenanceRequest extends EditRecord
                     if (!$this->record->is_direct_vendor) {
                         $quote = $this->record->currentClientQuote ?? $this->record->clientQuotes()->where('status', '!=', 'archived')->latest()->first();
                         if (!$quote) {
-                            return 'Quotation required: Prepare and approve quotation before proceeding with repair.';
+                            return 'Quotation required: Prepare quotation and issue work orders before proceeding with repair.';
                         }
-                        if ($quote->status !== 'approved') {
+                        if (!$this->record->payer_type?->isDwellyAbsorbed() && $quote->status !== 'approved') {
                             return 'Quotation Approval Pending: Client must approve pricing before physical repairs can start.';
                         }
                         if (empty($quote->awarded_vendor_quote_ids)) {

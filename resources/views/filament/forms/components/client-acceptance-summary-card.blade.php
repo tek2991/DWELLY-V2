@@ -85,6 +85,16 @@
                     <div style="margin-top: 0.25rem; color: #1e40af; font-size: 0.6875rem;">Ref: <strong>{{ $ticket->direct_payment_reference }}</strong></div>
                 @endif
             </div>
+        @elseif($ticket->payer_type?->isDwellyAbsorbed())
+            <div style="padding: 0.5rem 0.625rem; border-radius: 0.375rem; background: rgba(225, 29, 72, 0.05); border: 1px solid rgba(225, 29, 72, 0.2); margin-bottom: 0.75rem; font-size: 0.75rem;">
+                <div style="font-weight: 700; color: #be123c; margin-bottom: 0.25rem;">🏢 Dwelly Absorbed Expense</div>
+                <div style="color: #475569; font-size: 0.6875rem;">Cost absorbed by company. No client invoice required.</div>
+                @if($vendorBills->isNotEmpty())
+                    <div style="margin-top: 0.375rem; padding-top: 0.375rem; border-top: 1px dashed rgba(225, 29, 72, 0.2);">
+                        <span style="color: #be123c; font-weight: 700;">{{ $vendorBills->count() }} Vendor Bill(s) Issued</span>
+                    </div>
+                @endif
+            </div>
         @else
             @if($clientInvoice || $vendorBills->isNotEmpty())
                 <div style="padding: 0.5rem 0.625rem; border-radius: 0.375rem; background: rgba(128, 128, 128, 0.05); border: 1px solid rgba(128, 128, 128, 0.2); margin-bottom: 0.75rem; font-size: 0.75rem;">

@@ -14,6 +14,7 @@ use App\Domain\Property\Models\PropertyRoom;
 use App\Domain\Property\Models\PropertyUtility;
 use App\Domain\Maintenance\Services\MaintenanceBillingService;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
@@ -37,6 +38,8 @@ class VerificationAuditRelationManager extends RelationManager
 
     protected static \BackedEnum|string|null $icon = 'heroicon-o-check-badge';
 
+    protected string $view = 'filament.resources.operations.maintenance-requests.verification-audit-relation-manager';
+
     public function form(Schema $schema): Schema
     {
         return $schema->components([]);
@@ -46,20 +49,17 @@ class VerificationAuditRelationManager extends RelationManager
     {
         return $table
             ->recordTitleAttribute('audit_number')
-            ->heading('Quality Verification Audits (Optional)')
+            ->heading('Quality Verification Audits')
             ->description(function (RelationManager $livewire) {
                 $ticket = $livewire->getOwnerRecord();
                 if (! $ticket) {
-                    return 'Quality verification audits and paying party completion sign-off.';
+                    return 'On-site quality verification audits and inspections.';
                 }
-                if ($ticket->isWorkCompleted() || $ticket->hasClientAcceptance()) {
-                    $acceptedBy = $ticket->client_accepted_by_name ?: ($ticket->payer_type?->getLabel() ?? 'Paying Party');
-                    $date = $ticket->client_accepted_at?->format('d M Y') ?? ($ticket->completed_at?->format('d M Y') ?? 'Confirmed');
-
-                    return "✅ Work completed & accepted by {$acceptedBy} ({$date}). Quality audits on-site are optional.";
+                if ($ticket->isWorkCompleted()) {
+                    return 'Work completed and verified. On-site quality audits are optional.';
                 }
 
-                return 'Upload paying party acceptance proof to mark work completed, or trigger an on-site quality audit.';
+                return 'Optional quality audits. Record sign-off to complete work.';
             })
             ->columns([
                 TextColumn::make('audit_number')
@@ -90,12 +90,19 @@ class VerificationAuditRelationManager extends RelationManager
                     ->sortable(),
             ])
             ->headerActions([
-                $this->getViewPdfModalAction(),
                 $this->getMarkWorkCompletedAction(),
                 $this->getGenerateClientInvoiceAction(),
                 $this->getGenerateVendorBillsAction(),
                 $this->getManageClientAcceptanceAction(),
-                $this->getTriggerOptionalAuditAction(),
+                ActionGroup::make([
+                    $this->getTriggerOptionalAuditAction(),
+                    $this->getViewPdfModalAction(),
+                ])
+                ->label('More')
+                ->icon('heroicon-m-ellipsis-vertical')
+                ->color('gray')
+                ->button()
+                ->size('sm'),
             ])
             ->recordActions([
                 Action::make('openAudit')
@@ -115,11 +122,9 @@ class VerificationAuditRelationManager extends RelationManager
     protected function getViewPdfModalAction(): Action
     {
         return Action::make('viewPdfDossier')
-            ->label('View Maintenance PDF')
+            ->label('Maintenance PDF')
             ->icon('heroicon-o-document-text')
             ->color('gray')
-            ->button()
-            ->size('sm')
             ->modalHeading(fn (RelationManager $livewire) => 'Maintenance Dossier: Ticket #' . $livewire->getOwnerRecord()?->ticket_number)
             ->modalWidth('7xl')
             ->modalSubmitAction(false)
@@ -132,7 +137,13 @@ class VerificationAuditRelationManager extends RelationManager
     protected function getMarkWorkCompletedAction(): Action
     {
         return Action::make('recordClientAcceptanceAndComplete')
-            ->label('Mark Work Completed (Client Acceptance)')
+            ->label(function (RelationManager $livewire): string {
+                $ticket = $livewire->getOwnerRecord();
+                if ($ticket?->payer_type?->isDwellyAbsorbed()) {
+                    return 'Mark Work Completed (Internal Sign-Off)';
+                }
+                return 'Mark Work Completed (Client Acceptance)';
+            })
             ->icon('heroicon-o-check-circle')
             ->color('success')
             ->button()
@@ -140,11 +151,15 @@ class VerificationAuditRelationManager extends RelationManager
             ->record(fn (RelationManager $livewire) => $livewire->getOwnerRecord())
             ->visible(function (RelationManager $livewire) {
                 $ticket = $livewire->getOwnerRecord();
-                if (!$ticket) return false;
+                if (! $ticket) return false;
+
+                if ($ticket->isWorkCompleted()) {
+                    return false;
+                }
 
                 $statusVal = $ticket->status instanceof MaintenanceStatus ? $ticket->status->value : (string) $ticket->status;
 
-                return !$ticket->isWorkCompleted() && in_array($statusVal, [
+                return in_array($statusVal, [
                     'in_progress',
                     'submitted',
                     'vendor_assigned',
@@ -154,9 +169,15 @@ class VerificationAuditRelationManager extends RelationManager
                     'audit_approved',
                 ]);
             })
-            ->modalHeading('Paying Party Acceptance & Work Completion Sign-Off')
-            ->modalDescription('Upload documentary proof (signed handover sheet, client email, or WhatsApp confirmation) showing the paying party has accepted the completed repair.')
-            ->modalSubmitActionLabel('Confirm Acceptance & Mark Completed')
+            ->modalHeading(fn (RelationManager $livewire) => $livewire->getOwnerRecord()?->payer_type?->isDwellyAbsorbed()
+                ? 'Internal Maintenance Sign-Off & Work Completion'
+                : 'Paying Party Acceptance & Work Completion Sign-Off'
+            )
+            ->modalDescription(fn (RelationManager $livewire) => $livewire->getOwnerRecord()?->payer_type?->isDwellyAbsorbed()
+                ? 'Confirm operational completion of repair work. Cost is absorbed 100% by Dwelly.'
+                : 'Upload documentary proof (signed handover sheet, client email, or WhatsApp confirmation) showing the paying party has accepted the completed repair.'
+            )
+            ->modalSubmitActionLabel('Confirm & Mark Completed')
             ->modalWidth('2xl')
             ->fillForm(function (RelationManager $livewire): array {
                 $ticket = $livewire->getOwnerRecord();
@@ -185,6 +206,22 @@ class VerificationAuditRelationManager extends RelationManager
                     ->content(function (RelationManager $livewire): HtmlString {
                         $ticket = $livewire->getOwnerRecord();
                         $ticket?->loadMissing(['owner', 'tenant']);
+
+                        if ($ticket?->payer_type?->isDwellyAbsorbed()) {
+                            return new HtmlString("
+                                <div style='background: linear-gradient(135deg, #f0fdf4 0%, #f8fafc 100%); border: 1.5px solid #bbf7d0; border-left: 5px solid #16a34a; border-radius: 8px; padding: 12px 14px; font-size: 13px; color: #166534; line-height: 1.5;'>
+                                    <div style='display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 6px;'>
+                                        <strong>🏢 Internal Repair Sign-Off & Verification</strong>
+                                        <span style='font-size: 11px; font-weight: 700; background: #dcfce7; color: #15803d; padding: 3px 8px; border-radius: 9999px; text-transform: uppercase;'>
+                                            100% Absorbed by Dwelly
+                                        </span>
+                                    </div>
+                                    <div>
+                                        This maintenance ticket is absorbed by Dwelly operations. Confirm on-site repair completion. Documentary proof is optional.
+                                    </div>
+                                </div>
+                            ");
+                        }
 
                         $payerVal = $ticket?->payer_type instanceof PayerType
                             ? $ticket->payer_type->value
@@ -300,11 +337,12 @@ class VerificationAuditRelationManager extends RelationManager
                     ->label('Documentary Proof of Acceptance (Images / PDFs)')
                     ->helperText(function (RelationManager $livewire): string {
                         $ticket = $livewire->getOwnerRecord();
-                        return (bool) $ticket?->is_direct_vendor
-                            ? 'Optional for direct repairs: Upload confirmation photos, signed notes, or chat approval if available.'
-                            : 'Upload clear photos or PDFs of the signed confirmation, WhatsApp screenshot, or email. (Mandatory for Dwelly-coordinated)';
+                        $isOptional = (bool) $ticket?->is_direct_vendor || (bool) $ticket?->payer_type?->isDwellyAbsorbed();
+                        return $isOptional
+                            ? 'Optional: Upload confirmation photos, signed notes, or internal documentation if available.'
+                            : 'Upload clear photos or PDFs of the signed confirmation, WhatsApp screenshot, or email. (Mandatory for client-billed repairs)';
                     })
-                    ->required(fn (RelationManager $livewire): bool => ! (bool) $livewire->getOwnerRecord()?->is_direct_vendor)
+                    ->required(fn (RelationManager $livewire): bool => ! (bool) ($livewire->getOwnerRecord()?->is_direct_vendor || $livewire->getOwnerRecord()?->payer_type?->isDwellyAbsorbed()))
                     ->multiple()
                     ->panelLayout('grid')
                     ->imagePreviewHeight('140')
@@ -411,7 +449,7 @@ class VerificationAuditRelationManager extends RelationManager
             ->record(fn (RelationManager $livewire) => $livewire->getOwnerRecord())
             ->visible(function (RelationManager $livewire) {
                 $ticket = $livewire->getOwnerRecord();
-                if (! $ticket || $ticket->is_direct_vendor) return false;
+                if (! $ticket || $ticket->is_direct_vendor || (bool) $ticket->payer_type?->isDwellyAbsorbed()) return false;
                 $hasInvoice = filled($ticket->owner_invoice_id) || filled($ticket->tenant_invoice_id);
                 return ! $hasInvoice && ($ticket->isWorkCompleted() || $ticket->hasClientAcceptance());
             })

@@ -48,6 +48,17 @@ class MaintenanceQuotationResource extends Resource
 
     public static function getRecordSubNavigation(Page $page): array
     {
+        $record = $page->getRecord();
+        $isDwelly = (bool) $record?->maintenanceRequest?->payer_type?->isDwellyAbsorbed();
+
+        if ($isDwelly) {
+            return $page->generateNavigationItems([
+                EditMaintenanceQuotation::class,
+                ManageQuotationWorkOrders::class,
+                ManageQuotationSettlement::class,
+            ]);
+        }
+
         return $page->generateNavigationItems([
             EditMaintenanceQuotation::class,
             ManageClientQuotation::class,

@@ -27,6 +27,15 @@ class ManageClientQuotation extends EditRecord
         return MaintenanceQuotationForm::configurePricingForm($schema);
     }
 
+    public function mount(int|string $record): void
+    {
+        parent::mount($record);
+
+        if ($this->getRecord()?->maintenanceRequest?->payer_type?->isDwellyAbsorbed()) {
+            redirect(ManageQuotationWorkOrders::getUrl(['record' => $this->getRecord()]));
+        }
+    }
+
     protected function getFormActions(): array
     {
         return [];

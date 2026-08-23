@@ -38,8 +38,8 @@ class MaintenanceBillingService
         array $lineItems = [],
         array $options = []
     ): Invoice {
-        if ($request->is_direct_vendor) {
-            throw new \InvalidArgumentException("Cannot generate client invoice for direct repair tickets (#{$request->ticket_number}) where owner/tenant repairs directly.");
+        if ($request->is_direct_vendor || (bool) $request->payer_type?->isDwellyAbsorbed()) {
+            throw new \InvalidArgumentException("Cannot generate client invoice for direct or Dwelly-absorbed maintenance tickets (#{$request->ticket_number}).");
         }
 
         return DB::transaction(function () use ($request, $billType, $lineItems, $options) {
@@ -416,9 +416,33 @@ class MaintenanceBillingService
     public function awardVendorQuotesAndIssueWorkOrders(MaintenanceClientQuote $quote, array $selectedIds): void
     {
         DB::transaction(function () use ($quote, $selectedIds) {
-            $quote->update([
+            $isDwelly = (bool) $quote->maintenanceRequest?->payer_type?->isDwellyAbsorbed();
+            $updateData = [
                 'awarded_vendor_quote_ids' => $selectedIds,
-            ]);
+            ];
+
+            if ($isDwelly) {
+                $vendorQuotes = MaintenanceVendorQuote::whereIn('id', $selectedIds)->get();
+                $awardedVendorTotal = (float) $vendorQuotes->sum('quoted_cost');
+
+                $updateData['subtotal_amount'] = $awardedVendorTotal;
+                $updateData['total_amount'] = $awardedVendorTotal;
+                $updateData['dwelly_amount'] = $awardedVendorTotal;
+                $updateData['owner_amount'] = 0.00;
+                $updateData['tenant_amount'] = 0.00;
+                $updateData['margin_amount'] = 0.00;
+                $updateData['margin_percentage'] = 0.00;
+
+                if ($quote->status !== 'approved') {
+                    $updateData['status'] = 'approved';
+                    $updateData['approved_by_type'] = 'dwelly';
+                    $updateData['approval_channel'] = 'internal';
+                    $updateData['approval_notes'] = $quote->approval_notes ?: 'Direct internal authorization (Dwelly-absorbed repair).';
+                    $updateData['approved_at'] = $quote->approved_at ?: now();
+                }
+            }
+
+            $quote->update($updateData);
 
             $request = $quote->maintenanceRequest;
             $vendorQuotes = MaintenanceVendorQuote::whereIn('id', $selectedIds)->get();

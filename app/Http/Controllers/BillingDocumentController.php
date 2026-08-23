@@ -13,7 +13,8 @@ class BillingDocumentController extends Controller
     public function downloadInvoice(Invoice $invoice, InvoiceService $invoiceService)
     {
         $invoice->loadMissing(['items.tax', 'items.item', 'contact']);
-        $pdf = Pdf::loadView('accounting::pdf.invoice', ['invoice' => $invoice]);
+        $view = view()->exists('accounting::pdf.invoice') ? 'accounting::pdf.invoice' : 'pdf.invoice';
+        $pdf = Pdf::loadView($view, ['invoice' => $invoice]);
         return $pdf->stream("Invoice-{$invoice->invoice_number}.pdf");
     }
 
@@ -30,7 +31,8 @@ class BillingDocumentController extends Controller
     public function downloadBill(Bill $bill)
     {
         $bill->loadMissing(['items', 'contact']);
-        $pdf = Pdf::loadView('accounting::pdf.bill', ['bill' => $bill]);
+        $view = view()->exists('accounting::pdf.bill') ? 'accounting::pdf.bill' : 'pdf.bill';
+        $pdf = Pdf::loadView($view, ['bill' => $bill]);
         return $pdf->stream("Bill-{$bill->bill_number}.pdf");
     }
 

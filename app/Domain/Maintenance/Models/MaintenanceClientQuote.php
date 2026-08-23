@@ -196,6 +196,36 @@ class MaintenanceClientQuote extends DomainModel implements HasMedia
             $vendorTotal += round($qty * $vCost, 2);
         }
 
+        // Fallback: If no client line items or vendor cost from items is 0, compute from vendor quotes
+        if ($vendorTotal === 0.0 && $this->vendorQuotes()->exists()) {
+            $awardedQuotes = $this->vendorQuotes()
+                ->where(function ($q) {
+                    $q->where('work_order_awarded', true)
+                      ->orWhereNotNull('work_order_number')
+                      ->orWhereNotNull('bill_id');
+                })->get();
+
+            if ($awardedQuotes->isEmpty()) {
+                $awardedQuotes = $this->vendorQuotes()->get();
+            }
+
+            $vendorTotal = (float) $awardedQuotes->sum('quoted_cost');
+        }
+
+        $payer = $this->maintenanceRequest?->payer_type?->value ?? (string) $this->maintenanceRequest?->payer_type;
+        $isDwelly = in_array($payer, ['dwelly', 'dwelly_absorbs', 'dwelly_absorbed']);
+
+        if ($isDwelly) {
+            $this->subtotal_amount = $vendorTotal;
+            $this->margin_amount = 0.00;
+            $this->tax_amount = 0.00;
+            $this->total_amount = $vendorTotal;
+            $this->dwelly_amount = $vendorTotal;
+            $this->owner_amount = 0.00;
+            $this->tenant_amount = 0.00;
+            return $this;
+        }
+
         $marginPct = (float) ($this->margin_percentage ?: \App\Domain\Shared\Services\SettingService::get('financials.default_margin_percentage', 10.00));
         $taxPct = (float) ($this->gst_percentage ?: \App\Domain\Shared\Services\SettingService::get('financials.default_gst_percentage', 18.00));
 
@@ -211,7 +241,6 @@ class MaintenanceClientQuote extends DomainModel implements HasMedia
         $this->tax_amount = $taxAmount;
         $this->total_amount = $total;
 
-        $payer = $this->maintenanceRequest?->payer_type?->value ?? (string) $this->maintenanceRequest?->payer_type;
         if ($payer === 'tenant' || $payer === 'dwelly_invoice_tenant') {
             $this->tenant_amount = $total;
             $this->owner_amount = 0.00;
@@ -220,10 +249,6 @@ class MaintenanceClientQuote extends DomainModel implements HasMedia
             $this->owner_amount = $total;
             $this->tenant_amount = 0.00;
             $this->dwelly_amount = 0.00;
-        } elseif ($payer === 'dwelly' || $payer === 'dwelly_absorbs') {
-            $this->dwelly_amount = $total;
-            $this->owner_amount = 0.00;
-            $this->tenant_amount = 0.00;
         } elseif ($payer === 'split' || $payer === 'dwelly_invoice_split') {
             $currOwner = (float) ($this->owner_amount ?? 0);
             $currTenant = (float) ($this->tenant_amount ?? 0);
@@ -234,6 +259,10 @@ class MaintenanceClientQuote extends DomainModel implements HasMedia
                 $this->owner_amount = $half;
                 $this->tenant_amount = round($total - $half, 2);
             }
+            $this->dwelly_amount = 0.00;
+        } else {
+            $this->owner_amount = $total;
+            $this->tenant_amount = 0.00;
             $this->dwelly_amount = 0.00;
         }
 
