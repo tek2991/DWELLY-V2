@@ -789,4 +789,216 @@ class MaintenanceRequestTest extends TestCase
         $this->assertEquals(\App\Domain\Maintenance\Models\MaintenanceRequest::class, $bill->reference_type);
         $this->assertEquals($request->id, $bill->reference_id);
     }
+
+    public function test_start_repair_action_locks_repair_decision_and_financial_responsibility_for_direct_route(): void
+    {
+        $property = Property::create([
+            'building_name' => 'Sunset Villa 101',
+            'status' => 'active',
+        ]);
+
+        $request = MaintenanceRequest::create([
+            'property_id' => $property->id,
+            'title' => 'Direct Route Glass Window Repair',
+            'payer_type' => PayerType::OWNER,
+            'is_direct_vendor' => true,
+            'status' => MaintenanceStatus::SUBMITTED,
+        ]);
+
+        $user = \App\Models\User::factory()->create();
+
+        // 1. Initial State: Form fields are enabled
+        $this->assertFalse($request->isLocked());
+        $testInitial = \Livewire\Livewire::actingAs($user)
+            ->test(\App\Filament\Resources\Operations\MaintenanceRequestResource\Pages\EditMaintenanceRequest::class, [
+                'record' => $request->getRouteKey(),
+            ])
+            ->assertSuccessful();
+
+        $formInitial = $testInitial->instance()->getSchema('form');
+        $this->assertFalse($formInitial->getComponent('payer_type')->isDisabled());
+        $this->assertFalse($formInitial->getComponent('is_direct_vendor')->isDisabled());
+
+        // 2. Call startRepair action on the Edit page
+        $testInitial->callAction('startRepair')
+            ->assertHasNoActionErrors();
+
+        $request->refresh();
+        $this->assertEquals(MaintenanceStatus::IN_PROGRESS, $request->status);
+        $this->assertTrue($request->isLocked());
+
+        // 3. Verify Form is now locked
+        $testLocked = \Livewire\Livewire::actingAs($user)
+            ->test(\App\Filament\Resources\Operations\MaintenanceRequestResource\Pages\EditMaintenanceRequest::class, [
+                'record' => $request->getRouteKey(),
+            ])
+            ->assertSuccessful()
+            ->assertSee('Maintenance Request Locked')
+            ->assertSee('Repairs are authorized');
+
+        $formLocked = $testLocked->instance()->getSchema('form');
+        $this->assertTrue($formLocked->getComponent('payer_type')->isDisabled());
+        $this->assertTrue($formLocked->getComponent('is_direct_vendor')->isDisabled());
+        $this->assertTrue($formLocked->getComponent('property_id')->isDisabled());
+        $this->assertTrue($formLocked->getComponent('title')->isDisabled());
+    }
+
+    public function test_direct_repair_route_does_not_generate_client_invoices_or_vendor_bills(): void
+    {
+        $owner = \App\Domain\Party\Models\Party::create([
+            'display_name' => 'Direct Owner Alice',
+            'party_type' => 'individual',
+        ]);
+
+        $property = Property::create([
+            'building_name' => 'Meadow View 404',
+            'status' => 'active',
+        ]);
+
+        $request = MaintenanceRequest::create([
+            'property_id' => $property->id,
+            'owner_id' => $owner->id,
+            'title' => 'Direct Route Paint Touchup',
+            'payer_type' => PayerType::OWNER,
+            'is_direct_vendor' => true,
+            'status' => MaintenanceStatus::IN_PROGRESS,
+            'client_accepted_at' => now(),
+            'client_accepted_by_name' => 'Alice',
+        ]);
+
+        $user = \App\Models\User::factory()->create();
+
+        // 1. In VerificationAuditRelationManager, invoice and bill header actions must be hidden
+        $testManager = \Livewire\Livewire::actingAs($user)
+            ->test(\App\Filament\Resources\Operations\MaintenanceRequestResource\RelationManagers\VerificationAuditRelationManager::class, [
+                'ownerRecord' => $request,
+                'pageClass' => \App\Filament\Resources\Operations\MaintenanceRequestResource\Pages\EditMaintenanceRequest::class,
+            ])
+            ->assertSuccessful()
+            ->assertTableActionHidden('generateClientInvoice')
+            ->assertTableActionHidden('generateVendorBills')
+            ->assertSee('Work completed &amp; accepted by Alice', false);
+
+        // 2. In EditMaintenanceRequest sidebar, client acceptance summary card is rendered
+        $testEdit = \Livewire\Livewire::actingAs($user)
+            ->test(\App\Filament\Resources\Operations\MaintenanceRequestResource\Pages\EditMaintenanceRequest::class, [
+                'record' => $request->getRouteKey(),
+            ])
+            ->assertSuccessful()
+            ->assertSee('Direct Repair Settlement')
+            ->assertSee('Acceptance Confirmed');
+
+        // 3. Calling createMaintenanceInvoice on direct request throws InvalidArgumentException
+        $billingService = app(\App\Domain\Maintenance\Services\MaintenanceBillingService::class);
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Cannot generate client invoice for direct repair tickets');
+        $billingService->createMaintenanceInvoice($request, 'owner_invoice');
+    }
+
+    public function test_direct_repair_route_acceptance_proof_is_optional(): void
+    {
+        $owner = \App\Domain\Party\Models\Party::create([
+            'display_name' => 'Owner Bob',
+            'party_type' => 'individual',
+        ]);
+
+        $property = Property::create([
+            'building_name' => 'Oakwood Residency 102',
+            'status' => 'active',
+        ]);
+
+        $request = MaintenanceRequest::create([
+            'property_id' => $property->id,
+            'owner_id' => $owner->id,
+            'title' => 'Direct Route Lock Repair',
+            'payer_type' => PayerType::OWNER,
+            'is_direct_vendor' => true,
+            'status' => MaintenanceStatus::IN_PROGRESS,
+        ]);
+
+        $item = $request->items()->create([
+            'issue_description' => 'Broken front door handle',
+            'repair_action' => 'Replaced lock latch and lubricated hinges',
+            'status' => 'completed',
+        ]);
+        $item->addMedia(\Illuminate\Http\UploadedFile::fake()->image('after.jpg'))->toMediaCollection('repaired_photos');
+
+        $user = \App\Models\User::factory()->create();
+
+        // Calling recordClientAcceptanceAndComplete without uploading proofs should succeed for direct repairs
+        \Livewire\Livewire::actingAs($user)
+            ->test(\App\Filament\Resources\Operations\MaintenanceRequestResource\RelationManagers\VerificationAuditRelationManager::class, [
+                'ownerRecord' => $request,
+                'pageClass' => \App\Filament\Resources\Operations\MaintenanceRequestResource\Pages\EditMaintenanceRequest::class,
+            ])
+            ->assertSuccessful()
+            ->callTableAction('recordClientAcceptanceAndComplete', null, [
+                'client_accepted_by_name' => 'Bob Owner',
+                'client_accepted_at' => now()->toDateString(),
+                'client_acceptance_notes' => 'Self-repaired and confirmed satisfactory.',
+            ])
+            ->assertHasNoTableActionErrors();
+
+        $request->refresh();
+        $this->assertEquals(MaintenanceStatus::WORK_COMPLETED, $request->status);
+        $this->assertEquals('Bob Owner', $request->client_accepted_by_name);
+        $this->assertCount(0, $request->getMedia('client_acceptance_proofs'));
+    }
+
+    public function test_close_ticket_action_is_disabled_until_work_completed_and_then_enabled_and_highlighted(): void
+    {
+        $user = \App\Models\User::factory()->create();
+
+        $property = Property::create([
+            'building_name' => 'Highland Tower 301',
+            'status' => 'active',
+        ]);
+
+        $request = MaintenanceRequest::create([
+            'property_id' => $property->id,
+            'title' => 'Electrical Short Circuit',
+            'payer_type' => PayerType::OWNER,
+            'is_direct_vendor' => true,
+            'status' => MaintenanceStatus::IN_PROGRESS,
+        ]);
+
+        // 1. When status is IN_PROGRESS (work not completed), closeTicket action on Edit page is disabled and gray
+        $testPage = \Livewire\Livewire::actingAs($user)
+            ->test(\App\Filament\Resources\Operations\MaintenanceRequestResource\Pages\EditMaintenanceRequest::class, [
+                'record' => $request->getRouteKey(),
+            ])
+            ->assertSuccessful()
+            ->assertActionDisabled('closeTicket');
+
+        $closeAction = $testPage->instance()->getAction('closeTicket');
+        $this->assertEquals('gray', $closeAction->getColor());
+
+        // 2. Mark work completed
+        $request->update([
+            'status' => MaintenanceStatus::WORK_COMPLETED,
+            'completed_at' => now(),
+        ]);
+
+        // 3. When status is WORK_COMPLETED, closeTicket action on Edit page is enabled and highlighted (success)
+        $testPageCompleted = \Livewire\Livewire::actingAs($user)
+            ->test(\App\Filament\Resources\Operations\MaintenanceRequestResource\Pages\EditMaintenanceRequest::class, [
+                'record' => $request->getRouteKey(),
+            ])
+            ->assertSuccessful()
+            ->assertActionEnabled('closeTicket');
+
+        $closeActionCompleted = $testPageCompleted->instance()->getAction('closeTicket');
+        $this->assertEquals('success', $closeActionCompleted->getColor());
+
+        // 4. Closing ticket succeeds
+        $testPageCompleted->callAction('closeTicket')
+            ->assertHasNoActionErrors();
+
+        $request->refresh();
+        $this->assertEquals(MaintenanceStatus::CLOSED, $request->status);
+    }
 }
+
+
+
+

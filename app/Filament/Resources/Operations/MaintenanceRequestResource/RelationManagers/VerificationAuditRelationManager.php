@@ -47,9 +47,20 @@ class VerificationAuditRelationManager extends RelationManager
         return $table
             ->recordTitleAttribute('audit_number')
             ->heading('Quality Verification Audits (Optional)')
-            ->header(fn (RelationManager $livewire) => view('filament.forms.components.client-acceptance-summary-card', [
-                'ticket' => $livewire->getOwnerRecord(),
-            ]))
+            ->description(function (RelationManager $livewire) {
+                $ticket = $livewire->getOwnerRecord();
+                if (! $ticket) {
+                    return 'Quality verification audits and paying party completion sign-off.';
+                }
+                if ($ticket->isWorkCompleted() || $ticket->hasClientAcceptance()) {
+                    $acceptedBy = $ticket->client_accepted_by_name ?: ($ticket->payer_type?->getLabel() ?? 'Paying Party');
+                    $date = $ticket->client_accepted_at?->format('d M Y') ?? ($ticket->completed_at?->format('d M Y') ?? 'Confirmed');
+
+                    return "✅ Work completed & accepted by {$acceptedBy} ({$date}). Quality audits on-site are optional.";
+                }
+
+                return 'Upload paying party acceptance proof to mark work completed, or trigger an on-site quality audit.';
+            })
             ->columns([
                 TextColumn::make('audit_number')
                     ->label('Audit Number')
@@ -287,8 +298,13 @@ class VerificationAuditRelationManager extends RelationManager
                 SpatieMediaLibraryFileUpload::make('client_acceptance_proofs')
                     ->collection('client_acceptance_proofs')
                     ->label('Documentary Proof of Acceptance (Images / PDFs)')
-                    ->helperText('Upload clear photos or PDFs of the signed confirmation, WhatsApp screenshot, or email. (Mandatory)')
-                    ->required()
+                    ->helperText(function (RelationManager $livewire): string {
+                        $ticket = $livewire->getOwnerRecord();
+                        return (bool) $ticket?->is_direct_vendor
+                            ? 'Optional for direct repairs: Upload confirmation photos, signed notes, or chat approval if available.'
+                            : 'Upload clear photos or PDFs of the signed confirmation, WhatsApp screenshot, or email. (Mandatory for Dwelly-coordinated)';
+                    })
+                    ->required(fn (RelationManager $livewire): bool => ! (bool) $livewire->getOwnerRecord()?->is_direct_vendor)
                     ->multiple()
                     ->panelLayout('grid')
                     ->imagePreviewHeight('140')
@@ -395,7 +411,7 @@ class VerificationAuditRelationManager extends RelationManager
             ->record(fn (RelationManager $livewire) => $livewire->getOwnerRecord())
             ->visible(function (RelationManager $livewire) {
                 $ticket = $livewire->getOwnerRecord();
-                if (! $ticket) return false;
+                if (! $ticket || $ticket->is_direct_vendor) return false;
                 $hasInvoice = filled($ticket->owner_invoice_id) || filled($ticket->tenant_invoice_id);
                 return ! $hasInvoice && ($ticket->isWorkCompleted() || $ticket->hasClientAcceptance());
             })
@@ -842,8 +858,13 @@ class VerificationAuditRelationManager extends RelationManager
                 SpatieMediaLibraryFileUpload::make('client_acceptance_proofs')
                     ->collection('client_acceptance_proofs')
                     ->label('Documentary Proof of Acceptance (Images / PDFs)')
-                    ->helperText('Upload clear photos or PDFs of the signed confirmation, WhatsApp screenshot, or email. (Mandatory)')
-                    ->required()
+                    ->helperText(function (RelationManager $livewire): string {
+                        $ticket = $livewire->getOwnerRecord();
+                        return (bool) $ticket?->is_direct_vendor
+                            ? 'Optional for direct repairs: Upload confirmation photos, signed notes, or chat approval if available.'
+                            : 'Upload clear photos or PDFs of the signed confirmation, WhatsApp screenshot, or email. (Mandatory for Dwelly-coordinated)';
+                    })
+                    ->required(fn (RelationManager $livewire): bool => ! (bool) $livewire->getOwnerRecord()?->is_direct_vendor)
                     ->multiple()
                     ->panelLayout('grid')
                     ->imagePreviewHeight('140')

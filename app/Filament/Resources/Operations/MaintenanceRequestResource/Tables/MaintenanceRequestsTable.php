@@ -113,8 +113,12 @@ class MaintenanceRequestsTable
             ->recordActions([
                 Action::make('closeTicket')
                     ->label('Close Ticket')
-                    ->icon('heroicon-o-check-badge')
-                    ->color('success')
+                    ->icon('heroicon-o-lock-closed')
+                    ->color(fn ($record) => $record->isWorkCompleted() ? 'success' : 'gray')
+                    ->disabled(fn ($record) => !$record->isWorkCompleted())
+                    ->tooltip(fn ($record) => !$record->isWorkCompleted()
+                        ? 'Work must be marked completed with client acceptance before closing this ticket.'
+                        : 'Close this completed maintenance ticket.')
                     ->requiresConfirmation()
                     ->modalHeading('Close Maintenance Request')
                     ->modalDescription('Are you sure you want to close this maintenance ticket?')

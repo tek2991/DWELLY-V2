@@ -24,7 +24,7 @@ class MaintenanceBillingForm
                         TextInput::make('invoice_number')
                             ->label('Invoice / Bill #')
                             ->disabled()
-                            ->degraded()
+                            ->dehydrated()
                             ->placeholder('Auto-generated'),
 
                         Select::make('contact_id')

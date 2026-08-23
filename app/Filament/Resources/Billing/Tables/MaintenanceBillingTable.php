@@ -144,8 +144,8 @@ class MaintenanceBillingTable
                     ->form([
                         Select::make('maintenance_request_id')
                             ->label('Maintenance Ticket')
-                            ->options(fn () => MaintenanceRequest::get()->mapWithKeys(fn ($req) => [
-                                $req->id => "{$req->ticket_number} - {$req->title} (" . ($req->property?->name ?? 'Property') . ")"
+                            ->options(fn () => MaintenanceRequest::where('is_direct_vendor', false)->get()->mapWithKeys(fn ($req) => [
+                                $req->id => "{$req->ticket_number} - {$req->title} (" . ($req->property?->building_name ?: ($req->property?->name ?? 'Property')) . ")"
                             ]))
                             ->searchable()
                             ->required()

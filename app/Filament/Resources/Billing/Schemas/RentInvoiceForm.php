@@ -27,7 +27,7 @@ class RentInvoiceForm
                         TextInput::make('invoice_number')
                             ->label('Invoice Number')
                             ->disabled()
-                            ->degraded()
+                            ->dehydrated()
                             ->placeholder('Auto-generated'),
 
                         Select::make('contact_id')

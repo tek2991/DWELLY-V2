@@ -38,6 +38,10 @@ class MaintenanceBillingService
         array $lineItems = [],
         array $options = []
     ): Invoice {
+        if ($request->is_direct_vendor) {
+            throw new \InvalidArgumentException("Cannot generate client invoice for direct repair tickets (#{$request->ticket_number}) where owner/tenant repairs directly.");
+        }
+
         return DB::transaction(function () use ($request, $billType, $lineItems, $options) {
             $party = match ($billType) {
                 'tenant_invoice' => $request->tenant,
@@ -276,6 +280,10 @@ class MaintenanceBillingService
      */
     public function createAllVendorBillsForRequest(MaintenanceRequest $request, array $options = []): array
     {
+        if ($request->is_direct_vendor) {
+            return [];
+        }
+
         $bills = [];
         $quote = $request->currentClientQuote ?? $request->clientQuotes()->latest()->first();
         $awardedIds = (array) ($quote?->awarded_vendor_quote_ids ?? []);
@@ -309,6 +317,10 @@ class MaintenanceBillingService
         array $lineItems = [],
         array $options = []
     ): Bill {
+        if ($request->is_direct_vendor) {
+            throw new \InvalidArgumentException("Cannot generate vendor bill for direct repair tickets (#{$request->ticket_number}) where owner/tenant repairs directly.");
+        }
+
         return DB::transaction(function () use ($request, $lineItems, $options) {
             $vendorParty = $request->vendor;
             if (!$vendorParty) {

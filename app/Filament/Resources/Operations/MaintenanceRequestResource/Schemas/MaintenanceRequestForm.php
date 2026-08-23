@@ -41,12 +41,16 @@ class MaintenanceRequestForm
                                     $quote = $record->currentClientQuote ?? $record->clientQuotes()->where('status', '!=', 'archived')->latest()->first();
                                     $quoteNumber = $quote ? " #{$quote->quote_number}" : '';
 
+                                    $reason = $record->is_direct_vendor
+                                        ? 'On-site repairs have been authorized and are in progress under the Direct Repair route.'
+                                        : ($quote ? 'The Maintenance Quotation' . e($quoteNumber) . ' for this ticket has been approved.' : 'Repairs have been authorized and are in progress.');
+
                                     return new HtmlString(
                                         '<div style="background-color: rgba(30, 58, 138, 0.06); border: 1px solid rgba(37, 99, 235, 0.25); border-left: 4px solid #2563eb; padding: 14px 18px; border-radius: 8px; margin-bottom: 8px; font-size: 13px; color: #1e3a8a; display: flex; align-items: flex-start; gap: 12px;">' .
                                         '<span style="font-size: 20px; line-height: 1;">🔒</span>' .
                                         '<div>' .
                                         '<strong style="font-size: 14px; display: block; margin-bottom: 2px;">Maintenance Request Locked</strong>' .
-                                        '<span>The Maintenance Quotation' . e($quoteNumber) . ' for this ticket has been approved. Target property, issue details, defect items, and financial responsibility are permanently locked to preserve contract and billing integrity. Track ongoing repairs in the Repair Execution tab.</span>' .
+                                        '<span>' . $reason . ' Target property, issue details, defect items, and financial responsibility are permanently locked to preserve contract and billing integrity. Track ongoing repairs in the Repair Execution tab.</span>' .
                                         '</div>' .
                                         '</div>'
                                     );
@@ -192,6 +196,10 @@ class MaintenanceRequestForm
                             // 💰 Section 3: Repair Decision & Financial Responsibility
                             Section::make('💰 Repair Decision & Financial Responsibility')
                                 ->description(function ($record) {
+                                    if ($record && $record->isLocked()) {
+                                        return '🔒 Financial responsibility and execution route are locked because repair work has been authorized / in progress.';
+                                    }
+
                                     $hasActiveQuote = (bool) ($record && ($record->current_client_quote_id || $record->clientQuotes()->where('status', '!=', 'archived')->exists()));
                                     if ($hasActiveQuote) {
                                         return '🔒 Financial responsibility and execution route are locked because an official Maintenance Quotation has been created for this ticket.';
@@ -232,14 +240,14 @@ class MaintenanceRequestForm
                                                 return null;
                                             }
                                             if ($record->isQuotationApproved()) {
-                                                return 'Cannot unlock financial responsibility after quotation is approved.';
+                                                return 'Cannot unlock financial responsibility after quotation is approved / repairs started.';
                                             }
                                             $quote = $record->currentClientQuote ?? $record->clientQuotes()->where('status', '!=', 'archived')->latest()->first();
                                             $hasWorkOrders = ($quote && ! empty($quote->awarded_vendor_quote_ids))
                                                 || $record->vendorQuotes()->where('is_awarded', true)->exists()
                                                 || in_array($record->status, [MaintenanceStatus::IN_PROGRESS, MaintenanceStatus::WORK_COMPLETED, MaintenanceStatus::CLOSED, MaintenanceStatus::CANCELLED]);
 
-                                            return $hasWorkOrders ? 'Cannot unlock financial responsibility after Work Orders have been issued.' : 'Archive active quotation and unlock Who Pays / Execution Route';
+                                            return $hasWorkOrders ? 'Cannot unlock financial responsibility after Work Orders have been issued or repairs started.' : 'Archive active quotation and unlock Who Pays / Execution Route';
                                         })
                                         ->requiresConfirmation()
                                         ->modalHeading('⚠️ Unlock Financial Responsibility & Archive Quotation?')
@@ -309,7 +317,7 @@ class MaintenanceRequestForm
                                         })
                                         ->required()
                                         ->live()
-                                        ->disabled(fn ($record) => (bool) ($record && ($record->current_client_quote_id || $record->clientQuotes()->where('status', '!=', 'archived')->exists())))
+                                        ->disabled(fn ($record) => (bool) ($record && ($record->isLocked() || $record->current_client_quote_id || $record->clientQuotes()->where('status', '!=', 'archived')->exists())))
                                         ->dehydrated()
                                         ->afterStateUpdated(function ($state, Set $set) {
                                             if (in_array($state, ['dwelly', PayerType::DWELLY->value, PayerType::DWELLY_DIRECT_ABSORBED->value])) {
@@ -319,6 +327,10 @@ class MaintenanceRequestForm
                                             }
                                         })
                                         ->helperText(function (Get $get, $record) {
+                                            if ($record && $record->isLocked()) {
+                                                return '🔒 Locked: Financial responsibility cannot be changed because repairs have been authorized / in progress.';
+                                            }
+
                                             if ($record && ($record->current_client_quote_id || $record->clientQuotes()->where('status', '!=', 'archived')->exists())) {
                                                 $quote = $record->currentClientQuote ?? $record->clientQuotes()->where('status', '!=', 'archived')->latest()->first();
                                                 $quoteRef = $quote ? " (#{$quote->quote_number})" : '';
@@ -359,9 +371,13 @@ class MaintenanceRequestForm
                                         ->default(0)
                                         ->required()
                                         ->live()
-                                        ->disabled(fn ($record) => (bool) ($record && ($record->current_client_quote_id || $record->clientQuotes()->where('status', '!=', 'archived')->exists())))
+                                        ->disabled(fn ($record) => (bool) ($record && ($record->isLocked() || $record->current_client_quote_id || $record->clientQuotes()->where('status', '!=', 'archived')->exists())))
                                         ->dehydrated()
                                         ->helperText(function (Get $get, $record) {
+                                            if ($record && $record->isLocked()) {
+                                                return '🔒 Locked: Execution route cannot be modified because repairs have been authorized / in progress.';
+                                            }
+
                                             if ($record && ($record->current_client_quote_id || $record->clientQuotes()->where('status', '!=', 'archived')->exists())) {
                                                 return '🔒 Locked: Execution route cannot be modified because an active Maintenance Quotation is linked.';
                                             }
@@ -376,9 +392,18 @@ class MaintenanceRequestForm
                                             $payer = $get('payer_type');
                                             $isDirect = $get('is_direct_vendor');
                                             $hasQuotation = (bool) ($record && ($record->current_client_quote_id || $record->clientQuotes()->where('status', '!=', 'archived')->exists()));
+                                            $isLocked = (bool) ($record && $record->isLocked());
 
                                             if (blank($payer)) {
                                                 return new HtmlString('<div style="font-size: 13px; color: #d97706; background-color: rgba(217, 119, 6, 0.08); border-left: 4px solid #d97706; padding: 10px 14px; border-radius: 4px;">⚠️ <strong>Decision Required:</strong> Please assign financial responsibility above before preparing quotations or starting repairs.</div>');
+                                            }
+
+                                            if ($isLocked) {
+                                                $routeText = $isDirect
+                                                    ? 'Direct Repair Route (Client handles contractor directly)'
+                                                    : 'Dwelly-Coordinated Route';
+
+                                                return new HtmlString('<div style="font-size: 13px; color: #1e3a8a; background-color: rgba(30, 58, 138, 0.06); border-left: 4px solid #2563eb; padding: 10px 14px; border-radius: 4px;">🔒 <strong>Financial Responsibility & Execution Route Locked:</strong> Repairs are authorized & in progress (' . e($routeText) . '). Financial decision is permanently locked.</div>');
                                             }
 
                                             if ($hasQuotation) {
