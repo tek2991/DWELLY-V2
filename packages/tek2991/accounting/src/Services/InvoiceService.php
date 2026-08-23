@@ -173,14 +173,15 @@ class InvoiceService
             $entries = [];
 
             // DR: Receivable Account
+            $receivableAccount = \Tek2991\Accounting\Models\Account::find($receivableAccountId);
             $entries[] = [
                 'account_id' => $receivableAccountId,
                 'type' => 'debit',
                 'amount' => $invoice->grand_total,
-                'description' => "Invoice {$invoice->invoice_number}",
+                'description' => "Invoice {$invoice->invoice_number} ({$invoice->contact?->name})",
             ];
 
-            // CR: Income Accounts (These are natively reduced by both line and doc discounts)
+            // CR: Credit Accounts (Income or Pass-Through Liability)
             $incomeAccounts = [];
             $taxAccounts = [];
 
@@ -215,11 +216,16 @@ class InvoiceService
 
             foreach ($incomeAccounts as $accId => $amount) {
                 if ($amount > 0) {
+                    $acc = \Tek2991\Accounting\Models\Account::find($accId);
+                    $lineNote = $acc?->type === \Tek2991\Accounting\Enums\AccountType::Liability
+                        ? "Invoice {$invoice->invoice_number} Pass-Through"
+                        : "Invoice {$invoice->invoice_number} Income";
+
                     $entries[] = [
                         'account_id' => $accId,
                         'type' => 'credit',
                         'amount' => $amount,
-                        'description' => "Invoice {$invoice->invoice_number} Revenue",
+                        'description' => $lineNote,
                     ];
                 }
             }

@@ -37,13 +37,13 @@ class DefaultChartOfAccountsSeeder extends Seeder
                             ['code' => '1120', 'name' => 'Petty Cash', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::CurrentAsset],
                             ['code' => '1130', 'name' => 'Current Accounts', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::CurrentAsset, 'system_role' => SystemRole::Bank],
                             ['code' => '1140', 'name' => 'Savings Accounts', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::CurrentAsset, 'system_role' => SystemRole::Bank],
-                            ['code' => '1150', 'name' => 'Fixed Deposits (<1 year)', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::CurrentAsset],
+                            ['code' => '1150', 'name' => 'Fixed Deposits (FD Escrow)', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::CurrentAsset],
                         ]
                     ],
                     [
-                        'code' => '1200', 'name' => 'Trade Receivables', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::CurrentAsset, 'is_control_account' => true, 'system_role' => SystemRole::TradeReceivable,
+                        'code' => '1200', 'name' => 'Tenant & Trade Receivables', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::CurrentAsset, 'is_control_account' => true, 'system_role' => SystemRole::TradeReceivable,
                         'children' => [
-                            ['code' => '1210', 'name' => 'Debtors', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::CurrentAsset],
+                            ['code' => '1210', 'name' => 'Tenant Receivables Control', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::CurrentAsset, 'system_role' => SystemRole::TenantReceivable],
                             ['code' => '1220', 'name' => 'Bills Receivable', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::CurrentAsset],
                         ]
                     ],
@@ -61,18 +61,17 @@ class DefaultChartOfAccountsSeeder extends Seeder
                     [
                         'code' => '1400', 'name' => 'Inventory', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::CurrentAsset, 'is_control_account' => true, 'system_role' => SystemRole::Inventory,
                         'children' => [
-                            ['code' => '1410', 'name' => 'Raw Materials', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::CurrentAsset],
-                            ['code' => '1420', 'name' => 'Work In Progress', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::CurrentAsset],
-                            ['code' => '1430', 'name' => 'Finished Goods', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::CurrentAsset],
-                            ['code' => '1440', 'name' => 'Stock in Transit', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::CurrentAsset],
+                            ['code' => '1410', 'name' => 'Maintenance Supplies & Spares', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::CurrentAsset],
+                            ['code' => '1420', 'name' => 'Stock in Transit', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::CurrentAsset],
                         ]
                     ],
                     [
-                        'code' => '1500', 'name' => 'Advances', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::CurrentAsset,
+                        'code' => '1500', 'name' => 'Advances & Recoverables', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::CurrentAsset,
                         'children' => [
-                            ['code' => '1510', 'name' => 'Advance to Suppliers', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::CurrentAsset],
+                            ['code' => '1510', 'name' => 'Advance to Contractors & Suppliers', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::CurrentAsset],
                             ['code' => '1520', 'name' => 'Employee Advances', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::CurrentAsset],
-                            ['code' => '1530', 'name' => 'Security Deposits', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::CurrentAsset],
+                            ['code' => '1530', 'name' => 'Security Deposits Held with Owners', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::CurrentAsset, 'system_role' => SystemRole::SecurityDepositOwnerAsset],
+                            ['code' => '1540', 'name' => 'Owner Advances & Recoverables', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::CurrentAsset, 'system_role' => SystemRole::OwnerAdvanceAsset],
                         ]
                     ],
                 ]
@@ -83,26 +82,22 @@ class DefaultChartOfAccountsSeeder extends Seeder
                     ['code' => '1610', 'name' => 'Land', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::FixedAsset],
                     ['code' => '1620', 'name' => 'Buildings', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::FixedAsset],
                     ['code' => '1630', 'name' => 'Furniture & Fixtures', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::FixedAsset],
-                    ['code' => '1640', 'name' => 'Computers', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::FixedAsset],
-                    ['code' => '1650', 'name' => 'Office Equipment', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::FixedAsset],
-                    ['code' => '1660', 'name' => 'Vehicles', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::FixedAsset],
-                    ['code' => '1670', 'name' => 'Plant & Machinery', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::FixedAsset],
+                    ['code' => '1640', 'name' => 'Computers & Equipment', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::FixedAsset],
+                    ['code' => '1650', 'name' => 'Vehicles', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::FixedAsset],
                 ]
             ],
             [
                 'code' => '1700', 'name' => 'Intangible Assets', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::FixedAsset,
                 'children' => [
-                    ['code' => '1710', 'name' => 'Software', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::FixedAsset],
+                    ['code' => '1710', 'name' => 'Software & Platform', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::FixedAsset],
                     ['code' => '1720', 'name' => 'Website Development', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::FixedAsset],
-                    ['code' => '1730', 'name' => 'Trademarks', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::FixedAsset],
                 ]
             ],
             [
                 'code' => '1800', 'name' => 'Accumulated Depreciation', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::FixedAsset,
                 'children' => [
-                    ['code' => '1810', 'name' => 'Building Depreciation', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::FixedAsset],
-                    ['code' => '1820', 'name' => 'Vehicle Depreciation', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::FixedAsset],
-                    ['code' => '1830', 'name' => 'Computer Depreciation', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::FixedAsset],
+                    ['code' => '1810', 'name' => 'Accumulated Depreciation - Buildings', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::FixedAsset],
+                    ['code' => '1820', 'name' => 'Accumulated Depreciation - Equipment', 'type' => AccountType::Asset, 'reporting_class' => ReportingClass::FixedAsset],
                 ]
             ],
 
@@ -110,9 +105,9 @@ class DefaultChartOfAccountsSeeder extends Seeder
             // 2. LIABILITIES
             // ────────────────────────────────────────────────────────
             [
-                'code' => '2100', 'name' => 'Trade Payables', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::CurrentLiability, 'is_control_account' => true, 'system_role' => SystemRole::TradePayable,
+                'code' => '2100', 'name' => 'Contractor & Trade Payables', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::CurrentLiability, 'is_control_account' => true, 'system_role' => SystemRole::TradePayable,
                 'children' => [
-                    ['code' => '2110', 'name' => 'Creditors', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::CurrentLiability],
+                    ['code' => '2110', 'name' => 'Contractor & Vendor Payables Control', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::CurrentLiability, 'system_role' => SystemRole::VendorPayable],
                     ['code' => '2120', 'name' => 'Bills Payable', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::CurrentLiability],
                 ]
             ],
@@ -130,34 +125,30 @@ class DefaultChartOfAccountsSeeder extends Seeder
                 'children' => [
                     ['code' => '2310', 'name' => 'TDS Payable', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::CurrentLiability],
                     ['code' => '2320', 'name' => 'TCS Payable', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::CurrentLiability],
-                    ['code' => '2330', 'name' => 'PF Payable', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::CurrentLiability],
-                    ['code' => '2340', 'name' => 'ESI Payable', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::CurrentLiability],
-                    ['code' => '2350', 'name' => 'Professional Tax Payable', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::CurrentLiability],
-                    ['code' => '2360', 'name' => 'Labour Welfare Fund Payable', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::CurrentLiability],
+                    ['code' => '2330', 'name' => 'PF & ESI Payable', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::CurrentLiability],
+                    ['code' => '2340', 'name' => 'Professional Tax Payable', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::CurrentLiability],
                 ]
             ],
             [
-                'code' => '2400', 'name' => 'Accruals', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::CurrentLiability,
+                'code' => '2400', 'name' => 'Pass-Through & Accruals', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::CurrentLiability,
                 'children' => [
                     ['code' => '2410', 'name' => 'Salary Payable', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::CurrentLiability],
-                    ['code' => '2420', 'name' => 'Rent Payable', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::CurrentLiability],
+                    ['code' => '2420', 'name' => 'Owner Payables (Pass-Through Rent Control)', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::CurrentLiability, 'system_role' => SystemRole::OwnerPayable],
                     ['code' => '2430', 'name' => 'Interest Payable', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::CurrentLiability],
                 ]
             ],
             [
-                'code' => '2500', 'name' => 'Customer Advances', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::CurrentLiability,
+                'code' => '2500', 'name' => 'Custodial Deposits & Customer Advances', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::CurrentLiability,
                 'children' => [
                     ['code' => '2510', 'name' => 'Advance from Customers', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::CurrentLiability],
+                    ['code' => '2520', 'name' => 'Tenant Security Deposit Liabilities (Refundable)', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::CurrentLiability, 'system_role' => SystemRole::SecurityDepositLiability],
                 ]
             ],
             [
-                'code' => '2600', 'name' => 'Loans', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::LongTermLiability,
+                'code' => '2600', 'name' => 'Loans & Borrowings', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::LongTermLiability,
                 'children' => [
                     ['code' => '2610', 'name' => 'Bank Loans', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::LongTermLiability],
-                    ['code' => '2620', 'name' => 'Vehicle Loans', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::LongTermLiability],
-                    ['code' => '2630', 'name' => 'Mortgage Loans', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::LongTermLiability],
-                    ['code' => '2640', 'name' => 'Unsecured Loans', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::LongTermLiability],
-                    ['code' => '2650', 'name' => 'Director\'s Loan', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::LongTermLiability],
+                    ['code' => '2620', 'name' => 'Director\'s Loan', 'type' => AccountType::Liability, 'reporting_class' => ReportingClass::LongTermLiability],
                 ]
             ],
 
@@ -167,50 +158,48 @@ class DefaultChartOfAccountsSeeder extends Seeder
             [
                 'code' => '3100', 'name' => 'Capital Account', 'type' => AccountType::Equity, 'reporting_class' => ReportingClass::Equity,
                 'children' => [
-                    ['code' => '3110', 'name' => 'Drawings', 'type' => AccountType::Equity, 'reporting_class' => ReportingClass::Equity],
-                    ['code' => '3120', 'name' => 'Current Year Profit/Loss', 'type' => AccountType::Equity, 'reporting_class' => ReportingClass::Equity],
-                    ['code' => '3130', 'name' => 'Retained Earnings', 'type' => AccountType::Equity, 'reporting_class' => ReportingClass::Equity, 'system_role' => SystemRole::RetainedEarnings],
+                    ['code' => '3110', 'name' => 'Partner / Share Capital', 'type' => AccountType::Equity, 'reporting_class' => ReportingClass::Equity],
+                    ['code' => '3120', 'name' => 'Drawings', 'type' => AccountType::Equity, 'reporting_class' => ReportingClass::Equity],
+                    ['code' => '3130', 'name' => 'Current Year Profit/Loss', 'type' => AccountType::Equity, 'reporting_class' => ReportingClass::Equity],
+                    ['code' => '3140', 'name' => 'Retained Earnings', 'type' => AccountType::Equity, 'reporting_class' => ReportingClass::Equity, 'system_role' => SystemRole::RetainedEarnings],
                 ]
             ],
 
             // ────────────────────────────────────────────────────────
-            // 4. REVENUE
+            // 4. REVENUE (True Operating Revenue Only - No Rent Bloating)
             // ────────────────────────────────────────────────────────
             [
-                'code' => '4100', 'name' => 'Sales Revenue', 'type' => AccountType::Revenue, 'reporting_class' => ReportingClass::Revenue,
+                'code' => '4100', 'name' => 'Property Management Revenue', 'type' => AccountType::Revenue, 'reporting_class' => ReportingClass::Revenue,
                 'children' => [
-                    ['code' => '4110', 'name' => 'Domestic Goods Sales', 'type' => AccountType::Revenue, 'reporting_class' => ReportingClass::Revenue],
-                    ['code' => '4120', 'name' => 'Export Sales', 'type' => AccountType::Revenue, 'reporting_class' => ReportingClass::Revenue],
-                    ['code' => '4130', 'name' => 'Service Revenue', 'type' => AccountType::Revenue, 'reporting_class' => ReportingClass::Revenue],
-                    ['code' => '4140', 'name' => 'Job Work Revenue', 'type' => AccountType::Revenue, 'reporting_class' => ReportingClass::Revenue],
+                    ['code' => '4110', 'name' => 'Property Management Commission Income', 'type' => AccountType::Revenue, 'reporting_class' => ReportingClass::Revenue, 'system_role' => SystemRole::CommissionRevenue],
+                    ['code' => '4120', 'name' => 'Maintenance Service Income', 'type' => AccountType::Revenue, 'reporting_class' => ReportingClass::Revenue, 'system_role' => SystemRole::MaintenanceIncome],
+                    ['code' => '4130', 'name' => 'Tenant Placement & Onboarding Fees', 'type' => AccountType::Revenue, 'reporting_class' => ReportingClass::Revenue],
+                    ['code' => '4140', 'name' => 'Utility Management & Service Fees', 'type' => AccountType::Revenue, 'reporting_class' => ReportingClass::Revenue],
                 ]
             ],
             [
                 'code' => '4200', 'name' => 'Other Operating Revenue', 'type' => AccountType::Revenue, 'reporting_class' => ReportingClass::Revenue,
                 'children' => [
-                    ['code' => '4210', 'name' => 'Scrap Sales', 'type' => AccountType::Revenue, 'reporting_class' => ReportingClass::Revenue],
-                    ['code' => '4220', 'name' => 'Commission Income', 'type' => AccountType::Revenue, 'reporting_class' => ReportingClass::Revenue],
+                    ['code' => '4210', 'name' => 'Brokerage & Leasing Commission', 'type' => AccountType::Revenue, 'reporting_class' => ReportingClass::Revenue],
+                    ['code' => '4220', 'name' => 'Late Payment / Penalty Fees', 'type' => AccountType::Revenue, 'reporting_class' => ReportingClass::Revenue],
                 ]
             ],
             [
                 'code' => '4300', 'name' => 'Non-Operating Revenue', 'type' => AccountType::Revenue, 'reporting_class' => ReportingClass::Revenue,
                 'children' => [
-                    ['code' => '4310', 'name' => 'Interest Income', 'type' => AccountType::Revenue, 'reporting_class' => ReportingClass::Revenue],
-                    ['code' => '4320', 'name' => 'Dividend Income', 'type' => AccountType::Revenue, 'reporting_class' => ReportingClass::Revenue],
-                    ['code' => '4330', 'name' => 'Rental Income', 'type' => AccountType::Revenue, 'reporting_class' => ReportingClass::Revenue],
-                    ['code' => '4340', 'name' => 'Profit on Asset Sale', 'type' => AccountType::Revenue, 'reporting_class' => ReportingClass::Revenue],
-                    ['code' => '4350', 'name' => 'Discount Received', 'type' => AccountType::Revenue, 'reporting_class' => ReportingClass::Revenue],
+                    ['code' => '4310', 'name' => 'Interest on Fixed Deposits (FD)', 'type' => AccountType::Revenue, 'reporting_class' => ReportingClass::Revenue],
+                    ['code' => '4320', 'name' => 'Discount Received', 'type' => AccountType::Revenue, 'reporting_class' => ReportingClass::Revenue],
                 ]
             ],
 
             // ────────────────────────────────────────────────────────
-            // 5. COST OF GOODS SOLD
+            // 5. DIRECT SERVICE COSTS (COGS)
             // ────────────────────────────────────────────────────────
             [
-                'code' => '5100', 'name' => 'Purchases', 'type' => AccountType::Expense, 'reporting_class' => ReportingClass::COGS,
+                'code' => '5100', 'name' => 'Direct Maintenance & Repair Costs', 'type' => AccountType::Expense, 'reporting_class' => ReportingClass::COGS,
                 'children' => [
-                    ['code' => '5110', 'name' => 'Raw Material Purchases', 'type' => AccountType::Expense, 'reporting_class' => ReportingClass::COGS],
-                    ['code' => '5120', 'name' => 'Finished Goods Purchases', 'type' => AccountType::Expense, 'reporting_class' => ReportingClass::COGS],
+                    ['code' => '5110', 'name' => 'Contractor & Painter Direct Costs', 'type' => AccountType::Expense, 'reporting_class' => ReportingClass::COGS, 'system_role' => SystemRole::MaintenanceExpense],
+                    ['code' => '5120', 'name' => 'Maintenance Materials & Spares', 'type' => AccountType::Expense, 'reporting_class' => ReportingClass::COGS],
                 ]
             ],
             [

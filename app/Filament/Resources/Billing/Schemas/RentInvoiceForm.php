@@ -85,8 +85,9 @@ class RentInvoiceForm
                                     ->columnSpan(3),
 
                                 Select::make('income_account_id')
-                                    ->label('Income Account')
-                                    ->options(fn () => Account::where('type', 'income')->pluck('name', 'id'))
+                                    ->label('Credit / Pass-Through Account')
+                                    ->options(fn () => Account::whereIn('type', ['liability', 'revenue', 'income'])->pluck('name', 'id'))
+                                    ->searchable()
                                     ->columnSpan(2),
                             ])
                             ->defaultItems(1),

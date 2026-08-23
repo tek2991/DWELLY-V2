@@ -32,36 +32,59 @@ class RentBillingService
         array $overrides = []
     ): Invoice {
         return DB::transaction(function () use ($agreement, $month, $year, $overrides) {
-            // Find primary tenant party
+            // 1. Find primary tenant party
             $primaryRole = $agreement->roles()->where('is_primary', true)->first() ?? $agreement->roles()->first();
-            if (!$primaryRole || !$primaryRole->party) {
+            $tenantParty = $primaryRole?->party ?? $agreement->tenantParty ?? $agreement->party;
+            if (!$tenantParty) {
                 throw new \InvalidArgumentException("No valid tenant party linked to agreement {$agreement->code}");
             }
 
-            $party = $primaryRole->party;
-            $this->provisioningService->ensurePartyAccountingReady($party);
-            $contact = $party->accountingContact;
+            $this->provisioningService->ensurePartyAccountingReady($tenantParty);
+            $tenantContact = $tenantParty->accountingContact ?? $this->provisioningService->ensureAccountingContact($tenantParty);
+
+            // 2. Find property owner party for pass-through rent liability
+            $ownerParty = $agreement->property?->owner;
+            if (!$ownerParty && $agreement->property_id) {
+                $mouPartyId = \App\Domain\Mou\Models\Mou::where('property_id', $agreement->property_id)
+                    ->whereNotNull('party_id')
+                    ->latest()
+                    ->value('party_id');
+                if ($mouPartyId) {
+                    $ownerParty = \App\Domain\Party\Models\Party::find($mouPartyId);
+                }
+            }
+            if (!$ownerParty) {
+                $ownerParty = \App\Domain\Party\Models\Party::whereHas('roles', fn ($q) => $q->where('name', 'owner'))
+                    ->orWhereHas('ownerProfile')
+                    ->first();
+            }
+
+            $ownerPayableAccount = $ownerParty 
+                ? $this->provisioningService->getOwnerPayableAccount($ownerParty)
+                : (Account::where('system_role', \Tek2991\Accounting\Enums\SystemRole::OwnerPayable)->first()
+                    ?? Account::where('type', 'liability')->first());
 
             $monthName = date('F Y', mktime(0, 0, 0, $month, 1, $year));
             $issueDate = $overrides['issue_date'] ?? now()->toDateString();
             $dueDate = $overrides['due_date'] ?? now()->startOfMonth()->addDays(5)->toDateString();
 
-            // Default Income Account
-            $incomeAccount = Account::where('type', 'income')->first() 
-                ?? Account::where('system_role', \Tek2991\Accounting\Enums\SystemRole::RentIncome)->first();
-
             $invoiceNumber = $this->docNumberService->nextInvoiceNumber();
+            $branchId = app(\Tek2991\Accounting\Services\BranchContext::class)->getCurrentId() 
+                ?? $tenantContact->branch_id 
+                ?? $agreement->property?->branch_id 
+                ?? \App\Models\Branch::first()?->id;
 
             $invoice = Invoice::create([
-                'contact_id' => $contact->id,
+                'branch_id' => $branchId,
+                'contact_id' => $tenantContact->id,
                 'invoice_number' => $invoiceNumber,
-                'status' => InvoiceStatus::Sent,
+                'status' => InvoiceStatus::Draft,
                 'issue_date' => $issueDate,
                 'due_date' => $dueDate,
                 'currency_code' => 'INR',
                 'reference_type' => TenancyAgreement::class,
                 'reference_id' => $agreement->id,
-                'notes' => $overrides['notes'] ?? "Monthly Rent Invoice for {$monthName} - Agreement: {$agreement->code}",
+                'notes' => $overrides['notes'] ?? "Monthly Rent Demand for {$monthName} - Agreement: {$agreement->code}",
                 'terms' => 'Payment due by 5th of every month.',
             ]);
 
@@ -69,18 +92,18 @@ class RentBillingService
             $utilityAmount = (float) ($overrides['utility_amount'] ?? 0);
             $maintenanceAmount = (float) ($overrides['maintenance_amount'] ?? 0);
 
-            // Add Rent Line Item
+            // Add Rent Line Item (Pass-through: Credits Owner AP Liability)
             InvoiceItem::create([
                 'invoice_id' => $invoice->id,
                 'line_type' => DocumentLineType::Account,
                 'sort_order' => 1,
-                'description' => "Rent for {$monthName} ({$agreement->property?->name})",
+                'description' => "Rent for {$monthName} ({$agreement->property?->building_name}) [Owner Pass-Through]",
                 'quantity' => 1,
                 'unit_price' => $rentAmount,
                 'line_total' => $rentAmount,
                 'gross_amount' => $rentAmount,
                 'net_amount' => $rentAmount,
-                'income_account_id' => $incomeAccount?->id,
+                'income_account_id' => $ownerPayableAccount?->id,
             ]);
 
             if ($utilityAmount > 0) {
@@ -94,11 +117,12 @@ class RentBillingService
                     'line_total' => $utilityAmount,
                     'gross_amount' => $utilityAmount,
                     'net_amount' => $utilityAmount,
-                    'income_account_id' => $incomeAccount?->id,
+                    'income_account_id' => $ownerPayableAccount?->id,
                 ]);
             }
 
             if ($maintenanceAmount > 0) {
+                $maintIncomeAccount = $this->provisioningService->getMaintenanceIncomeAccount();
                 InvoiceItem::create([
                     'invoice_id' => $invoice->id,
                     'line_type' => DocumentLineType::Account,
@@ -109,11 +133,15 @@ class RentBillingService
                     'line_total' => $maintenanceAmount,
                     'gross_amount' => $maintenanceAmount,
                     'net_amount' => $maintenanceAmount,
-                    'income_account_id' => $incomeAccount?->id,
+                    'income_account_id' => $maintIncomeAccount?->id ?? $ownerPayableAccount?->id,
                 ]);
             }
 
             $this->invoiceService->recalculateTotals($invoice);
+
+            // Post to double-entry ledger (DR: Tenant AR, CR: Owner AP)
+            $this->invoiceService->post($invoice);
+            $invoice->refresh();
 
             return $invoice;
         });

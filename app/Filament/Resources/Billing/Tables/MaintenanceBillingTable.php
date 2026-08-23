@@ -5,15 +5,8 @@ namespace App\Filament\Resources\Billing\Tables;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
-use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Textarea;
-use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-use Tek2991\Accounting\Models\Account;
 use Tek2991\Accounting\Models\Invoice;
 
 class MaintenanceBillingTable
@@ -71,51 +64,6 @@ class MaintenanceBillingTable
             ])
             ->defaultSort('issue_date', 'desc')
             ->recordActions([
-                Action::make('record_payment')
-                    ->label('Record Payment')
-                    ->icon('heroicon-o-banknotes')
-                    ->color('success')
-                    ->visible(fn (Invoice $record) => $record->balance_due > 0)
-                    ->form([
-                        TextInput::make('amount')
-                            ->label('Payment Amount (₹)')
-                            ->numeric()
-                            ->prefix('₹')
-                            ->default(fn (Invoice $record) => $record->balance_due)
-                            ->required(),
-
-                        Select::make('payment_account_id')
-                            ->label('Payment Account')
-                            ->options(fn () => Account::where('type', 'asset')->pluck('name', 'id'))
-                            ->required(),
-
-                        DatePicker::make('payment_date')
-                            ->label('Payment Date')
-                            ->default(now())
-                            ->required(),
-
-                        TextInput::make('reference')
-                            ->label('Transaction Reference / UTR Number'),
-
-                        Textarea::make('notes')
-                            ->label('Payment Remarks'),
-                    ])
-                    ->action(function (Invoice $record, array $data) {
-                        app(\Tek2991\Accounting\Services\InvoiceService::class)->recordPayment($record, [
-                            'amount' => (float) $data['amount'],
-                            'payment_account_id' => (int) $data['payment_account_id'],
-                            'payment_date' => $data['payment_date'],
-                            'reference' => $data['reference'] ?? null,
-                            'notes' => $data['notes'] ?? null,
-                        ]);
-
-                        Notification::make()
-                            ->title('Payment Recorded')
-                            ->body("Recorded payment of ₹" . number_format($data['amount'], 2) . " for Maintenance Invoice {$record->invoice_number}")
-                            ->success()
-                            ->send();
-                    }),
-
                 Action::make('download_invoice')
                     ->label('Invoice PDF')
                     ->icon('heroicon-o-document-arrow-down')
@@ -130,8 +78,6 @@ class MaintenanceBillingTable
                     ->visible(fn (Invoice $record) => $record->payments()->exists())
                     ->url(fn (Invoice $record) => route('billing.receipt.pdf', ['invoice' => $record->id, 'payment' => $record->payments()->latest()->first()?->id ?? 0]))
                     ->openUrlInNewTab(),
-
-                EditAction::make(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

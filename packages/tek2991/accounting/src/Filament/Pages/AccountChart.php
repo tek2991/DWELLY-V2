@@ -55,7 +55,7 @@ class AccountChart extends Page
             ->get();
 
         return $accounts->groupBy(function (Account $account) {
-            return $account->reporting_class->getLabel();
+            return $account->reporting_class?->getLabel() ?? 'General ' . ($account->type?->getLabel() ?? 'Accounts');
         });
     }
 

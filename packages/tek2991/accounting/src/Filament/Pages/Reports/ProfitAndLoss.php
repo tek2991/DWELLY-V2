@@ -113,7 +113,7 @@ class ProfitAndLoss extends Page implements HasForms
         return $balances->filter(function ($item) {
             return $item['balance']->getAmount() !== 0;
         })->groupBy(function ($item) {
-            return $item['account']->reporting_class->getLabel();
+            return $item['account']->reporting_class?->getLabel() ?? 'Unclassified';
         });
     }
 }

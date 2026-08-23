@@ -2,10 +2,8 @@
 
 namespace App\Console\Commands;
 
+use App\Domain\Finance\Services\RentBillingService;
 use Illuminate\Console\Command;
-use App\Domain\Agreement\Models\TenancyAgreement;
-use App\Domain\Finance\Services\AccountingBridgeService;
-use App\Domain\Finance\Models\RentPayment;
 
 class GenerateMonthlyRentInvoices extends Command
 {
@@ -14,57 +12,29 @@ class GenerateMonthlyRentInvoices extends Command
      *
      * @var string
      */
-    protected $signature = 'finance:generate-rent-invoices';
+    protected $signature = 'finance:generate-rent-invoices {--month=} {--year=}';
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = 'Generates monthly rent invoices for all active tenancies';
+    protected $description = 'Generates monthly pass-through rent invoices for all active tenancies';
 
     /**
      * Execute the console command.
      */
-    public function handle(AccountingBridgeService $accounting)
+    public function handle(RentBillingService $rentBilling)
     {
-        $this->info('Starting monthly rent invoice generation...');
-        
-        $activeAgreements = TenancyAgreement::where('status', 'active')->get();
-        
-        $count = 0;
-        foreach ($activeAgreements as $agreement) {
-            // Check if a payment for this month already exists to prevent duplicates
-            $existingPayment = \App\Domain\Finance\Models\RentPayment::where('tenancy_agreement_id', $agreement->id)
-                ->whereYear('due_date', now()->year)
-                ->whereMonth('due_date', now()->month)
-                ->exists();
-                
-            if ($existingPayment) {
-                continue;
-            }
-            
-            // Find the primary tenant
-            $primaryRole = $agreement->roles()->where('is_primary', true)->first();
-            if (!$primaryRole) {
-                $this->warn("No primary tenant for agreement {$agreement->code}, skipping.");
-                continue;
-            }
+        $month = (int) ($this->option('month') ?: now()->month);
+        $year = (int) ($this->option('year') ?: now()->year);
 
-            // Create a properly persisted pending rent payment
-            $payment = \App\Domain\Finance\Models\RentPayment::create([
-                'tenancy_agreement_id' => $agreement->id,
-                'tenant_id' => $primaryRole->party_id,
-                'amount' => $agreement->rent_amount,
-                'status' => 'pending',
-                'due_date' => now()->startOfMonth(),
-            ]);
-            
-            $accounting->recordRentPayment($payment);
-            
-            $count++;
-        }
-        
-        $this->info("Successfully generated {$count} rent invoices.");
+        $monthName = date('F Y', mktime(0, 0, 0, $month, 1, $year));
+        $this->info("Starting monthly rent demand generation for {$monthName}...");
+
+        $count = $rentBilling->bulkGenerateRentInvoices($month, $year);
+
+        $this->info("Successfully generated {$count} rent invoices for {$monthName}.");
     }
 }
+

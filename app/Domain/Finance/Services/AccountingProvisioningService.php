@@ -26,17 +26,28 @@ class AccountingProvisioningService
         // Sync the latest details from the Party to the Contact
         $this->syncAccountingContact($party, $contact);
 
-        $isTenant = $party->hasRole(\App\Domain\Party\Enums\BusinessRole::TENANT) || $party->tenantProfile()->exists();
-        $isOwner = $party->hasRole(\App\Domain\Party\Enums\BusinessRole::OWNER) || $party->ownerProfile()->exists();
-        $isVendor = $party->hasRole(\App\Domain\Party\Enums\BusinessRole::VENDOR) || $party->vendorProfile()->exists();
+        $isTenant = $party->hasRole(BusinessRole::TENANT) || $party->tenantProfile()->exists();
+        $isOwner = $party->hasRole(BusinessRole::OWNER) || $party->ownerProfile()->exists();
+        $isVendor = $party->hasRole(BusinessRole::VENDOR) || $party->vendorProfile()->exists();
 
-        // Owners and Tenants participate as BOTH Customer and Vendor (Receivables & Payables)
-        if ($isTenant || $isOwner || ($isVendor && ($isOwner || $isTenant))) {
-            $this->ensureReceivableLedger($contact, "AR - {$contact->name}");
-            $this->ensurePayableLedger($contact, "AP - {$contact->name}");
-        } elseif ($isVendor) {
-            $this->ensurePayableLedger($contact, "AP - {$contact->name}");
-        } else {
+        if ($isTenant) {
+            $this->ensureLedger($contact, AccountType::Asset, SystemRole::TenantReceivable, "AR - {$contact->name}");
+            $this->ensureLedger($contact, AccountType::Liability, SystemRole::SecurityDepositLiability, "Deposit Liability - {$contact->name}");
+        }
+
+        if ($isOwner) {
+            $this->ensureLedger($contact, AccountType::Liability, SystemRole::OwnerPayable, "AP - {$contact->name}");
+            $this->ensureLedger($contact, AccountType::Asset, SystemRole::CustomerReceivable, "AR - {$contact->name}");
+            $this->ensureLedger($contact, AccountType::Asset, SystemRole::OwnerAdvanceAsset, "Advance - {$contact->name}");
+            $this->ensureLedger($contact, AccountType::Asset, SystemRole::SecurityDepositOwnerAsset, "Security Deposit with {$contact->name}");
+        }
+
+        if ($isVendor) {
+            $this->ensureLedger($contact, AccountType::Liability, SystemRole::VendorPayable, "AP - {$contact->name}");
+        }
+
+        // Fallback for general parties
+        if (!$isTenant && !$isOwner && !$isVendor) {
             $this->ensureReceivableLedger($contact, "AR - {$contact->name}");
             $this->ensurePayableLedger($contact, "AP - {$contact->name}");
         }
@@ -44,7 +55,106 @@ class AccountingProvisioningService
         $this->updateContactTypeBasedOnRoles($contact, $party);
     }
 
-    protected function ensureAccountingContact(Party $party): Contact
+    public function getOwnerPayableAccount(Party $owner): Account
+    {
+        $this->ensurePartyAccountingReady($owner);
+        $contact = $this->ensureAccountingContact($owner);
+        
+        return Account::where('contact_id', $contact->id)
+            ->whereIn('system_role', [SystemRole::OwnerPayable, SystemRole::VendorPayable])
+            ->first() ?? $this->ensureLedger($contact, AccountType::Liability, SystemRole::OwnerPayable, "AP - {$contact->name}");
+    }
+
+    public function getTenantReceivableAccount(Party $tenant): Account
+    {
+        $this->ensurePartyAccountingReady($tenant);
+        $contact = $this->ensureAccountingContact($tenant);
+        
+        return Account::where('contact_id', $contact->id)
+            ->whereIn('system_role', [SystemRole::TenantReceivable, SystemRole::CustomerReceivable, SystemRole::TradeReceivable])
+            ->first() ?? $this->ensureLedger($contact, AccountType::Asset, SystemRole::TenantReceivable, "AR - {$contact->name}");
+    }
+
+    public function getOwnerAdvanceAccount(Party $owner): Account
+    {
+        $this->ensurePartyAccountingReady($owner);
+        $contact = $this->ensureAccountingContact($owner);
+        
+        return Account::where('contact_id', $contact->id)
+            ->where('system_role', SystemRole::OwnerAdvanceAsset)
+            ->first() ?? $this->ensureLedger($contact, AccountType::Asset, SystemRole::OwnerAdvanceAsset, "Advance - {$contact->name}");
+    }
+
+    public function getTenantDepositAccount(Party $tenant): Account
+    {
+        $this->ensurePartyAccountingReady($tenant);
+        $contact = $this->ensureAccountingContact($tenant);
+        
+        return Account::where('contact_id', $contact->id)
+            ->where('system_role', SystemRole::SecurityDepositLiability)
+            ->first() ?? $this->ensureLedger($contact, AccountType::Liability, SystemRole::SecurityDepositLiability, "Deposit Liability - {$contact->name}");
+    }
+
+    public function getOwnerDepositAccount(Party $owner): Account
+    {
+        $this->ensurePartyAccountingReady($owner);
+        $contact = $this->ensureAccountingContact($owner);
+        
+        return Account::where('contact_id', $contact->id)
+            ->where('system_role', SystemRole::SecurityDepositOwnerAsset)
+            ->first() ?? $this->ensureLedger($contact, AccountType::Asset, SystemRole::SecurityDepositOwnerAsset, "Security Deposit with {$contact->name}");
+    }
+
+    public function getVendorPayableAccount(Party $vendor): Account
+    {
+        $this->ensurePartyAccountingReady($vendor);
+        $contact = $this->ensureAccountingContact($vendor);
+        
+        return Account::where('contact_id', $contact->id)
+            ->where('system_role', SystemRole::VendorPayable)
+            ->first() ?? $this->ensureLedger($contact, AccountType::Liability, SystemRole::VendorPayable, "AP - {$contact->name}");
+    }
+
+    public function getCommissionIncomeAccount(): Account
+    {
+        return Account::where('system_role', SystemRole::CommissionRevenue)->first()
+            ?? Account::where('type', AccountType::Revenue)->where('name', 'like', '%Commission%')->first()
+            ?? Account::where('type', AccountType::Revenue)->first()
+            ?? Account::create([
+                'type' => AccountType::Revenue,
+                'system_role' => SystemRole::CommissionRevenue,
+                'name' => 'Property Management Commission Income',
+                'is_control_account' => false,
+            ]);
+    }
+
+    public function getMaintenanceIncomeAccount(): Account
+    {
+        return Account::where('system_role', SystemRole::MaintenanceIncome)->first()
+            ?? Account::where('type', AccountType::Revenue)->where('name', 'like', '%Maintenance%')->first()
+            ?? Account::where('type', AccountType::Revenue)->first()
+            ?? Account::create([
+                'type' => AccountType::Revenue,
+                'system_role' => SystemRole::MaintenanceIncome,
+                'name' => 'Maintenance Service Income',
+                'is_control_account' => false,
+            ]);
+    }
+
+    public function getMaintenanceExpenseAccount(): Account
+    {
+        return Account::where('system_role', SystemRole::MaintenanceExpense)->first()
+            ?? Account::where('type', AccountType::Expense)->where('name', 'like', '%Maintenance%')->first()
+            ?? Account::where('type', AccountType::Expense)->first()
+            ?? Account::create([
+                'type' => AccountType::Expense,
+                'system_role' => SystemRole::MaintenanceExpense,
+                'name' => 'Contractor & Maintenance Repair Expense',
+                'is_control_account' => false,
+            ]);
+    }
+
+    public function ensureAccountingContact(Party $party): Contact
     {
         if ($party->accounting_contact_id) {
             $contact = Contact::find($party->accounting_contact_id);
@@ -131,14 +241,25 @@ class AccountingProvisioningService
             ->where('system_role', $systemRole)
             ->first();
 
+        $reportingClass = match ($type) {
+            AccountType::Asset => \Tek2991\Accounting\Enums\ReportingClass::CurrentAsset,
+            AccountType::Liability => \Tek2991\Accounting\Enums\ReportingClass::CurrentLiability,
+            AccountType::Equity => \Tek2991\Accounting\Enums\ReportingClass::Equity,
+            AccountType::Revenue => \Tek2991\Accounting\Enums\ReportingClass::Revenue,
+            AccountType::Expense => \Tek2991\Accounting\Enums\ReportingClass::OperatingExpense,
+        };
+
         if (!$account) {
             $account = Account::create([
                 'contact_id' => $contact->id,
                 'type' => $type,
+                'reporting_class' => $reportingClass,
                 'system_role' => $systemRole,
                 'name' => $name,
                 'is_control_account' => false,
             ]);
+        } elseif (!$account->reporting_class) {
+            $account->update(['reporting_class' => $reportingClass]);
         }
 
         return $account;
@@ -146,9 +267,9 @@ class AccountingProvisioningService
     
     protected function updateContactTypeBasedOnRoles(Contact $contact, Party $party): void
     {
-        $isTenant = $party->hasRole(\App\Domain\Party\Enums\BusinessRole::TENANT) || $party->tenantProfile()->exists();
-        $isOwner = $party->hasRole(\App\Domain\Party\Enums\BusinessRole::OWNER) || $party->ownerProfile()->exists();
-        $isVendor = $party->hasRole(\App\Domain\Party\Enums\BusinessRole::VENDOR) || $party->vendorProfile()->exists();
+        $isTenant = $party->hasRole(BusinessRole::TENANT) || $party->tenantProfile()->exists();
+        $isOwner = $party->hasRole(BusinessRole::OWNER) || $party->ownerProfile()->exists();
+        $isVendor = $party->hasRole(BusinessRole::VENDOR) || $party->vendorProfile()->exists();
         
         if ($isOwner || $isTenant || ($isVendor && ($isOwner || $isTenant))) {
             $newType = ContactType::Both->value;
@@ -167,37 +288,5 @@ class AccountingProvisioningService
     public function postInitialInvoices(\App\Domain\Agreement\Models\TenancyAgreement $agreement): void
     {
         \Illuminate\Support\Facades\Log::info("Posted initial invoices for Tenancy {$agreement->id}");
-    }
-
-    /**
-     * Post a rent payment transaction to the accounting ledger.
-     */
-    public function recordRentPayment(RentPayment $payment): void
-    {
-        // Example implementation:
-        // Debit: Bank Account
-        // Credit: Rent Income
-        
-        \Illuminate\Support\Facades\Log::info("Rent payment recorded in accounting: {$payment->id}");
-    }
-
-    /**
-     * Post an owner payout to the accounting ledger.
-     */
-    public function recordOwnerPayout(OwnerPayout $payout): void
-    {
-        // Example implementation:
-        // Debit: Owner Payable
-        // Credit: Bank Account
-        
-        \Illuminate\Support\Facades\Log::info("Owner payout recorded in accounting: {$payout->id}");
-    }
-    
-    /**
-     * Generate an invoice for maintenance or utilities.
-     */
-    public function createInvoice(Party $party, Money $amount, string $description): void
-    {
-        \Illuminate\Support\Facades\Log::info("Invoice created for {$party->display_name}: {$amount->getAmount()} - {$description}");
     }
 }

@@ -3,8 +3,6 @@
 namespace App\Filament\Resources\Billing;
 
 use App\Domain\Maintenance\Models\MaintenanceRequest;
-use App\Filament\Resources\Billing\Pages\CreateMaintenanceBilling;
-use App\Filament\Resources\Billing\Pages\EditMaintenanceBilling;
 use App\Filament\Resources\Billing\Pages\ListMaintenanceBilling;
 use App\Filament\Resources\Billing\Schemas\MaintenanceBillingForm;
 use App\Filament\Resources\Billing\Tables\MaintenanceBillingTable;
@@ -13,6 +11,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 use Tek2991\Accounting\Models\Invoice;
 
 class MaintenanceBillingResource extends Resource
@@ -28,6 +27,16 @@ class MaintenanceBillingResource extends Resource
     protected static ?string $modelLabel = 'Maintenance Invoice';
 
     protected static ?string $pluralModelLabel = 'Maintenance Invoices & Bills';
+
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return false;
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -57,8 +66,6 @@ class MaintenanceBillingResource extends Resource
     {
         return [
             'index' => ListMaintenanceBilling::route('/'),
-            'create' => CreateMaintenanceBilling::route('/create'),
-            'edit' => EditMaintenanceBilling::route('/{record}/edit'),
         ];
     }
 }

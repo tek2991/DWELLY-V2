@@ -107,12 +107,20 @@ class Contact extends Model
     public function receivableAccount(): HasOne
     {
         return $this->hasOne(Account::class, 'contact_id')
-            ->where('system_role', \Tek2991\Accounting\Enums\SystemRole::CustomerReceivable);
+            ->whereIn('system_role', [
+                \Tek2991\Accounting\Enums\SystemRole::TenantReceivable,
+                \Tek2991\Accounting\Enums\SystemRole::CustomerReceivable,
+                \Tek2991\Accounting\Enums\SystemRole::TradeReceivable,
+            ]);
     }
 
     public function payableAccount(): HasOne
     {
         return $this->hasOne(Account::class, 'contact_id')
-            ->where('system_role', \Tek2991\Accounting\Enums\SystemRole::VendorPayable);
+            ->whereIn('system_role', [
+                \Tek2991\Accounting\Enums\SystemRole::OwnerPayable,
+                \Tek2991\Accounting\Enums\SystemRole::VendorPayable,
+                \Tek2991\Accounting\Enums\SystemRole::TradePayable,
+            ]);
     }
 }

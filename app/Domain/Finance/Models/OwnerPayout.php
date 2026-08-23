@@ -11,9 +11,27 @@ class OwnerPayout extends DomainModel
 {
     protected $table = 'owner_payouts';
 
+    protected $fillable = [
+        'branch_id',
+        'owner_id',
+        'property_id',
+        'transaction_id',
+        'period_start',
+        'period_end',
+        'rent_collected',
+        'management_fee',
+        'advance_offset',
+        'reserve_deduction',
+        'amount',
+        'status',
+        'notes',
+        'processed_at',
+    ];
+
     protected $casts = [
         'rent_collected' => 'decimal:2',
         'management_fee' => 'decimal:2',
+        'advance_offset' => 'decimal:2',
         'reserve_deduction' => 'decimal:2',
         'amount' => 'decimal:2',
         'period_start' => 'date',
@@ -29,5 +47,10 @@ class OwnerPayout extends DomainModel
     public function property(): BelongsTo
     {
         return $this->belongsTo(Property::class, 'property_id');
+    }
+
+    public function transaction(): BelongsTo
+    {
+        return $this->belongsTo(\Tek2991\Accounting\Models\Transaction::class, 'transaction_id');
     }
 }

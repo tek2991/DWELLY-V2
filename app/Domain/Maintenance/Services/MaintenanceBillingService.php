@@ -105,7 +105,7 @@ class MaintenanceBillingService
             $party->refresh();
             $contact = $party->accountingContact ?? \Tek2991\Accounting\Models\Contact::where('party_id', $party->id)->first();
 
-            $incomeAccount = Account::where('type', \Tek2991\Accounting\Enums\AccountType::Revenue->value)->first();
+            $incomeAccount = $this->provisioningService->getMaintenanceIncomeAccount();
             $invoiceNumber = $this->docNumberService->nextInvoiceNumber();
             $branchId = app(\Tek2991\Accounting\Services\BranchContext::class)->getCurrentId() ?? $contact->branch_id ?? $request->property?->branch_id ?? \App\Models\Branch::first()?->id;
 
@@ -115,7 +115,7 @@ class MaintenanceBillingService
                 'invoice_number' => $invoiceNumber,
                 'reference_type' => MaintenanceRequest::class,
                 'reference_id' => $request->id,
-                'status' => InvoiceStatus::Sent,
+                'status' => InvoiceStatus::Draft,
                 'issue_date' => $options['issue_date'] ?? now()->toDateString(),
                 'due_date' => $options['due_date'] ?? now()->addDays(7)->toDateString(),
                 'currency_code' => 'INR',
@@ -188,6 +188,8 @@ class MaintenanceBillingService
             }
 
             $this->invoiceService->recalculateTotals($invoice);
+            $this->invoiceService->post($invoice);
+            $invoice->refresh();
 
             if ($billType === 'tenant_invoice') {
                 $request->update(['tenant_invoice_id' => (string) $invoice->id]);
@@ -216,7 +218,7 @@ class MaintenanceBillingService
             $vendorParty->refresh();
             $contact = $vendorParty->accountingContact ?? \Tek2991\Accounting\Models\Contact::where('party_id', $vendorParty->id)->first();
 
-            $expenseAccount = Account::where('type', 'expense')->first();
+            $expenseAccount = $this->provisioningService->getMaintenanceExpenseAccount();
             $billNumber = $this->docNumberService->nextBillNumber();
             $request = $vendorQuote->maintenanceRequest;
             $branchId = app(\Tek2991\Accounting\Services\BranchContext::class)->getCurrentId() ?? $contact->branch_id ?? $request->property?->branch_id ?? \App\Models\Branch::first()?->id;
@@ -228,7 +230,7 @@ class MaintenanceBillingService
                 'vendor_reference' => $vendorQuote->vendor_quote_number ?: $vendorQuote->work_order_number,
                 'reference_type' => MaintenanceRequest::class,
                 'reference_id' => $request->id,
-                'status' => BillStatus::Received,
+                'status' => BillStatus::Draft,
                 'issue_date' => $options['issue_date'] ?? now()->toDateString(),
                 'due_date' => $options['due_date'] ?? now()->addDays(14)->toDateString(),
                 'currency_code' => 'INR',
@@ -261,6 +263,9 @@ class MaintenanceBillingService
             ]);
 
             $this->billService->recalculateTotals($bill);
+            $this->billService->post($bill);
+            $bill->refresh();
+
             $vendorQuote->update([
                 'bill_id' => (string) $bill->id,
                 'status' => 'billed',
@@ -330,7 +335,7 @@ class MaintenanceBillingService
             $this->provisioningService->ensurePartyAccountingReady($vendorParty);
             $contact = $vendorParty->accountingContact;
 
-            $expenseAccount = Account::where('type', 'expense')->first();
+            $expenseAccount = $this->provisioningService->getMaintenanceExpenseAccount();
             $billNumber = $this->docNumberService->nextBillNumber();
 
             $bill = Bill::create([
