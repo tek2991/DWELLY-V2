@@ -37,7 +37,6 @@ class OperationsPanelProvider extends PanelProvider
                 'Portfolio & Operations',
                 'Billing & Finance',
                 'Sales & CRM',
-                'Leasing & Finance',
                 'Settings',
             ])
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
