@@ -13,7 +13,7 @@ class ListOwnerPayouts extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make(),
+            // Standard creation handled by "Generate Owner Payout" table action
         ];
     }
 }

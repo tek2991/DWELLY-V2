@@ -85,6 +85,15 @@ class AccountingProvisioningService
             ->first() ?? $this->ensureLedger($contact, AccountType::Asset, SystemRole::OwnerAdvanceAsset, "Advance - {$contact->name}");
     }
 
+    public function getOwnerAdvanceBalance(Party $owner): float
+    {
+        $advanceAccount = $this->getOwnerAdvanceAccount($owner);
+        $debits = (float) $advanceAccount->journalEntries()->where('type', \Tek2991\Accounting\Enums\JournalEntryType::Debit)->sum('amount');
+        $credits = (float) $advanceAccount->journalEntries()->where('type', \Tek2991\Accounting\Enums\JournalEntryType::Credit)->sum('amount');
+
+        return max(0.0, $debits - $credits);
+    }
+
     public function getTenantDepositAccount(Party $tenant): Account
     {
         $this->ensurePartyAccountingReady($tenant);

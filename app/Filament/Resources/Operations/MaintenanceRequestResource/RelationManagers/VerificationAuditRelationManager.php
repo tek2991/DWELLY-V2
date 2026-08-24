@@ -505,8 +505,8 @@ class VerificationAuditRelationManager extends RelationManager
                     ]);
                     $ticket->update(['status' => MaintenanceStatus::INVOICED]);
                     Notification::make()
-                        ->title('Client Invoice Generated')
-                        ->body("Invoice #{$invoice->invoice_number} (₹" . number_format((float) $invoice->grand_total, 2) . ") generated successfully for Ticket #{$ticket->ticket_number}.")
+                        ->title('Client Invoice Created (Draft)')
+                        ->body("Draft Invoice #{$invoice->invoice_number} (₹" . number_format((float) $invoice->grand_total, 2) . ") created and sent to Accounting for review & posting.")
                         ->success()
                         ->send();
                 } catch (\Throwable $e) {
@@ -586,8 +586,8 @@ class VerificationAuditRelationManager extends RelationManager
                     $count = count($bills);
                     $total = array_sum(array_map(fn ($b) => (float) $b->grand_total, $bills));
                     Notification::make()
-                        ->title('Vendor Bills Generated')
-                        ->body("{$count} Vendor Bill(s) totaling ₹" . number_format($total, 2) . " generated successfully for Ticket #{$ticket->ticket_number}.")
+                        ->title('Vendor Bills Created (Draft)')
+                        ->body("{$count} Draft Vendor Bill(s) totaling ₹" . number_format($total, 2) . " created and queued for Accounting review & posting.")
                         ->success()
                         ->send();
                 } catch (\Throwable $e) {

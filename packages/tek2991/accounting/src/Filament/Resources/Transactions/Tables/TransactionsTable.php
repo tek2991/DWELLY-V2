@@ -19,55 +19,90 @@ class TransactionsTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->headerActions([
-                Actions\ExportAction::make()
-                    ->exporter(TransactionExporter::class)
-            ])
             ->modifyQueryUsing(fn ($query) => $query->with(['bankAccount.account', 'account', 'journalEntries.account']))
             ->columns([
                 Tables\Columns\TextColumn::make('posted_at')
                     ->label('Date')
-                    ->date()
+                    ->date('M d, Y')
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('type')
+                    ->label('Type')
                     ->badge()
                     ->sortable(),
 
-                Tables\Columns\TextColumn::make('bankAccount.account.name')
-                    ->label('Bank Account')
-                    ->searchable()
-                    ->sortable()
-                    ->placeholder('—')
+                Tables\Columns\TextColumn::make('description')
+                    ->label('Description')
+                    ->searchable(['description', 'reference'])
+                    ->weight('medium')
+                    ->description(fn (Transaction $record) => $record->reference ? "Ref: {$record->reference}" : null)
+                    ->wrap()
+                    ->limit(45),
+
+                Tables\Columns\TextColumn::make('bank_account_display')
+                    ->label('Bank / Account')
+                    ->getStateUsing(function (Transaction $record) {
+                        if ($record->bankAccount?->account?->name) {
+                            return $record->bankAccount->account->name;
+                        }
+                        $bankEntry = $record->journalEntries->first(function ($je) {
+                            return $je->account && (
+                                in_array($je->account->system_role, [
+                                    \Tek2991\Accounting\Enums\SystemRole::Bank,
+                                    \Tek2991\Accounting\Enums\SystemRole::Cash,
+                                ])
+                                || str_contains(strtolower($je->account->name), 'bank')
+                                || str_contains(strtolower($je->account->name), 'current')
+                                || str_contains(strtolower($je->account->name), 'savings')
+                                || str_contains(strtolower($je->account->name), 'cash')
+                            );
+                        });
+                        return $bankEntry?->account?->name ?? '—';
+                    })
+                    ->icon(fn ($state) => $state !== '—' ? 'heroicon-m-building-library' : null)
+                    ->iconColor('gray')
+                    ->color(fn ($state) => $state === '—' ? 'gray' : null)
+                    ->limit(24)
+                    ->tooltip(fn ($state) => $state !== '—' ? $state : null)
                     ->toggleable(),
 
                 Tables\Columns\TextColumn::make('journalEntries.account.name')
                     ->label('Accounts Affected')
                     ->badge()
+                    ->color('gray')
+                    ->limitList(2)
+                    ->expandableLimitedList()
                     ->searchable()
                     ->toggleable(),
 
-                Tables\Columns\TextColumn::make('reference')
-                    ->searchable()
-                    ->placeholder('—')
-                    ->toggleable(isToggledHiddenByDefault: true),
-
-                Tables\Columns\TextColumn::make('description')
-                    ->searchable()
-                    ->wrap()
-                    ->limit(60),
-
                 Tables\Columns\TextColumn::make('amount')
+                    ->label('Amount')
                     ->money(fn () => \Tek2991\Accounting\Facades\Accounting::getCurrency())
-                    ->sortable(),
+                    ->sortable()
+                    ->alignEnd()
+                    ->weight('bold')
+                    ->color(fn (Transaction $record) => match ($record->type) {
+                        TransactionType::Deposit, TransactionType::PaymentIn => 'success',
+                        TransactionType::Withdrawal, TransactionType::PaymentOut => 'danger',
+                        default => null,
+                    }),
 
-                Tables\Columns\IconColumn::make('reviewed')
-                    ->boolean()
-                    ->trueIcon('heroicon-o-check-circle')
-                    ->falseIcon('heroicon-o-clock')
-                    ->trueColor('success')
-                    ->falseColor('gray')
-                    ->label('Reviewed'),
+                Tables\Columns\IconColumn::make('document_path')
+                    ->label('Doc')
+                    ->alignCenter()
+                    ->icon(fn ($state) => $state ? 'heroicon-m-paper-clip' : null)
+                    ->color('primary')
+                    ->tooltip(fn ($state) => $state ? 'Supporting document attached (click to view)' : null)
+                    ->url(fn (Transaction $record) => $record->document_path ? \Illuminate\Support\Facades\Storage::url($record->document_path) : null, shouldOpenInNewTab: true)
+                    ->toggleable(),
+
+                Tables\Columns\TextColumn::make('reviewed')
+                    ->label('Status')
+                    ->alignCenter()
+                    ->badge()
+                    ->getStateUsing(fn (Transaction $record) => $record->reviewed ? 'Reviewed' : 'Pending')
+                    ->color(fn (Transaction $record) => $record->reviewed ? 'success' : 'gray')
+                    ->icon(fn (Transaction $record) => $record->reviewed ? 'heroicon-m-check-circle' : 'heroicon-m-clock'),
 
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()

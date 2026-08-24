@@ -48,6 +48,14 @@ class ViewTransaction extends ViewRecord
                         Infolists\Components\TextEntry::make('reference')
                             ->placeholder('—'),
 
+                        Infolists\Components\TextEntry::make('document_path')
+                            ->label('Supporting Document')
+                            ->formatStateUsing(fn ($state) => $state ? basename($state) : '—')
+                            ->url(fn (Transaction $record) => $record->document_path ? \Illuminate\Support\Facades\Storage::url($record->document_path) : null, shouldOpenInNewTab: true)
+                            ->icon('heroicon-o-paper-clip')
+                            ->color('primary')
+                            ->placeholder('—'),
+
                         Infolists\Components\TextEntry::make('description')
                             ->columnSpanFull(),
                     ]),

@@ -90,10 +90,16 @@ class OwnerPayoutsTable
                             ->reactive()
                             ->afterStateUpdated(function ($state, callable $set) {
                                 if ($state) {
-                                    $prop = Property::find($state);
-                                    $agr = $prop?->agreements()->where('status', 'active')->first();
+                                    $prop = Property::with(['agreements' => fn($q) => $q->where('status', 'active'), 'owner'])->find($state);
+                                    $agr = $prop?->agreements->first();
                                     if ($agr) {
                                         $set('rent_collected', (float) $agr->rent_amount);
+                                    }
+                                    if ($prop?->owner) {
+                                        $advBal = app(\App\Domain\Finance\Services\AccountingProvisioningService::class)->getOwnerAdvanceBalance($prop->owner);
+                                        if ($advBal > 0) {
+                                            $set('advance_offset', (float) $advBal);
+                                        }
                                     }
                                 }
                             }),
@@ -136,15 +142,42 @@ class OwnerPayoutsTable
 
                         Select::make('bank_account_id')
                             ->label('Disbursement Bank Account')
-                            ->options(fn () => Account::where('type', 'asset')->pluck('name', 'id'))
-                            ->searchable(),
+                            ->options(function () {
+                                $defaultId = \Tek2991\Accounting\Facades\Accounting::getDefaultBankAccountId();
+
+                                return Account::where('type', \Tek2991\Accounting\Enums\AccountType::Asset)
+                                    ->where(function ($q) {
+                                        $q->whereIn('system_role', [
+                                            \Tek2991\Accounting\Enums\SystemRole::Bank,
+                                            \Tek2991\Accounting\Enums\SystemRole::Cash,
+                                        ])
+                                        ->orWhere('code', 'like', '11%')
+                                        ->orWhere('name', 'like', '%Current Account%')
+                                        ->orWhere('name', 'like', '%Savings Account%')
+                                        ->orWhere('name', 'like', '%Bank%')
+                                        ->orWhere('name', 'like', '%Cash%');
+                                    })
+                                    ->where('is_control_account', false)
+                                    ->get()
+                                    ->mapWithKeys(function (Account $acc) use ($defaultId) {
+                                        if ($acc->id === $defaultId) {
+                                            return [$acc->id => "<div style='display: flex; align-items: center; justify-content: space-between; width: 100%;'><span>{$acc->name}</span><span style='font-size: 10px; font-weight: 700; background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 9999px; text-transform: uppercase;'>Default</span></div>"];
+                                        }
+                                        return [$acc->id => "<div>{$acc->name}</div>"];
+                                    });
+                            })
+                            ->default(fn () => \Tek2991\Accounting\Facades\Accounting::getDefaultBankAccountId())
+                            ->allowHtml()
+                            ->searchable()
+                            ->preload()
+                            ->required(),
 
                         Textarea::make('notes')
                             ->label('Payout Remarks'),
                     ])
-                    ->action(function (array $data, ProcessOwnerPayoutAction $action) {
+                    ->action(function (array $data) {
                         $property = Property::findOrFail($data['property_id']);
-                        $payout = $action->execute(
+                        $payout = app(ProcessOwnerPayoutAction::class)->execute(
                             $property,
                             $data['period_start'],
                             $data['period_end'],

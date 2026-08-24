@@ -188,7 +188,6 @@ class MaintenanceBillingService
             }
 
             $this->invoiceService->recalculateTotals($invoice);
-            $this->invoiceService->post($invoice);
             $invoice->refresh();
 
             if ($billType === 'tenant_invoice') {
@@ -263,7 +262,6 @@ class MaintenanceBillingService
             ]);
 
             $this->billService->recalculateTotals($bill);
-            $this->billService->post($bill);
             $bill->refresh();
 
             $vendorQuote->update([
@@ -343,7 +341,7 @@ class MaintenanceBillingService
                 'bill_number' => $billNumber,
                 'reference_type' => MaintenanceRequest::class,
                 'reference_id' => $request->id,
-                'status' => BillStatus::Received,
+                'status' => BillStatus::Draft,
                 'issue_date' => $options['issue_date'] ?? now()->toDateString(),
                 'due_date' => $options['due_date'] ?? now()->addDays(14)->toDateString(),
                 'currency_code' => 'INR',

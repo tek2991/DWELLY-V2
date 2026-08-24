@@ -303,13 +303,22 @@ class RealEstateFiduciaryAccountingTest extends TestCase
             'status' => 'awarded',
         ]);
 
-        // 1. Generate Client Invoice to Owner
+        // 1. Generate Client Invoice to Owner (created as Draft by Operations)
         $invoice = $maintBilling->createMaintenanceInvoice($maintRequest, 'owner_invoice');
         $this->assertEquals(35000.00, $invoice->grand_total);
+        $this->assertEquals('draft', $invoice->status->value);
 
-        // 2. Generate Vendor Bill for Painter
+        // 2. Generate Vendor Bill for Painter (created as Draft by Operations)
         $bill = $maintBilling->createVendorBillForQuote($vendorQuote);
         $this->assertEquals(15000.00, $bill->grand_total);
+        $this->assertEquals('draft', $bill->status->value);
+
+        // 3. Finance / Accountant reviews and posts both documents to GL
+        app(\Tek2991\Accounting\Services\InvoiceService::class)->post($invoice);
+        app(\Tek2991\Accounting\Services\BillService::class)->post($bill);
+
+        $this->assertEquals('sent', $invoice->refresh()->status->value);
+        $this->assertEquals('received', $bill->refresh()->status->value);
 
         // Verify P&L
         $revenue = $accountService->getTypeTotal(AccountType::Revenue, '2026-01-01', '2026-12-31');

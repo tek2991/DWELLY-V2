@@ -182,7 +182,7 @@ class BillService
                 'account_id' => $payableAccountId,
                 'type' => 'credit',
                 'amount' => $bill->grand_total,
-                'description' => "Bill {$bill->bill_number}",
+                'description' => "Bill {$bill->bill_number} ({$bill->contact?->name})",
             ];
 
             // DR: Expense/Asset Accounts (These are natively reduced by both line and doc discounts)
@@ -220,11 +220,12 @@ class BillService
 
             foreach ($expenseAccounts as $accId => $amount) {
                 if ($amount > 0) {
+                    $acc = \Tek2991\Accounting\Models\Account::find($accId);
                     $entries[] = [
                         'account_id' => $accId,
                         'type' => 'debit',
                         'amount' => $amount,
-                        'description' => "Bill {$bill->bill_number} Expense",
+                        'description' => "Bill {$bill->bill_number} (" . ($acc?->name ?? 'Expense') . ")",
                     ];
                 }
             }

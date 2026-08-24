@@ -78,6 +78,48 @@ class BillsTable
                     }),
             ])
             ->groupedBulkActions([
+                Actions\BulkAction::make('post_selected')
+                    ->label('Post Selected')
+                    ->icon('heroicon-o-paper-airplane')
+                    ->color('success')
+                    ->requiresConfirmation()
+                    ->modalHeading('Post Selected Bills')
+                    ->modalDescription('Are you sure you want to approve and post all selected draft bills to the General Ledger?')
+                    ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                        $billService = app(\Tek2991\Accounting\Services\BillService::class);
+                        $posted = 0;
+                        $skipped = 0;
+                        $errors = [];
+
+                        foreach ($records as $record) {
+                            if ($record->status === BillStatus::Draft) {
+                                try {
+                                    $billService->post($record);
+                                    $posted++;
+                                } catch (\Throwable $e) {
+                                    $errors[] = "#{$record->bill_number}: " . $e->getMessage();
+                                }
+                            } else {
+                                $skipped++;
+                            }
+                        }
+
+                        if ($posted > 0) {
+                            \Filament\Notifications\Notification::make()
+                                ->title("{$posted} Bill(s) posted successfully")
+                                ->success()
+                                ->send();
+                        }
+
+                        if (!empty($errors)) {
+                            \Filament\Notifications\Notification::make()
+                                ->title('Some bills could not be posted')
+                                ->body(implode('<br>', $errors))
+                                ->danger()
+                                ->send();
+                        }
+                    })
+                    ->deselectRecordsAfterCompletion(),
                 Actions\BulkAction::make('delete')
                     ->label('Delete Selected')
                     ->icon('heroicon-o-trash')

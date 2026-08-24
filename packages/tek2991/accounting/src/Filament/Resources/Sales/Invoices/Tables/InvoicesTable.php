@@ -80,6 +80,15 @@ class InvoicesTable
                         $disk = config('accounting.pdf.disk', 'public');
                         return response()->download(\Illuminate\Support\Facades\Storage::disk($disk)->path($path));
                     }),
+                Actions\Action::make('download_receipt')
+                    ->label('Receipt')
+                    ->icon('heroicon-o-receipt-percent')
+                    ->color('success')
+                    ->visible(fn (Invoice $record) => $record->payments()->exists())
+                    ->url(fn (Invoice $record) => route('billing.receipt.pdf', [
+                        'invoice' => $record->id,
+                        'payment' => $record->payments()->latest()->first()?->id ?? 0,
+                    ]), shouldOpenInNewTab: true),
                 Actions\Action::make('email')
                     ->label('Email')
                     ->icon('heroicon-o-envelope')
@@ -101,6 +110,48 @@ class InvoicesTable
                     }),
             ])
             ->groupedBulkActions([
+                Actions\BulkAction::make('post_selected')
+                    ->label('Post Selected')
+                    ->icon('heroicon-o-paper-airplane')
+                    ->color('success')
+                    ->requiresConfirmation()
+                    ->modalHeading('Post Selected Invoices')
+                    ->modalDescription('Are you sure you want to approve and post all selected draft invoices to the General Ledger?')
+                    ->action(function (\Illuminate\Database\Eloquent\Collection $records) {
+                        $invoiceService = app(\Tek2991\Accounting\Services\InvoiceService::class);
+                        $posted = 0;
+                        $skipped = 0;
+                        $errors = [];
+
+                        foreach ($records as $record) {
+                            if ($record->status === InvoiceStatus::Draft) {
+                                try {
+                                    $invoiceService->post($record);
+                                    $posted++;
+                                } catch (\Throwable $e) {
+                                    $errors[] = "#{$record->invoice_number}: " . $e->getMessage();
+                                }
+                            } else {
+                                $skipped++;
+                            }
+                        }
+
+                        if ($posted > 0) {
+                            \Filament\Notifications\Notification::make()
+                                ->title("{$posted} Invoice(s) posted successfully")
+                                ->success()
+                                ->send();
+                        }
+
+                        if (!empty($errors)) {
+                            \Filament\Notifications\Notification::make()
+                                ->title('Some invoices could not be posted')
+                                ->body(implode('<br>', $errors))
+                                ->danger()
+                                ->send();
+                        }
+                    })
+                    ->deselectRecordsAfterCompletion(),
                 Actions\BulkAction::make('delete')
                     ->label('Delete Selected')
                     ->icon('heroicon-o-trash')

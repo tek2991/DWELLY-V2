@@ -37,6 +37,7 @@ class Transaction extends Model
         'description',
         'notes',
         'reference',
+        'document_path',
         'amount',
         'pending',
         'reviewed',

@@ -7,8 +7,11 @@ use Filament\Facades\Filament;
 use Filament\Forms;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Schemas\Components\Tabs\Tab;
+use Illuminate\Database\Eloquent\Builder;
 use Tek2991\Accounting\Enums\JournalEntryType;
 use Tek2991\Accounting\Enums\TransactionType;
+use Tek2991\Accounting\Filament\Exports\TransactionExporter;
 use Tek2991\Accounting\Filament\Resources\Transactions\TransactionResource;
 use Tek2991\Accounting\Models\Transaction;
 use Tek2991\Accounting\Services\TransactionService;
@@ -122,6 +125,42 @@ class ListTransactions extends ListRecords
                         $action->halt();
                     }
                 }),
+
+            // ── Export ─────────────────────────────────────────────
+            Actions\ExportAction::make()
+                ->exporter(TransactionExporter::class)
+                ->label('Export')
+                ->icon('heroicon-o-arrow-down-tray')
+                ->color('gray'),
+        ];
+    }
+
+    public function getTabs(): array
+    {
+        return [
+            'all' => Tab::make('All Transactions'),
+            'inflows' => Tab::make('Inflows & Deposits')
+                ->icon('heroicon-m-arrow-down-left')
+                ->modifyQueryUsing(fn (Builder $query) => $query->whereIn('type', [TransactionType::Deposit, TransactionType::PaymentIn])),
+            'outflows' => Tab::make('Outflows & Payments')
+                ->icon('heroicon-m-arrow-up-right')
+                ->modifyQueryUsing(fn (Builder $query) => $query->whereIn('type', [TransactionType::Withdrawal, TransactionType::PaymentOut])),
+            'journals' => Tab::make('Manual Journals')
+                ->icon('heroicon-m-document-text')
+                ->modifyQueryUsing(fn (Builder $query) => $query->where('type', TransactionType::Journal)),
+            'invoices_bills' => Tab::make('Invoices & Bills')
+                ->icon('heroicon-m-document-duplicate')
+                ->modifyQueryUsing(fn (Builder $query) => $query->whereIn('type', [
+                    TransactionType::InvoicePosting,
+                    TransactionType::BillPosting,
+                    TransactionType::CreditNote,
+                    TransactionType::DebitNote,
+                ])),
+            'pending' => Tab::make('Pending Review')
+                ->icon('heroicon-m-clock')
+                ->badge(fn () => Transaction::where('reviewed', false)->count())
+                ->badgeColor('warning')
+                ->modifyQueryUsing(fn (Builder $query) => $query->where('reviewed', false)),
         ];
     }
 
@@ -228,6 +267,16 @@ class ListTransactions extends ListRecords
                     ->label('Reference')
                     ->nullable(),
             ]),
+
+            Forms\Components\FileUpload::make('document_path')
+                ->label('Supporting Document')
+                ->directory('accounting/journal_documents')
+                ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
+                ->maxSize(10240)
+                ->required()
+                ->downloadable()
+                ->openable()
+                ->helperText('A supporting document (PDF, PNG, JPG, WEBP) is mandatory for manual journal entries.'),
 
             Forms\Components\Textarea::make('description')
                 ->label('Memo / Description')

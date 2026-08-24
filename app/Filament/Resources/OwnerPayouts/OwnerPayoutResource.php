@@ -18,9 +18,17 @@ class OwnerPayoutResource extends Resource
 {
     protected static ?string $model = OwnerPayout::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;
 
-    protected static \UnitEnum|string|null $navigationGroup = 'Leasing & Finance';
+    protected static \UnitEnum|string|null $navigationGroup = 'Billing & Finance';
+
+    protected static ?string $navigationLabel = 'Owner Payouts';
+
+    protected static ?string $modelLabel = 'Owner Payout';
+
+    protected static ?string $pluralModelLabel = 'Owner Payouts';
+
+    protected static ?int $navigationSort = 4;
 
     public static function form(Schema $schema): Schema
     {
@@ -43,8 +51,6 @@ class OwnerPayoutResource extends Resource
     {
         return [
             'index' => ListOwnerPayouts::route('/'),
-            'create' => CreateOwnerPayout::route('/create'),
-            'edit' => EditOwnerPayout::route('/{record}/edit'),
         ];
     }
 }

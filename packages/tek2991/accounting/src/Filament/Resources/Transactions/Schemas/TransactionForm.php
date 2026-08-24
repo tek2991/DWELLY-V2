@@ -16,6 +16,15 @@ class TransactionForm
             return [
                 Forms\Components\DatePicker::make('posted_at')->required(),
                 Forms\Components\TextInput::make('reference'),
+                Forms\Components\FileUpload::make('document_path')
+                    ->label('Supporting Document')
+                    ->directory('accounting/journal_documents')
+                    ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
+                    ->maxSize(10240)
+                    ->required()
+                    ->downloadable()
+                    ->openable()
+                    ->helperText('A supporting document (PDF, PNG, JPG, WEBP) is mandatory for manual journal entries.'),
                 Forms\Components\Textarea::make('description')->required(),
                 Forms\Components\Repeater::make('journalEntries')
                     ->schema([
@@ -63,6 +72,7 @@ class TransactionForm
     public static function mutateRecordDataForForm(array $data, Transaction $record): array
     {
         if ($record->type === TransactionType::Journal) {
+            $data['document_path'] = $record->document_path;
             $data['journalEntries'] = $record->journalEntries->map(fn($e) => [
                 'account_id' => $e->account_id,
                 'type' => $e->type->value,

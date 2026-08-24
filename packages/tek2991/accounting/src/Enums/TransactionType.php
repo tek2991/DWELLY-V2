@@ -20,7 +20,17 @@ enum TransactionType: string implements HasLabel, HasColor, HasIcon
 
     public function getLabel(): ?string
     {
-        return $this->name;
+        return match ($this) {
+            self::Deposit => 'Deposit',
+            self::Withdrawal => 'Withdrawal',
+            self::Journal => 'Journal Entry',
+            self::InvoicePosting => 'Invoice',
+            self::BillPosting => 'Bill',
+            self::PaymentIn => 'Payment In',
+            self::PaymentOut => 'Payment Out',
+            self::CreditNote => 'Credit Note',
+            self::DebitNote => 'Debit Note',
+        };
     }
 
     public function getColor(): string | array | null
@@ -28,18 +38,22 @@ enum TransactionType: string implements HasLabel, HasColor, HasIcon
         return match ($this) {
             self::Deposit, self::PaymentIn => 'success',
             self::Withdrawal, self::PaymentOut => 'danger',
-            self::Journal, self::InvoicePosting, self::BillPosting, self::CreditNote, self::DebitNote => 'info',
+            self::Journal => 'primary',
+            self::InvoicePosting => 'info',
+            self::BillPosting => 'warning',
+            self::CreditNote, self::DebitNote => 'gray',
         };
     }
 
     public function getIcon(): ?string
     {
         return match ($this) {
-            self::Deposit, self::PaymentIn => 'heroicon-o-arrow-down-tray',
-            self::Withdrawal, self::PaymentOut => 'heroicon-o-arrow-up-tray',
-            self::Journal => 'heroicon-o-document-text',
-            self::InvoicePosting, self::BillPosting => 'heroicon-o-document-duplicate',
-            self::CreditNote, self::DebitNote => 'heroicon-o-document-minus',
+            self::Deposit, self::PaymentIn => 'heroicon-m-arrow-down-left',
+            self::Withdrawal, self::PaymentOut => 'heroicon-m-arrow-up-right',
+            self::Journal => 'heroicon-m-document-text',
+            self::InvoicePosting => 'heroicon-m-document-arrow-up',
+            self::BillPosting => 'heroicon-m-document-arrow-down',
+            self::CreditNote, self::DebitNote => 'heroicon-m-document-minus',
         };
     }
 
