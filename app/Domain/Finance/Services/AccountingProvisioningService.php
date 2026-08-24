@@ -9,7 +9,6 @@ use Tek2991\Accounting\Models\Account;
 use Tek2991\Accounting\Enums\ContactType;
 use Tek2991\Accounting\Enums\AccountType;
 use Tek2991\Accounting\Enums\SystemRole;
-use App\Domain\Finance\Models\RentPayment;
 use App\Domain\Finance\Models\OwnerPayout;
 use Brick\Money\Money;
 
@@ -30,26 +29,23 @@ class AccountingProvisioningService
         $isOwner = $party->hasRole(BusinessRole::OWNER) || $party->ownerProfile()->exists();
         $isVendor = $party->hasRole(BusinessRole::VENDOR) || $party->vendorProfile()->exists();
 
-        if ($isTenant) {
-            $this->ensureLedger($contact, AccountType::Asset, SystemRole::TenantReceivable, "AR - {$contact->name}");
-            $this->ensureLedger($contact, AccountType::Liability, SystemRole::SecurityDepositLiability, "Deposit Liability - {$contact->name}");
-        }
+        // 1. Every contact gets exactly 1 AR (Receivable) subledger
+        $this->ensureReceivableLedger($contact, "AR - {$contact->name}");
 
+        // 2. Every contact gets exactly 1 AP (Payable) subledger
         if ($isOwner) {
-            $this->ensureLedger($contact, AccountType::Liability, SystemRole::OwnerPayable, "AP - {$contact->name}");
-            $this->ensureLedger($contact, AccountType::Asset, SystemRole::CustomerReceivable, "AR - {$contact->name}");
+            $this->ensureLedger($contact, AccountType::Liability, SystemRole::OwnerPayable, "AP - {$contact->name}", [SystemRole::VendorPayable]);
             $this->ensureLedger($contact, AccountType::Asset, SystemRole::OwnerAdvanceAsset, "Advance - {$contact->name}");
             $this->ensureLedger($contact, AccountType::Asset, SystemRole::SecurityDepositOwnerAsset, "Security Deposit with {$contact->name}");
-        }
-
-        if ($isVendor) {
-            $this->ensureLedger($contact, AccountType::Liability, SystemRole::VendorPayable, "AP - {$contact->name}");
-        }
-
-        // Fallback for general parties
-        if (!$isTenant && !$isOwner && !$isVendor) {
-            $this->ensureReceivableLedger($contact, "AR - {$contact->name}");
+        } elseif ($isVendor) {
+            $this->ensureLedger($contact, AccountType::Liability, SystemRole::VendorPayable, "AP - {$contact->name}", [SystemRole::OwnerPayable]);
+        } else {
             $this->ensurePayableLedger($contact, "AP - {$contact->name}");
+        }
+
+        // 3. Tenant-specific auxiliary ledgers
+        if ($isTenant) {
+            $this->ensureLedger($contact, AccountType::Liability, SystemRole::SecurityDepositLiability, "Deposit Liability - {$contact->name}");
         }
         
         $this->updateContactTypeBasedOnRoles($contact, $party);
@@ -236,18 +232,28 @@ class AccountingProvisioningService
 
     protected function ensureReceivableLedger(Contact $contact, string $name): Account
     {
-        return $this->ensureLedger($contact, AccountType::Asset, SystemRole::CustomerReceivable, $name);
+        return $this->ensureLedger($contact, AccountType::Asset, SystemRole::CustomerReceivable, $name, [SystemRole::TenantReceivable]);
     }
 
     protected function ensurePayableLedger(Contact $contact, string $name): Account
     {
-        return $this->ensureLedger($contact, AccountType::Liability, SystemRole::VendorPayable, $name);
+        return $this->ensureLedger($contact, AccountType::Liability, SystemRole::VendorPayable, $name, [SystemRole::OwnerPayable]);
     }
 
-    protected function ensureLedger(Contact $contact, AccountType $type, SystemRole $systemRole, string $name): Account
-    {
+    protected function ensureLedger(
+        Contact $contact, 
+        AccountType $type, 
+        SystemRole $systemRole, 
+        string $name,
+        array $equivalentRoles = []
+    ): Account {
+        $searchRoles = array_unique(array_map(
+            fn ($r) => $r instanceof SystemRole ? $r->value : (string) $r,
+            array_merge([$systemRole], $equivalentRoles)
+        ));
+
         $account = Account::where('contact_id', $contact->id)
-            ->where('system_role', $systemRole)
+            ->whereIn('system_role', $searchRoles)
             ->first();
 
         $reportingClass = match ($type) {
@@ -258,20 +264,66 @@ class AccountingProvisioningService
             AccountType::Expense => \Tek2991\Accounting\Enums\ReportingClass::OperatingExpense,
         };
 
+        $parentControl = $this->resolveControlAccount($systemRole);
+
         if (!$account) {
             $account = Account::create([
                 'contact_id' => $contact->id,
+                'parent_id' => $parentControl?->id,
                 'type' => $type,
                 'reporting_class' => $reportingClass,
                 'system_role' => $systemRole,
                 'name' => $name,
+                'currency_code' => \Tek2991\Accounting\Facades\Accounting::getCurrency(),
                 'is_control_account' => false,
             ]);
-        } elseif (!$account->reporting_class) {
-            $account->update(['reporting_class' => $reportingClass]);
+        } else {
+            $updates = [];
+            if (!$account->reporting_class) {
+                $updates['reporting_class'] = $reportingClass;
+            }
+            if (!$account->parent_id && $parentControl) {
+                $updates['parent_id'] = $parentControl->id;
+            }
+            if (!empty($updates)) {
+                $account->update($updates);
+            }
         }
 
         return $account;
+    }
+
+    protected function resolveControlAccount(SystemRole $systemRole): ?Account
+    {
+        return match ($systemRole) {
+            SystemRole::CustomerReceivable, SystemRole::TenantReceivable => 
+                Account::whereIn('system_role', [SystemRole::TenantReceivable, SystemRole::TradeReceivable])
+                    ->whereNull('contact_id')
+                    ->first(),
+            SystemRole::OwnerPayable => 
+                Account::where('system_role', SystemRole::OwnerPayable)
+                    ->whereNull('contact_id')
+                    ->first()
+                ?? Account::where('system_role', SystemRole::TradePayable)->whereNull('contact_id')->first(),
+            SystemRole::VendorPayable => 
+                Account::where('system_role', SystemRole::VendorPayable)
+                    ->whereNull('contact_id')
+                    ->first()
+                ?? Account::where('system_role', SystemRole::TradePayable)->whereNull('contact_id')->first(),
+            SystemRole::OwnerAdvanceAsset => 
+                Account::where('system_role', SystemRole::OwnerAdvanceAsset)
+                    ->whereNull('contact_id')
+                    ->first(),
+            SystemRole::SecurityDepositOwnerAsset => 
+                Account::where('system_role', SystemRole::SecurityDepositOwnerAsset)
+                    ->whereNull('contact_id')
+                    ->first(),
+            SystemRole::SecurityDepositLiability => 
+                Account::where('system_role', SystemRole::SecurityDepositLiability)
+                    ->whereNull('contact_id')
+                    ->first(),
+            default => null,
+        };
     }
     
     protected function updateContactTypeBasedOnRoles(Contact $contact, Party $party): void

@@ -2,8 +2,6 @@
 
 namespace App\Filament\Resources\Billing;
 
-use App\Filament\Resources\Billing\Pages\CreateRentInvoice;
-use App\Filament\Resources\Billing\Pages\EditRentInvoice;
 use App\Filament\Resources\Billing\Pages\ListRentInvoices;
 use App\Filament\Resources\Billing\Schemas\RentInvoiceForm;
 use App\Filament\Resources\Billing\Tables\RentInvoicesTable;
@@ -57,8 +55,6 @@ class RentInvoicesResource extends Resource
     {
         return [
             'index' => ListRentInvoices::route('/'),
-            'create' => CreateRentInvoice::route('/create'),
-            'edit' => EditRentInvoice::route('/{record}/edit'),
         ];
     }
 }

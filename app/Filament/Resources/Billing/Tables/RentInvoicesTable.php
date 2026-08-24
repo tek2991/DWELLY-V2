@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Billing\Tables;
 use App\Domain\Agreement\Models\TenancyAgreement;
 use App\Domain\Finance\Services\RentBillingService;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -17,6 +18,8 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Tek2991\Accounting\Models\Account;
 use Tek2991\Accounting\Models\Invoice;
+use Tek2991\Accounting\Services\InvoiceService;
+use Tek2991\Accounting\Enums\InvoiceStatus;
 
 class RentInvoicesTable
 {
@@ -73,69 +76,96 @@ class RentInvoicesTable
             ])
             ->defaultSort('issue_date', 'desc')
             ->recordActions([
-                Action::make('record_payment')
-                    ->label('Record Payment')
-                    ->icon('heroicon-o-banknotes')
-                    ->color('success')
-                    ->visible(fn (Invoice $record) => $record->balance_due > 0)
-                    ->form([
-                        TextInput::make('amount')
-                            ->label('Payment Amount (₹)')
-                            ->numeric()
-                            ->prefix('₹')
-                            ->default(fn (Invoice $record) => $record->balance_due)
-                            ->required(),
+                ActionGroup::make([
+                    Action::make('record_payment')
+                        ->label('Record Payment')
+                        ->icon('heroicon-o-banknotes')
+                        ->color('success')
+                        ->visible(fn (Invoice $record) => $record->balance_due > 0)
+                        ->form([
+                            TextInput::make('amount')
+                                ->label('Payment Amount (₹)')
+                                ->numeric()
+                                ->prefix('₹')
+                                ->default(fn (Invoice $record) => $record->balance_due)
+                                ->required(),
 
-                        Select::make('payment_account_id')
-                            ->label('Payment / Bank Account')
-                            ->options(fn () => Account::where('type', 'asset')->pluck('name', 'id'))
-                            ->required(),
+                            Select::make('payment_account_id')
+                                ->label('Payment / Bank Account')
+                                ->options(fn () => Account::where('type', 'asset')->pluck('name', 'id'))
+                                ->required(),
 
-                        DatePicker::make('payment_date')
-                            ->label('Payment Date')
-                            ->default(now())
-                            ->required(),
+                            DatePicker::make('payment_date')
+                                ->label('Payment Date')
+                                ->default(now())
+                                ->required(),
 
-                        TextInput::make('reference')
-                            ->label('Transaction Reference / UTR Number')
-                            ->placeholder('e.g. UTR12345678'),
+                            TextInput::make('reference')
+                                ->label('Transaction Reference / UTR Number')
+                                ->placeholder('e.g. UTR12345678'),
 
-                        Textarea::make('notes')
-                            ->label('Payment Remarks'),
-                    ])
-                    ->action(function (Invoice $record, array $data, RentBillingService $service) {
-                        $payment = $service->recordPayment(
-                            $record,
-                            (float) $data['amount'],
-                            (int) $data['payment_account_id'],
-                            $data['payment_date'],
-                            $data['reference'] ?? null,
-                            $data['notes'] ?? null
-                        );
+                            Textarea::make('notes')
+                                ->label('Payment Remarks'),
+                        ])
+                        ->action(function (Invoice $record, array $data, RentBillingService $service) {
+                            $payment = $service->recordPayment(
+                                $record,
+                                (float) $data['amount'],
+                                (int) $data['payment_account_id'],
+                                $data['payment_date'],
+                                $data['reference'] ?? null,
+                                $data['notes'] ?? null
+                            );
 
-                        Notification::make()
-                            ->title('Payment Recorded')
-                            ->body("Recorded payment of ₹" . number_format($data['amount'], 2) . " for Invoice {$record->invoice_number}")
-                            ->success()
-                            ->send();
-                    }),
+                            Notification::make()
+                                ->title('Payment Recorded')
+                                ->body("Recorded payment of ₹" . number_format($data['amount'], 2) . " for Invoice {$record->invoice_number}")
+                                ->success()
+                                ->send();
+                        }),
 
-                Action::make('download_invoice')
-                    ->label('Invoice PDF')
-                    ->icon('heroicon-o-document-arrow-down')
-                    ->color('primary')
-                    ->url(fn (Invoice $record) => route('billing.invoice.pdf', $record))
-                    ->openUrlInNewTab(),
+                    Action::make('download_invoice')
+                        ->label('Invoice PDF')
+                        ->icon('heroicon-o-document-arrow-down')
+                        ->color('primary')
+                        ->modalHeading(fn (Invoice $record) => "Invoice - {$record->invoice_number}")
+                        ->modalWidth(\Filament\Support\Enums\Width::SevenExtraLarge)
+                        ->modalContent(fn (Invoice $record) => view('components.invoice-pdf-modal', ['invoice' => $record]))
+                        ->modalSubmitAction(false)
+                        ->modalCancelActionLabel('Close'),
 
-                Action::make('download_receipt')
-                    ->label('Receipt PDF')
-                    ->icon('heroicon-o-arrow-down-tray')
-                    ->color('success')
-                    ->visible(fn (Invoice $record) => $record->payments()->exists())
-                    ->url(fn (Invoice $record) => route('billing.receipt.pdf', ['invoice' => $record->id, 'payment' => $record->payments()->latest()->first()?->id ?? 0]))
-                    ->openUrlInNewTab(),
+                    Action::make('download_receipt')
+                        ->label('Receipt PDF')
+                        ->icon('heroicon-o-arrow-down-tray')
+                        ->color('success')
+                        ->visible(fn (Invoice $record) => $record->payments()->exists())
+                        ->modalHeading(fn (Invoice $record) => "Payment Receipt - {$record->invoice_number}")
+                        ->modalWidth(\Filament\Support\Enums\Width::SevenExtraLarge)
+                        ->modalContent(fn (Invoice $record) => view('components.receipt-pdf-modal', [
+                            'invoice' => $record,
+                            'payment' => $record->payments()->latest()->first(),
+                        ]))
+                        ->modalSubmitAction(false)
+                        ->modalCancelActionLabel('Close'),
 
-                EditAction::make(),
+                    Action::make('cancel_invoice')
+                        ->label('Cancel Invoice')
+                        ->icon('heroicon-o-x-circle')
+                        ->color('danger')
+                        ->requiresConfirmation()
+                        ->modalHeading('Cancel Rent Invoice')
+                        ->modalDescription('Are you sure you want to cancel this rent invoice? This will automatically reverse the General Ledger accounting transactions and return the balance to zero.')
+                        ->visible(fn (Invoice $record) => $record->status !== InvoiceStatus::Cancelled && $record->status !== InvoiceStatus::Paid)
+                        ->action(function (Invoice $record, InvoiceService $invoiceService) {
+                            $invoiceService->cancel($record);
+
+                            Notification::make()
+                                ->title('Invoice Cancelled')
+                                ->body("Rent Invoice {$record->invoice_number} has been cancelled and accounting entries reversed.")
+                                ->success()
+                                ->send();
+                        }),
+                ]),
             ])
             ->toolbarActions([
                 Action::make('raise_rent_invoice')
@@ -237,10 +267,6 @@ class RentInvoicesTable
                             ->success()
                             ->send();
                     }),
-
-                BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                ]),
             ]);
     }
 }

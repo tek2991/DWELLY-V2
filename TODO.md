@@ -15,3 +15,5 @@
 8. Dashboard items according to roles.
 
 9. Default branch
+
+10. Deboarding and advance amount adjustment
