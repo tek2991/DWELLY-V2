@@ -114,16 +114,15 @@ trait HasTenancyWorkflowHeader
                 ->action(function (array $data) {
                     $record = $this->getRecord();
                     $service = app(TenancyDeboardingService::class);
-                    $service->initiateDeboarding($record, $data);
-                    $audit = $service->triggerMoveOutAudit($record, auth()->user());
+                    $deboarding = $service->initiateDeboarding($record, $data, auth()->user());
 
                     Notification::make()
                         ->title('Deboarding Initiated & Exit Audit Triggered')
-                        ->body("Notice recorded. Move-Out Verification Audit #{$audit->audit_number} created.")
+                        ->body("Notice recorded. Move-Out Verification Audit has been created.")
                         ->success()
                         ->send();
 
-                    $this->redirect(TenancyAgreementResource::getUrl('deboard', ['record' => $record]));
+                    $this->redirect(\App\Filament\Resources\Operations\TenantDeboardingResource::getUrl('edit', ['record' => $deboarding->id]));
                 })
                 ->extraAttributes(['style' => 'display: none;']),
 

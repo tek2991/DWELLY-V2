@@ -34,6 +34,8 @@ class Invoice extends Model
         'status',
         'issue_date',
         'due_date',
+        'billing_period_start',
+        'billing_period_end',
         'currency_code',
         'exchange_rate',
         'discount_type',
@@ -55,6 +57,8 @@ class Invoice extends Model
         'status' => InvoiceStatus::class,
         'issue_date' => 'date',
         'due_date' => 'date',
+        'billing_period_start' => 'date',
+        'billing_period_end' => 'date',
         'billing_address_snapshot' => 'array',
         'discount_type' => DiscountType::class,
         'exchange_rate' => 'decimal:6',
@@ -88,6 +92,18 @@ class Invoice extends Model
     public function placeOfSupplyState(): BelongsTo { return $this->belongsTo(State::class, 'place_of_supply_state_id'); }
 
     // Helpers
+    public function getBillingPeriodFormattedAttribute(): ?string
+    {
+        if ($this->billing_period_start && $this->billing_period_end) {
+            return $this->billing_period_start->format('d M Y') . ' – ' . $this->billing_period_end->format('d M Y');
+        } elseif ($this->billing_period_start) {
+            return 'From ' . $this->billing_period_start->format('d M Y');
+        } elseif ($this->billing_period_end) {
+            return 'Until ' . $this->billing_period_end->format('d M Y');
+        }
+        return null;
+    }
+
     public function getIsOverdueAttribute(): bool
     {
         return $this->getRawOriginal('balance_due') > 0 && 

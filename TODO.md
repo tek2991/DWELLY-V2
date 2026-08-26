@@ -16,4 +16,4 @@
 
 9. Default branch
 
-10. Deboarding and advance amount adjustment
+10. Deboarding and advance amount

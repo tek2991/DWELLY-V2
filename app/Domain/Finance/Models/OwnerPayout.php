@@ -53,4 +53,14 @@ class OwnerPayout extends DomainModel
     {
         return $this->belongsTo(\Tek2991\Accounting\Models\Transaction::class, 'transaction_id');
     }
+
+    public function getPeriodFormattedAttribute(): ?string
+    {
+        if ($this->period_start && $this->period_end) {
+            return $this->period_start->format('d M Y') . ' – ' . $this->period_end->format('d M Y');
+        } elseif ($this->period_start) {
+            return $this->period_start->format('d M Y');
+        }
+        return null;
+    }
 }

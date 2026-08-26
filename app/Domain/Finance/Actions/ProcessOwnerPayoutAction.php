@@ -184,6 +184,33 @@ class ProcessOwnerPayoutAction
                 'processed_at' => now(),
             ]);
 
+            // 9. Settle Linked Maintenance Invoices
+            $maintenanceInvoiceIds = $options['maintenance_invoice_ids'] ?? [];
+            if (empty($maintenanceInvoiceIds) && $advanceOffset > 0) {
+                $reqIds = \App\Domain\Maintenance\Models\MaintenanceRequest::where('property_id', $property->id)->pluck('id');
+                $maintenanceInvoiceIds = \Tek2991\Accounting\Models\Invoice::where('reference_type', \App\Domain\Maintenance\Models\MaintenanceRequest::class)
+                    ->whereIn('reference_id', $reqIds)
+                    ->whereIn('status', [
+                        \Tek2991\Accounting\Enums\InvoiceStatus::Draft,
+                        \Tek2991\Accounting\Enums\InvoiceStatus::Sent,
+                        \Tek2991\Accounting\Enums\InvoiceStatus::PartiallyPaid,
+                    ])
+                    ->pluck('id')
+                    ->toArray();
+            }
+
+            foreach ($maintenanceInvoiceIds as $mInvId) {
+                $mInv = \Tek2991\Accounting\Models\Invoice::find($mInvId);
+                if ($mInv && $mInv->status !== \Tek2991\Accounting\Enums\InvoiceStatus::Paid) {
+                    $mInv->amount_paid = $mInv->grand_total;
+                    $mInv->balance_due = 0.00;
+                    $mInv->status = \Tek2991\Accounting\Enums\InvoiceStatus::Paid;
+                    $settlementNote = "Settled via Owner Payout for {$property->building_name} ({$periodStart} to {$periodEnd}) [Payout Ref: {$transaction->reference}]";
+                    $mInv->notes = trim(($mInv->notes ? $mInv->notes . "\n" : '') . $settlementNote);
+                    $mInv->save();
+                }
+            }
+
             return $payout;
         });
     }

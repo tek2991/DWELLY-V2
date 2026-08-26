@@ -454,14 +454,16 @@ class TenancyAgreementForm
                 '</button>'.
                 '</div>';
         } elseif (in_array($status, ['deboarding_initiated', 'vacated'])) {
-            $deboardUrl = TenancyAgreementResource::getUrl('deboard', ['record' => $record]);
+            $deboardUrl = $record->deboarding 
+                ? \App\Filament\Resources\Operations\TenantDeboardingResource::getUrl('edit', ['record' => $record->deboarding->id])
+                : TenancyAgreementResource::getUrl('deboard', ['record' => $record]);
             $activationBannerHtml = '<div style="margin-top: 1rem; padding: 0.85rem 1.25rem; background-color: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 0.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">'.
                 '<div>'.
                 '<div style="font-weight: 700; font-size: 14px; color: #b45309;">⚠️ Tenancy Deboarding in Progress ('.ucfirst(str_replace('_', ' ', $status)).')</div>'.
-                '<div style="font-size: 12px; color: rgba(128, 128, 128, 0.85); margin-top: 2px;">Move-Out verification inspection and security deposit settlement.</div>'.
+                '<div style="font-size: 12px; color: rgba(128, 128, 128, 0.85); margin-top: 2px;">Move-Out verification inspection, maintenance resolution, and security deposit settlement.</div>'.
                 '</div>'.
                 '<a href="'.e($deboardUrl).'" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 15px; background-color: #0284c7; color: #ffffff; font-weight: 600; font-size: 13px; border-radius: 6px; text-decoration: none; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">'.
-                'Open Deboarding Dashboard &rarr;'.
+                'Open Deboarding Workflow &rarr;'.
                 '</a>'.
                 '</div>';
         } elseif ($canActivate) {

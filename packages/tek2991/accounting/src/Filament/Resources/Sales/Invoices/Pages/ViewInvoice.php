@@ -34,22 +34,27 @@ class ViewInvoice extends ViewRecord
                     $livewire->fillForm();
                 }),
             Actions\Action::make('download_pdf')
-                ->label('Download PDF')
+                ->label('Invoice PDF')
                 ->icon('heroicon-o-document-arrow-down')
-                ->action(function ($record) {
-                    $path = app(InvoiceService::class)->generatePdf($record);
-                    $disk = config('accounting.pdf.disk', 'public');
-                    return response()->download(\Illuminate\Support\Facades\Storage::disk($disk)->path($path));
-                }),
+                ->color('primary')
+                ->modalHeading(fn ($record) => "Invoice - {$record->invoice_number}")
+                ->modalWidth(\Filament\Support\Enums\Width::SevenExtraLarge)
+                ->modalContent(fn ($record) => view('components.invoice-pdf-modal', ['invoice' => $record]))
+                ->modalSubmitAction(false)
+                ->modalCancelActionLabel('Close'),
             Actions\Action::make('download_receipt')
-                ->label('Download Receipt')
-                ->icon('heroicon-o-receipt-percent')
+                ->label('Receipt PDF')
+                ->icon('heroicon-o-arrow-down-tray')
                 ->color('success')
                 ->visible(fn ($record) => $record->payments()->exists())
-                ->url(fn ($record) => route('billing.receipt.pdf', [
-                    'invoice' => $record->id,
-                    'payment' => $record->payments()->latest()->first()?->id ?? 0,
-                ]), shouldOpenInNewTab: true),
+                ->modalHeading(fn ($record) => "Payment Receipt - {$record->invoice_number}")
+                ->modalWidth(\Filament\Support\Enums\Width::SevenExtraLarge)
+                ->modalContent(fn ($record) => view('components.receipt-pdf-modal', [
+                    'invoice' => $record,
+                    'payment' => $record->payments()->latest()->first(),
+                ]))
+                ->modalSubmitAction(false)
+                ->modalCancelActionLabel('Close'),
             Actions\Action::make('record_payment')
                 ->label('Record Payment')
                 ->icon('heroicon-o-banknotes')

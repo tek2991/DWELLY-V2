@@ -1,3 +1,6 @@
+@php
+    $payment = $payment ?? $invoice->payments()->latest()->first();
+@endphp
 <div style="width: 100%; display: flex; flex-direction: column; gap: 0.75rem;">
     <div style="display: flex; justify-content: space-between; align-items: center; background-color: #f8fafc; padding: 0.625rem 0.875rem; border-radius: 0.375rem; border: 1px solid #e2e8f0;">
         <div>

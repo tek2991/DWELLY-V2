@@ -131,5 +131,10 @@ class TenancyAgreement extends DomainModel implements HasMedia
     {
         return $this->belongsTo(\App\Domain\Property\Models\UtilityProvider::class, 'electricity_provider_id');
     }
+
+    public function deboarding(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(TenantDeboarding::class, 'tenancy_agreement_id');
+    }
 }
 

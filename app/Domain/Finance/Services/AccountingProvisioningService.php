@@ -87,7 +87,26 @@ class AccountingProvisioningService
         $debits = (float) $advanceAccount->journalEntries()->where('type', \Tek2991\Accounting\Enums\JournalEntryType::Debit)->sum('amount');
         $credits = (float) $advanceAccount->journalEntries()->where('type', \Tek2991\Accounting\Enums\JournalEntryType::Credit)->sum('amount');
 
-        return max(0.0, $debits - $credits);
+        return max(0.0, ($debits - $credits) / 100);
+    }
+
+    public function getOwnerReserveAccount(Party $owner): Account
+    {
+        $this->ensurePartyAccountingReady($owner);
+        $contact = $this->ensureAccountingContact($owner);
+
+        return Account::where('contact_id', $contact->id)
+            ->where('name', 'like', '%Reserve%')
+            ->first() ?? $this->ensureLedger($contact, AccountType::Liability, SystemRole::OwnerPayable, "Maintenance Reserve - {$contact->name}");
+    }
+
+    public function getOwnerReserveBalance(Party $owner): float
+    {
+        $reserveAccount = $this->getOwnerReserveAccount($owner);
+        $credits = (float) $reserveAccount->journalEntries()->where('type', \Tek2991\Accounting\Enums\JournalEntryType::Credit)->sum('amount');
+        $debits = (float) $reserveAccount->journalEntries()->where('type', \Tek2991\Accounting\Enums\JournalEntryType::Debit)->sum('amount');
+
+        return max(0.0, ($credits - $debits) / 100);
     }
 
     public function getTenantDepositAccount(Party $tenant): Account

@@ -2,24 +2,23 @@
 
 namespace App\Filament\Resources\TenancyAgreements\Pages;
 
+use App\Domain\Agreement\Enums\DeboardingStatus;
 use App\Domain\Agreement\Models\TenancyAgreement;
 use App\Domain\Agreement\Services\TenancyDeboardingService;
 use App\Domain\Audit\Enums\AuditStatus;
 use App\Filament\Resources\Operations\AuditResource;
+use App\Filament\Resources\Operations\TenantDeboardingResource;
 use App\Filament\Resources\TenancyAgreements\Pages\Concerns\HasTenancyWorkflowHeader;
 use App\Filament\Resources\TenancyAgreements\TenancyAgreementResource;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
+use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -35,7 +34,7 @@ class DeboardTenancy extends EditRecord
 
     protected static ?string $navigationLabel = '6. Deboarding & Exit';
 
-    protected static ?string $title = 'Tenant Deboarding & Property Vacating';
+    protected static ?string $title = 'Deboarding Status & Reference';
 
     public static function shouldRegisterNavigation(array $parameters = []): bool
     {
@@ -49,14 +48,25 @@ class DeboardTenancy extends EditRecord
 
     protected function getHeaderActions(): array
     {
+        /** @var TenancyAgreement $record */
+        $record = $this->getRecord();
+        $deboarding = $record?->deboarding;
+
         return [
+            Action::make('openDedicatedWorkflow')
+                ->label('Open Dedicated Deboarding Workflow →')
+                ->icon('heroicon-o-arrow-top-right-on-square')
+                ->color('primary')
+                ->visible(fn () => $deboarding !== null)
+                ->url(fn () => TenantDeboardingResource::getUrl('edit', ['record' => $deboarding->id])),
+
             Action::make('initiateDeboardingPageAction')
-                ->label('Initiate Deboarding & Trigger Exit Audit')
+                ->label('Initiate Deboarding & Exit Workflow')
                 ->icon('heroicon-o-arrow-left-on-rectangle')
                 ->color('warning')
-                ->modalHeading('Initiate Tenant Deboarding & Trigger Exit Audit')
-                ->modalDescription('Record notice dates, reason for exit, and automatically trigger the Move-Out Verification Audit.')
-                ->visible(fn () => $this->record && $this->record->status === 'active')
+                ->modalHeading('Initiate Tenant Deboarding & Exit Workflow')
+                ->modalDescription('Record notice dates, reason for exit, and launch the dedicated Deboarding & Exit Workflow.')
+                ->visible(fn () => $record && $record->status === 'active' && ! $deboarding)
                 ->form([
                     DatePicker::make('notice_date')
                         ->label('Notice Date')
@@ -64,6 +74,7 @@ class DeboardTenancy extends EditRecord
                         ->required(),
                     DatePicker::make('vacating_date')
                         ->label('Target Vacating Date')
+                        ->default(now()->addDays(30)->toDateString())
                         ->required(),
                     Select::make('deboarding_reason')
                         ->label('Reason for Deboarding')
@@ -73,6 +84,7 @@ class DeboardTenancy extends EditRecord
                             'Owner Request' => 'Owner Request / Non-renewal',
                             'Eviction' => 'Eviction',
                             'Mutual Agreement' => 'Mutual Agreement',
+                            'Other' => 'Other',
                         ])
                         ->default('Agreement Expiry')
                         ->required(),
@@ -82,136 +94,86 @@ class DeboardTenancy extends EditRecord
                 ])
                 ->action(function (array $data) {
                     $service = app(TenancyDeboardingService::class);
-                    $service->initiateDeboarding($this->record, $data);
-                    $audit = $service->triggerMoveOutAudit($this->record, auth()->user());
+                    $deboarding = $service->initiateDeboarding($this->record, $data, auth()->user());
 
                     Notification::make()
-                        ->title('Deboarding Initiated & Exit Audit Triggered')
-                        ->body("Notice recorded. Move-Out Verification Audit #{$audit->audit_number} has been created for exit inspection.")
+                        ->title('Deboarding Workflow Initiated')
+                        ->body("Deboarding #{$deboarding->code} created. Redirecting to dedicated workflow...")
                         ->success()
                         ->send();
 
-                    $this->fillForm();
-                }),
-
-            Action::make('completeDeboardingPageAction')
-                ->label('Complete Deboarding & Vacate Property')
-                ->icon('heroicon-o-check-badge')
-                ->color('danger')
-                ->modalHeading('Complete Deboarding & Vacate Property')
-                ->modalDescription('Finalize tenant exit, settle security deposit, lock the Move-Out audit, and update property status.')
-                ->visible(fn () => $this->record && $this->record->status === 'deboarding_initiated')
-                ->form([
-                    Select::make('new_property_status')
-                        ->label('New Property Status')
-                        ->options([
-                            'vacant' => 'Vacant & Ready for Onboarding',
-                            'under_maintenance' => 'Under Maintenance / Repairs Needed',
-                        ])
-                        ->default('vacant')
-                        ->required(),
-                    TextInput::make('net_deposit_refund')
-                        ->label('Net Security Deposit Refundable (₹)')
-                        ->numeric()
-                        ->prefix('₹')
-                        ->default(fn () => $this->record?->net_deposit_refund ?? $this->record?->security_deposit ?? 0.00)
-                        ->required(),
-                    Select::make('deposit_settlement_status')
-                        ->label('Security Deposit Settlement Status')
-                        ->options([
-                            'pending' => 'Pending Settlement',
-                            'refunded' => 'Refunded to Tenant',
-                            'balance_due' => 'Balance Due from Tenant',
-                            'settled' => 'Fully Settled',
-                        ])
-                        ->default('settled')
-                        ->required(),
-                ])
-                ->action(function (array $data) {
-                    if ($this->record->moveOutAudit) {
-                        $auditStatus = $this->record->moveOutAudit->status;
-                        $statusVal = $auditStatus instanceof AuditStatus ? $auditStatus->value : (string) $auditStatus;
-                        if (! in_array($statusVal, ['approved', 'completed'])) {
-                            Notification::make()
-                                ->title('Cannot Complete Deboarding')
-                                ->body('The Move-Out Verification Audit must be approved before completing deboarding.')
-                                ->warning()
-                                ->persistent()
-                                ->send();
-
-                            return;
-                        }
-                    }
-
-                    $service = app(TenancyDeboardingService::class);
-                    $service->completeDeboardingAndVacate(
-                        $this->record,
-                        $data['new_property_status'] ?? 'vacant',
-                        [
-                            'net_refund' => $data['net_deposit_refund'] ?? 0,
-                            'settlement_status' => $data['deposit_settlement_status'] ?? 'settled',
-                        ],
-                        auth()->user()
-                    );
-
-                    Notification::make()
-                        ->title('Deboarding Completed')
-                        ->body("Tenancy agreement #{$this->record->code} has been marked as Vacated and property status updated.")
-                        ->success()
-                        ->send();
-
-                    $this->fillForm();
+                    $this->redirect(TenantDeboardingResource::getUrl('edit', ['record' => $deboarding->id]));
                 }),
         ];
     }
 
     public function form(Schema $schema): Schema
     {
-        $isVacated = $this->getRecord()?->status === 'vacated';
-
         return $schema
-            ->disabled($isVacated)
+            ->disabled(true)
             ->components([
-                Section::make('1. Deboarding Lifecycle & Notice Information')
+                Section::make('Deboarding Overview & Quick Launcher')
                     ->schema([
-                        DatePicker::make('notice_date')
-                            ->label('Notice Given Date'),
-
-                        DatePicker::make('vacating_date')
-                            ->label('Target / Actual Vacating Date'),
-
-                        Select::make('deboarding_reason')
-                            ->label('Deboarding Reason')
-                            ->options([
-                                'Agreement Expiry' => 'Agreement Expiry',
-                                'Tenant Early Termination' => 'Tenant Early Termination',
-                                'Owner Request' => 'Owner Request / Non-renewal',
-                                'Eviction' => 'Eviction',
-                                'Mutual Agreement' => 'Mutual Agreement',
-                            ]),
-
-                        Textarea::make('deboarding_notes')
-                            ->label('Deboarding Notes & Exit Remarks')
-                            ->rows(2)
-                            ->columnSpanFull(),
-                    ])->columns(3),
-
-                Section::make('2. Move-Out Verification Audit')
-                    ->description('Exit inspection comparing current property condition against the Move-In baseline.')
-                    ->schema([
-                        Placeholder::make('move_out_audit_card')
-                            ->label('Move-Out Verification Audit Status')
-                            ->content(function ($record) {
+                        Placeholder::make('deboarding_status_overview')
+                            ->hiddenLabel()
+                            ->content(function (?TenancyAgreement $record) {
                                 if (! $record) {
                                     return '';
                                 }
-                                $audit = $record->moveOutAudit;
-                                if (! $audit) {
+
+                                $deboarding = $record->deboarding;
+
+                                if (! $deboarding) {
                                     return new HtmlString(
-                                        '<div style="padding: 14px; background-color: rgba(239, 246, 255, 1); border: 1px solid rgba(191, 219, 254, 1); border-radius: 8px; color: #1e40af; font-size: 13px;">'.
-                                            'ℹ No Move-Out Audit triggered yet. Click <strong>Initiate Deboarding & Trigger Exit Audit</strong> to generate exit inspection.'.
-                                            '</div>'
+                                        '<div style="padding: 20px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">' .
+                                            '<div>' .
+                                                '<div style="font-weight: 700; font-size: 15px; color: #92400e;">⚠️ Deboarding Not Yet Initiated</div>' .
+                                                '<div style="font-size: 13px; color: #b45309; margin-top: 2px;">This tenancy agreement is currently Active. When the tenant gives notice or agreement expires, initiate the deboarding workflow.</div>' .
+                                            '</div>' .
+                                        '</div>'
                                     );
+                                }
+
+                                $status = $deboarding->status instanceof DeboardingStatus ? $deboarding->status : DeboardingStatus::tryFrom((string) $deboarding->status);
+                                $statusLabel = $status?->getLabel() ?? ucfirst((string) $deboarding->status);
+                                $workflowUrl = TenantDeboardingResource::getUrl('edit', ['record' => $deboarding->id]);
+
+                                return new HtmlString(
+                                    '<div style="padding: 20px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;">' .
+                                        '<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">' .
+                                            '<div>' .
+                                                '<div style="display: flex; align-items: center; gap: 10px;">' .
+                                                    '<span style="font-size: 1.15rem; font-weight: 800; color: #0f172a;">Deboarding #' . e($deboarding->code) . '</span>' .
+                                                    '<span style="display: inline-flex; padding: 3px 10px; font-size: 12px; font-weight: 700; border-radius: 9999px; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;">' . e($statusLabel) . '</span>' .
+                                                '</div>' .
+                                                '<div style="font-size: 13px; color: #64748b; margin-top: 4px;">' .
+                                                    'Notice Date: <strong>' . e($deboarding->notice_date?->format('d M Y') ?? 'N/A') . '</strong> | Target Vacate: <strong>' . e($deboarding->target_vacating_date?->format('d M Y') ?? 'N/A') . '</strong>' .
+                                                '</div>' .
+                                            '</div>' .
+                                            '<div>' .
+                                                '<a href="' . e($workflowUrl) . '" style="display: inline-flex; align-items: center; gap: 6px; padding: 10px 18px; background: #2563eb; color: #ffffff; font-weight: 600; font-size: 13px; border-radius: 8px; text-decoration: none; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">' .
+                                                    'Open Dedicated Deboarding Workflow →' .
+                                                '</a>' .
+                                            '</div>' .
+                                        '</div>' .
+                                    '</div>'
+                                );
+                            })
+                            ->columnSpanFull(),
+                    ]),
+
+                Section::make('Exit Inspection & Audit Status')
+                    ->schema([
+                        Placeholder::make('move_out_audit_status')
+                            ->hiddenLabel()
+                            ->content(function (?TenancyAgreement $record) {
+                                if (! $record) {
+                                    return '';
+                                }
+
+                                $audit = $record->moveOutAudit ?? $record->deboarding?->moveOutAudit;
+                                if (! $audit) {
+                                    return new HtmlString('<div style="font-size: 13px; color: #64748b;">No Move-Out audit linked.</div>');
                                 }
 
                                 $auditStatus = $audit->status;
@@ -219,70 +181,42 @@ class DeboardTenancy extends EditRecord
                                 $auditUrl = AuditResource::getUrl('edit', ['record' => $audit->id]);
 
                                 return new HtmlString(
-                                    '<div style="display: flex; align-items: center; justify-content: space-between; padding: 16px; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px;">'.
-                                        '<div>'.
-                                            '<div style="font-weight: 600; font-size: 15px; color: #111827;">Move-Out Audit #'.e($audit->audit_number).'</div>'.
-                                            '<div style="font-size: 13px; color: #6b7280; margin-top: 4px;">Status: <span style="font-weight: 600; text-transform: capitalize; color: '.($statusLabel === 'Approved' ? '#059669' : '#d97706').';">'.e($statusLabel).'</span> | Referenced Baseline: #'.e($record->audit?->audit_number ?? 'N/A').'</div>'.
-                                        '</div>'.
-                                        '<div>'.
-                                            '<a href="'.e($auditUrl).'" target="_blank" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background-color: #4f46e5; color: #ffffff; border-radius: 6px; font-weight: 500; font-size: 13px; text-decoration: none;">'.
-                                                'Perform Exit Inspection →'.
-                                            '</a>'.
-                                        '</div>'.
+                                    '<div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px;">' .
+                                        '<div>' .
+                                            '<div style="font-weight: 600; font-size: 14px;">Move-Out Audit #' . e($audit->audit_number) . '</div>' .
+                                            '<div style="font-size: 12px; color: #64748b; margin-top: 2px;">Status: <strong>' . e($statusLabel) . '</strong> | Inspector: ' . e($audit->inspector?->name ?? 'Unassigned') . '</div>' .
+                                        '</div>' .
+                                        '<div>' .
+                                            '<a href="' . e($auditUrl) . '" target="_blank" style="font-size: 12px; color: #4f46e5; font-weight: 600;">View Audit Details →</a>' .
+                                        '</div>' .
                                     '</div>'
                                 );
                             })
                             ->columnSpanFull(),
                     ]),
 
-                Section::make('3. Key Return & Security Deposit Settlement')
+                Section::make('Keys & Deposit Settlement Summary')
                     ->schema([
-                        Toggle::make('keys_returned')
-                            ->label('Keys & Society Badges Returned by Tenant')
-                            ->live(),
+                        Grid::make(3)
+                            ->schema([
+                                Placeholder::make('keys_summary')
+                                    ->label('Keys Returned')
+                                    ->content(fn (?TenancyAgreement $record) => ($record?->keys_returned || $record?->deboarding?->keys_returned) ? '✅ Yes' : '❌ Pending'),
 
-                        DateTimePicker::make('keys_returned_at')
-                            ->label('Key Return Date & Time'),
+                                Placeholder::make('net_refund_summary')
+                                    ->label('Net Deposit Refund')
+                                    ->content(fn (?TenancyAgreement $record) => '₹' . number_format((float) ($record?->deboarding?->net_deposit_refund ?? $record?->net_deposit_refund ?? 0.00), 2)),
 
-                        SpatieMediaLibraryFileUpload::make('key_return_attachments')
-                            ->label('Key Return Photo / Receipt')
-                            ->collection('key_return_attachments')
-                            ->multiple()
-                            ->downloadable()
-                            ->openable()
-                            ->columnSpanFull(),
-
-                        TextInput::make('net_deposit_refund')
-                            ->label('Net Security Deposit Refundable (₹)')
-                            ->numeric()
-                            ->prefix('₹')
-                            ->default(fn ($record) => $record?->net_deposit_refund ?? $record?->security_deposit ?? 0.00)
-                            ->helperText('Net deposit refund amount after deducting damages or dues.'),
-
-                        Select::make('deposit_settlement_status')
-                            ->label('Deposit Settlement Status')
-                            ->options([
-                                'pending' => 'Pending Settlement',
-                                'refunded' => 'Refunded to Tenant',
-                                'balance_due' => 'Balance Due from Tenant',
-                                'settled' => 'Fully Settled',
-                            ])
-                            ->default('pending'),
-                    ])->columns(2),
+                                Placeholder::make('settlement_status_summary')
+                                    ->label('Settlement Status')
+                                    ->content(fn (?TenancyAgreement $record) => ucfirst(str_replace('_', ' ', (string) ($record?->deboarding?->settlement_status ?? $record?->deposit_settlement_status ?? 'pending')))),
+                            ]),
+                    ]),
             ]);
     }
 
     protected function getFormActions(): array
     {
-        if ($this->getRecord()?->status === 'vacated') {
-            return [];
-        }
-
-        return parent::getFormActions();
-    }
-
-    protected function getRedirectUrl(): ?string
-    {
-        return null;
+        return [];
     }
 }

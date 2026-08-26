@@ -142,7 +142,7 @@
         }
         .summary-val {
             text-align: right;
-            font-weight: 600;
+            font-weight: bold;
             color: #0f172a;
         }
         .grand-total-row td {
@@ -229,7 +229,7 @@
                 <div class="logo-title">{{ $companyName }}</div>
                 <div class="company-subtitle">Property Management &bull; Tax Invoice</div>
                 @if($branchName)
-                    <div style="font-size: 10px; color: #475569; margin-top: 4px; font-weight: 600;">Branch: {{ $branchName }}</div>
+                    <div style="font-size: 10px; color: #475569; margin-top: 4px; font-weight: bold;">Branch: {{ $branchName }}</div>
                 @endif
                 @if($branchAddress)
                     <div style="font-size: 9.5px; color: #64748b; margin-top: 2px;">{{ $branchAddress }}</div>
@@ -438,7 +438,7 @@
             <td style="width: 40%; vertical-align: bottom; text-align: right;">
                 <div class="signatory-box">
                     <div style="font-weight: bold; margin-bottom: 40px;">For {{ $companyName }}</div>
-                    <div style="border-top: 1px solid #cbd5e1; display: inline-block; width: 160px; padding-top: 4px; font-weight: 500;">
+                    <div style="border-top: 1px solid #cbd5e1; display: inline-block; width: 160px; padding-top: 4px;">
                         Authorized Signatory
                     </div>
                 </div>

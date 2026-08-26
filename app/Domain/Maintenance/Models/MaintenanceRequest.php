@@ -38,6 +38,7 @@ class MaintenanceRequest extends DomainModel implements HasMedia
         'ticket_number',
         'property_id',
         'tenant_id',
+        'tenant_deboarding_id',
         'owner_id',
         'vendor_party_id',
         'assigned_inspector_id',
@@ -325,5 +326,10 @@ class MaintenanceRequest extends DomainModel implements HasMedia
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by_id');
+    }
+
+    public function deboarding(): BelongsTo
+    {
+        return $this->belongsTo(\App\Domain\Agreement\Models\TenantDeboarding::class, 'tenant_deboarding_id');
     }
 }

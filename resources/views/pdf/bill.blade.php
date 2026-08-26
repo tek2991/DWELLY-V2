@@ -142,7 +142,7 @@
         }
         .summary-val {
             text-align: right;
-            font-weight: 600;
+            font-weight: bold;
             color: #0f172a;
         }
         .grand-total-row td {
