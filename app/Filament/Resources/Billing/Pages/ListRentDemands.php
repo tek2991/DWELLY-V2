@@ -2,12 +2,12 @@
 
 namespace App\Filament\Resources\Billing\Pages;
 
-use App\Filament\Resources\Billing\RentInvoicesResource;
+use App\Filament\Resources\Billing\RentDemandsResource;
 use Filament\Resources\Pages\ListRecords;
 
-class ListRentInvoices extends ListRecords
+class ListRentDemands extends ListRecords
 {
-    protected static string $resource = RentInvoicesResource::class;
+    protected static string $resource = RentDemandsResource::class;
 
     protected function getHeaderActions(): array
     {

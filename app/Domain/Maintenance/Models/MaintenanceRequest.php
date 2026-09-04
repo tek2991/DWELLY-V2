@@ -332,4 +332,9 @@ class MaintenanceRequest extends DomainModel implements HasMedia
     {
         return $this->belongsTo(\App\Domain\Agreement\Models\TenantDeboarding::class, 'tenant_deboarding_id');
     }
+
+    public function tasks(): \Illuminate\Database\Eloquent\Relations\MorphMany
+    {
+        return $this->morphMany(\App\Domain\Task\Models\Task::class, 'taskable');
+    }
 }

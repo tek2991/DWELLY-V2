@@ -73,6 +73,12 @@ class FinancialOperationsHub extends Page
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('bulk_generate_rent')
+                ->label('Bulk Generate Rent')
+                ->icon('heroicon-o-sparkles')
+                ->color('warning')
+                ->url(fn (): string => \App\Filament\Pages\Billing\BulkGenerateMonthlyRent::getUrl()),
+
             ActionGroup::make([
                 $this->recordDepositReceiptAction(),
                 $this->recordDepositPlacementAction(),
@@ -309,9 +315,9 @@ class FinancialOperationsHub extends Page
     }
 
     /**
-     * Get unpaid rent invoices
+     * Get unpaid rent demands
      */
-    public function getRentInvoices(): Collection
+    public function getRentDemands(): Collection
     {
         $query = Invoice::where('reference_type', TenancyAgreement::class)
             ->where('status', '!=', InvoiceStatus::Cancelled)
@@ -367,6 +373,11 @@ class FinancialOperationsHub extends Page
                 default => $collection,
             };
         });
+    }
+
+    public function getRentInvoices(): Collection
+    {
+        return $this->getRentDemands();
     }
 
     /**

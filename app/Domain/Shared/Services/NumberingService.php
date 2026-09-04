@@ -21,6 +21,7 @@ class NumberingService
                     'tenancy' => 'TNC',
                     'mou' => 'MOU',
                     'audit' => 'AUD',
+                    'task' => 'TSK',
                     default => strtoupper(substr($entityType, 0, 3)),
                 };
 

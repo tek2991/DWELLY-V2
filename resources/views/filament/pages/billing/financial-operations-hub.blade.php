@@ -454,13 +454,13 @@
                 @endif
             </div>
 
-        <!-- Tab 3: Overdue Rent Invoices Table -->
-        @elseif($activeTab === 'rent_invoices')
-            @php $rentInvoices = $this->getRentInvoices(); @endphp
+        <!-- Tab 3: Overdue Rent Demands Table -->
+        @elseif($activeTab === 'rent_invoices' || $activeTab === 'rent_demands')
+            @php $rentInvoices = $this->getRentDemands(); @endphp
             <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 0.875rem; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
                 @if($rentInvoices->isEmpty())
                     <div style="padding: 3.5rem 2rem; text-align: center; color: #64748b;">
-                        <div style="font-size: 1rem; font-weight: 700; color: #334155;">No unpaid rent invoices</div>
+                        <div style="font-size: 1rem; font-weight: 700; color: #334155;">No unpaid rent demands</div>
                         <div style="font-size: 0.8125rem; margin-top: 0.25rem;">All monthly rent demands are fully collected.</div>
                     </div>
                 @else
@@ -468,7 +468,7 @@
                         <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.75rem;">
                             <thead>
                                 <tr style="background: #f8fafc; color: #475569; font-weight: 700; border-bottom: 1px solid #e2e8f0; text-transform: uppercase; font-size: 0.6875rem; letter-spacing: 0.05em;">
-                                    <th style="padding: 0.75rem 1rem;">Invoice #</th>
+                                    <th style="padding: 0.75rem 1rem;">Demand #</th>
                                     <th style="padding: 0.75rem 1rem;">Tenant</th>
                                     <th style="padding: 0.75rem 1rem;">Property</th>
                                     <th style="padding: 0.75rem 1rem;">Billing Cycle</th>

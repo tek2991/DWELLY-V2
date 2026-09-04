@@ -40,6 +40,7 @@ class AccountingPanelProvider extends PanelProvider
             ->discoverPages(in: app_path('Filament/Accounting/Pages'), for: 'App\Filament\Accounting\Pages')
             ->pages([
                 Dashboard::class,
+                \App\Filament\Pages\Billing\BulkGenerateOwnerPayouts::class,
             ])
             ->discoverWidgets(in: app_path('Filament/Accounting/Widgets'), for: 'App\Filament\Accounting\Widgets')
             ->widgets([

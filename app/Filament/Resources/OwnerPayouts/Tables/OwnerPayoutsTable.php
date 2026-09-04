@@ -4,9 +4,12 @@ namespace App\Filament\Resources\OwnerPayouts\Tables;
 
 use App\Domain\Finance\Actions\ProcessOwnerPayoutAction;
 use App\Domain\Finance\Services\OwnerPayoutService;
+use App\Domain\Finance\Models\OwnerPayout;
 use App\Domain\Property\Models\Property;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\ViewAction;
+use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -15,13 +18,10 @@ use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Components\View;
-use Filament\Schemas\Components\Wizard;
-use Filament\Schemas\Components\Wizard\Step;
 use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Tek2991\Accounting\Models\Account;
-use Tek2991\Accounting\Models\OwnerPayout;
 
 class OwnerPayoutsTable
 {
@@ -57,6 +57,13 @@ class OwnerPayoutsTable
                     ->money('INR')
                     ->color('danger')
                     ->sortable(),
+
+                TextColumn::make('commissionInvoice.invoice_number')
+                    ->label('Charges Invoice #')
+                    ->searchable()
+                    ->placeholder('—')
+                    ->color('primary')
+                    ->weight('medium'),
 
                 TextColumn::make('advance_offset')
                     ->label('Advance Offset')
@@ -192,12 +199,34 @@ class OwnerPayoutsTable
                             ->suffix('%')
                             ->required(),
 
+                        CheckboxList::make('maintenance_invoice_ids')
+                            ->label('Select Pending Maintenance Invoices / Tickets to Deduct')
+                            ->options(fn(Get $get, OwnerPayoutService $service) => ($pId = $get('property_id')) && ($prop = Property::find($pId)) ? $service->getPendingMaintenanceOptions($prop) : [])
+                            ->default(fn(Get $get, OwnerPayoutService $service) => ($pId = $get('property_id')) && ($prop = Property::find($pId)) ? array_keys($service->getPendingMaintenanceOptions($prop)) : [])
+                            ->visible(fn(Get $get, OwnerPayoutService $service) => ($pId = $get('property_id')) && ($prop = Property::find($pId)) && !empty($service->getPendingMaintenanceOptions($prop)))
+                            ->live()
+                            ->afterStateUpdated(function (Set $set, Get $get, $state, OwnerPayoutService $service) {
+                                $pId = $get('property_id');
+                                if ($pId) {
+                                    $prop = Property::find($pId);
+                                    if ($prop) {
+                                        $month = (int) ($get('month') ?: date('n'));
+                                        $year = (int) ($get('year') ?: date('Y'));
+                                        $calc = $service->calculatePayoutDetails($prop, $month, $year, [
+                                            'selected_maintenance_invoice_ids' => $state ?: [],
+                                        ]);
+                                        $set('advance_offset', $calc['advance_offset']);
+                                    }
+                                }
+                            })
+                            ->columnSpanFull(),
+
                         TextInput::make('advance_offset')
-                            ->label('Advance Offset (₹)')
+                            ->label('Total Advance / Maintenance Offset (₹)')
                             ->numeric()
                             ->prefix('₹')
                             ->default(0)
-                            ->helperText('Amount to deduct towards prior capital advances/purchases made on owner behalf.'),
+                            ->helperText('Total amount deducted towards selected maintenance invoices and prior owner advances.'),
 
                         TextInput::make('reserve_deduction')
                             ->label('Reserve Deduction (₹)')
@@ -254,6 +283,7 @@ class OwnerPayoutsTable
                                 'advance_offset' => $data['advance_offset'] ?? 0.0,
                                 'reserve_deduction' => $data['reserve_deduction'] ?? 0.0,
                                 'bank_account_id' => $data['bank_account_id'] ?? null,
+                                'maintenance_invoice_ids' => $data['maintenance_invoice_ids'] ?? [],
                                 'notes' => $data['notes'] ?? null,
                             ]
                         );
@@ -265,98 +295,37 @@ class OwnerPayoutsTable
                             ->send();
                     }),
 
-                Action::make('bulk_generate_payouts')
-                    ->label('Bulk Generate Monthly Payouts')
+                Action::make('bulk_disburse_payouts')
+                    ->label('Bulk Disburse Payouts')
                     ->icon('heroicon-o-sparkles')
                     ->color('warning')
-                    ->modalHeading('Bulk Disburse Monthly Owner Payouts')
-                    ->modalWidth(Width::SevenExtraLarge)
-                    ->modalSubmitActionLabel('Yes, Disburse Payouts Now')
-                    ->modifyWizardUsing(fn (Wizard $wizard) => $wizard->nextAction(fn (Action $action) => $action->label('Confirm & Disburse Payouts')->color('warning')->icon('heroicon-o-arrow-right')))
-                    ->steps([
-                        Step::make('Review Payouts')
-                            ->description('Select cycle & review owner payout calculations')
-                            ->icon('heroicon-o-clipboard-document-list')
-                            ->schema([
-                                Select::make('month')
-                                    ->label('Billing Month')
-                                    ->options([
-                                        1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April',
-                                        5 => 'May', 6 => 'June', 7 => 'July', 8 => 'August',
-                                        9 => 'September', 10 => 'October', 11 => 'November', 12 => 'December',
-                                    ])
-                                    ->default((int) date('n'))
-                                    ->required()
-                                    ->live(),
-
-                                TextInput::make('year')
-                                    ->label('Billing Year')
-                                    ->numeric()
-                                    ->default((int) date('Y'))
-                                    ->required()
-                                    ->live(),
-
-                                Select::make('bank_account_id')
-                                    ->label('Disbursement Bank Account')
-                                    ->options(function () {
-                                        $defaultId = \Tek2991\Accounting\Facades\Accounting::getDefaultBankAccountId();
-
-                                        return Account::where('type', \Tek2991\Accounting\Enums\AccountType::Asset)
-                                            ->where(function ($q) {
-                                                $q->whereIn('system_role', [
-                                                    \Tek2991\Accounting\Enums\SystemRole::Bank,
-                                                    \Tek2991\Accounting\Enums\SystemRole::Cash,
-                                                ])
-                                                ->orWhere('code', 'like', '11%')
-                                                ->orWhere('name', 'like', '%Current Account%')
-                                                ->orWhere('name', 'like', '%Savings Account%')
-                                                ->orWhere('name', 'like', '%Bank%')
-                                                ->orWhere('name', 'like', '%Cash%');
-                                            })
-                                            ->where('is_control_account', false)
-                                            ->get()
-                                            ->mapWithKeys(function (Account $acc) use ($defaultId) {
-                                                if ($acc->id === $defaultId) {
-                                                    return [$acc->id => "<div style='display: flex; align-items: center; justify-content: space-between; width: 100%;'><span>{$acc->name}</span><span style='font-size: 10px; font-weight: 700; background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 9999px; text-transform: uppercase;'>Default</span></div>"];
-                                                }
-                                                return [$acc->id => "<div>{$acc->name}</div>"];
-                                            });
-                                    })
-                                    ->default(fn () => \Tek2991\Accounting\Facades\Accounting::getDefaultBankAccountId())
-                                    ->allowHtml()
-                                    ->searchable()
-                                    ->preload()
-                                    ->required(),
-
-                                View::make('filament.billing.bulk-owner-payout-preview-modal')
-                                    ->columnSpanFull(),
-                            ]),
-
-                        Step::make('Final Confirmation')
-                            ->description('Confirm ledger disbursements & fee revenue')
-                            ->icon('heroicon-o-shield-check')
-                            ->schema([
-                                View::make('filament.billing.bulk-owner-payout-final-confirmation-modal')
-                                    ->columnSpanFull(),
-                            ]),
-                    ])
-                    ->action(function (array $data, OwnerPayoutService $service) {
-                        $count = $service->bulkProcessOwnerPayouts(
-                            (int) $data['month'],
-                            (int) $data['year'],
-                            auth()->user(),
-                            !empty($data['bank_account_id']) ? (int) $data['bank_account_id'] : null
-                        );
-
-                        Notification::make()
-                            ->title('Bulk Owner Payouts Completed')
-                            ->body("Disbursed {$count} owner payouts for " . date('F Y', mktime(0, 0, 0, $data['month'], 1, $data['year'])))
-                            ->success()
-                            ->send();
-                    }),
+                    ->url(fn (): string => \App\Filament\Pages\Billing\BulkGenerateOwnerPayouts::getUrl()),
             ])
             ->recordActions([
-                ViewAction::make(),
+                ActionGroup::make([
+                    Action::make('download_payout_statement')
+                        ->label('Owner Monthly Report (PDF)')
+                        ->icon('heroicon-o-document-chart-bar')
+                        ->color('success')
+                        ->modalHeading(fn (OwnerPayout $record) => "Owner Monthly Performance & Payout Report - {$record->property?->building_name}")
+                        ->modalWidth(Width::SevenExtraLarge)
+                        ->modalContent(fn (OwnerPayout $record) => view('components.payout-pdf-modal', ['payout' => $record]))
+                        ->modalSubmitAction(false)
+                        ->modalCancelActionLabel('Close'),
+
+                    Action::make('download_commission_invoice')
+                        ->label('Owner Charges Invoice (PDF)')
+                        ->icon('heroicon-o-document-text')
+                        ->color('primary')
+                        ->visible(fn (OwnerPayout $record) => !empty($record->commission_invoice_id))
+                        ->modalHeading(fn (OwnerPayout $record) => "Owner Charges Tax Invoice #{$record->commissionInvoice?->invoice_number}")
+                        ->modalWidth(Width::SevenExtraLarge)
+                        ->modalContent(fn (OwnerPayout $record) => view('components.invoice-pdf-modal', ['invoice' => $record->commissionInvoice]))
+                        ->modalSubmitAction(false)
+                        ->modalCancelActionLabel('Close'),
+
+                    ViewAction::make(),
+                ]),
             ])
             ->toolbarActions([]);
     }

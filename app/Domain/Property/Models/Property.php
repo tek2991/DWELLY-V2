@@ -139,6 +139,11 @@ class Property extends DomainModel
         return $this->hasMany(\App\Domain\Finance\Models\OwnerPayout::class, 'property_id');
     }
 
+    public function tasks(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(\App\Domain\Task\Models\Task::class, 'property_id');
+    }
+
     public function owner(): \Illuminate\Database\Eloquent\Relations\HasOneThrough
     {
         return $this->hasOneThrough(

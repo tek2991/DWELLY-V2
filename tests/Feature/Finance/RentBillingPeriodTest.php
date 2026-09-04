@@ -396,4 +396,45 @@ class RentBillingPeriodTest extends TestCase
         $this->assertFalse(Invoice::where('reference_id', $agr1->id)->exists());
         $this->assertTrue(Invoice::where('reference_id', $agr2->id)->exists());
     }
+
+    /**
+     * Test 8: Bulk generation with string ULID array matching Filament form submission.
+     */
+    public function test_bulk_generation_with_string_ulid_array()
+    {
+        $agr1 = TenancyAgreement::create([
+            'property_id' => $this->property->id,
+            'code' => 'AGR-ULID-1',
+            'rent_amount' => 15000.00,
+            'security_deposit' => 30000.00,
+            'status' => 'active',
+            'start_date' => '2026-08-01',
+            'keys_handed_over' => true,
+            'keys_handed_over_at' => '2026-08-01',
+        ]);
+        TenancyRole::create(['tenancy_agreement_id' => $agr1->id, 'party_id' => $this->tenant->id, 'role_type' => 'Primary Tenant', 'is_primary' => true]);
+
+        $rentBilling = app(RentBillingService::class);
+
+        // Simulate Filament form data where selected_agreements is an array of ULID strings
+        $formData = [
+            'month' => 8,
+            'year' => 2026,
+            'property_id' => (string) $this->property->id,
+            'selected_agreements' => [(string) $agr1->id],
+        ];
+
+        $selected = !empty($formData['selected_agreements']) ? array_values(array_map('strval', (array) $formData['selected_agreements'])) : null;
+        $propertyId = !empty($formData['property_id']) ? (string) $formData['property_id'] : null;
+
+        $count = $rentBilling->bulkGenerateRentInvoices(
+            (int) $formData['month'],
+            (int) $formData['year'],
+            $selected,
+            $propertyId
+        );
+
+        $this->assertEquals(1, $count);
+        $this->assertTrue(Invoice::where('reference_id', $agr1->id)->exists());
+    }
 }

@@ -15,17 +15,17 @@ use Filament\Schemas\Schema;
 use Tek2991\Accounting\Models\Contact;
 use Tek2991\Accounting\Models\Account;
 
-class RentInvoiceForm
+class RentDemandForm
 {
     public static function configure(Schema $schema): Schema
     {
         return $schema
             ->components([
-                Section::make('Invoice Information')
+                Section::make('Rent Demand Details')
                     ->columns(3)
                     ->components([
                         TextInput::make('invoice_number')
-                            ->label('Invoice Number')
+                            ->label('Demand / Ref Number')
                             ->disabled()
                             ->dehydrated()
                             ->placeholder('Auto-generated'),
@@ -97,7 +97,7 @@ class RentInvoiceForm
                     ->columns(2)
                     ->components([
                         Textarea::make('notes')
-                            ->label('Invoice Notes / Billing Period')
+                            ->label('Demand Notes / Billing Period')
                             ->columnSpanFull(),
 
                         Textarea::make('terms')

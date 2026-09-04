@@ -4,21 +4,28 @@ namespace App\Domain\Finance\Actions;
 
 use App\Domain\Finance\Models\OwnerPayout;
 use App\Domain\Finance\Services\AccountingProvisioningService;
+use App\Domain\Finance\Services\OwnerPayoutService;
 use App\Domain\Property\Models\Property;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Tek2991\Accounting\Enums\DocumentLineType;
+use Tek2991\Accounting\Enums\InvoiceStatus;
 use Tek2991\Accounting\Enums\JournalEntryType;
 use Tek2991\Accounting\Enums\SystemRole;
 use Tek2991\Accounting\Enums\TransactionType;
 use Tek2991\Accounting\Models\Account;
+use Tek2991\Accounting\Models\Invoice;
+use Tek2991\Accounting\Models\InvoiceItem;
+use Tek2991\Accounting\Services\DocumentNumberService;
 use Tek2991\Accounting\Services\TransactionService;
 
 class ProcessOwnerPayoutAction
 {
     public function __construct(
         private AccountingProvisioningService $provisioning,
-        private TransactionService $txnService
+        private TransactionService $txnService,
+        private DocumentNumberService $docNumberService
     ) {}
 
     /**
@@ -166,12 +173,55 @@ class ProcessOwnerPayoutAction
                 'pending' => false,
             ], $entries);
 
-            // 8. Create Payout Record
+            // 8. Generate Official Commission Sales Invoice for the Property Owner
+            $commissionInvoice = null;
+            if ($managementFee > 0) {
+                $ownerContact = $owner->accountingContact ?? $this->provisioning->ensureAccountingContact($owner);
+                $invoiceNumber = $this->docNumberService->nextInvoiceNumber();
+                $formattedPeriod = Carbon::parse($periodStart)->format('d M Y') . ' – ' . Carbon::parse($periodEnd)->format('d M Y');
+
+                $commissionInvoice = Invoice::create([
+                    'branch_id' => $branchId,
+                    'contact_id' => $ownerContact->id,
+                    'invoice_number' => $invoiceNumber,
+                    'status' => InvoiceStatus::Paid,
+                    'issue_date' => $options['payout_date'] ?? $periodEnd,
+                    'due_date' => $options['payout_date'] ?? $periodEnd,
+                    'billing_period_start' => $periodStart,
+                    'billing_period_end' => $periodEnd,
+                    'currency_code' => 'INR',
+                    'reference_type' => Property::class,
+                    'reference_id' => $property->id,
+                    'notes' => "Property Management Commission ({$managementFeePercent}%) for {$property->building_name} ({$formattedPeriod}) - Deducted at source from Owner Payout",
+                    'terms' => 'Management fee automatically settled via monthly rental disbursement deduction.',
+                    'subtotal' => $managementFee,
+                    'grand_total' => $managementFee,
+                    'amount_paid' => $managementFee,
+                    'balance_due' => 0.00,
+                    'transaction_id' => $transaction->id,
+                ]);
+
+                InvoiceItem::create([
+                    'invoice_id' => $commissionInvoice->id,
+                    'line_type' => DocumentLineType::Account,
+                    'sort_order' => 1,
+                    'description' => "Property Management Fee ({$managementFeePercent}%) - {$property->building_name} [{$formattedPeriod}]",
+                    'quantity' => 1,
+                    'unit_price' => $managementFee,
+                    'line_total' => $managementFee,
+                    'gross_amount' => $managementFee,
+                    'net_amount' => $managementFee,
+                    'income_account_id' => $commissionAccount->id,
+                ]);
+            }
+
+            // 9. Create Payout Record
             $payout = OwnerPayout::create([
                 'branch_id' => $branchId,
                 'owner_id' => $owner->id,
                 'property_id' => $property->id,
                 'transaction_id' => $transaction->id,
+                'commission_invoice_id' => $commissionInvoice?->id,
                 'rent_collected' => $rentCollected,
                 'management_fee' => $managementFee,
                 'advance_offset' => $advanceOffset,
@@ -184,32 +234,37 @@ class ProcessOwnerPayoutAction
                 'processed_at' => now(),
             ]);
 
-            // 9. Settle Linked Maintenance Invoices
-            $maintenanceInvoiceIds = $options['maintenance_invoice_ids'] ?? [];
-            if (empty($maintenanceInvoiceIds) && $advanceOffset > 0) {
+            // 10. Settle Linked Maintenance Invoices
+            $maintenanceInvoiceIds = $options['maintenance_invoice_ids'] ?? null;
+            if ($maintenanceInvoiceIds === null && $advanceOffset > 0) {
                 $reqIds = \App\Domain\Maintenance\Models\MaintenanceRequest::where('property_id', $property->id)->pluck('id');
-                $maintenanceInvoiceIds = \Tek2991\Accounting\Models\Invoice::where('reference_type', \App\Domain\Maintenance\Models\MaintenanceRequest::class)
+                $maintenanceInvoiceIds = Invoice::where('reference_type', \App\Domain\Maintenance\Models\MaintenanceRequest::class)
                     ->whereIn('reference_id', $reqIds)
                     ->whereIn('status', [
-                        \Tek2991\Accounting\Enums\InvoiceStatus::Draft,
-                        \Tek2991\Accounting\Enums\InvoiceStatus::Sent,
-                        \Tek2991\Accounting\Enums\InvoiceStatus::PartiallyPaid,
+                        InvoiceStatus::Draft,
+                        InvoiceStatus::Sent,
+                        InvoiceStatus::PartiallyPaid,
                     ])
                     ->pluck('id')
                     ->toArray();
             }
 
-            foreach ($maintenanceInvoiceIds as $mInvId) {
-                $mInv = \Tek2991\Accounting\Models\Invoice::find($mInvId);
-                if ($mInv && $mInv->status !== \Tek2991\Accounting\Enums\InvoiceStatus::Paid) {
-                    $mInv->amount_paid = $mInv->grand_total;
-                    $mInv->balance_due = 0.00;
-                    $mInv->status = \Tek2991\Accounting\Enums\InvoiceStatus::Paid;
-                    $settlementNote = "Settled via Owner Payout for {$property->building_name} ({$periodStart} to {$periodEnd}) [Payout Ref: {$transaction->reference}]";
-                    $mInv->notes = trim(($mInv->notes ? $mInv->notes . "\n" : '') . $settlementNote);
-                    $mInv->save();
+            if (!empty($maintenanceInvoiceIds)) {
+                foreach ($maintenanceInvoiceIds as $mInvId) {
+                    $mInv = Invoice::find($mInvId);
+                    if ($mInv && $mInv->status !== InvoiceStatus::Paid) {
+                        $mInv->amount_paid = $mInv->grand_total;
+                        $mInv->balance_due = 0.00;
+                        $mInv->status = InvoiceStatus::Paid;
+                        $settlementNote = "Settled via Owner Payout for {$property->building_name} ({$periodStart} to {$periodEnd}) [Payout Ref: {$transaction->reference}]";
+                        $mInv->notes = trim(($mInv->notes ? $mInv->notes . "\n" : '') . $settlementNote);
+                        $mInv->save();
+                    }
                 }
             }
+
+            // 11. Compile Payout Document Snapshot & Generate Immutable PDF
+            app(OwnerPayoutService::class)->generateAndStorePayoutPdf($payout);
 
             return $payout;
         });

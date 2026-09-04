@@ -7,7 +7,9 @@ use App\Domain\Finance\Models\OwnerPayout;
 use App\Domain\Party\Models\Party;
 use App\Domain\Property\Models\Property;
 use App\Models\User;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Storage;
 use Tek2991\Accounting\Models\Invoice;
 
 class OwnerPayoutService
@@ -153,7 +155,7 @@ class OwnerPayoutService
 
         // 7. Maintenance Invoices & Advance Balance Offsets
         $maintenanceRequestIds = \App\Domain\Maintenance\Models\MaintenanceRequest::where('property_id', $property->id)->pluck('id');
-        $unpaidMaintenanceInvoices = Invoice::where('reference_type', \App\Domain\Maintenance\Models\MaintenanceRequest::class)
+        $allUnpaidMaintenanceInvoices = Invoice::where('reference_type', \App\Domain\Maintenance\Models\MaintenanceRequest::class)
             ->whereIn('reference_id', $maintenanceRequestIds)
             ->whereIn('status', [
                 \Tek2991\Accounting\Enums\InvoiceStatus::Draft,
@@ -161,6 +163,11 @@ class OwnerPayoutService
                 \Tek2991\Accounting\Enums\InvoiceStatus::PartiallyPaid,
             ])
             ->get();
+
+        $selectedIds = $options['selected_maintenance_invoice_ids'] ?? null;
+        $unpaidMaintenanceInvoices = $selectedIds !== null 
+            ? $allUnpaidMaintenanceInvoices->whereIn('id', $selectedIds)
+            : $allUnpaidMaintenanceInvoices;
 
         $maintenanceItems = [];
         $maintenanceOffset = 0.0;
@@ -180,7 +187,8 @@ class OwnerPayoutService
         }
 
         $generalAdvBalance = $this->provisioningService->getOwnerAdvanceBalance($owner);
-        $totalAdvanceRequired = $maintenanceOffset + $generalAdvBalance;
+        $otherAdvance = isset($options['other_advance_offset']) ? (float) $options['other_advance_offset'] : 0.0;
+        $totalAdvanceRequired = $maintenanceOffset + $generalAdvBalance + $otherAdvance;
 
         $advanceOffset = isset($options['advance_offset'])
             ? (float) $options['advance_offset']
@@ -198,9 +206,12 @@ class OwnerPayoutService
             'reason' => null,
             'property_id' => $property->id,
             'property_name' => $property->building_name ?? $property->name ?? 'Property',
+            'property_url' => \App\Filament\Resources\Properties\PropertyResource::getUrl('edit', ['record' => $property->id]),
+            'agreement_id' => $agreement?->id,
+            'agreement_code' => $agreement?->code,
+            'agreement_url' => $agreement ? \App\Filament\Resources\TenancyAgreements\TenancyAgreementResource::getUrl('edit', ['record' => $agreement->id]) : null,
             'owner_id' => $owner->id,
             'owner_name' => $owner->display_name,
-            'agreement_code' => $agreement->code,
             'handover_date_formatted' => $rentCalc['handover_date_formatted'],
             'billing_period_start' => $rentCalc['billing_period_start'],
             'billing_period_end' => $rentCalc['billing_period_end'],
@@ -317,14 +328,41 @@ class OwnerPayoutService
      */
     public function bulkProcessOwnerPayouts(int $month, int $year, ?User $actor = null, ?int $bankAccountId = null): int
     {
+        $summary = $this->bulkProcessOwnerPayoutsWithSummary($month, $year, [], $actor, [
+            'bank_account_id' => $bankAccountId,
+        ]);
+
+        return $summary['count'];
+    }
+
+    /**
+     * Bulk process owner payouts with comprehensive execution summary.
+     */
+    public function bulkProcessOwnerPayoutsWithSummary(
+        int $month,
+        int $year,
+        array $selectedPropertyIds = [],
+        ?User $actor = null,
+        array $options = []
+    ): array {
         $preview = $this->getBulkPayoutPreview($month, $year);
+        $selectedIds = !empty($selectedPropertyIds) ? array_map('strval', $selectedPropertyIds) : null;
+
         $count = 0;
+        $totalAmount = 0.0;
+        $totalManagementFee = 0.0;
+        $totalAdvanceOffset = 0.0;
+        $generatedPayouts = [];
 
         foreach ($preview['items'] as $item) {
             if ($item['status'] === 'ready') {
+                if ($selectedIds !== null && !in_array((string) $item['property_id'], $selectedIds, true)) {
+                    continue;
+                }
+
                 $property = Property::find($item['property_id']);
                 if ($property) {
-                    $this->processPayoutAction->execute(
+                    $payout = $this->processPayoutAction->execute(
                         $property,
                         $item['billing_period_start'],
                         $item['billing_period_end'],
@@ -334,17 +372,41 @@ class OwnerPayoutService
                             'management_fee_percent' => $item['management_fee_percent'],
                             'advance_offset' => $item['advance_offset'],
                             'reserve_deduction' => $item['reserve_deduction'],
-                            'bank_account_id' => $bankAccountId,
+                            'bank_account_id' => $options['bank_account_id'] ?? null,
+                            'payout_date' => $options['payout_date'] ?? null,
                             'maintenance_invoice_ids' => $item['maintenance_invoice_ids'] ?? [],
-                            'notes' => "Monthly Owner Payout for {$preview['month_name']} (Period: {$item['formatted_period']})",
+                            'notes' => $options['notes'] ?? "Monthly Owner Payout for {$preview['month_name']} (Period: {$item['formatted_period']})",
                         ]
                     );
+
                     $count++;
+                    $totalAmount += (float) $payout->amount;
+                    $totalManagementFee += (float) $payout->management_fee;
+                    $totalAdvanceOffset += (float) $payout->advance_offset;
+
+                    $generatedPayouts[] = [
+                        'payout_id' => $payout->id,
+                        'property_id' => $property->id,
+                        'property_name' => $property->building_name ?? 'Property',
+                        'owner_name' => $property->owner?->display_name ?? 'Owner',
+                        'net_amount' => (float) $payout->amount,
+                        'management_fee' => (float) $payout->management_fee,
+                        'commission_invoice_number' => $payout->commissionInvoice?->invoice_number,
+                    ];
                 }
             }
         }
 
-        return $count;
+        return [
+            'count' => $count,
+            'total_amount' => $totalAmount,
+            'total_management_fee' => $totalManagementFee,
+            'total_advance_offset' => $totalAdvanceOffset,
+            'month' => $month,
+            'year' => $year,
+            'month_name' => $preview['month_name'],
+            'generated_payouts' => $generatedPayouts,
+        ];
     }
 
     protected function formatOwnerBankDetails(?Party $owner): string
@@ -363,5 +425,231 @@ class OwnerPayoutService
         }
 
         return 'No Bank Linked';
+    }
+
+    /**
+     * Get pending maintenance invoices and options for a property.
+     */
+    public function getPendingMaintenanceOptions(Property $property): array
+    {
+        $maintenanceRequestIds = \App\Domain\Maintenance\Models\MaintenanceRequest::where('property_id', $property->id)->pluck('id');
+        $unpaidMaintenanceInvoices = Invoice::where('reference_type', \App\Domain\Maintenance\Models\MaintenanceRequest::class)
+            ->whereIn('reference_id', $maintenanceRequestIds)
+            ->whereIn('status', [
+                \Tek2991\Accounting\Enums\InvoiceStatus::Draft,
+                \Tek2991\Accounting\Enums\InvoiceStatus::Sent,
+                \Tek2991\Accounting\Enums\InvoiceStatus::PartiallyPaid,
+            ])
+            ->get();
+
+        $options = [];
+        foreach ($unpaidMaintenanceInvoices as $mInv) {
+            $amt = (float) ($mInv->balance_due > 0 ? $mInv->balance_due : $mInv->grand_total);
+            if ($amt > 0) {
+                $req = \App\Domain\Maintenance\Models\MaintenanceRequest::find($mInv->reference_id);
+                $ticketNumber = $req?->ticket_number ?? 'TKT-' . substr($mInv->id, -4);
+                $title = $req?->title ?? 'Maintenance Work';
+                $label = "🔧 {$ticketNumber}: {$title} (Inv #{$mInv->invoice_number}) — ₹" . number_format($amt, 2);
+                $options[$mInv->id] = $label;
+            }
+        }
+
+        return $options;
+    }
+
+    /**
+     * Compile data structure for Owner Payout Statement & Remittance Advice PDF.
+     */
+    public function getPayoutStatementData(OwnerPayout $payout): array
+    {
+        $payout->loadMissing(['owner.bankAccounts', 'property', 'commissionInvoice', 'transaction']);
+
+        $owner = $payout->owner;
+        $property = $payout->property;
+        $commissionInvoice = $payout->commissionInvoice;
+        $transaction = $payout->transaction;
+
+        $agreement = $property?->agreements()->where('status', 'active')->first();
+        if (!$agreement && $payout->period_start) {
+            $agreement = $property?->agreements()
+                ->where('start_date', '<=', $payout->period_end)
+                ->where(function ($q) use ($payout) {
+                    $q->whereNull('end_date')->orWhere('end_date', '>=', $payout->period_start);
+                })
+                ->first();
+        }
+
+        $tenantRole = $agreement?->roles()->where('is_primary', true)->first() ?? $agreement?->roles()->first();
+        $tenant = $tenantRole?->party ?? $agreement?->tenantParty;
+
+        $primaryBank = $owner?->bankAccounts()->where('is_primary', true)->first() ?? $owner?->bankAccounts()->first();
+
+        // Linked maintenance deductions
+        $maintenanceDeductions = [];
+        if ($payout->advance_offset > 0 && $transaction) {
+            $mInvoices = Invoice::where('reference_type', \App\Domain\Maintenance\Models\MaintenanceRequest::class)
+                ->where('notes', 'like', "%{$transaction->reference}%")
+                ->get();
+            foreach ($mInvoices as $mInv) {
+                $maintenanceDeductions[] = [
+                    'invoice_number' => $mInv->invoice_number,
+                    'description' => $mInv->notes ?: "Maintenance Work for {$property?->building_name}",
+                    'amount' => (float) $mInv->grand_total,
+                ];
+            }
+        }
+
+        // Maintenance activity log for the property
+        $maintenanceActivity = [];
+        if ($property) {
+            $mRequests = \App\Domain\Maintenance\Models\MaintenanceRequest::where('property_id', $property->id)
+                ->where(function ($q) use ($payout) {
+                    if ($payout->period_start && $payout->period_end) {
+                        $q->whereBetween('created_at', [$payout->period_start->startOfDay(), $payout->period_end->endOfDay()])
+                          ->orWhereBetween('resolved_at', [$payout->period_start->startOfDay(), $payout->period_end->endOfDay()]);
+                    }
+                })
+                ->latest()
+                ->take(10)
+                ->get();
+
+            foreach ($mRequests as $req) {
+                $maintenanceActivity[] = [
+                    'ticket_number' => $req->ticket_number,
+                    'title' => $req->title,
+                    'category' => $req->category?->name ?? 'General Repair',
+                    'status' => is_object($req->status) && method_exists($req->status, 'getLabel') ? $req->status->getLabel() : (string) $req->status,
+                    'created_at' => $req->created_at?->format('d M Y'),
+                    'cost' => (float) (Invoice::where('reference_type', \App\Domain\Maintenance\Models\MaintenanceRequest::class)->where('reference_id', $req->id)->sum('grand_total') ?: ($req->estimated_cost ?? 0.0)),
+                ];
+            }
+        }
+
+        $totalCharges = (float) ($payout->management_fee + $payout->advance_offset + $payout->reserve_deduction);
+
+        return [
+            'payout' => $payout,
+            'owner' => $owner,
+            'property' => $property,
+            'agreement' => $agreement,
+            'tenant' => $tenant,
+            'commission_invoice' => $commissionInvoice,
+            'transaction' => $transaction,
+            'primary_bank' => $primaryBank,
+            'maintenance_deductions' => $maintenanceDeductions,
+            'maintenance_activity' => $maintenanceActivity,
+            'gross_rent' => (float) $payout->rent_collected,
+            'management_fee' => (float) $payout->management_fee,
+            'advance_offset' => (float) $payout->advance_offset,
+            'reserve_deduction' => (float) $payout->reserve_deduction,
+            'total_charges' => $totalCharges,
+            'net_payout' => (float) $payout->amount,
+            'formatted_period' => $payout->period_formatted,
+        ];
+    }
+
+    /**
+     * Compile comprehensive point-in-time document snapshot for the Owner Payout.
+     */
+    public function compilePayoutDocumentSnapshot(OwnerPayout $payout): array
+    {
+        $statementData = $this->getPayoutStatementData($payout);
+        $owner = $statementData['owner'];
+        $property = $statementData['property'];
+        $primaryBank = $statementData['primary_bank'];
+        $commissionInvoice = $statementData['commission_invoice'];
+        $branch = $payout->branch ?? \App\Models\Branch::first();
+
+        return [
+            'document_type' => 'owner_payout_statement',
+            'version' => '1.0',
+            'snapshot_created_at' => now()->toIso8601String(),
+            'payout_id' => $payout->id,
+            'period_start' => $payout->period_start?->toDateString(),
+            'period_end' => $payout->period_end?->toDateString(),
+            'formatted_period' => $payout->period_formatted,
+            'processed_at' => $payout->processed_at?->toIso8601String() ?? now()->toIso8601String(),
+            'owner' => [
+                'id' => $owner?->id,
+                'display_name' => $owner?->display_name ?? 'Property Owner',
+                'email' => $owner?->email,
+                'phone' => $owner?->phone,
+                'pan_number' => $owner?->individual?->pan_number,
+            ],
+            'property' => [
+                'id' => $property?->id,
+                'code' => $property?->code,
+                'building_name' => $property?->building_name ?? $property?->name,
+                'address' => $property?->address_line_1,
+                'city' => $property?->city,
+            ],
+            'disbursement_bank' => [
+                'bank_name' => $primaryBank?->bank_name ?? 'N/A',
+                'account_number' => $primaryBank?->account_number ?? 'N/A',
+                'account_number_masked' => $primaryBank ? ('••••' . substr($primaryBank->account_number ?? '0000', -4)) : 'N/A',
+                'ifsc_code' => $primaryBank?->ifsc_code ?? 'N/A',
+                'account_holder' => $primaryBank?->account_holder_name ?? $owner?->display_name,
+            ],
+            'company' => [
+                'name' => 'Dwelly Living Private Limited',
+                'branch_name' => $branch?->name ?? 'Headquarters',
+                'support_email' => 'finance@dwelly.in',
+                'support_phone' => '+91 98765 43210',
+            ],
+            'commission_invoice' => [
+                'id' => $commissionInvoice?->id,
+                'invoice_number' => $commissionInvoice?->invoice_number,
+                'amount' => (float) ($commissionInvoice?->grand_total ?? $payout->management_fee),
+                'status' => $commissionInvoice?->status->value ?? 'paid',
+            ],
+            'gross_rent' => (float) $payout->rent_collected,
+            'management_fee' => (float) $payout->management_fee,
+            'advance_offset' => (float) $payout->advance_offset,
+            'reserve_deduction' => (float) $payout->reserve_deduction,
+            'net_payout' => (float) $payout->amount,
+            'maintenance_deductions' => $statementData['maintenance_deductions'],
+            'transaction_reference' => $payout->transaction?->reference ?? ("PAYOUT-" . substr($payout->id, -8)),
+            'notes' => $payout->notes,
+        ];
+    }
+
+    /**
+     * Generate, store immutable PDF file, and update OwnerPayout metadata with snapshot and SHA-256 checksum.
+     */
+    public function generateAndStorePayoutPdf(OwnerPayout $payout, bool $force = false): string
+    {
+        $disk = Storage::disk('local');
+
+        if (!$force && !empty($payout->pdf_path) && $disk->exists($payout->pdf_path)) {
+            return $disk->path($payout->pdf_path);
+        }
+
+        $snapshot = $payout->document_snapshot ?: $this->compilePayoutDocumentSnapshot($payout);
+        $statementData = $this->getPayoutStatementData($payout);
+
+        $pdf = Pdf::loadView('pdf.owner_payout_statement', [
+            'payout' => $payout,
+            'statementData' => $statementData,
+            'snapshot' => $snapshot,
+        ]);
+
+        $pdfOutput = $pdf->output();
+        $checksum = hash('sha256', $pdfOutput);
+
+        $year = $payout->period_start ? $payout->period_start->format('Y') : date('Y');
+        $month = $payout->period_start ? $payout->period_start->format('m') : date('m');
+        $filename = "payout_{$payout->id}.pdf";
+        $relativePath = "documents/owner_payouts/{$year}/{$month}/{$filename}";
+
+        $disk->put($relativePath, $pdfOutput);
+
+        $payout->updateQuietly([
+            'document_snapshot' => $snapshot,
+            'pdf_path' => $relativePath,
+            'pdf_generated_at' => now(),
+            'pdf_checksum' => $checksum,
+        ]);
+
+        return $disk->path($relativePath);
     }
 }

@@ -4,8 +4,10 @@ namespace App\Domain\Finance\Services;
 
 use App\Domain\Agreement\Models\TenancyAgreement;
 use App\Domain\Finance\Services\AccountingProvisioningService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Tek2991\Accounting\Models\Account;
 use Tek2991\Accounting\Models\Invoice;
 use Tek2991\Accounting\Models\InvoiceItem;
@@ -24,9 +26,62 @@ class RentBillingService
     ) {}
 
     /**
-     * Calculate billing period, proration status, and rent amount for an agreement and billing month/year.
+     * Get pending, unpaid maintenance invoices for a tenancy agreement (tenant recovery).
      */
-    public function calculateBillingDetails(TenancyAgreement $agreement, int $month, int $year): array
+    public function getPendingMaintenanceOptions(TenancyAgreement $agreement): array
+    {
+        $tenantParty = $agreement->tenantParty ?? $agreement->party;
+        $tenantContactId = $tenantParty?->accountingContact?->id;
+
+        $maintRequests = \App\Domain\Maintenance\Models\MaintenanceRequest::where('property_id', $agreement->property_id)
+            ->where(function ($q) use ($tenantParty) {
+                if ($tenantParty) {
+                    $q->where('tenant_id', $tenantParty->id)
+                      ->orWhere('tenant_amount', '>', 0);
+                } else {
+                    $q->where('tenant_amount', '>', 0);
+                }
+            })
+            ->pluck('id');
+
+        $query = Invoice::where('reference_type', \App\Domain\Maintenance\Models\MaintenanceRequest::class)
+            ->whereIn('reference_id', $maintRequests)
+            ->whereIn('status', [
+                InvoiceStatus::Draft,
+                InvoiceStatus::Sent,
+                InvoiceStatus::PartiallyPaid,
+            ]);
+
+        if ($tenantContactId) {
+            $query->orWhere(function ($q) use ($tenantContactId, $maintRequests) {
+                $q->where('contact_id', $tenantContactId)
+                  ->whereIn('reference_id', $maintRequests)
+                  ->whereIn('status', [
+                      InvoiceStatus::Draft,
+                      InvoiceStatus::Sent,
+                      InvoiceStatus::PartiallyPaid,
+                  ]);
+            });
+        }
+
+        return $query->get()->map(function (Invoice $mInv) {
+            $req = \App\Domain\Maintenance\Models\MaintenanceRequest::find($mInv->reference_id);
+            $amt = (float) ($mInv->balance_due > 0 ? $mInv->balance_due : $mInv->grand_total);
+
+            return [
+                'id' => $mInv->id,
+                'invoice_number' => $mInv->invoice_number,
+                'ticket_number' => $req?->ticket_number ?? 'TKT-' . substr($mInv->id, -4),
+                'title' => $req?->title ?? 'Maintenance Work',
+                'amount' => $amt,
+            ];
+        })->toArray();
+    }
+
+    /**
+     * Calculate billing period, proration status, rent amount, and tenant maintenance add-ons.
+     */
+    public function calculateBillingDetails(TenancyAgreement $agreement, int $month, int $year, ?array $selectedMaintenanceInvoiceIds = null): array
     {
         $monthStart = Carbon::create($year, $month, 1)->startOfDay();
         $monthEnd = $monthStart->copy()->endOfMonth()->startOfDay();
@@ -58,6 +113,8 @@ class RentBillingService
                 'standard_rent' => (float) ($agreement->rent_amount ?? 0),
                 'utility_amount' => 0.0,
                 'maintenance_amount' => 0.0,
+                'maintenance_invoices' => [],
+                'maintenance_invoice_ids' => [],
                 'total_amount' => 0.0,
             ];
         }
@@ -79,6 +136,8 @@ class RentBillingService
                 'standard_rent' => (float) ($agreement->rent_amount ?? 0),
                 'utility_amount' => 0.0,
                 'maintenance_amount' => 0.0,
+                'maintenance_invoices' => [],
+                'maintenance_invoice_ids' => [],
                 'total_amount' => 0.0,
             ];
         }
@@ -122,6 +181,20 @@ class RentBillingService
             $rentAmount = $standardRent;
         }
 
+        // 5. Tenant-Payable Maintenance Invoices
+        $pendingMaintenance = $this->getPendingMaintenanceOptions($agreement);
+        $maintenanceItems = [];
+        $maintenanceAmount = 0.0;
+
+        foreach ($pendingMaintenance as $mItem) {
+            if ($selectedMaintenanceInvoiceIds === null || in_array($mItem['id'], $selectedMaintenanceInvoiceIds)) {
+                $maintenanceItems[] = $mItem;
+                $maintenanceAmount += (float) $mItem['amount'];
+            }
+        }
+
+        $totalAmount = round($rentAmount + $maintenanceAmount, 2);
+
         return [
             'eligible' => true,
             'reason' => null,
@@ -137,8 +210,10 @@ class RentBillingService
             'rent_amount' => $rentAmount,
             'standard_rent' => $standardRent,
             'utility_amount' => 0.0,
-            'maintenance_amount' => 0.0,
-            'total_amount' => $rentAmount,
+            'maintenance_amount' => $maintenanceAmount,
+            'maintenance_invoices' => $maintenanceItems,
+            'maintenance_invoice_ids' => array_column($maintenanceItems, 'id'),
+            'total_amount' => $totalAmount,
         ];
     }
 
@@ -158,6 +233,8 @@ class RentBillingService
         $alreadyGeneratedCount = 0;
         $ineligibleCount = 0;
         $totalReadyAmount = 0.0;
+        $totalBaseRent = 0.0;
+        $totalMaintenanceAmount = 0.0;
 
         foreach ($agreements as $agreement) {
             $details = $this->calculateBillingDetails($agreement, $month, $year);
@@ -200,14 +277,20 @@ class RentBillingService
                 $badgeColor = 'success';
                 $readyCount++;
                 $totalReadyAmount += $details['total_amount'];
+                $totalBaseRent += $details['rent_amount'];
+                $totalMaintenanceAmount += $details['maintenance_amount'];
             }
 
             $items[] = [
                 'agreement_id' => $agreement->id,
                 'agreement_code' => $agreement->code,
                 'tenant_name' => $tenantName,
+                'property_id' => $agreement->property_id,
                 'property_name' => $propertyName,
                 'property_code' => $propertyCode,
+                'owner_name' => $agreement->property?->owner?->display_name ?? 'Property Owner',
+                'agreement_url' => \App\Filament\Resources\TenancyAgreements\TenancyAgreementResource::getUrl('edit', ['record' => $agreement->id]),
+                'property_url' => $agreement->property_id ? \App\Filament\Resources\Properties\PropertyResource::getUrl('edit', ['record' => $agreement->property_id]) : null,
                 'handover_date_formatted' => $details['handover_date_formatted'],
                 'billing_period_start' => $details['billing_period_start'],
                 'billing_period_end' => $details['billing_period_end'],
@@ -220,6 +303,8 @@ class RentBillingService
                 'standard_rent' => $details['standard_rent'],
                 'utility_amount' => $details['utility_amount'],
                 'maintenance_amount' => $details['maintenance_amount'],
+                'maintenance_invoices' => $details['maintenance_invoices'],
+                'maintenance_invoice_ids' => $details['maintenance_invoice_ids'],
                 'total_amount' => $details['total_amount'],
                 'status' => $status,
                 'status_label' => $statusLabel,
@@ -238,6 +323,8 @@ class RentBillingService
                 'ready_count' => $readyCount,
                 'already_generated_count' => $alreadyGeneratedCount,
                 'ineligible_count' => $ineligibleCount,
+                'total_base_rent' => $totalBaseRent,
+                'total_maintenance_amount' => $totalMaintenanceAmount,
                 'total_ready_amount' => $totalReadyAmount,
             ],
             'items' => $items,
@@ -245,9 +332,9 @@ class RentBillingService
     }
 
     /**
-     * Generate a Rent Invoice (Tek2991\Accounting\Models\Invoice) for a Tenancy Agreement.
+     * Generate a Rent Demand (Tek2991\Accounting\Models\Invoice) for a Tenancy Agreement.
      */
-    public function generateRentInvoice(
+    public function generateRentDemand(
         TenancyAgreement $agreement,
         int $month,
         int $year,
@@ -355,7 +442,42 @@ class RentBillingService
                 ]);
             }
 
-            if ($maintenanceAmount > 0) {
+            // Add Tenant-payable Maintenance Invoices (Itemized & Settled)
+            $selectedMaintIds = $overrides['selected_maintenance_invoice_ids'] ?? $calc['maintenance_invoice_ids'] ?? [];
+            if (!empty($selectedMaintIds)) {
+                $maintInvoices = Invoice::whereIn('id', $selectedMaintIds)->get();
+                $maintIncomeAccount = $this->provisioningService->getMaintenanceIncomeAccount() 
+                    ?? Account::where('name', 'like', '%Maintenance%')->first();
+
+                $lineOrder = 3;
+                foreach ($maintInvoices as $mInv) {
+                    $req = \App\Domain\Maintenance\Models\MaintenanceRequest::find($mInv->reference_id);
+                    $mAmount = (float) ($mInv->balance_due > 0 ? $mInv->balance_due : $mInv->grand_total);
+                    $ticketNo = $req?->ticket_number ?? 'TKT-' . substr($mInv->id, -4);
+                    $title = $req?->title ?? 'Maintenance Work';
+
+                    InvoiceItem::create([
+                        'invoice_id' => $invoice->id,
+                        'line_type' => DocumentLineType::Account,
+                        'sort_order' => $lineOrder++,
+                        'description' => "Maintenance Recovery (#{$ticketNo}: {$title})",
+                        'quantity' => 1,
+                        'unit_price' => $mAmount,
+                        'line_total' => $mAmount,
+                        'gross_amount' => $mAmount,
+                        'net_amount' => $mAmount,
+                        'income_account_id' => $maintIncomeAccount?->id ?? $ownerPayableAccount?->id,
+                    ]);
+
+                    // Settle underlying maintenance invoice to prevent double-billing
+                    $mInv->update([
+                        'status' => InvoiceStatus::Paid,
+                        'paid_amount' => $mInv->grand_total,
+                        'balance_due' => 0.0,
+                        'notes' => trim(($mInv->notes ?? '') . " | Consolidated into Rent Demand #{$invoice->invoice_number}"),
+                    ]);
+                }
+            } elseif ($maintenanceAmount > 0) {
                 $maintIncomeAccount = $this->provisioningService->getMaintenanceIncomeAccount();
                 InvoiceItem::create([
                     'invoice_id' => $invoice->id,
@@ -377,23 +499,59 @@ class RentBillingService
             $this->invoiceService->post($invoice);
             $invoice->refresh();
 
+            // Compile document snapshot & render immutable stored PDF
+            $this->generateAndStoreDemandPdf($invoice);
+
             return $invoice;
         });
     }
 
     /**
-     * Bulk generate rent invoices for all eligible active tenancies or selected tenancies.
-     *
-     * @param int $month
-     * @param int $year
-     * @param array<string|int>|null $selectedAgreementIds
-     * @param string|int|null $propertyId
-     * @return int
+     * Backward-compatible alias for generateRentDemand.
      */
-    public function bulkGenerateRentInvoices(int $month, int $year, ?array $selectedAgreementIds = null, string|int|null $propertyId = null): int
+    public function generateRentInvoice(TenancyAgreement $agreement, int $month, int $year, array $overrides = []): Invoice
     {
+        return $this->generateRentDemand($agreement, $month, $year, $overrides);
+    }
+
+    /**
+     * Bulk generate rent demands for all eligible active tenancies or selected tenancies.
+     */
+    public function bulkGenerateRentDemands(
+        int $month,
+        int $year,
+        ?array $selectedAgreementIds = null,
+        string|int|null $propertyId = null,
+        array $options = []
+    ): int {
+        $summary = $this->bulkGenerateRentDemandsWithSummary($month, $year, $selectedAgreementIds, $propertyId, $options);
+        return $summary['count'];
+    }
+
+    public function bulkGenerateRentInvoices(
+        int $month,
+        int $year,
+        ?array $selectedAgreementIds = null,
+        string|int|null $propertyId = null,
+        array $options = []
+    ): int {
+        return $this->bulkGenerateRentDemands($month, $year, $selectedAgreementIds, $propertyId, $options);
+    }
+
+    /**
+     * Bulk generate rent demands and return a detailed summary.
+     */
+    public function bulkGenerateRentDemandsWithSummary(
+        int $month,
+        int $year,
+        ?array $selectedAgreementIds = null,
+        string|int|null $propertyId = null,
+        array $options = []
+    ): array {
         $preview = $this->getBulkGenerationPreview($month, $year, $propertyId);
-        $count = 0;
+        $generated = [];
+        $errors = [];
+        $totalAmount = 0.0;
 
         // Normalise selectedAgreementIds to strings for exact comparison (supports ULID and int IDs)
         $selectedIds = $selectedAgreementIds !== null ? array_map('strval', $selectedAgreementIds) : null;
@@ -406,23 +564,56 @@ class RentBillingService
 
                 $agreement = TenancyAgreement::find($item['agreement_id']);
                 if ($agreement) {
-                    $this->generateRentInvoice($agreement, $month, $year, [
-                        'billing_period_start' => $item['billing_period_start'],
-                        'billing_period_end' => $item['billing_period_end'],
-                        'rent_amount' => $item['rent_amount'],
-                        'utility_amount' => $item['utility_amount'],
-                        'maintenance_amount' => $item['maintenance_amount'],
-                    ]);
-                    $count++;
+                    try {
+                        $overrides = array_merge([
+                            'billing_period_start' => $item['billing_period_start'],
+                            'billing_period_end' => $item['billing_period_end'],
+                            'rent_amount' => $item['rent_amount'],
+                            'utility_amount' => $item['utility_amount'],
+                            'maintenance_amount' => $item['maintenance_amount'],
+                            'selected_maintenance_invoice_ids' => $item['maintenance_invoice_ids'] ?? [],
+                        ], $options);
+
+                        $invoice = $this->generateRentDemand($agreement, $month, $year, $overrides);
+                        $generated[] = [
+                            'invoice_id' => $invoice->id,
+                            'invoice_number' => $invoice->invoice_number,
+                            'agreement_code' => $agreement->code,
+                            'tenant_name' => $item['tenant_name'],
+                            'property_name' => $item['property_name'],
+                            'total_amount' => (float) $item['total_amount'],
+                        ];
+                        $totalAmount += (float) $item['total_amount'];
+                    } catch (\Throwable $e) {
+                        $errors[] = [
+                            'agreement_code' => $agreement->code,
+                            'error' => $e->getMessage(),
+                        ];
+                    }
                 }
             }
         }
 
-        return $count;
+        return [
+            'count' => count($generated),
+            'generated_invoices' => $generated,
+            'total_amount' => $totalAmount,
+            'errors' => $errors,
+        ];
+    }
+
+    public function bulkGenerateRentInvoicesWithSummary(
+        int $month,
+        int $year,
+        ?array $selectedAgreementIds = null,
+        string|int|null $propertyId = null,
+        array $options = []
+    ): array {
+        return $this->bulkGenerateRentDemandsWithSummary($month, $year, $selectedAgreementIds, $propertyId, $options);
     }
 
     /**
-     * Record payment against a Rent Invoice.
+     * Record payment against a Rent Demand.
      */
     public function recordPayment(Invoice $invoice, float $amount, ?int $bankAccountId = null, ?string $paymentDate = null, ?string $reference = null, ?string $notes = null): Payment
     {
@@ -442,5 +633,196 @@ class RentBillingService
 
         return $this->invoiceService->recordPayment($invoice, $paymentData);
     }
+
+    /**
+     * Compile comprehensive Monthly Rent Demand Notice & Statement data for PDF rendering.
+     */
+    public function getMonthlyDemandNoticeData(Invoice $invoice): array
+    {
+        $invoice->loadMissing(['items', 'contact', 'payments', 'branch']);
+
+        $agreement = null;
+        if ($invoice->reference_type === TenancyAgreement::class && $invoice->reference_id) {
+            $agreement = TenancyAgreement::with(['property.owner', 'primaryTenant.party', 'roles.party'])->find($invoice->reference_id);
+        }
+
+        $property = $agreement?->property;
+        $owner = $property?->owner;
+        if (!$owner && $property?->id) {
+            $mouPartyId = \App\Domain\Mou\Models\Mou::where('property_id', $property->id)
+                ->whereNotNull('party_id')
+                ->latest()
+                ->value('party_id');
+            if ($mouPartyId) {
+                $owner = \App\Domain\Party\Models\Party::find($mouPartyId);
+            }
+        }
+        if (!$owner) {
+            $owner = \App\Domain\Party\Models\Party::whereHas('ownerProfile')->first();
+        }
+
+        $primaryRole = $agreement?->roles?->where('is_primary', true)->first() ?? $agreement?->roles?->first();
+        $tenant = $primaryRole?->party ?? $agreement?->primaryTenant?->party ?? $agreement?->tenantParty ?? $agreement?->party;
+
+        // Calculate previous ledger dues before this demand's issue date
+        $previousBalance = 0.0;
+        if ($agreement) {
+            $previousBalance = (float) Invoice::where('reference_type', TenancyAgreement::class)
+                ->where('reference_id', $agreement->id)
+                ->where('id', '!=', $invoice->id)
+                ->where('issue_date', '<', $invoice->issue_date ?? now())
+                ->where('status', '!=', InvoiceStatus::Cancelled)
+                ->sum('balance_due');
+        }
+
+        return [
+            'invoice' => $invoice,
+            'agreement' => $agreement,
+            'property' => $property,
+            'owner' => $owner,
+            'tenant' => $tenant,
+            'previous_balance' => $previousBalance,
+            'current_demand' => (float) $invoice->grand_total,
+            'amount_paid' => (float) $invoice->amount_paid,
+            'balance_due' => (float) $invoice->balance_due,
+            'total_payable' => (float) $invoice->balance_due + $previousBalance,
+        ];
+    }
+
+    /**
+     * Compile comprehensive point-in-time document snapshot payload for immutability.
+     */
+    public function compileDocumentSnapshot(Invoice $invoice): array
+    {
+        $noticeData = $this->getMonthlyDemandNoticeData($invoice);
+
+        $agreement = $noticeData['agreement'];
+        $property = $noticeData['property'];
+        $owner = $noticeData['owner'];
+        $tenant = $noticeData['tenant'];
+        $branch = $invoice->branch ?? \App\Models\Branch::first();
+
+        $items = $invoice->items->map(function ($item) {
+            return [
+                'id' => $item->id,
+                'description' => $item->description,
+                'quantity' => (float) $item->quantity,
+                'unit_price' => (float) $item->unit_price,
+                'line_total' => (float) $item->line_total,
+                'gross_amount' => (float) $item->gross_amount,
+            ];
+        })->toArray();
+
+        return [
+            'document_type' => 'rent_demand_notice',
+            'version' => '1.0',
+            'snapshot_created_at' => now()->toIso8601String(),
+            'demand_number' => $invoice->invoice_number,
+            'issue_date' => $invoice->issue_date?->toDateString(),
+            'due_date' => $invoice->due_date?->toDateString(),
+            'billing_period_start' => $invoice->billing_period_start?->toDateString(),
+            'billing_period_end' => $invoice->billing_period_end?->toDateString(),
+            'billing_period_formatted' => $invoice->billing_period_formatted,
+            'currency_code' => $invoice->currency_code ?? 'INR',
+            'agreement' => [
+                'id' => $agreement?->id,
+                'code' => $agreement?->code,
+                'start_date' => $agreement?->start_date?->toDateString(),
+                'end_date' => $agreement?->end_date?->toDateString(),
+                'rent_amount' => (float) ($agreement?->rent_amount ?? 0),
+            ],
+            'tenant' => [
+                'id' => $tenant?->id,
+                'display_name' => $tenant?->display_name ?? $invoice->contact?->name ?? 'Tenant',
+                'email' => $tenant?->email ?? $invoice->contact?->email,
+                'phone' => $tenant?->phone ?? $invoice->contact?->phone,
+                'pan_number' => $tenant?->individual?->pan_number,
+                'address' => $invoice->contact?->billing_address ?? $tenant?->address,
+            ],
+            'owner' => [
+                'id' => $owner?->id,
+                'display_name' => $owner?->display_name ?? $owner?->name ?? 'Property Owner',
+                'email' => $owner?->email,
+                'phone' => $owner?->phone,
+                'pan_number' => $owner?->individual?->pan_number,
+            ],
+            'property' => [
+                'id' => $property?->id,
+                'code' => $property?->code,
+                'building_name' => $property?->building_name ?? $property?->name,
+                'unit_number' => $property?->unit_number ?? $property?->flat_number,
+                'address_line_1' => $property?->address_line_1,
+                'address_line_2' => $property?->address_line_2,
+                'city' => $property?->city,
+                'pincode' => $property?->pincode,
+            ],
+            'company' => [
+                'name' => 'Dwelly Living Private Limited',
+                'legal_name' => 'Dwelly Living Private Limited',
+                'branch_name' => $branch?->name ?? 'Headquarters',
+                'support_email' => 'finance@dwelly.in',
+                'support_phone' => '+91 98765 43210',
+                'website' => 'https://dwelly.in',
+                'bank_name' => 'HDFC Bank Ltd',
+                'account_name' => 'Dwelly Living Pvt Ltd - Escrow / Client Holding A/C',
+                'account_number' => '50200012345678',
+                'ifsc_code' => 'HDFC0001234',
+                'upi_id' => 'dwelly.holding@hdfcbank',
+            ],
+            'items' => $items,
+            'current_demand' => (float) $invoice->grand_total,
+            'previous_balance' => (float) ($noticeData['previous_balance'] ?? 0.0),
+            'amount_paid' => (float) $invoice->amount_paid,
+            'balance_due' => (float) $invoice->balance_due,
+            'total_payable' => (float) ($noticeData['total_payable'] ?? $invoice->balance_due),
+            'notes' => $invoice->notes,
+            'terms' => $invoice->terms,
+        ];
+    }
+
+    /**
+     * Generate, store immutable PDF file, and update invoice metadata with snapshot and SHA-256 checksum.
+     */
+    public function generateAndStoreDemandPdf(Invoice $invoice, bool $force = false): string
+    {
+        $disk = Storage::disk('local');
+
+        if (!$force && !empty($invoice->pdf_path) && $disk->exists($invoice->pdf_path)) {
+            return $disk->path($invoice->pdf_path);
+        }
+
+        // 1. Ensure snapshot is compiled and persisted
+        $snapshot = $invoice->document_snapshot ?: $this->compileDocumentSnapshot($invoice);
+        $noticeData = $this->getMonthlyDemandNoticeData($invoice);
+
+        // 2. Render PDF
+        $pdf = Pdf::loadView('pdf.rent_demand_notice', [
+            'invoice' => $invoice,
+            'noticeData' => $noticeData,
+            'snapshot' => $snapshot,
+        ]);
+
+        $pdfOutput = $pdf->output();
+        $checksum = hash('sha256', $pdfOutput);
+
+        // 3. Store to immutable directory structure: documents/rent_demands/{year}/{month}/demand_{invoice_number}.pdf
+        $year = $invoice->billing_period_start ? $invoice->billing_period_start->format('Y') : date('Y');
+        $month = $invoice->billing_period_start ? $invoice->billing_period_start->format('m') : date('m');
+        $filename = "demand_{$invoice->invoice_number}.pdf";
+        $relativePath = "documents/rent_demands/{$year}/{$month}/{$filename}";
+
+        $disk->put($relativePath, $pdfOutput);
+
+        // 4. Update database record with snapshot, storage path, generation timestamp, and checksum
+        $invoice->updateQuietly([
+            'document_snapshot' => $snapshot,
+            'pdf_path' => $relativePath,
+            'pdf_generated_at' => now(),
+            'pdf_checksum' => $checksum,
+        ]);
+
+        return $disk->path($relativePath);
+    }
 }
+
 

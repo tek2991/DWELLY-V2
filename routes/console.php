@@ -8,6 +8,6 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 use Illuminate\Support\Facades\Schedule;
-use App\Console\Commands\GenerateMonthlyRentInvoices;
+use App\Console\Commands\GenerateMonthlyRent;
 
-Schedule::command(GenerateMonthlyRentInvoices::class)->monthlyOn(1, '00:00');
+Schedule::command(GenerateMonthlyRent::class)->monthlyOn(1, '00:00');

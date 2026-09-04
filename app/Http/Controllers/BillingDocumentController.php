@@ -8,10 +8,43 @@ use Tek2991\Accounting\Models\Invoice;
 use Tek2991\Accounting\Models\Payment;
 use Tek2991\Accounting\Services\InvoiceService;
 
+use App\Domain\Finance\Services\RentBillingService;
+use App\Domain\Agreement\Models\TenancyAgreement;
+
 class BillingDocumentController extends Controller
 {
-    public function downloadInvoice(Invoice $invoice, InvoiceService $invoiceService)
+    public function streamDemandNotice(Invoice $invoice, RentBillingService $rentBillingService)
     {
+        $filePath = $rentBillingService->generateAndStoreDemandPdf($invoice);
+
+        return response()->file($filePath, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="Rent-Demand-' . $invoice->invoice_number . '.pdf"',
+            'Cache-Control' => 'no-cache, no-store, must-revalidate',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
+        ]);
+    }
+
+    public function streamOwnerPayoutStatement(\App\Domain\Finance\Models\OwnerPayout $payout, \App\Domain\Finance\Services\OwnerPayoutService $ownerPayoutService)
+    {
+        $filePath = $ownerPayoutService->generateAndStorePayoutPdf($payout);
+
+        return response()->file($filePath, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="Owner-Payout-' . $payout->id . '.pdf"',
+            'Cache-Control' => 'no-cache, no-store, must-revalidate',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
+        ]);
+    }
+
+    public function downloadInvoice(Invoice $invoice, InvoiceService $invoiceService, RentBillingService $rentBillingService)
+    {
+        if ($invoice->reference_type === TenancyAgreement::class || str_contains((string) $invoice->notes, 'Rent')) {
+            return $this->streamDemandNotice($invoice, $rentBillingService);
+        }
+
         $invoice->loadMissing(['items.tax', 'items.item', 'contact']);
         $view = view()->exists('accounting::pdf.invoice') ? 'accounting::pdf.invoice' : 'pdf.invoice';
         $pdf = Pdf::loadView($view, ['invoice' => $invoice]);

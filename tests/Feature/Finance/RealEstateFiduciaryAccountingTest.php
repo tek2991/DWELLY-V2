@@ -253,6 +253,26 @@ class RealEstateFiduciaryAccountingTest extends TestCase
         $this->assertEquals(13000.00, $payout->amount);
         $this->assertEquals('completed', $payout->status);
 
+        // Verify Commission Sales Invoice is created for the Owner
+        $this->assertNotNull($payout->commission_invoice_id, "Owner payout must generate a linked commission invoice.");
+        $commInvoice = $payout->commissionInvoice;
+        $this->assertNotNull($commInvoice);
+        $this->assertEquals(2000.00, (float) $commInvoice->grand_total);
+        $this->assertEquals(\Tek2991\Accounting\Enums\InvoiceStatus::Paid, $commInvoice->status);
+
+        // Verify Document Snapshot and Immutable PDF
+        $this->assertTrue($payout->hasStoredPdf(), "Owner Payout Statement PDF must be generated and stored on disk.");
+        $this->assertNotNull($payout->pdf_checksum);
+        $this->assertEquals(64, strlen($payout->pdf_checksum));
+        $this->assertIsArray($payout->document_snapshot);
+        $this->assertEquals('owner_payout_statement', $payout->document_snapshot['document_type']);
+        $this->assertEquals(2000.00, $payout->document_snapshot['commission_invoice']['amount']);
+
+        // Verify Payout PDF Route
+        $response = $this->actingAs($this->user)->get(route('billing.payout.pdf', ['payout' => $payout]));
+        $response->assertStatus(200);
+        $response->assertHeader('Content-Type', 'application/pdf');
+
         // Verify P&L Revenue is ONLY the ₹2,000 Commission Fee!
         $totalRevenue = $accountService->getTypeTotal(AccountType::Revenue, '2026-07-01', '2026-07-31');
         $this->assertEquals(2000.00, $totalRevenue->getDecimal(), "P&L Revenue must strictly reflect the ₹2,000 commission fee!");

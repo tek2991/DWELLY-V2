@@ -204,4 +204,9 @@ class TenantDeboarding extends DomainModel implements HasMedia
             $this->excess_due_from_tenant = round(abs($netRefund), 2);
         }
     }
+
+    public function tasks(): \Illuminate\Database\Eloquent\Relations\MorphMany
+    {
+        return $this->morphMany(\App\Domain\Task\Models\Task::class, 'taskable');
+    }
 }

@@ -215,7 +215,7 @@
                         <td style="text-align: right; font-weight: bold; font-size: 10.5px; padding: 2px 0 2px 8px; width: 140px;">{{ $receiptNo }}</td>
                     </tr>
                     <tr>
-                        <td style="text-align: right; color: #64748b; font-size: 10px; padding: 2px 0;">Invoice Number:</td>
+                        <td style="text-align: right; color: #64748b; font-size: 10px; padding: 2px 0;">Demand / Ref No:</td>
                         <td style="text-align: right; font-weight: bold; font-size: 10.5px; padding: 2px 0 2px 8px;">{{ $invoice->invoice_number }}</td>
                     </tr>
                     <tr>
@@ -283,8 +283,8 @@
                     </div>
                 @endif
                 <div class="info-row">
-                    <span class="info-label">Invoice Purpose:</span>
-                    <span class="info-value">{{ $invoice->notes ?? "Invoice {$invoice->invoice_number}" }}</span>
+                    <span class="info-label">Demand Purpose:</span>
+                    <span class="info-value">{{ $invoice->notes ?? "Rent Demand {$invoice->invoice_number}" }}</span>
                 </div>
                 @if($payment->notes)
                     <div class="info-row">
@@ -302,12 +302,12 @@
         <div class="amount-banner-val">&#8377; {{ number_format((float) $payment->amount, 2) }}</div>
     </div>
 
-    {{-- Invoice Settlement Breakdown Table --}}
+    {{-- Settlement Breakdown Table --}}
     <table class="summary-table">
         <thead>
             <tr>
-                <th style="width: 40%;">Invoice Reference</th>
-                <th class="text-right" style="width: 20%;">Total Invoice Amt</th>
+                <th style="width: 40%;">Demand / Charge Reference</th>
+                <th class="text-right" style="width: 20%;">Total Demand Amt</th>
                 <th class="text-right" style="width: 20%;">This Payment</th>
                 <th class="text-right" style="width: 20%;">Remaining Balance</th>
             </tr>
@@ -315,7 +315,7 @@
         <tbody>
             <tr>
                 <td>
-                    <strong>Invoice #{{ $invoice->invoice_number }}</strong>
+                    <strong>Ref #{{ $invoice->invoice_number }}</strong>
                     <div style="font-size: 9.5px; color: #64748b; margin-top: 2px;">
                         {{ $invoice->notes ?? 'Rent / Maintenance Settlement' }}
                     </div>

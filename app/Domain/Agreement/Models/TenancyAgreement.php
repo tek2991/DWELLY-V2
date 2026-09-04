@@ -136,5 +136,10 @@ class TenancyAgreement extends DomainModel implements HasMedia
     {
         return $this->hasOne(TenantDeboarding::class, 'tenancy_agreement_id');
     }
+
+    public function tasks(): \Illuminate\Database\Eloquent\Relations\MorphMany
+    {
+        return $this->morphMany(\App\Domain\Task\Models\Task::class, 'taskable');
+    }
 }
 

@@ -16,6 +16,7 @@ class OwnerPayout extends DomainModel
         'owner_id',
         'property_id',
         'transaction_id',
+        'commission_invoice_id',
         'period_start',
         'period_end',
         'rent_collected',
@@ -25,6 +26,10 @@ class OwnerPayout extends DomainModel
         'amount',
         'status',
         'notes',
+        'document_snapshot',
+        'pdf_path',
+        'pdf_generated_at',
+        'pdf_checksum',
         'processed_at',
     ];
 
@@ -36,6 +41,8 @@ class OwnerPayout extends DomainModel
         'amount' => 'decimal:2',
         'period_start' => 'date',
         'period_end' => 'date',
+        'document_snapshot' => 'array',
+        'pdf_generated_at' => 'datetime',
         'processed_at' => 'datetime',
     ];
 
@@ -54,12 +61,30 @@ class OwnerPayout extends DomainModel
         return $this->belongsTo(\Tek2991\Accounting\Models\Transaction::class, 'transaction_id');
     }
 
+    public function commissionInvoice(): BelongsTo
+    {
+        return $this->belongsTo(\Tek2991\Accounting\Models\Invoice::class, 'commission_invoice_id');
+    }
+
     public function getPeriodFormattedAttribute(): ?string
     {
         if ($this->period_start && $this->period_end) {
             return $this->period_start->format('d M Y') . ' – ' . $this->period_end->format('d M Y');
         } elseif ($this->period_start) {
             return $this->period_start->format('d M Y');
+        }
+        return null;
+    }
+
+    public function hasStoredPdf(): bool
+    {
+        return !empty($this->pdf_path) && \Illuminate\Support\Facades\Storage::disk('local')->exists($this->pdf_path);
+    }
+
+    public function getStoredPdfAbsolutePath(): ?string
+    {
+        if ($this->hasStoredPdf()) {
+            return \Illuminate\Support\Facades\Storage::disk('local')->path($this->pdf_path);
         }
         return null;
     }

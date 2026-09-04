@@ -185,9 +185,23 @@ class OwnerPayoutBillingPeriodTest extends TestCase
         $payout = OwnerPayout::where('property_id', $this->property->id)->first();
         $this->assertNotNull($payout);
         $this->assertEquals(9000.00, $payout->amount);
+        $this->assertEquals(1000.00, $payout->management_fee);
         $this->assertEquals('completed', $payout->status);
         $this->assertEquals('2026-08-01', $payout->period_start->toDateString());
         $this->assertEquals('2026-08-31', $payout->period_end->toDateString());
+
+        // Verify Commission Sales Invoice
+        $this->assertNotNull($payout->commission_invoice_id);
+        $this->assertNotNull($payout->commissionInvoice);
+        $this->assertEquals(1000.00, (float) $payout->commissionInvoice->grand_total);
+        $this->assertEquals(\Tek2991\Accounting\Enums\InvoiceStatus::Paid, $payout->commissionInvoice->status);
+
+        // Verify PDF and Snapshot Storage
+        $this->assertTrue($payout->hasStoredPdf());
+        $this->assertNotNull($payout->pdf_checksum);
+        $this->assertEquals(64, strlen($payout->pdf_checksum));
+        $this->assertIsArray($payout->document_snapshot);
+        $this->assertEquals('owner_payout_statement', $payout->document_snapshot['document_type']);
 
         // Idempotency: re-running should find 0 ready
         $previewAfter = $payoutService->getBulkPayoutPreview(8, 2026);

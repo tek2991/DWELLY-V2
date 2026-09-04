@@ -2,9 +2,9 @@
 
 namespace App\Filament\Resources\Billing;
 
-use App\Filament\Resources\Billing\Pages\ListRentInvoices;
-use App\Filament\Resources\Billing\Schemas\RentInvoiceForm;
-use App\Filament\Resources\Billing\Tables\RentInvoicesTable;
+use App\Filament\Resources\Billing\Pages\ListRentDemands;
+use App\Filament\Resources\Billing\Schemas\RentDemandForm;
+use App\Filament\Resources\Billing\Tables\RentDemandsTable;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -13,28 +13,28 @@ use Filament\Tables\Table;
 use Tek2991\Accounting\Models\Invoice;
 use App\Domain\Agreement\Models\TenancyAgreement;
 
-class RentInvoicesResource extends Resource
+class RentDemandsResource extends Resource
 {
     protected static ?string $model = Invoice::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDocumentText;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;
 
     protected static \UnitEnum|string|null $navigationGroup = 'Billing & Finance';
 
-    protected static ?string $navigationLabel = 'Rent Invoices & Receipts';
+    protected static ?string $navigationLabel = 'Rent Demands & Collections';
 
-    protected static ?string $modelLabel = 'Rent Invoice';
+    protected static ?string $modelLabel = 'Rent Demand';
 
-    protected static ?string $pluralModelLabel = 'Rent Invoices & Receipts';
+    protected static ?string $pluralModelLabel = 'Rent Demands & Receipts';
 
     public static function form(Schema $schema): Schema
     {
-        return RentInvoiceForm::configure($schema);
+        return RentDemandForm::configure($schema);
     }
 
     public static function table(Table $table): Table
     {
-        return RentInvoicesTable::configure($table);
+        return RentDemandsTable::configure($table);
     }
 
     public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
@@ -54,7 +54,7 @@ class RentInvoicesResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => ListRentInvoices::route('/'),
+            'index' => ListRentDemands::route('/'),
         ];
     }
 }

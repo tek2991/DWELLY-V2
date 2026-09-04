@@ -13,6 +13,10 @@ Route::get('/login', function () {
 })->name('login');
 
 Route::middleware(['auth'])->group(function () {
+    Route::get('/billing/demands/{invoice}/pdf', [BillingDocumentController::class, 'streamDemandNotice'])
+        ->name('billing.demand.pdf');
+    Route::get('/billing/payouts/{payout}/pdf', [BillingDocumentController::class, 'streamOwnerPayoutStatement'])
+        ->name('billing.payout.pdf');
     Route::get('/billing/invoices/{invoice}/pdf', [BillingDocumentController::class, 'downloadInvoice'])
         ->name('billing.invoice.pdf');
     Route::get('/billing/invoices/{invoice}/payments/{payment}/receipt', [BillingDocumentController::class, 'downloadReceipt'])

@@ -2,9 +2,12 @@
     $propertyId = isset($get) ? $get('property_id') : null;
     $month = isset($get) ? (int) ($get('month') ?: date('n')) : (int) date('n');
     $year = isset($get) ? (int) ($get('year') ?: date('Y')) : (int) date('Y');
+    $selectedMaintIds = isset($get) ? $get('maintenance_invoice_ids') : null;
 
     $property = $propertyId ? \App\Domain\Property\Models\Property::with(['owner.bankAccounts', 'agreements' => fn($q) => $q->where('status', 'active')])->find($propertyId) : null;
-    $calc = $property ? app(\App\Domain\Finance\Services\OwnerPayoutService::class)->calculatePayoutDetails($property, $month, $year) : null;
+    $calc = $property ? app(\App\Domain\Finance\Services\OwnerPayoutService::class)->calculatePayoutDetails($property, $month, $year, [
+        'selected_maintenance_invoice_ids' => $selectedMaintIds,
+    ]) : null;
 @endphp
 
 @if($calc && $calc['eligible'])

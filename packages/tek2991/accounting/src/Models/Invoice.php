@@ -48,6 +48,10 @@ class Invoice extends Model
         'balance_due',
         'notes',
         'terms',
+        'document_snapshot',
+        'pdf_path',
+        'pdf_generated_at',
+        'pdf_checksum',
         'place_of_supply_state_id',
         'reference_type',
         'reference_id',
@@ -60,6 +64,8 @@ class Invoice extends Model
         'billing_period_start' => 'date',
         'billing_period_end' => 'date',
         'billing_address_snapshot' => 'array',
+        'document_snapshot' => 'array',
+        'pdf_generated_at' => 'datetime',
         'discount_type' => DiscountType::class,
         'exchange_rate' => 'decimal:6',
         'discount_rate' => 'decimal:4',
@@ -117,5 +123,18 @@ class Invoice extends Model
             return 'overdue';
         }
         return $this->status->value;
+    }
+
+    public function hasStoredPdf(): bool
+    {
+        return !empty($this->pdf_path) && \Illuminate\Support\Facades\Storage::disk('local')->exists($this->pdf_path);
+    }
+
+    public function getStoredPdfAbsolutePath(): ?string
+    {
+        if ($this->hasStoredPdf()) {
+            return \Illuminate\Support\Facades\Storage::disk('local')->path($this->pdf_path);
+        }
+        return null;
     }
 }

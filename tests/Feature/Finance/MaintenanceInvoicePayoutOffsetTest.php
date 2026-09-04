@@ -258,4 +258,85 @@ class MaintenanceInvoicePayoutOffsetTest extends TestCase
         // Reserve balance should now be ₹3,000 (₹5,000 - ₹2,000)
         $this->assertEquals(3000.00, $provisioning->getOwnerReserveBalance($this->owner));
     }
+
+    /**
+     * Test 4: Selective maintenance ticket deduction in Single Owner Payout.
+     * When 2 maintenance tickets are open, selecting only 1 for deduction leaves the 2nd open.
+     */
+    public function test_selective_maintenance_invoice_payout_deduction()
+    {
+        $billingService = app(MaintenanceBillingService::class);
+        $payoutService = app(OwnerPayoutService::class);
+        $processAction = app(\App\Domain\Finance\Actions\ProcessOwnerPayoutAction::class);
+
+        // 1. Create 2 maintenance requests with owner invoices
+        $req1 = MaintenanceRequest::create([
+            'ticket_number' => 'TKT-2026-08-010',
+            'property_id' => $this->property->id,
+            'owner_id' => $this->owner->id,
+            'title' => 'Plumbing Leak Fix',
+            'category' => 'plumbing',
+            'status' => 'resolved',
+            'owner_amount' => 1200.00,
+            'total_cost' => 1200.00,
+        ]);
+        $inv1 = $billingService->createMaintenanceInvoice($req1, 'owner_invoice');
+
+        $req2 = MaintenanceRequest::create([
+            'ticket_number' => 'TKT-2026-08-011',
+            'property_id' => $this->property->id,
+            'owner_id' => $this->owner->id,
+            'title' => 'Geyser Element Replacement',
+            'category' => 'electrical',
+            'status' => 'resolved',
+            'owner_amount' => 2800.00,
+            'total_cost' => 2800.00,
+        ]);
+        $inv2 = $billingService->createMaintenanceInvoice($req2, 'owner_invoice');
+
+        // 2. Verify pending maintenance options
+        $options = $payoutService->getPendingMaintenanceOptions($this->property);
+        $this->assertCount(2, $options);
+        $this->assertArrayHasKey($inv1->id, $options);
+        $this->assertArrayHasKey($inv2->id, $options);
+
+        // 3. Process payout selecting ONLY inv1
+        $bankAccount = \Tek2991\Accounting\Models\Account::where('type', 'asset')->where('system_role', \Tek2991\Accounting\Enums\SystemRole::Bank)->first()
+            ?? \Tek2991\Accounting\Models\Account::where('type', 'asset')->first();
+
+        $payout = $processAction->execute(
+            $this->property,
+            '2026-08-01',
+            '2026-08-31',
+            $this->user,
+            [
+                'rent_collected' => 30000.00,
+                'management_fee_percent' => 10.00,
+                'advance_offset' => 1200.00,
+                'bank_account_id' => $bankAccount->id,
+                'maintenance_invoice_ids' => [$inv1->id],
+            ]
+        );
+
+        // 4. Assertions
+        $this->assertEquals(30000.00, $payout->rent_collected);
+        $this->assertEquals(3000.00, $payout->management_fee);
+        $this->assertEquals(1200.00, $payout->advance_offset);
+        $this->assertEquals(25800.00, $payout->amount); // 30000 - 3000 - 1200
+
+        // Inv 1 should be Paid
+        $inv1->refresh();
+        $this->assertEquals(InvoiceStatus::Paid, $inv1->status);
+        $this->assertEquals(1200.00, $inv1->amount_paid);
+
+        // Inv 2 should remain Unpaid (deferred)
+        $inv2->refresh();
+        $this->assertNotEquals(InvoiceStatus::Paid, $inv2->status);
+        $this->assertEquals(0.00, (float) $inv2->amount_paid);
+
+        // Next cycle pending options should now only show inv2
+        $remainingOptions = $payoutService->getPendingMaintenanceOptions($this->property);
+        $this->assertCount(1, $remainingOptions);
+        $this->assertArrayHasKey($inv2->id, $remainingOptions);
+    }
 }

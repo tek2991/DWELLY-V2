@@ -113,7 +113,7 @@ class ViewInvoice extends ViewRecord
                         ->title('Payment recorded successfully')
                         ->body("Payment of ₹" . number_format((float) $data['amount'], 2) . " recorded.")
                         ->actions([
-                            \Filament\Notifications\Actions\Action::make('download_receipt')
+                            Actions\Action::make('download_receipt')
                                 ->label('Download Receipt')
                                 ->icon('heroicon-o-arrow-down-tray')
                                 ->button()
