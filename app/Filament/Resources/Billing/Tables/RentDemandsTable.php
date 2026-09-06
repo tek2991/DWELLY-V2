@@ -214,13 +214,6 @@ class RentDemandsTable
                                 ->send();
                         }),
                 ]),
-            ])
-            ->toolbarActions([
-                Action::make('bulk_generate_page')
-                    ->label('Bulk Generate Monthly Rent')
-                    ->icon('heroicon-o-sparkles')
-                    ->color('primary')
-                    ->url(fn (): string => \App\Filament\Pages\Billing\BulkGenerateMonthlyRent::getUrl()),
             ]);
     }
 }

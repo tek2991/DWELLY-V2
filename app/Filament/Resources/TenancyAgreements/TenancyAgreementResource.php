@@ -25,11 +25,11 @@ class TenancyAgreementResource extends Resource
 {
     protected static ?string $model = TenancyAgreement::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDocumentText;
 
-    protected static \UnitEnum|string|null $navigationGroup = 'Sales & CRM';
+    protected static \UnitEnum|string|null $navigationGroup = 'Properties & Leasing';
 
-    protected static ?int $navigationSort = 99;
+    protected static ?int $navigationSort = 3;
 
     protected static ?SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
 

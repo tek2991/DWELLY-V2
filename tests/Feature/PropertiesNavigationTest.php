@@ -20,7 +20,7 @@ class PropertiesNavigationTest extends TestCase
     public function test_properties_cluster_has_correct_navigation_properties(): void
     {
         $this->assertEquals('Properties', PropertiesCluster::getNavigationLabel());
-        $this->assertEquals('Portfolio & Operations', PropertiesCluster::getNavigationGroup());
+        $this->assertEquals('Properties & Leasing', PropertiesCluster::getNavigationGroup());
     }
 
     public function test_property_resource_belongs_to_properties_cluster(): void

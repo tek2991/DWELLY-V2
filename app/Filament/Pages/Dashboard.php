@@ -22,6 +22,8 @@ class Dashboard extends BaseDashboard
 
     protected static ?string $navigationLabel = 'Main Dashboard';
 
+    protected static ?int $navigationSort = -1;
+
     protected static ?string $title = 'Main Executive Dashboard';
 
     public function getColumns(): int|array

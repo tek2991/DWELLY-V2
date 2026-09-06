@@ -32,6 +32,11 @@ class BulkGenerateOwnerPayouts extends Page
 
     protected static ?int $navigationSort = 2;
 
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
+
     public int $month;
 
     public int $year;

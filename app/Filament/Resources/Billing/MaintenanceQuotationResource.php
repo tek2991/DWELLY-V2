@@ -30,6 +30,8 @@ class MaintenanceQuotationResource extends Resource
 
     protected static ?string $navigationLabel = 'Maintenance Quotes';
 
+    protected static ?int $navigationSort = 5;
+
     protected static ?string $modelLabel = 'Maintenance Quotation';
 
     protected static ?string $pluralModelLabel = 'Maintenance Quotations';

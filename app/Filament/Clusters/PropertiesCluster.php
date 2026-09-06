@@ -10,7 +10,9 @@ class PropertiesCluster extends Cluster
 
     protected static ?string $navigationLabel = 'Properties';
 
-    protected static \UnitEnum|string|null $navigationGroup = 'Portfolio & Operations';
+    protected static \UnitEnum|string|null $navigationGroup = 'Properties & Leasing';
+
+    protected static ?int $navigationSort = 2;
 
     protected static ?string $slug = 'properties';
 }

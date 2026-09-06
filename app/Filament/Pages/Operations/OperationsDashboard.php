@@ -29,13 +29,13 @@ class OperationsDashboard extends Page
 {
     protected string $view = 'filament.pages.operations.operations-dashboard';
 
-    protected static BackedEnum|string|null $navigationIcon = Heroicon::OutlinedAdjustmentsHorizontal;
+    protected static BackedEnum|string|null $navigationIcon = Heroicon::OutlinedPresentationChartLine;
 
-    protected static \UnitEnum|string|null $navigationGroup = 'Portfolio & Operations';
+    protected static \UnitEnum|string|null $navigationGroup = 'Properties & Leasing';
 
     protected static ?string $navigationLabel = 'Operations Dashboard';
 
-    protected static ?int $navigationSort = 0;
+    protected static ?int $navigationSort = 1;
 
     protected static ?string $title = 'Operations Command Center';
 

@@ -27,11 +27,11 @@ class TenantDeboardingResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArrowLeftOnRectangle;
 
-    protected static \UnitEnum|string|null $navigationGroup = 'Portfolio & Operations';
+    protected static \UnitEnum|string|null $navigationGroup = 'Properties & Leasing';
 
     protected static ?string $navigationLabel = 'Tenant Deboardings';
 
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 4;
 
     protected static ?SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
 

@@ -20,11 +20,11 @@ class TaskResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentCheck;
 
-    protected static \UnitEnum|string|null $navigationGroup = 'Portfolio & Operations';
+    protected static \UnitEnum|string|null $navigationGroup = 'Maintenance & Field Ops';
 
     protected static ?string $navigationLabel = 'Operations Tasks';
 
-    protected static ?int $navigationSort = 6;
+    protected static ?int $navigationSort = 2;
 
     public static function form(Schema $schema): Schema
     {

@@ -294,12 +294,6 @@ class OwnerPayoutsTable
                             ->success()
                             ->send();
                     }),
-
-                Action::make('bulk_disburse_payouts')
-                    ->label('Bulk Disburse Payouts')
-                    ->icon('heroicon-o-sparkles')
-                    ->color('warning')
-                    ->url(fn (): string => \App\Filament\Pages\Billing\BulkGenerateOwnerPayouts::getUrl()),
             ])
             ->recordActions([
                 ActionGroup::make([

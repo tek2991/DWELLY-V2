@@ -18,9 +18,13 @@ class PartyResource extends Resource
 {
     protected static ?string $model = Party::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUserGroup;
 
-    protected static \UnitEnum|string|null $navigationGroup = 'Sales & CRM';
+    protected static \UnitEnum|string|null $navigationGroup = 'Directory & CRM';
+
+    protected static ?string $navigationLabel = 'Parties & Contacts';
+
+    protected static ?int $navigationSort = 1;
 
     public static function form(Schema $schema): Schema
     {

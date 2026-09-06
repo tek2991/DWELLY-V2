@@ -24,6 +24,8 @@ class MaintenanceBillingResource extends Resource
 
     protected static ?string $navigationLabel = 'Maintenance Invoices & Bills';
 
+    protected static ?int $navigationSort = 4;
+
     protected static ?string $modelLabel = 'Maintenance Invoice';
 
     protected static ?string $pluralModelLabel = 'Maintenance Invoices & Bills';

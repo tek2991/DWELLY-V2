@@ -27,9 +27,11 @@ class MOUResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDocumentCheck;
 
-    protected static \UnitEnum|string|null $navigationGroup = 'Sales & CRM';
+    protected static \UnitEnum|string|null $navigationGroup = 'Directory & CRM';
 
-    protected static ?int $navigationSort = 2;
+    protected static ?string $navigationLabel = 'Owner MOUs';
+
+    protected static ?int $navigationSort = 3;
 
     public static function canViewAny(): bool
     {

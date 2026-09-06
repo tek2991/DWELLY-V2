@@ -16,9 +16,13 @@ class CommunicationLogResource extends Resource
 {
     protected static ?string $model = CommunicationLog::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedChatBubbleLeftRight;
 
-    protected static \UnitEnum|string|null $navigationGroup = 'Sales & CRM';
+    protected static \UnitEnum|string|null $navigationGroup = 'Directory & CRM';
+
+    protected static ?string $navigationLabel = 'Communication Logs';
+
+    protected static ?int $navigationSort = 4;
 
 
     public static function canCreate(): bool

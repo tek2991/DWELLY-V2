@@ -18,7 +18,7 @@ class OwnerPayoutResource extends Resource
 {
     protected static ?string $model = OwnerPayout::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCreditCard;
 
     protected static \UnitEnum|string|null $navigationGroup = 'Billing & Finance';
 
@@ -28,7 +28,7 @@ class OwnerPayoutResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Owner Payouts';
 
-    protected static ?int $navigationSort = 4;
+    protected static ?int $navigationSort = 3;
 
     public static function form(Schema $schema): Schema
     {

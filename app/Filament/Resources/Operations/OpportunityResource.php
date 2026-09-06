@@ -26,9 +26,11 @@ class OpportunityResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSparkles;
     
-    protected static \UnitEnum|string|null $navigationGroup = 'Sales & CRM';
+    protected static \UnitEnum|string|null $navigationGroup = 'Directory & CRM';
+
+    protected static ?string $navigationLabel = 'Sales Opportunities';
     
-    protected static ?int $navigationSort = 1;
+    protected static ?int $navigationSort = 2;
 
     public static function canEdit(?\Illuminate\Database\Eloquent\Model $record = null): bool
     {

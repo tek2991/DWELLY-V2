@@ -2,8 +2,9 @@
 
 namespace App\Filament\Resources\OwnerPayouts\Pages;
 
+use App\Filament\Pages\Billing\BulkGenerateOwnerPayouts;
 use App\Filament\Resources\OwnerPayouts\OwnerPayoutResource;
-use Filament\Actions\CreateAction;
+use Filament\Actions\Action;
 use Filament\Resources\Pages\ListRecords;
 
 class ListOwnerPayouts extends ListRecords
@@ -13,7 +14,11 @@ class ListOwnerPayouts extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            // Standard creation handled by "Generate Owner Payout" table action
+            Action::make('bulkDisbursePayouts')
+                ->label('Bulk Disburse Payouts')
+                ->icon('heroicon-o-sparkles')
+                ->color('primary')
+                ->url(BulkGenerateOwnerPayouts::getUrl()),
         ];
     }
 }

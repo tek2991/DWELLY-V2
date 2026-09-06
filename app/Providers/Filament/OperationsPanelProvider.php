@@ -6,6 +6,7 @@ use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Navigation\NavigationGroup;
 use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
@@ -34,10 +35,12 @@ class OperationsPanelProvider extends PanelProvider
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverClusters(in: app_path('Filament/Clusters'), for: 'App\Filament\Clusters')
             ->navigationGroups([
-                'Portfolio & Operations',
-                'Billing & Finance',
-                'Sales & CRM',
-                'Settings',
+                NavigationGroup::make('Properties & Leasing'),
+                NavigationGroup::make('Maintenance & Field Ops'),
+                NavigationGroup::make('Billing & Finance'),
+                NavigationGroup::make('Directory & CRM'),
+                NavigationGroup::make('Settings')
+                    ->collapsed(),
             ])
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
             ->pages([

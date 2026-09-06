@@ -20,9 +20,9 @@ class MaintenanceRequestResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedWrenchScrewdriver;
 
-    protected static \UnitEnum|string|null $navigationGroup = 'Portfolio & Operations';
+    protected static \UnitEnum|string|null $navigationGroup = 'Maintenance & Field Ops';
 
-    protected static ?int $navigationSort = 4;
+    protected static ?int $navigationSort = 1;
 
     public static function form(Schema $schema): Schema
     {

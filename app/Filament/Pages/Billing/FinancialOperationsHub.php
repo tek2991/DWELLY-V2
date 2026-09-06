@@ -42,7 +42,7 @@ class FinancialOperationsHub extends Page
 
     protected static ?string $navigationLabel = 'Financial Operations Hub';
 
-    protected static ?int $navigationSort = 0;
+    protected static ?int $navigationSort = 6;
 
     public string $activeTab = 'security_deposits';
 

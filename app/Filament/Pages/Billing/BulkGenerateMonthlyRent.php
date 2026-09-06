@@ -30,6 +30,11 @@ class BulkGenerateMonthlyRent extends Page
 
     protected static ?int $navigationSort = 1;
 
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
+
     public int $month;
 
     public int $year;

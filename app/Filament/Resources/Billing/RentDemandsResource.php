@@ -23,6 +23,8 @@ class RentDemandsResource extends Resource
 
     protected static ?string $navigationLabel = 'Rent Demands & Collections';
 
+    protected static ?int $navigationSort = 2;
+
     protected static ?string $modelLabel = 'Rent Demand';
 
     protected static ?string $pluralModelLabel = 'Rent Demands & Receipts';

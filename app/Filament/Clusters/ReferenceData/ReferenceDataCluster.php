@@ -14,5 +14,7 @@ class ReferenceDataCluster extends Cluster
     
     protected static \UnitEnum|string|null $navigationGroup = 'Settings';
     
+    protected static ?int $navigationSort = 3;
+    
     protected static ?string $slug = 'reference-data';
 }
