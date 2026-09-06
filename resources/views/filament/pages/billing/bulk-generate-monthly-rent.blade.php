@@ -18,7 +18,62 @@
 
     <div x-data="{
         confirmModalOpen: false,
+        confirmSingleModalOpen: false,
+        singleGenerateItem: null,
         activeRowDetails: null,
+        isEditing: false,
+        editForm: {
+            rent_amount: 0,
+            utility_amount: 0,
+            selected_maintenance_invoice_ids: [],
+            notes: '',
+        },
+        openDetails(item) {
+            this.activeRowDetails = item;
+            this.isEditing = false;
+            this.initEditForm(item);
+        },
+        initEditForm(item) {
+            if (!item) return;
+            this.editForm = {
+                rent_amount: Number(item.rent_amount || 0),
+                utility_amount: Number(item.utility_amount || 0),
+                selected_maintenance_invoice_ids: item.selected_maintenance_invoice_ids ? [...item.selected_maintenance_invoice_ids] : (item.maintenance_invoices ? item.maintenance_invoices.map(m => m.id) : []),
+                notes: item.notes || '',
+            };
+        },
+        calcTotalDemand() {
+            const rent = parseFloat(this.editForm.rent_amount) || 0;
+            const util = parseFloat(this.editForm.utility_amount) || 0;
+            let maint = 0;
+            if (this.activeRowDetails && this.activeRowDetails.maintenance_invoices) {
+                const selected = this.editForm.selected_maintenance_invoice_ids || [];
+                this.activeRowDetails.maintenance_invoices.forEach(m => {
+                    if (selected.includes(m.id)) {
+                        maint += (parseFloat(m.amount) || 0);
+                    }
+                });
+            }
+            return Math.round((rent + util + maint) * 100) / 100;
+        },
+        async saveAdjustment() {
+            if (!this.activeRowDetails) return;
+            const payload = {
+                rent_amount: this.editForm.rent_amount,
+                utility_amount: this.editForm.utility_amount,
+                selected_maintenance_invoice_ids: this.editForm.selected_maintenance_invoice_ids,
+                notes: this.editForm.notes,
+            };
+            await $wire.saveDemandAdjustment(this.activeRowDetails.agreement_id, payload);
+            this.isEditing = false;
+            this.activeRowDetails = null;
+        },
+        async resetAdjustment() {
+            if (!this.activeRowDetails) return;
+            await $wire.resetDemandAdjustment(this.activeRowDetails.agreement_id);
+            this.isEditing = false;
+            this.activeRowDetails = null;
+        }
     }" style="display: flex; flex-direction: column; gap: 1.5rem; width: 100%;">
 
         <!-- Post-Generation Summary Banner (If just executed) -->
@@ -289,7 +344,7 @@
 
                         <button 
                             type="button" 
-                            wire:click="generateSelected" 
+                            @click="confirmModalOpen = true" 
                             @if($selectedSummary['count'] === 0) disabled @endif
                             style="display: inline-flex; align-items: center; gap: 0.5rem; background: {{ $selectedSummary['count'] > 0 ? '#4f46e5' : '#94a3b8' }}; color: #ffffff; font-weight: 700; font-size: 0.8125rem; padding: 0.55rem 1.25rem; border-radius: 0.5rem; border: none; cursor: {{ $selectedSummary['count'] > 0 ? 'pointer' : 'not-allowed' }}; box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: all 0.2s ease;">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 1.125rem; height: 1.125rem;">
@@ -404,13 +459,20 @@
 
                                     <!-- Agreement Code -->
                                     <td style="padding: 0.75rem 1rem;">
-                                        <button 
-                                            type="button" 
-                                            @click="activeRowDetails = @js($item)"
-                                            title="Click to view full breakdown and resource links"
-                                            style="background: transparent; border: none; padding: 0; text-align: left; cursor: pointer; font-weight: 700; color: #4f46e5; font-family: monospace; text-decoration: underline;">
-                                            {{ $item['agreement_code'] }}
-                                        </button>
+                                        <div style="display: flex; align-items: center; gap: 0.375rem; flex-wrap: wrap;">
+                                            <button 
+                                                type="button" 
+                                                @click="openDetails(@js($item))"
+                                                title="Click to view full breakdown and resource links"
+                                                style="background: transparent; border: none; padding: 0; text-align: left; cursor: pointer; font-weight: 700; color: #4f46e5; font-family: monospace; text-decoration: underline;">
+                                                {{ $item['agreement_code'] }}
+                                            </button>
+                                            @if(!empty($item['is_adjusted']))
+                                                <span style="font-size: 0.625rem; font-weight: 700; color: #b45309; background: #fef3c7; border: 1px solid #fde68a; padding: 0.1rem 0.35rem; border-radius: 0.25rem;">
+                                                    Adjusted
+                                                </span>
+                                            @endif
+                                        </div>
                                         <div style="font-size: 0.6875rem; color: #64748b; margin-top: 0.125rem;">
                                             Handover: {{ $item['handover_date_formatted'] }}
                                         </div>
@@ -478,10 +540,17 @@
                                     <!-- Status Column -->
                                     <td style="padding: 0.75rem 1rem;">
                                         @if($item['status'] === 'ready')
-                                            <span style="display: inline-flex; align-items: center; gap: 0.375rem; font-size: 0.75rem; font-weight: 700; color: #16a34a; background: #f0fdf4; border: 1px solid #bbf7d0; padding: 0.2rem 0.5rem; border-radius: 9999px;">
-                                                <span style="width: 0.375rem; height: 0.375rem; border-radius: 9999px; background: #16a34a;"></span>
-                                                Ready to Bill
-                                            </span>
+                                            @if(!empty($item['is_adjusted']))
+                                                <span style="display: inline-flex; align-items: center; gap: 0.375rem; font-size: 0.75rem; font-weight: 700; color: #b45309; background: #fffbeb; border: 1px solid #fde68a; padding: 0.2rem 0.5rem; border-radius: 9999px;">
+                                                    <span style="width: 0.375rem; height: 0.375rem; border-radius: 9999px; background: #f59e0b;"></span>
+                                                    Ready • Adjusted
+                                                </span>
+                                            @else
+                                                <span style="display: inline-flex; align-items: center; gap: 0.375rem; font-size: 0.75rem; font-weight: 700; color: #16a34a; background: #f0fdf4; border: 1px solid #bbf7d0; padding: 0.2rem 0.5rem; border-radius: 9999px;">
+                                                    <span style="width: 0.375rem; height: 0.375rem; border-radius: 9999px; background: #16a34a;"></span>
+                                                    Ready to Bill
+                                                </span>
+                                            @endif
                                         @elseif($item['status'] === 'already_generated')
                                             <a 
                                                 href="{{ \App\Filament\Resources\Billing\RentDemandsResource::getUrl('index') }}?tableSearch={{ urlencode($item['existing_invoice_number'] ?? '') }}"
@@ -501,7 +570,7 @@
                                         <div style="display: flex; align-items: center; justify-content: flex-end; gap: 0.375rem;">
                                             <button 
                                                 type="button" 
-                                                @click="activeRowDetails = @js($item)"
+                                                @click="openDetails(@js($item))"
                                                 title="View Detailed Breakdown & Resource Links"
                                                 style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.6875rem; font-weight: 600; color: #475569; background: #f8fafc; border: 1px solid #cbd5e1; padding: 0.25rem 0.5rem; border-radius: 0.375rem; cursor: pointer; transition: all 0.15s ease;">
                                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" style="width: 0.875rem; height: 0.875rem;">
@@ -511,22 +580,13 @@
                                                 <span>Details</span>
                                             </button>
 
-                                            @if($isReady)
-                                                <button 
-                                                    type="button" 
-                                                    wire:click="generateSingle('{{ $item['agreement_id'] }}')"
-                                                    style="font-size: 0.6875rem; font-weight: 700; color: #4f46e5; background: #eef2ff; border: 1px solid #c7d2fe; padding: 0.25rem 0.5rem; border-radius: 0.375rem; cursor: pointer;">
-                                                    ⚡ Generate
-                                                </button>
-                                            @elseif($item['status'] === 'already_generated')
+                                            @if($item['status'] === 'already_generated')
                                                 <a 
                                                     href="{{ \App\Filament\Resources\Billing\RentDemandsResource::getUrl('index') }}?tableSearch={{ urlencode($item['existing_invoice_number'] ?? '') }}"
                                                     target="_blank"
-                                                    style="font-size: 0.6875rem; font-weight: 600; color: #64748b; text-decoration: underline;">
+                                                    style="font-size: 0.6875rem; font-weight: 600; color: #64748b; text-decoration: underline; margin-left: 0.25rem;">
                                                     View
                                                 </a>
-                                            @else
-                                                <span style="font-size: 0.6875rem; color: #cbd5e1;">—</span>
                                             @endif
                                         </div>
                                     </td>
@@ -579,17 +639,148 @@
             @endif
         </div>
 
-        <!-- Item Breakdown & Resource Links Modal -->
-        <div 
-            x-show="activeRowDetails !== null" 
-            x-cloak 
-            style="position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); padding: 1.5rem;"
-            @keydown.escape.window="activeRowDetails = null"
-        >
+        <!-- Sticky Bottom Action Bar -->
+        <div style="position: sticky; bottom: 1rem; background: #0f172a; color: #ffffff; border-radius: 0.75rem; padding: 1rem 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3); z-index: 20;">
+            <div style="display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;">
+                <div>
+                    <span style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase;">Selected Tenancies</span>
+                    <div style="font-size: 1.25rem; font-weight: 800; color: #ffffff;">
+                        {{ $selectedSummary['count'] }} / {{ $summary['ready_count'] }}
+                    </div>
+                </div>
+                <div style="height: 2rem; width: 1px; background: #334155;"></div>
+                <div>
+                    <span style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase;">Total Base Rent</span>
+                    <div style="font-size: 1.25rem; font-weight: 800; color: #4ade80;">
+                        ₹{{ number_format($selectedSummary['total_base_rent'], 2) }}
+                    </div>
+                </div>
+                <div style="height: 2rem; width: 1px; background: #334155;"></div>
+                <div>
+                    <span style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase;">Total Demand Value</span>
+                    <div style="font-size: 1.125rem; font-weight: 700; color: #818cf8;">
+                        ₹{{ number_format($selectedSummary['total_amount'], 2) }}
+                    </div>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 0.75rem;">
+                <button 
+                    type="button" 
+                    @click="confirmModalOpen = true"
+                    {{ $selectedSummary['count'] === 0 ? 'disabled' : '' }}
+                    style="background: {{ $selectedSummary['count'] > 0 ? '#4f46e5' : '#475569' }}; color: #ffffff; border: none; border-radius: 0.5rem; padding: 0.625rem 1.25rem; font-size: 0.875rem; font-weight: 700; cursor: {{ $selectedSummary['count'] > 0 ? 'pointer' : 'not-allowed' }}; display: flex; align-items: center; gap: 0.5rem; transition: background 0.15s ease;">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 1.125rem; height: 1.125rem;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" />
+                    </svg>
+                    Generate Selected ({{ $selectedSummary['count'] }} Demands)
+                </button>
+            </div>
+        </div>
+
+        <!-- Confirmation Modal -->
+        <template x-teleport="body">
             <div 
-                @click.away="activeRowDetails = null"
-                style="background: #ffffff; border-radius: 1rem; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.04); max-width: 44rem; width: 100%; max-height: 90vh; overflow-y: auto; border: 1px solid #e2e8f0; animation: fadeIn 0.15s ease-out;"
+                x-show="confirmModalOpen" 
+                x-cloak
+                @keydown.escape.window="confirmModalOpen = false"
+                style="position: fixed; inset: 0; z-index: 9999; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); overflow-y: auto;"
+                x-transition:enter="transition ease-out duration-200"
+                x-transition:enter-start="opacity-0"
+                x-transition:enter-end="opacity-100"
+                x-transition:leave="transition ease-in duration-150"
+                x-transition:leave-start="opacity-100"
+                x-transition:leave-end="opacity-0">
+                <div 
+                    style="min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 1.5rem; width: 100%; box-sizing: border-box;"
+                    @click.self="confirmModalOpen = false">
+                    <div 
+                        @click.away="confirmModalOpen = false"
+                        style="background: #ffffff; border-radius: 1rem; max-width: 32rem; width: 100%; margin: auto; padding: 1.5rem; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); position: relative;"
+                        x-show="confirmModalOpen"
+                        x-transition:enter="transition ease-out duration-200"
+                        x-transition:enter-start="opacity-0 scale-95"
+                        x-transition:enter-end="opacity-100 scale-100"
+                        x-transition:leave="transition ease-in duration-150"
+                        x-transition:leave-start="opacity-100 scale-100"
+                        x-transition:leave-end="opacity-0 scale-95">
+                        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+                            <div style="width: 2.75rem; height: 2.75rem; border-radius: 9999px; background: #e0e7ff; color: #4f46e5; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 1.5rem; height: 1.5rem;">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 style="font-size: 1.125rem; font-weight: 700; color: #0f172a; margin: 0;">
+                                    Confirm Batch Rent Demands
+                                </h3>
+                                <p style="font-size: 0.8125rem; color: #64748b; margin: 0.25rem 0 0 0;">
+                                    Billing Cycle: <strong>{{ $monthName }}</strong>
+                                </p>
+                            </div>
+                        </div>
+
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 1rem; margin-bottom: 1.25rem; font-size: 0.8125rem;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <span style="color: #64748b;">Tenancies to Bill:</span>
+                                <strong style="color: #0f172a;">{{ $selectedSummary['count'] }} Tenancies</strong>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <span style="color: #64748b;">Total Base Rent:</span>
+                                <span style="color: #0f172a; font-weight: 600;">₹{{ number_format($selectedSummary['total_base_rent'], 2) }}</span>
+                            </div>
+                            @if($selectedSummary['total_maintenance_amount'] > 0)
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                    <span style="color: #64748b;">Total Maintenance / Utilities:</span>
+                                    <span style="color: #0f172a; font-weight: 600;">₹{{ number_format($selectedSummary['total_maintenance_amount'], 2) }}</span>
+                                </div>
+                            @endif
+                            <div style="border-top: 1px solid #cbd5e1; padding-top: 0.5rem; display: flex; justify-content: space-between; font-size: 0.9375rem;">
+                                <strong style="color: #0f172a;">Total Rent Demand Invoiced:</strong>
+                                <strong style="color: #4f46e5;">₹{{ number_format($selectedSummary['total_amount'], 2) }}</strong>
+                            </div>
+                        </div>
+
+                        <p style="font-size: 0.75rem; color: #64748b; margin-bottom: 1.25rem; line-height: 1.4;">
+                            ⚠️ This operation will generate official monthly rent demand notices, post accounting charges to tenant Accounts Receivable (AR), and record pass-through payable to owner accounts.
+                        </p>
+
+                        <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+                            <button 
+                                type="button" 
+                                @click="confirmModalOpen = false"
+                                style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 0.375rem; padding: 0.5rem 1rem; font-size: 0.8125rem; font-weight: 600; color: #475569; cursor: pointer;">
+                                Cancel
+                            </button>
+                            <button 
+                                type="button" 
+                                wire:click="generateSelected"
+                                @click="confirmModalOpen = false"
+                                style="background: #4f46e5; border: none; border-radius: 0.375rem; padding: 0.5rem 1.25rem; font-size: 0.8125rem; font-weight: 700; color: #ffffff; cursor: pointer;">
+                                Yes, Generate Demands
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <!-- Item Breakdown & Resource Links Modal -->
+        <template x-teleport="body">
+            <div 
+                x-show="activeRowDetails !== null" 
+                x-cloak 
+                style="position: fixed; inset: 0; z-index: 9999; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); overflow-y: auto;"
+                @keydown.escape.window="activeRowDetails = null"
             >
+                <div 
+                    style="min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 1.5rem; width: 100%; box-sizing: border-box;"
+                    @click.self="activeRowDetails = null"
+                >
+                    <div 
+                        @click.away="activeRowDetails = null"
+                        style="background: #ffffff; border-radius: 1rem; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.04); max-width: 44rem; width: 100%; max-height: 90vh; overflow-y: auto; border: 1px solid #e2e8f0; margin: auto; position: relative;"
+                    >
                 <!-- Modal Header -->
                 <div style="padding: 1.25rem 1.5rem; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; background: #fafafa; border-top-left-radius: 1rem; border-top-right-radius: 1rem;">
                     <div style="display: flex; align-items: center; gap: 0.75rem;">
@@ -601,7 +792,10 @@
                         <div>
                             <div style="display: flex; align-items: center; gap: 0.5rem;">
                                 <h3 style="font-size: 1.0625rem; font-weight: 800; color: #0f172a; margin: 0;" x-text="'Rent Demand: ' + (activeRowDetails?.agreement_code || '')"></h3>
-                                <template x-if="activeRowDetails?.status === 'ready'">
+                                <template x-if="activeRowDetails?.status === 'ready' && activeRowDetails?.is_adjusted">
+                                    <span style="font-size: 0.6875rem; font-weight: 700; color: #b45309; background: #fef3c7; border: 1px solid #fde68a; padding: 0.15rem 0.45rem; border-radius: 9999px;">Adjusted Draft</span>
+                                </template>
+                                <template x-if="activeRowDetails?.status === 'ready' && !activeRowDetails?.is_adjusted">
                                     <span style="font-size: 0.6875rem; font-weight: 700; color: #16a34a; background: #f0fdf4; border: 1px solid #bbf7d0; padding: 0.15rem 0.45rem; border-radius: 9999px;">Ready to Bill</span>
                                 </template>
                                 <template x-if="activeRowDetails?.status === 'already_generated'">
@@ -624,156 +818,416 @@
 
                 <!-- Modal Body -->
                 <template x-if="activeRowDetails">
-                    <div style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem;">
-                        
-                        <!-- Quick Resource Navigation Links -->
-                        <div>
-                            <div style="font-size: 0.6875rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">
-                                Quick Resource Navigation
-                            </div>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
-                                <a 
-                                    :href="activeRowDetails.agreement_url" 
-                                    target="_blank"
-                                    style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 0.5rem; text-decoration: none; color: #1e293b; transition: all 0.15s ease;"
-                                    onmouseover="this.style.background='#eef2ff'; this.style.borderColor='#a5b4fc';"
-                                    onmouseout="this.style.background='#f8fafc'; this.style.borderColor='#cbd5e1';"
-                                >
-                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                        <span style="font-size: 1rem;">📄</span>
-                                        <div>
-                                            <div style="font-size: 0.8125rem; font-weight: 700; color: #4f46e5;" x-text="activeRowDetails.agreement_code"></div>
-                                            <div style="font-size: 0.6875rem; color: #64748b;">Tenancy Agreement</div>
-                                        </div>
-                                    </div>
-                                    <span style="font-size: 0.75rem; font-weight: 600; color: #4f46e5;">Open ↗</span>
-                                </a>
-
-                                <a 
-                                    :href="activeRowDetails.property_url" 
-                                    target="_blank"
-                                    style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 0.5rem; text-decoration: none; color: #1e293b; transition: all 0.15s ease;"
-                                    onmouseover="this.style.background='#f0fdf4'; this.style.borderColor='#86efac';"
-                                    onmouseout="this.style.background='#f8fafc'; this.style.borderColor='#cbd5e1';"
-                                >
-                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                        <span style="font-size: 1rem;">🏢</span>
-                                        <div>
-                                            <div style="font-size: 0.8125rem; font-weight: 700; color: #0f172a;" x-text="activeRowDetails.property_name"></div>
-                                            <div style="font-size: 0.6875rem; color: #64748b;" x-text="activeRowDetails.property_code || 'Property Record'"></div>
-                                        </div>
-                                    </div>
-                                    <span style="font-size: 0.75rem; font-weight: 600; color: #16a34a;">Open ↗</span>
-                                </a>
-                            </div>
-                        </div>
-
-                        <!-- Tenancy & Party Details Grid -->
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; background: #f8fafc; padding: 0.875rem 1rem; border-radius: 0.625rem; border: 1px solid #e2e8f0;">
-                            <div>
-                                <span style="font-size: 0.6875rem; font-weight: 600; color: #64748b; text-transform: uppercase;">Tenant</span>
-                                <div style="font-size: 0.8125rem; font-weight: 700; color: #0f172a; margin-top: 0.125rem;" x-text="activeRowDetails.tenant_name"></div>
-                            </div>
-                            <div>
-                                <span style="font-size: 0.6875rem; font-weight: 600; color: #64748b; text-transform: uppercase;">Owner</span>
-                                <div style="font-size: 0.8125rem; font-weight: 700; color: #0f172a; margin-top: 0.125rem;" x-text="activeRowDetails.owner_name"></div>
-                            </div>
-                            <div>
-                                <span style="font-size: 0.6875rem; font-weight: 600; color: #64748b; text-transform: uppercase;">Handover Date</span>
-                                <div style="font-size: 0.8125rem; font-weight: 700; color: #0f172a; margin-top: 0.125rem;" x-text="activeRowDetails.handover_date_formatted"></div>
-                            </div>
-                            <div>
-                                <span style="font-size: 0.6875rem; font-weight: 600; color: #64748b; text-transform: uppercase;">Billing Period</span>
-                                <div style="font-size: 0.8125rem; font-weight: 700; color: #0f172a; margin-top: 0.125rem;" x-text="activeRowDetails.formatted_period"></div>
-                            </div>
-                        </div>
-
-                        <!-- Itemized Financial Calculation Box -->
-                        <div style="border: 1px solid #e2e8f0; border-radius: 0.625rem; overflow: hidden;">
-                            <div style="background: #f8fafc; padding: 0.625rem 1rem; font-size: 0.75rem; font-weight: 700; color: #475569; border-bottom: 1px solid #e2e8f0; text-transform: uppercase; letter-spacing: 0.025em; display: flex; align-items: center; justify-content: space-between;">
-                                <span>Itemized Demand Breakdown</span>
-                                <span style="font-size: 0.6875rem; font-weight: 400; color: #64748b;">(INR ₹)</span>
-                            </div>
-                            <div style="padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                    <div>
+                        <!-- Read-Only Overview -->
+                        <template x-if="!isEditing">
+                            <div style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem;">
                                 
-                                <!-- Base Rent Line -->
-                                <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8125rem;">
-                                    <div>
-                                        <div style="font-weight: 600; color: #0f172a; display: flex; align-items: center; gap: 0.375rem;">
-                                            <span>Monthly Rent (Pass-through AP)</span>
-                                            <template x-if="activeRowDetails.is_prorated">
-                                                <span style="font-size: 0.6875rem; font-weight: 700; color: #d97706; background: #fffbeb; border: 1px solid #fde68a; padding: 0.1rem 0.35rem; border-radius: 0.25rem;" x-text="'⚡ Prorated (' + activeRowDetails.days_active + '/' + activeRowDetails.total_days_in_month + ' days)'"></span>
-                                            </template>
-                                        </div>
-                                        <div style="font-size: 0.6875rem; color: #64748b; margin-top: 0.125rem;" x-text="'Standard Rent: ₹' + Number(activeRowDetails.standard_rent).toLocaleString('en-IN', {minimumFractionDigits: 2})"></div>
+                                <!-- Quick Resource Navigation Links -->
+                                <div>
+                                    <div style="font-size: 0.6875rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">
+                                        Quick Resource Navigation
                                     </div>
-                                    <span style="font-weight: 700; color: #0f172a;" x-text="'₹' + Number(activeRowDetails.rent_amount).toLocaleString('en-IN', {minimumFractionDigits: 2})"></span>
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                                        <a 
+                                            :href="activeRowDetails.agreement_url" 
+                                            target="_blank"
+                                            style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 0.5rem; text-decoration: none; color: #1e293b; transition: all 0.15s ease;"
+                                            onmouseover="this.style.background='#eef2ff'; this.style.borderColor='#a5b4fc';"
+                                            onmouseout="this.style.background='#f8fafc'; this.style.borderColor='#cbd5e1';"
+                                        >
+                                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                                <span style="font-size: 1rem;">📄</span>
+                                                <div>
+                                                    <div style="font-size: 0.8125rem; font-weight: 700; color: #4f46e5;" x-text="activeRowDetails.agreement_code"></div>
+                                                    <div style="font-size: 0.6875rem; color: #64748b;">Tenancy Agreement</div>
+                                                </div>
+                                            </div>
+                                            <span style="font-size: 0.75rem; font-weight: 600; color: #4f46e5;">Open ↗</span>
+                                        </a>
+
+                                        <a 
+                                            :href="activeRowDetails.property_url" 
+                                            target="_blank"
+                                            style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 0.5rem; text-decoration: none; color: #1e293b; transition: all 0.15s ease;"
+                                            onmouseover="this.style.background='#f0fdf4'; this.style.borderColor='#86efac';"
+                                            onmouseout="this.style.background='#f8fafc'; this.style.borderColor='#cbd5e1';"
+                                        >
+                                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                                <span style="font-size: 1rem;">🏢</span>
+                                                <div>
+                                                    <div style="font-size: 0.8125rem; font-weight: 700; color: #0f172a;" x-text="activeRowDetails.property_name"></div>
+                                                    <div style="font-size: 0.6875rem; color: #64748b;" x-text="activeRowDetails.property_code || 'Property Record'"></div>
+                                                </div>
+                                            </div>
+                                            <span style="font-size: 0.75rem; font-weight: 600; color: #16a34a;">Open ↗</span>
+                                        </a>
+                                    </div>
                                 </div>
 
-                                <!-- Utility Charges (if any) -->
-                                <template x-if="activeRowDetails.utility_amount > 0">
-                                    <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8125rem;">
-                                        <div style="font-weight: 600; color: #0f172a;">Utility Charges</div>
-                                        <span style="font-weight: 700; color: #0f172a;" x-text="'₹' + Number(activeRowDetails.utility_amount).toLocaleString('en-IN', {minimumFractionDigits: 2})"></span>
+                                <!-- Tenancy & Party Details Grid -->
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; background: #f8fafc; padding: 0.875rem 1rem; border-radius: 0.625rem; border: 1px solid #e2e8f0;">
+                                    <div>
+                                        <span style="font-size: 0.6875rem; font-weight: 600; color: #64748b; text-transform: uppercase;">Tenant</span>
+                                        <div style="font-size: 0.8125rem; font-weight: 700; color: #0f172a; margin-top: 0.125rem;" x-text="activeRowDetails.tenant_name"></div>
                                     </div>
-                                </template>
+                                    <div>
+                                        <span style="font-size: 0.6875rem; font-weight: 600; color: #64748b; text-transform: uppercase;">Owner</span>
+                                        <div style="font-size: 0.8125rem; font-weight: 700; color: #0f172a; margin-top: 0.125rem;" x-text="activeRowDetails.owner_name"></div>
+                                    </div>
+                                    <div>
+                                        <span style="font-size: 0.6875rem; font-weight: 600; color: #64748b; text-transform: uppercase;">Handover Date</span>
+                                        <div style="font-size: 0.8125rem; font-weight: 700; color: #0f172a; margin-top: 0.125rem;" x-text="activeRowDetails.handover_date_formatted"></div>
+                                    </div>
+                                    <div>
+                                        <span style="font-size: 0.6875rem; font-weight: 600; color: #64748b; text-transform: uppercase;">Billing Period</span>
+                                        <div style="font-size: 0.8125rem; font-weight: 700; color: #0f172a; margin-top: 0.125rem;" x-text="activeRowDetails.formatted_period"></div>
+                                    </div>
+                                </div>
 
-                                <!-- Tenant Maintenance Recoveries -->
-                                <template x-if="activeRowDetails.maintenance_invoices && activeRowDetails.maintenance_invoices.length > 0">
-                                    <div style="border-top: 1px dashed #e2e8f0; padding-top: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem;">
-                                        <div style="font-size: 0.6875rem; font-weight: 700; color: #ea580c; text-transform: uppercase; letter-spacing: 0.025em;">
-                                            Tenant-Payable Maintenance Recoveries (Itemized)
-                                        </div>
-                                        <template x-for="m in activeRowDetails.maintenance_invoices" :key="m.id">
-                                            <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8125rem; background: #fff7ed; padding: 0.375rem 0.625rem; border-radius: 0.375rem; border: 1px solid #fed7aa;">
-                                                <div style="display: flex; align-items: center; gap: 0.375rem;">
-                                                    <span style="font-weight: 700; color: #9a3412;" x-text="'🔧 ' + m.ticket_number + ':'"></span>
-                                                    <span style="color: #7c2d12;" x-text="m.title"></span>
+                                <!-- Itemized Financial Calculation Box -->
+                                <div style="border: 1px solid #e2e8f0; border-radius: 0.625rem; overflow: hidden;">
+                                    <div style="background: #f8fafc; padding: 0.625rem 1rem; font-size: 0.75rem; font-weight: 700; color: #475569; border-bottom: 1px solid #e2e8f0; text-transform: uppercase; letter-spacing: 0.025em; display: flex; align-items: center; justify-content: space-between;">
+                                        <span>Itemized Demand Breakdown</span>
+                                        <span style="font-size: 0.6875rem; font-weight: 400; color: #64748b;">(INR ₹)</span>
+                                    </div>
+                                    <div style="padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                                        
+                                        <!-- Base Rent Line -->
+                                        <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8125rem;">
+                                            <div>
+                                                <div style="font-weight: 600; color: #0f172a; display: flex; align-items: center; gap: 0.375rem;">
+                                                    <span>Monthly Rent (Pass-through AP)</span>
+                                                    <template x-if="activeRowDetails.is_prorated">
+                                                        <span style="font-size: 0.6875rem; font-weight: 700; color: #d97706; background: #fffbeb; border: 1px solid #fde68a; padding: 0.1rem 0.35rem; border-radius: 0.25rem;" x-text="'⚡ Prorated (' + activeRowDetails.days_active + '/' + activeRowDetails.total_days_in_month + ' days)'"></span>
+                                                    </template>
                                                 </div>
-                                                <span style="font-weight: 700; color: #ea580c;" x-text="'+₹' + Number(m.amount).toLocaleString('en-IN', {minimumFractionDigits: 2})"></span>
+                                                <div style="font-size: 0.6875rem; color: #64748b; margin-top: 0.125rem;" x-text="'Standard Rent: ₹' + Number(activeRowDetails.standard_rent).toLocaleString('en-IN', {minimumFractionDigits: 2})"></div>
+                                            </div>
+                                            <span style="font-weight: 700; color: #0f172a;" x-text="'₹' + Number(activeRowDetails.rent_amount).toLocaleString('en-IN', {minimumFractionDigits: 2})"></span>
+                                        </div>
+
+                                        <!-- Utility Charges (if any) -->
+                                        <template x-if="activeRowDetails.utility_amount > 0">
+                                            <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8125rem;">
+                                                <div style="font-weight: 600; color: #0f172a;">Utility Charges</div>
+                                                <span style="font-weight: 700; color: #0f172a;" x-text="'₹' + Number(activeRowDetails.utility_amount).toLocaleString('en-IN', {minimumFractionDigits: 2})"></span>
+                                            </div>
+                                        </template>
+
+                                        <!-- Tenant Maintenance Recoveries -->
+                                        <template x-if="activeRowDetails.maintenance_invoices && activeRowDetails.maintenance_invoices.length > 0">
+                                            <div style="border-top: 1px dashed #e2e8f0; padding-top: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                                                <div style="font-size: 0.6875rem; font-weight: 700; color: #ea580c; text-transform: uppercase; letter-spacing: 0.025em;">
+                                                    Tenant-Payable Maintenance Recoveries (Itemized)
+                                                </div>
+                                                <template x-for="m in activeRowDetails.maintenance_invoices" :key="m.id">
+                                                    <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8125rem; background: #fff7ed; padding: 0.375rem 0.625rem; border-radius: 0.375rem; border: 1px solid #fed7aa;">
+                                                        <div style="display: flex; align-items: center; gap: 0.375rem;">
+                                                            <span style="font-weight: 700; color: #9a3412;" x-text="'🔧 ' + m.ticket_number + ':'"></span>
+                                                            <span style="color: #7c2d12;" x-text="m.title"></span>
+                                                        </div>
+                                                        <span style="font-weight: 700; color: #ea580c;" x-text="'+₹' + Number(m.amount).toLocaleString('en-IN', {minimumFractionDigits: 2})"></span>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </template>
+
+                                        <!-- Operator Notes / Adjustments (if any) -->
+                                        <template x-if="activeRowDetails.notes">
+                                            <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 0.375rem; padding: 0.5rem 0.75rem; font-size: 0.75rem; color: #475569;">
+                                                <span style="font-weight: 700; color: #334155;">Notes / Adjustments: </span>
+                                                <span x-text="activeRowDetails.notes"></span>
+                                            </div>
+                                        </template>
+
+                                        <!-- Grand Total Line -->
+                                        <div style="border-top: 1px solid #cbd5e1; padding-top: 0.75rem; display: flex; align-items: center; justify-content: space-between; font-size: 1.0625rem; font-weight: 800;">
+                                            <span style="color: #0f172a;">Total Rent Demand Payable</span>
+                                            <span style="color: #16a34a;" x-text="'₹' + Number(activeRowDetails.total_amount).toLocaleString('en-IN', {minimumFractionDigits: 2})"></span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Read View Footer Actions -->
+                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-top: 0.5rem; flex-wrap: wrap;">
+                                    <button 
+                                        type="button" 
+                                        @click="activeRowDetails = null"
+                                        style="padding: 0.5rem 1rem; font-size: 0.8125rem; font-weight: 600; color: #64748b; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 0.5rem; cursor: pointer; transition: all 0.15s ease;"
+                                        onmouseover="this.style.background='#f1f5f9'"
+                                        onmouseout="this.style.background='#f8fafc'"
+                                    >
+                                        Close
+                                    </button>
+
+                                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                        <template x-if="activeRowDetails.status === 'ready'">
+                                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                                <template x-if="activeRowDetails.is_adjusted">
+                                                    <button 
+                                                        type="button" 
+                                                        @click="resetAdjustment()"
+                                                        title="Revert all adjustments back to calculated defaults"
+                                                        style="display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.5rem 0.875rem; font-size: 0.8125rem; font-weight: 600; color: #b45309; background: #fef3c7; border: 1px solid #fde68a; border-radius: 0.5rem; cursor: pointer; transition: all 0.15s ease;"
+                                                        onmouseover="this.style.background='#fde68a'"
+                                                        onmouseout="this.style.background='#fef3c7'">
+                                                        <span>↺ Revert to Defaults</span>
+                                                    </button>
+                                                </template>
+                                                <button 
+                                                    type="button" 
+                                                    @click="isEditing = true; initEditForm(activeRowDetails);"
+                                                    title="Edit pre-generation numbers"
+                                                    style="display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.5rem 0.875rem; font-size: 0.8125rem; font-weight: 600; color: #1e293b; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 0.5rem; cursor: pointer; transition: all 0.15s ease;"
+                                                    onmouseover="this.style.background='#e2e8f0'"
+                                                    onmouseout="this.style.background='#f1f5f9'">
+                                                    <span>✏️ Adjust Figures</span>
+                                                </button>
+                                                <button 
+                                                    type="button" 
+                                                    @click="singleGenerateItem = activeRowDetails; confirmSingleModalOpen = true;"
+                                                    style="display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.5rem 1.25rem; font-size: 0.8125rem; font-weight: 700; color: #ffffff; background: #4f46e5; border: none; border-radius: 0.5rem; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.1); transition: all 0.15s ease;"
+                                                    onmouseover="this.style.background='#4338ca'"
+                                                    onmouseout="this.style.background='#4f46e5'"
+                                                >
+                                                    <span>⚡ Generate Demand Now</span>
+                                                </button>
                                             </div>
                                         </template>
                                     </div>
+                                </div>
+
+                            </div>
+                        </template>
+
+                        <!-- Edit / Adjust View -->
+                        <template x-if="isEditing">
+                            <div style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem;">
+                                <!-- Informational Banner -->
+                                <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 0.5rem; padding: 0.75rem 1rem; font-size: 0.8125rem; color: #1e40af; display: flex; align-items: center; gap: 0.5rem;">
+                                    <span style="font-size: 1.125rem;">✏️</span>
+                                    <span>Edit demand figures before generation. Saving persists these custom numbers as a draft across sessions.</span>
+                                </div>
+
+                                <!-- Inputs Grid -->
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                                    <div>
+                                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #334155; margin-bottom: 0.25rem;">
+                                            Rent Demand Amount (₹)
+                                        </label>
+                                        <input 
+                                            type="number" 
+                                            step="0.01" 
+                                            x-model.number="editForm.rent_amount" 
+                                            style="width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; font-size: 0.875rem; font-weight: 600; color: #0f172a; box-sizing: border-box;" 
+                                        />
+                                        <div style="font-size: 0.6875rem; color: #64748b; margin-top: 0.25rem;">
+                                            Standard Rent: ₹<span x-text="Number(activeRowDetails.standard_rent).toLocaleString('en-IN', {minimumFractionDigits: 2})"></span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #334155; margin-bottom: 0.25rem;">
+                                            Utility Charges (₹)
+                                        </label>
+                                        <input 
+                                            type="number" 
+                                            step="0.01" 
+                                            x-model.number="editForm.utility_amount" 
+                                            style="width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; font-size: 0.875rem; font-weight: 600; color: #0f172a; box-sizing: border-box;" 
+                                        />
+                                        <div style="font-size: 0.6875rem; color: #64748b; margin-top: 0.25rem;">
+                                            Optional monthly utility charge
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Maintenance Invoices Selection (If any exist) -->
+                                <template x-if="activeRowDetails.maintenance_invoices && activeRowDetails.maintenance_invoices.length > 0">
+                                    <div style="border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 0.75rem 1rem; background: #fafafa;">
+                                        <div style="font-size: 0.75rem; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 0.5rem;">
+                                            Select Maintenance Invoices to Consolidate:
+                                        </div>
+                                        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                                            <template x-for="m in activeRowDetails.maintenance_invoices" :key="m.id">
+                                                <label style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8125rem; background: #ffffff; padding: 0.375rem 0.625rem; border-radius: 0.375rem; border: 1px solid #cbd5e1; cursor: pointer;">
+                                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            :value="m.id" 
+                                                            x-model="editForm.selected_maintenance_invoice_ids"
+                                                            style="border-radius: 0.25rem;" 
+                                                        />
+                                                        <span style="font-weight: 600; color: #0f172a;" x-text="m.ticket_number + ': ' + m.title"></span>
+                                                    </div>
+                                                    <span style="font-weight: 700; color: #ea580c;" x-text="'₹' + Number(m.amount).toLocaleString('en-IN', {minimumFractionDigits: 2})"></span>
+                                                </label>
+                                            </template>
+                                        </div>
+                                    </div>
                                 </template>
 
-                                <!-- Grand Total Line -->
-                                <div style="border-top: 1px solid #cbd5e1; padding-top: 0.75rem; display: flex; align-items: center; justify-content: space-between; font-size: 1.0625rem; font-weight: 800;">
-                                    <span style="color: #0f172a;">Total Rent Demand Payable</span>
-                                    <span style="color: #16a34a;" x-text="'₹' + Number(activeRowDetails.total_amount).toLocaleString('en-IN', {minimumFractionDigits: 2})"></span>
+                                <!-- Adjustment Notes -->
+                                <div>
+                                    <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #334155; margin-bottom: 0.25rem;">
+                                        Adjustment Reason / Operator Notes
+                                    </label>
+                                    <textarea 
+                                        x-model="editForm.notes" 
+                                        rows="2" 
+                                        placeholder="Enter reason for manual adjustment / custom notes (optional)..."
+                                        style="width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; font-size: 0.8125rem; color: #0f172a; resize: vertical; box-sizing: border-box;"
+                                    ></textarea>
                                 </div>
-                            </div>
-                        </div>
 
-                        <!-- Footer Actions -->
-                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-top: 0.5rem;">
-                            <button 
-                                type="button" 
-                                @click="activeRowDetails = null"
-                                style="padding: 0.5rem 1rem; font-size: 0.8125rem; font-weight: 600; color: #64748b; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 0.5rem; cursor: pointer; transition: all 0.15s ease;"
-                                onmouseover="this.style.background='#f1f5f9'"
-                                onmouseout="this.style.background='#f8fafc'"
-                            >
-                                Close
-                            </button>
+                                <!-- Live Calculation Preview Card -->
+                                <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 0.5rem; padding: 0.875rem 1rem; display: flex; align-items: center; justify-content: space-between;">
+                                    <div>
+                                        <div style="font-size: 0.6875rem; font-weight: 700; color: #166534; text-transform: uppercase;">Estimated Total Demand</div>
+                                        <div style="font-size: 0.75rem; color: #15803d;">Rent + Utility + Selected Maintenance</div>
+                                    </div>
+                                    <div style="font-size: 1.25rem; font-weight: 800; color: #166534;" x-text="'₹' + Number(calcTotalDemand()).toLocaleString('en-IN', {minimumFractionDigits: 2})"></div>
+                                </div>
 
-                            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <template x-if="activeRowDetails.status === 'ready'">
+                                <!-- Edit Footer Action Buttons -->
+                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-top: 0.5rem; border-top: 1px solid #e2e8f0; padding-top: 1rem;">
                                     <button 
                                         type="button" 
-                                        @click="$wire.generateSingle(activeRowDetails.agreement_id); activeRowDetails = null;"
-                                        style="display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.5rem 1.25rem; font-size: 0.8125rem; font-weight: 700; color: #ffffff; background: #4f46e5; border: none; border-radius: 0.5rem; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.1); transition: all 0.15s ease;"
-                                        onmouseover="this.style.background='#4338ca'"
-                                        onmouseout="this.style.background='#4f46e5'"
+                                        @click="isEditing = false"
+                                        style="padding: 0.5rem 1rem; font-size: 0.8125rem; font-weight: 600; color: #64748b; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 0.5rem; cursor: pointer; transition: all 0.15s ease;"
+                                        onmouseover="this.style.background='#f1f5f9'"
+                                        onmouseout="this.style.background='#f8fafc'"
                                     >
-                                        <span>⚡ Generate Demand Now</span>
+                                        Cancel
                                     </button>
-                                </template>
+
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <template x-if="activeRowDetails.is_adjusted">
+                                            <button 
+                                                type="button" 
+                                                @click="resetAdjustment()"
+                                                style="padding: 0.5rem 0.875rem; font-size: 0.8125rem; font-weight: 600; color: #b45309; background: #fef3c7; border: 1px solid #fde68a; border-radius: 0.5rem; cursor: pointer; transition: all 0.15s ease;"
+                                                onmouseover="this.style.background='#fde68a'"
+                                                onmouseout="this.style.background='#fef3c7'">
+                                                ↺ Revert to Defaults
+                                            </button>
+                                        </template>
+                                        <button 
+                                            type="button" 
+                                            @click="saveAdjustment()"
+                                            style="display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.5rem 1.25rem; font-size: 0.8125rem; font-weight: 700; color: #ffffff; background: #2563eb; border: none; border-radius: 0.5rem; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.1); transition: all 0.15s ease;"
+                                            onmouseover="this.style.background='#1d4ed8'"
+                                            onmouseout="this.style.background='#2563eb'"
+                                        >
+                                            <span>💾 Save Adjustments</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <!-- Single Agreement Rent Demand Confirmation Modal -->
+        <template x-teleport="body">
+            <div 
+                x-show="confirmSingleModalOpen" 
+                x-cloak
+                @keydown.escape.window="confirmSingleModalOpen = false"
+                style="position: fixed; inset: 0; z-index: 9999; background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(4px); overflow-y: auto;"
+                x-transition:enter="transition ease-out duration-200"
+                x-transition:enter-start="opacity-0"
+                x-transition:enter-end="opacity-100"
+                x-transition:leave="transition ease-in duration-150"
+                x-transition:leave-start="opacity-100"
+                x-transition:leave-end="opacity-0">
+                <div 
+                    style="min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 1.5rem; width: 100%; box-sizing: border-box;"
+                    @click.self="confirmSingleModalOpen = false">
+                    <div 
+                        @click.away="confirmSingleModalOpen = false"
+                        style="background: #ffffff; border-radius: 1rem; max-width: 32rem; width: 100%; margin: auto; padding: 1.5rem; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.05); position: relative;"
+                        x-show="confirmSingleModalOpen"
+                        x-transition:enter="transition ease-out duration-200"
+                        x-transition:enter-start="opacity-0 scale-95"
+                        x-transition:enter-end="opacity-100 scale-100"
+                        x-transition:leave="transition ease-in duration-150"
+                        x-transition:leave-start="opacity-100 scale-100"
+                        x-transition:leave-end="opacity-0 scale-95">
+                        
+                        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+                            <div style="width: 2.75rem; height: 2.75rem; border-radius: 9999px; background: #e0e7ff; color: #4f46e5; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 1.5rem; height: 1.5rem;">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 style="font-size: 1.125rem; font-weight: 700; color: #0f172a; margin: 0;">
+                                    Confirm Rent Demand Generation
+                                </h3>
+                                <p style="font-size: 0.8125rem; color: #64748b; margin: 0.25rem 0 0 0;" x-text="singleGenerateItem ? (singleGenerateItem.property_name + ' • ' + singleGenerateItem.formatted_period) : ''">
+                                </p>
                             </div>
                         </div>
 
+                        <template x-if="singleGenerateItem">
+                            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 1rem; margin-bottom: 1.25rem; font-size: 0.8125rem;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                    <span style="color: #64748b;">Tenant (Occupant):</span>
+                                    <strong style="color: #0f172a;" x-text="singleGenerateItem.tenant_name"></strong>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                    <span style="color: #64748b;">Agreement Code:</span>
+                                    <span style="color: #0f172a; font-family: monospace; font-weight: 700;" x-text="singleGenerateItem.agreement_code"></span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                    <span style="color: #64748b;">Base Rent Demand:</span>
+                                    <span style="color: #0f172a; font-weight: 600;" x-text="'₹' + Number(singleGenerateItem.rent_amount).toLocaleString('en-IN', {minimumFractionDigits: 2})"></span>
+                                </div>
+                                <template x-if="singleGenerateItem.utility_amount > 0">
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                        <span style="color: #64748b;">Utility Charges:</span>
+                                        <span style="color: #0f172a; font-weight: 600;" x-text="'₹' + Number(singleGenerateItem.utility_amount).toLocaleString('en-IN', {minimumFractionDigits: 2})"></span>
+                                    </div>
+                                </template>
+                                <template x-if="singleGenerateItem.maintenance_amount > 0">
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                        <span style="color: #64748b;">Maintenance Recoveries:</span>
+                                        <span style="color: #ea580c; font-weight: 600;" x-text="'₹' + Number(singleGenerateItem.maintenance_amount).toLocaleString('en-IN', {minimumFractionDigits: 2})"></span>
+                                    </div>
+                                </template>
+                                <div style="border-top: 1px solid #cbd5e1; padding-top: 0.5rem; display: flex; justify-content: space-between; font-size: 0.9375rem;">
+                                    <strong style="color: #0f172a;">Total Rent Demand Invoiced:</strong>
+                                    <strong style="color: #4f46e5;" x-text="'₹' + Number(singleGenerateItem.total_amount).toLocaleString('en-IN', {minimumFractionDigits: 2})"></strong>
+                                </div>
+                            </div>
+                        </template>
+
+                        <p style="font-size: 0.75rem; color: #64748b; margin-bottom: 1.25rem; line-height: 1.4;">
+                            ⚠️ This operation will generate an official monthly rent demand notice, post accounting charges to tenant Accounts Receivable (AR), and record pass-through payable to owner accounts.
+                        </p>
+
+                        <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+                            <button 
+                                type="button" 
+                                @click="confirmSingleModalOpen = false"
+                                style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 0.375rem; padding: 0.5rem 1rem; font-size: 0.8125rem; font-weight: 600; color: #475569; cursor: pointer;">
+                                Cancel
+                            </button>
+                            <button 
+                                type="button" 
+                                @click="confirmSingleModalOpen = false; activeRowDetails = null; $wire.generateSingle(singleGenerateItem.agreement_id);"
+                                style="background: #4f46e5; border: none; border-radius: 0.375rem; padding: 0.5rem 1.25rem; font-size: 0.8125rem; font-weight: 700; color: #ffffff; cursor: pointer;">
+                                Yes, Generate Demand
+                            </button>
+                        </div>
                     </div>
-                </template>
+                </div>
             </div>
-        </div>
-    </div>
+        </template>
+</div>
 </x-filament-panels::page>

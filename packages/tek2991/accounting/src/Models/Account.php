@@ -192,6 +192,51 @@ class Account extends Model
         ]);
     }
 
+    /**
+     * Scope to liquid Bank and Cash accounts for recording deposits and disbursements.
+     */
+    public function scopeBankAndCash(Builder $query): Builder
+    {
+        return $query->where('type', AccountType::Asset)
+            ->where(function ($q) {
+                $q->whereIn('system_role', [
+                    SystemRole::Bank,
+                    SystemRole::Cash,
+                ])
+                ->orWhere('code', 'like', '11%')
+                ->orWhere('name', 'like', '%Current Account%')
+                ->orWhere('name', 'like', '%Savings Account%')
+                ->orWhere('name', 'like', '%Bank%')
+                ->orWhere('name', 'like', '%Cash%');
+            })
+            ->where('is_control_account', false)
+            ->where('archived', false);
+    }
+
+    /**
+     * Get bank and cash account options formatted for select dropdowns,
+     * highlighting the default bank account at the top with a badge.
+     */
+    public static function bankAndCashOptionsWithDefault(): array
+    {
+        $defaultId = \Tek2991\Accounting\Facades\Accounting::getDefaultBankAccountId();
+
+        $accounts = static::bankAndCash()->get();
+        if ($defaultId) {
+            $accounts = $accounts->sortByDesc(fn (Account $acc) => $acc->id === $defaultId);
+        }
+
+        return $accounts->mapWithKeys(function (Account $acc) use ($defaultId) {
+            if ($acc->id === $defaultId) {
+                return [
+                    $acc->id => "<div style='display: flex; align-items: center; justify-content: space-between; width: 100%; font-weight: 600; color: #1e40af;'><span>{$acc->name}</span><span style='font-size: 10px; font-weight: 700; background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 9999px; text-transform: uppercase;'>Default</span></div>",
+                ];
+            }
+
+            return [$acc->id => "<div>{$acc->name}</div>"];
+        })->toArray();
+    }
+
     // ──────────────────────────────────────────────────────────────
     // Accessors
     // ──────────────────────────────────────────────────────────────

@@ -157,7 +157,7 @@ class FinancialOperationsHubTest extends TestCase
 
     public function test_record_deposit_receipt_action(): void
     {
-        $bankAccount = Account::where('type', 'asset')->first();
+        $bankAccount = Account::bankAndCash()->first();
 
         Livewire::test(FinancialOperationsHub::class)
             ->callAction('recordDepositReceipt', [
@@ -176,7 +176,7 @@ class FinancialOperationsHubTest extends TestCase
 
     public function test_record_deposit_placement_action(): void
     {
-        $bankAccount = Account::where('type', 'asset')->first();
+        $bankAccount = Account::bankAndCash()->first();
 
         Livewire::test(FinancialOperationsHub::class)
             ->callAction('recordDepositPlacement', [
@@ -227,7 +227,7 @@ class FinancialOperationsHubTest extends TestCase
             'notes' => 'Maintenance Painting Invoice',
         ]);
 
-        $bankAccount = Account::where('type', 'asset')->first();
+        $bankAccount = Account::bankAndCash()->first();
 
         Livewire::test(FinancialOperationsHub::class)
             ->callAction('recordInvoicePayment', [
@@ -257,5 +257,17 @@ class FinancialOperationsHubTest extends TestCase
 
         $component->set('search', 'NonExistentXYZ');
         $this->assertCount(0, $component->instance()->getSecurityDeposits());
+    }
+
+    public function test_record_deposit_receipt_auto_selects_default_bank_account(): void
+    {
+        $defaultBankId = \Tek2991\Accounting\Facades\Accounting::getDefaultBankAccountId();
+        $this->assertNotNull($defaultBankId);
+
+        Livewire::test(FinancialOperationsHub::class)
+            ->mountAction('recordDepositReceipt')
+            ->assertActionDataSet([
+                'bank_account_id' => $defaultBankId,
+            ]);
     }
 }

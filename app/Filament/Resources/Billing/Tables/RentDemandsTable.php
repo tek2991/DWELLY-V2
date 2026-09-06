@@ -87,11 +87,43 @@ class RentDemandsTable
             ->defaultSort('issue_date', 'desc')
             ->recordActions([
                 ActionGroup::make([
+                    Action::make('post_invoice')
+                        ->label('Approve & Post')
+                        ->icon('heroicon-o-paper-airplane')
+                        ->color('success')
+                        ->requiresConfirmation()
+                        ->modalHeading(fn (Invoice $record) => "Post Rent Demand {$record->invoice_number}")
+                        ->modalDescription('Are you sure you want to approve and post this draft rent demand into the General Ledger?')
+                        ->visible(fn (Invoice $record) => $record->status === InvoiceStatus::Draft)
+                        ->action(function (Invoice $record) {
+                            try {
+                                app(InvoiceService::class)->post($record);
+                                Notification::make()
+                                    ->title('Demand Posted')
+                                    ->body("Rent Demand {$record->invoice_number} has been approved and posted to the General Ledger.")
+                                    ->success()
+                                    ->send();
+                            } catch (\Exception $e) {
+                                Notification::make()
+                                    ->title('Failed to Post Demand')
+                                    ->body($e->getMessage())
+                                    ->danger()
+                                    ->send();
+                            }
+                        }),
+
                     Action::make('record_payment')
                         ->label('Record Payment')
                         ->icon('heroicon-o-banknotes')
                         ->color('success')
-                        ->visible(fn (Invoice $record) => $record->balance_due > 0)
+                        ->visible(fn (Invoice $record) => $record->balance_due > 0 && $record->status !== InvoiceStatus::Draft)
+                        ->fillForm(function (Invoice $record): array {
+                            return [
+                                'amount' => $record->balance_due,
+                                'payment_account_id' => \Tek2991\Accounting\Facades\Accounting::getDefaultBankAccountId(),
+                                'payment_date' => now()->toDateString(),
+                            ];
+                        })
                         ->form([
                             TextInput::make('amount')
                                 ->label('Payment Amount (₹)')
@@ -101,8 +133,12 @@ class RentDemandsTable
                                 ->required(),
 
                             Select::make('payment_account_id')
-                                ->label('Payment / Bank Account')
-                                ->options(fn () => Account::where('type', 'asset')->pluck('name', 'id'))
+                                ->label('Deposit To (Bank / Cash Account)')
+                                ->options(fn () => Account::bankAndCashOptionsWithDefault())
+                                ->default(fn () => \Tek2991\Accounting\Facades\Accounting::getDefaultBankAccountId())
+                                ->allowHtml()
+                                ->searchable()
+                                ->preload()
                                 ->required(),
 
                             DatePicker::make('payment_date')
@@ -115,7 +151,9 @@ class RentDemandsTable
                                 ->placeholder('e.g. UTR12345678'),
 
                             Textarea::make('notes')
-                                ->label('Payment Remarks'),
+                                ->label('Payment Remarks')
+                                ->placeholder('e.g. Received via NEFT / UPI / Cheque')
+                                ->rows(2),
                         ])
                         ->action(function (Invoice $record, array $data, RentBillingService $service) {
                             $service->recordPayment(

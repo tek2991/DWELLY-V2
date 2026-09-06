@@ -4,6 +4,8 @@ namespace App\Domain\Finance\Services;
 
 use App\Domain\Finance\Actions\ProcessOwnerPayoutAction;
 use App\Domain\Finance\Models\OwnerPayout;
+use App\Domain\Mou\Enums\MouType;
+use App\Domain\Opportunity\Enums\MouStatus;
 use App\Domain\Party\Models\Party;
 use App\Domain\Property\Models\Property;
 use App\Models\User;
@@ -21,12 +23,71 @@ class OwnerPayoutService
     ) {}
 
     /**
+     * Resolve the agreed management fee percentage from the property's active MOU or financial terms.
+     */
+    public function getManagementFeePercent(Property $property): float
+    {
+        // 1. Check active or verified pricing / onboarding MOU
+        $mous = $property->relationLoaded('mous')
+            ? $property->mous
+            : $property->mous()->get();
+
+        $pricingMous = $mous->filter(function ($mou) {
+            $type = $mou->type instanceof \BackedEnum ? $mou->type->value : (string) $mou->type;
+            $status = $mou->status instanceof \BackedEnum ? $mou->status->value : (string) $mou->status;
+
+            return in_array($type, [MouType::PRICING_UPDATE->value, MouType::ONBOARDING->value], true)
+                && in_array($status, [MouStatus::VERIFIED->value, MouStatus::CONVERTED->value, MouStatus::COMPLETED->value], true);
+        })->sortByDesc(fn ($m) => $m->verified_at ?? $m->created_at);
+
+        $activeMou = $pricingMous->first()
+            ?? $mous->filter(fn ($m) => in_array($m->status instanceof \BackedEnum ? $m->status->value : (string) $m->status, [MouStatus::VERIFIED->value, MouStatus::CONVERTED->value, MouStatus::COMPLETED->value], true))->sortByDesc('id')->first()
+            ?? $mous->sortByDesc('id')->first();
+
+        if ($activeMou && isset($activeMou->legal_terms['fee_percentage']) && is_numeric($activeMou->legal_terms['fee_percentage'])) {
+            return (float) $activeMou->legal_terms['fee_percentage'];
+        }
+
+        // 2. Check PropertyFinancialTerm (which is created from the MOU)
+        $financialTerms = $property->relationLoaded('financialTerms')
+            ? $property->financialTerms->sortByDesc('effective_from')
+            : $property->financialTerms()->latest('effective_from')->get();
+
+        $latestTerm = $financialTerms->first();
+        if ($latestTerm && $latestTerm->fee_percentage !== null && is_numeric($latestTerm->fee_percentage)) {
+            return (float) $latestTerm->fee_percentage;
+        }
+
+        // 3. Fallback default if no MOU specifies a fee percentage
+        return 10.0;
+    }
+
+    /**
      * Calculate owner payout details, billing period, proration, and deductions for a property and month/year.
      */
     public function calculatePayoutDetails(Property $property, int $month, int $year, array $options = []): array
     {
         $monthStart = Carbon::create($year, $month, 1)->startOfDay();
         $monthEnd = $monthStart->copy()->endOfMonth()->startOfDay();
+
+        // Check for existing draft payout adjustment if options not explicitly overriding
+        $draftPayout = null;
+        if (empty($options) || !empty($options['use_draft'])) {
+            $draftPayout = OwnerPayout::where('property_id', $property->id)
+                ->where('status', 'draft')
+                ->whereMonth('period_start', $month)
+                ->whereYear('period_start', $year)
+                ->first();
+        }
+
+        $draftSnapshot = $draftPayout?->document_snapshot ?? [];
+        $isAdjusted = ($draftPayout !== null);
+
+        $mouFeePercent = isset($options['management_fee_percent'])
+            ? (float) $options['management_fee_percent']
+            : (isset($draftSnapshot['management_fee_percent'])
+                ? (float) $draftSnapshot['management_fee_percent']
+                : $this->getManagementFeePercent($property));
 
         // 1. Identify Owner
         $owner = $property->owner;
@@ -61,12 +122,16 @@ class OwnerPayoutService
                 'days_active' => 0,
                 'total_days_in_month' => (int) $monthStart->daysInMonth,
                 'gross_rent' => 0.0,
-                'management_fee_percent' => 10.0,
+                'management_fee_percent' => $mouFeePercent,
                 'management_fee' => 0.0,
                 'advance_balance' => 0.0,
                 'advance_offset' => 0.0,
                 'reserve_deduction' => 0.0,
                 'net_payout' => 0.0,
+                'is_adjusted' => false,
+                'draft_payout_id' => null,
+                'selected_maintenance_invoice_ids' => [],
+                'notes' => null,
                 'bank_details_formatted' => 'No Bank Details',
             ];
         }
@@ -89,12 +154,16 @@ class OwnerPayoutService
                 'days_active' => 0,
                 'total_days_in_month' => (int) $monthStart->daysInMonth,
                 'gross_rent' => 0.0,
-                'management_fee_percent' => 10.0,
+                'management_fee_percent' => $mouFeePercent,
                 'management_fee' => 0.0,
                 'advance_balance' => 0.0,
                 'advance_offset' => 0.0,
                 'reserve_deduction' => 0.0,
                 'net_payout' => 0.0,
+                'is_adjusted' => false,
+                'draft_payout_id' => null,
+                'selected_maintenance_invoice_ids' => [],
+                'notes' => null,
                 'bank_details_formatted' => $this->formatOwnerBankDetails($owner),
             ];
         }
@@ -118,12 +187,16 @@ class OwnerPayoutService
                 'days_active' => 0,
                 'total_days_in_month' => (int) $monthStart->daysInMonth,
                 'gross_rent' => 0.0,
-                'management_fee_percent' => 10.0,
+                'management_fee_percent' => $mouFeePercent,
                 'management_fee' => 0.0,
                 'advance_balance' => 0.0,
                 'advance_offset' => 0.0,
                 'reserve_deduction' => 0.0,
                 'net_payout' => 0.0,
+                'is_adjusted' => false,
+                'draft_payout_id' => null,
+                'selected_maintenance_invoice_ids' => [],
+                'notes' => null,
                 'bank_details_formatted' => $this->formatOwnerBankDetails($owner),
             ];
         }
@@ -145,26 +218,27 @@ class OwnerPayoutService
         // 5. Determine Gross Rent
         $grossRent = isset($options['rent_collected'])
             ? (float) $options['rent_collected']
-            : ($existingInvoice ? (float) $existingInvoice->grand_total : (float) $rentCalc['rent_amount']);
+            : ($draftPayout !== null
+                ? (float) $draftPayout->rent_collected
+                : ($existingInvoice ? (float) $existingInvoice->grand_total : (float) $rentCalc['rent_amount']));
 
         // 6. Management Fee (Commission)
-        $feePercent = isset($options['management_fee_percent'])
-            ? (float) $options['management_fee_percent']
-            : 10.0;
-        $managementFee = round(($grossRent * $feePercent) / 100, 2);
+        $feePercent = $mouFeePercent;
+        $managementFee = isset($options['management_fee'])
+            ? (float) $options['management_fee']
+            : ($draftPayout !== null && !isset($options['management_fee_percent'])
+                ? (float) $draftPayout->management_fee
+                : round(($grossRent * $feePercent) / 100, 2));
 
         // 7. Maintenance Invoices & Advance Balance Offsets
-        $maintenanceRequestIds = \App\Domain\Maintenance\Models\MaintenanceRequest::where('property_id', $property->id)->pluck('id');
-        $allUnpaidMaintenanceInvoices = Invoice::where('reference_type', \App\Domain\Maintenance\Models\MaintenanceRequest::class)
-            ->whereIn('reference_id', $maintenanceRequestIds)
-            ->whereIn('status', [
-                \Tek2991\Accounting\Enums\InvoiceStatus::Draft,
-                \Tek2991\Accounting\Enums\InvoiceStatus::Sent,
-                \Tek2991\Accounting\Enums\InvoiceStatus::PartiallyPaid,
-            ])
-            ->get();
+        $pendingOptions = $this->getPendingMaintenanceOptions($property);
+        $availableInvoiceIds = array_keys($pendingOptions);
 
-        $selectedIds = $options['selected_maintenance_invoice_ids'] ?? null;
+        $allUnpaidMaintenanceInvoices = Invoice::whereIn('id', $availableInvoiceIds)->get();
+
+        $selectedIds = $options['selected_maintenance_invoice_ids']
+            ?? $draftSnapshot['selected_maintenance_invoice_ids']
+            ?? null;
         $unpaidMaintenanceInvoices = $selectedIds !== null 
             ? $allUnpaidMaintenanceInvoices->whereIn('id', $selectedIds)
             : $allUnpaidMaintenanceInvoices;
@@ -192,11 +266,15 @@ class OwnerPayoutService
 
         $advanceOffset = isset($options['advance_offset'])
             ? (float) $options['advance_offset']
-            : min($totalAdvanceRequired, max(0.0, $grossRent - $managementFee));
+            : ($draftPayout !== null
+                ? (float) $draftPayout->advance_offset
+                : min($totalAdvanceRequired, max(0.0, $grossRent - $managementFee)));
 
         $reserveDeduction = isset($options['reserve_deduction'])
             ? (float) $options['reserve_deduction']
-            : 0.0;
+            : ($draftPayout !== null
+                ? (float) $draftPayout->reserve_deduction
+                : 0.0);
 
         // 8. Net Payout
         $netPayout = max(0.0, round($grossRent - $managementFee - $advanceOffset - $reserveDeduction, 2));
@@ -227,10 +305,14 @@ class OwnerPayoutService
             'maintenance_offset' => $maintenanceOffset,
             'maintenance_invoices' => $maintenanceItems,
             'maintenance_invoice_ids' => array_column($maintenanceItems, 'id'),
+            'selected_maintenance_invoice_ids' => $selectedIds !== null ? array_values($selectedIds) : array_column($maintenanceItems, 'id'),
             'total_advance_required' => $totalAdvanceRequired,
             'advance_offset' => $advanceOffset,
             'reserve_deduction' => $reserveDeduction,
             'net_payout' => $netPayout,
+            'is_adjusted' => $isAdjusted,
+            'draft_payout_id' => $draftPayout?->id,
+            'notes' => $options['notes'] ?? $draftPayout?->notes,
             'bank_details_formatted' => $this->formatOwnerBankDetails($owner),
         ];
     }
@@ -241,7 +323,12 @@ class OwnerPayoutService
     public function getBulkPayoutPreview(int $month, int $year): array
     {
         $properties = Property::whereHas('agreements', fn ($q) => $q->where('status', 'active'))
-            ->with(['agreements' => fn ($q) => $q->where('status', 'active'), 'owner.bankAccounts'])
+            ->with([
+                'agreements' => fn ($q) => $q->where('status', 'active'),
+                'owner.bankAccounts',
+                'financialTerms',
+                'mous',
+            ])
             ->get();
 
         $monthName = date('F Y', mktime(0, 0, 0, $month, 1, $year));
@@ -271,6 +358,7 @@ class OwnerPayoutService
                             $q->whereMonth('period_start', $monthStart->month)->whereYear('period_start', $monthStart->year);
                         }
                     })
+                    ->where('status', '!=', 'draft')
                     ->first();
             }
 
@@ -286,8 +374,8 @@ class OwnerPayoutService
                 $alreadyProcessedCount++;
             } else {
                 $status = 'ready';
-                $statusLabel = 'Ready to Disburse';
-                $badgeColor = 'success';
+                $statusLabel = $details['is_adjusted'] ? 'Ready • Adjusted' : 'Ready to Disburse';
+                $badgeColor = $details['is_adjusted'] ? 'amber' : 'success';
                 $readyCount++;
                 $totalGrossRent += $details['gross_rent'];
                 $totalManagementFee += $details['management_fee'];
@@ -374,8 +462,9 @@ class OwnerPayoutService
                             'reserve_deduction' => $item['reserve_deduction'],
                             'bank_account_id' => $options['bank_account_id'] ?? null,
                             'payout_date' => $options['payout_date'] ?? null,
-                            'maintenance_invoice_ids' => $item['maintenance_invoice_ids'] ?? [],
-                            'notes' => $options['notes'] ?? "Monthly Owner Payout for {$preview['month_name']} (Period: {$item['formatted_period']})",
+                            'maintenance_invoice_ids' => $item['selected_maintenance_invoice_ids'] ?? $item['maintenance_invoice_ids'] ?? [],
+                            'notes' => $item['notes'] ?? $options['notes'] ?? "Monthly Owner Payout for {$preview['month_name']} (Period: {$item['formatted_period']})",
+                            'draft_payout_id' => $item['draft_payout_id'] ?? null,
                         ]
                     );
 
@@ -432,21 +521,28 @@ class OwnerPayoutService
      */
     public function getPendingMaintenanceOptions(Property $property): array
     {
-        $maintenanceRequestIds = \App\Domain\Maintenance\Models\MaintenanceRequest::where('property_id', $property->id)->pluck('id');
+        $maintRequests = \App\Domain\Maintenance\Models\MaintenanceRequest::where('property_id', $property->id)->get();
+        $maintenanceRequestIds = $maintRequests->pluck('id');
+
         $unpaidMaintenanceInvoices = Invoice::where('reference_type', \App\Domain\Maintenance\Models\MaintenanceRequest::class)
             ->whereIn('reference_id', $maintenanceRequestIds)
-            ->whereIn('status', [
-                \Tek2991\Accounting\Enums\InvoiceStatus::Draft,
-                \Tek2991\Accounting\Enums\InvoiceStatus::Sent,
-                \Tek2991\Accounting\Enums\InvoiceStatus::PartiallyPaid,
+            ->whereNotIn('status', [
+                \Tek2991\Accounting\Enums\InvoiceStatus::Paid,
+                \Tek2991\Accounting\Enums\InvoiceStatus::Cancelled,
             ])
+            ->where('balance_due', '>', 0)
             ->get();
 
         $options = [];
         foreach ($unpaidMaintenanceInvoices as $mInv) {
+            $req = $maintRequests->firstWhere('id', $mInv->reference_id);
+            // Exclude if it is exclusively a tenant invoice
+            if ($req && $req->tenant_invoice_id == $mInv->id && $req->owner_invoice_id != $mInv->id) {
+                continue;
+            }
+
             $amt = (float) ($mInv->balance_due > 0 ? $mInv->balance_due : $mInv->grand_total);
             if ($amt > 0) {
-                $req = \App\Domain\Maintenance\Models\MaintenanceRequest::find($mInv->reference_id);
                 $ticketNumber = $req?->ticket_number ?? 'TKT-' . substr($mInv->id, -4);
                 $title = $req?->title ?? 'Maintenance Work';
                 $label = "🔧 {$ticketNumber}: {$title} (Inv #{$mInv->invoice_number}) — ₹" . number_format($amt, 2);
@@ -651,5 +747,72 @@ class OwnerPayoutService
         ]);
 
         return $disk->path($relativePath);
+    }
+
+    /**
+     * Save or update a draft payout with custom adjustments.
+     */
+    public function saveDraftPayout(Property $property, int $month, int $year, array $adjustedData, ?User $actor = null): OwnerPayout
+    {
+        $details = $this->calculatePayoutDetails($property, $month, $year, $adjustedData);
+        if (! $details['eligible']) {
+            throw new \InvalidArgumentException($details['reason'] ?? 'Property is not eligible for payout.');
+        }
+
+        $monthStart = Carbon::create($year, $month, 1)->startOfDay();
+        $periodStart = $details['billing_period_start'] ?? $monthStart->toDateString();
+        $periodEnd = $details['billing_period_end'] ?? $monthStart->copy()->endOfMonth()->toDateString();
+
+        $snapshot = [
+            'is_adjusted' => true,
+            'adjusted_by' => $actor?->id,
+            'adjusted_at' => now()->toIso8601String(),
+            'management_fee_percent' => $details['management_fee_percent'],
+            'selected_maintenance_invoice_ids' => $details['selected_maintenance_invoice_ids'] ?? [],
+            'custom_inputs' => $adjustedData,
+        ];
+
+        $draftPayout = OwnerPayout::where('property_id', $property->id)
+            ->where(function ($q) use ($monthStart) {
+                $q->whereMonth('period_start', $monthStart->month)->whereYear('period_start', $monthStart->year);
+            })
+            ->where('status', 'draft')
+            ->first();
+
+        if (! $draftPayout) {
+            $draftPayout = new OwnerPayout();
+            $draftPayout->property_id = $property->id;
+            $draftPayout->status = 'draft';
+        }
+
+        $draftPayout->branch_id = $property->branch_id ?: $draftPayout->branch_id ?: \App\Models\Branch::first()?->id;
+        $draftPayout->owner_id = $property->owner_id ?: $details['owner_id'];
+        $draftPayout->period_start = $periodStart;
+        $draftPayout->period_end = $periodEnd;
+        $draftPayout->rent_collected = $details['gross_rent'];
+        $draftPayout->management_fee = $details['management_fee'];
+        $draftPayout->advance_offset = $details['advance_offset'];
+        $draftPayout->reserve_deduction = $details['reserve_deduction'];
+        $draftPayout->amount = $details['net_payout'];
+        $draftPayout->notes = $adjustedData['notes'] ?? $details['notes'] ?? null;
+        $draftPayout->document_snapshot = $snapshot;
+        $draftPayout->save();
+
+        return $draftPayout;
+    }
+
+    /**
+     * Delete draft payout adjustments for a property, reverting to calculated defaults.
+     */
+    public function resetDraftPayout(Property $property, int $month, int $year): bool
+    {
+        $monthStart = Carbon::create($year, $month, 1)->startOfDay();
+
+        return (bool) OwnerPayout::where('property_id', $property->id)
+            ->where(function ($q) use ($monthStart) {
+                $q->whereMonth('period_start', $monthStart->month)->whereYear('period_start', $monthStart->year);
+            })
+            ->where('status', 'draft')
+            ->delete();
     }
 }

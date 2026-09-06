@@ -50,11 +50,15 @@ class MaintenanceBillingResource extends Resource
 
     public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
     {
-        return parent::getEloquentQuery()
+        $query = parent::getEloquentQuery()
             ->where(function ($query) {
                 $query->where('reference_type', MaintenanceRequest::class)
                     ->orWhere('notes', 'like', '%Maintenance%');
             });
+
+        app(\Tek2991\Accounting\Services\BranchContext::class)->applyQueryScope($query);
+
+        return $query;
     }
 
     public static function getRelations(): array

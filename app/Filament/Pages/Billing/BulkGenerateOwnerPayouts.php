@@ -66,7 +66,7 @@ class BulkGenerateOwnerPayouts extends Page
 
     public function getSubheading(): ?string
     {
-        return 'Review monthly gross rental receipts, automatic 10% management commissions, maintenance deductions, and batch-disburse net payouts to property owners.';
+        return 'Review monthly gross rental receipts, agreed MOU management commissions, maintenance deductions, and batch-disburse net payouts to property owners.';
     }
 
     public static function canAccess(): bool
@@ -320,6 +320,130 @@ class BulkGenerateOwnerPayouts extends Page
         } catch (\Throwable $e) {
             Notification::make()
                 ->title('Disbursement Failed')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
+    /**
+     * Execute payout disbursement for a single property
+     */
+    public function disburseSingleProperty(string $propertyId): void
+    {
+        $service = app(OwnerPayoutService::class);
+        $options = [
+            'bank_account_id' => $this->bankAccountId,
+            'payout_date' => $this->payoutDate ?: now()->toDateString(),
+        ];
+
+        try {
+            $summary = $service->bulkProcessOwnerPayoutsWithSummary(
+                $this->month,
+                $this->year,
+                [(string) $propertyId],
+                auth()->user(),
+                $options
+            );
+
+            $this->lastExecutionSummary = $summary;
+            $this->refreshSelectedProperties();
+
+            $monthName = date('F Y', mktime(0, 0, 0, $this->month, 1, $this->year));
+
+            if ($summary['count'] > 0) {
+                Notification::make()
+                    ->title('Owner Payout Disbursed')
+                    ->body("Successfully disbursed payout of ₹" . number_format($summary['total_amount'], 2) . " for {$monthName}.")
+                    ->success()
+                    ->send();
+            } else {
+                Notification::make()
+                    ->title('No Payout Processed')
+                    ->body('Could not disburse payout. Please check property eligibility.')
+                    ->warning()
+                    ->send();
+            }
+        } catch (\Throwable $e) {
+            Notification::make()
+                ->title('Disbursement Failed')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
+    public function processSinglePayout(string $propertyId): void
+    {
+        $this->disburseSingleProperty($propertyId);
+    }
+
+    /**
+     * Save custom payout adjustments for a property.
+     */
+    public function savePayoutAdjustment(string $propertyId, array $data): void
+    {
+        $property = Property::find($propertyId);
+        if (! $property) {
+            Notification::make()->title('Property Not Found')->danger()->send();
+            return;
+        }
+
+        try {
+            $service = app(OwnerPayoutService::class);
+            $service->saveDraftPayout(
+                $property,
+                $this->month,
+                $this->year,
+                $data,
+                auth()->user()
+            );
+
+            $this->refreshSelectedProperties();
+
+            Notification::make()
+                ->title('Payout Adjustments Saved')
+                ->body('Custom numbers have been saved as a draft for this billing cycle.')
+                ->success()
+                ->send();
+        } catch (\Throwable $e) {
+            Notification::make()
+                ->title('Failed to Save Adjustments')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
+    /**
+     * Reset payout adjustments back to calculated defaults.
+     */
+    public function resetPayoutAdjustment(string $propertyId): void
+    {
+        $property = Property::find($propertyId);
+        if (! $property) {
+            Notification::make()->title('Property Not Found')->danger()->send();
+            return;
+        }
+
+        try {
+            $service = app(OwnerPayoutService::class);
+            $service->resetDraftPayout(
+                $property,
+                $this->month,
+                $this->year
+            );
+
+            $this->refreshSelectedProperties();
+
+            Notification::make()
+                ->title('Adjustments Reverted')
+                ->body('Reverted to calculated system defaults.')
+                ->info()
+                ->send();
+        } catch (\Throwable $e) {
+            Notification::make()
+                ->title('Failed to Reset Adjustments')
                 ->body($e->getMessage())
                 ->danger()
                 ->send();

@@ -39,11 +39,13 @@ class RentDemandsResource extends Resource
 
     public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
     {
-        return parent::getEloquentQuery()
-            ->where(function ($query) {
-                $query->where('reference_type', TenancyAgreement::class)
-                    ->orWhere('notes', 'like', '%Rent%');
-            });
+        $query = parent::getEloquentQuery();
+        app(\Tek2991\Accounting\Services\BranchContext::class)->applyQueryScope($query);
+
+        return $query->where(function ($q) {
+            $q->where('reference_type', TenancyAgreement::class)
+                ->orWhere('notes', 'like', '%Rent%');
+        });
     }
 
     public static function getRelations(): array

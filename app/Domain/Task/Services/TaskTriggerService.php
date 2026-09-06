@@ -120,7 +120,7 @@ class TaskTriggerService
             'checklist_items' => [
                 ['title' => 'Confirm exact vacating time with tenant and schedule field executive', 'is_mandatory' => true],
                 ['title' => 'Conduct physical move-out inspection against move-in audit baseline', 'is_mandatory' => true],
-                ['title' => 'Collect all physical keys, gate remotes, and society access badges', 'is_mandatory' => true],
+                ['title' => 'Collect all physical keys and gate remotes', 'is_mandatory' => true],
                 ['title' => 'Take final electricity and water submeter readings', 'is_mandatory' => true],
             ],
         ]);

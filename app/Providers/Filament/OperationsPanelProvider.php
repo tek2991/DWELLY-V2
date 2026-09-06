@@ -41,16 +41,19 @@ class OperationsPanelProvider extends PanelProvider
             ])
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
             ->pages([
-                Dashboard::class,
+                \App\Filament\Pages\Dashboard::class,
             ])
             ->widgets([
-                \App\Filament\Widgets\PropertyStatsOverview::class,
-                \App\Filament\Widgets\OpportunityStatsOverview::class,
-                \App\Filament\Widgets\OperationsQuickActionsWidget::class,
-                \App\Filament\Widgets\PendingAuditsWidget::class,
+                \App\Filament\Widgets\DashboardQuickActionsWidget::class,
+                \App\Filament\Widgets\PropertyStagesOverviewWidget::class,
+                \App\Filament\Widgets\DashboardActionAlertsWidget::class,
+                \App\Filament\Widgets\DashboardCadenceOverviewWidget::class,
+                \App\Filament\Widgets\MonthlyRevenueExpenseChartWidget::class,
+                \App\Filament\Widgets\PropertyGrowthChartWidget::class,
+                \App\Filament\Widgets\TenantTurnoverChartWidget::class,
                 \App\Filament\Widgets\UrgentMaintenanceWidget::class,
-                \App\Filament\Widgets\OnboardingPropertiesWidget::class,
-                \App\Filament\Widgets\RecentOpportunities::class,
+                \App\Filament\Widgets\PendingAuditsWidget::class,
+                \App\Filament\Widgets\PendingTasksWidget::class,
             ])
             ->middleware([
                 EncryptCookies::class,

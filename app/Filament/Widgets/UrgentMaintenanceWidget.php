@@ -37,29 +37,18 @@ class UrgentMaintenanceWidget extends BaseWidget
             )
             ->columns([
                 Tables\Columns\TextColumn::make('ticket_number')
-                    ->label('Ticket #')
+                    ->label('Ticket')
+                    ->description(fn (MaintenanceRequest $record): ?string => $record->property?->building_name ?? $record->property?->title)
                     ->searchable()
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('title')
                     ->label('Issue')
-                    ->limit(30)
-                    ->searchable(),
-
-                Tables\Columns\TextColumn::make('property.title')
-                    ->label('Property')
-                    ->placeholder('N/A')
+                    ->limit(20)
                     ->searchable(),
 
                 Tables\Columns\TextColumn::make('priority')
                     ->badge(),
-
-                Tables\Columns\TextColumn::make('status')
-                    ->badge(),
-
-                Tables\Columns\TextColumn::make('created_at')
-                    ->label('Reported')
-                    ->since(),
             ])
             ->actions([
                 Action::make('view')

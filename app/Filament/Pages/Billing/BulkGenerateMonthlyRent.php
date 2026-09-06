@@ -358,4 +358,77 @@ class BulkGenerateMonthlyRent extends Page
     {
         $this->lastGenerationSummary = null;
     }
+
+    /**
+     * Save custom rent demand adjustments for a tenancy agreement.
+     */
+    public function saveDemandAdjustment(string $agreementId, array $data): void
+    {
+        $agreement = TenancyAgreement::find($agreementId);
+        if (! $agreement) {
+            Notification::make()->title('Agreement Not Found')->danger()->send();
+            return;
+        }
+
+        try {
+            $service = app(RentBillingService::class);
+            $service->saveDraftRentDemand(
+                $agreement,
+                $this->month,
+                $this->year,
+                $data,
+                auth()->user()
+            );
+
+            $this->refreshSelectedAgreements();
+
+            Notification::make()
+                ->title('Demand Adjustments Saved')
+                ->body('Custom numbers have been saved as a draft for this billing cycle.')
+                ->success()
+                ->send();
+        } catch (\Throwable $e) {
+            Notification::make()
+                ->title('Failed to Save Adjustments')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
+    /**
+     * Reset rent demand adjustments back to calculated defaults.
+     */
+    public function resetDemandAdjustment(string $agreementId): void
+    {
+        $agreement = TenancyAgreement::find($agreementId);
+        if (! $agreement) {
+            Notification::make()->title('Agreement Not Found')->danger()->send();
+            return;
+        }
+
+        try {
+            $service = app(RentBillingService::class);
+            $service->resetDraftRentDemand(
+                $agreement,
+                $this->month,
+                $this->year
+            );
+
+            $this->refreshSelectedAgreements();
+
+            Notification::make()
+                ->title('Adjustments Reverted')
+                ->body('Reverted to calculated system defaults.')
+                ->info()
+                ->send();
+        } catch (\Throwable $e) {
+            Notification::make()
+                ->title('Failed to Reset Adjustments')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
 }
+

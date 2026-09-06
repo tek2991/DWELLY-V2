@@ -84,15 +84,38 @@ class BranchContext
 
     public function applyQueryScope($query)
     {
+        if (! auth()->check()) {
+            return $query;
+        }
+
+        $user = auth()->user();
+        $isOwner = method_exists($user, 'hasRole') && ($user->hasRole('Business Owner') || $user->hasRole('admin'));
+
         $branchId = $this->getCurrent()?->id;
-        if ($branchId) {
+        $isAll = $this->isAllBranches();
+
+        if ($isOwner) {
+            if ($branchId && ! $isAll) {
+                $query->where('branch_id', $branchId);
+            }
+            return $query;
+        }
+
+        $userBranchIds = method_exists($user, 'branches')
+            ? $user->branches()->pluck('branches.id')->toArray()
+            : [];
+
+        if (empty($userBranchIds)) {
+            $query->whereRaw('1 = 0');
+            return $query;
+        }
+
+        if ($branchId && in_array($branchId, $userBranchIds, true)) {
             $query->where('branch_id', $branchId);
         } else {
-            $user = auth()->user();
-            if ($user && method_exists($user, 'hasRole') && !$user->hasRole('admin')) {
-                $query->whereIn('branch_id', $user->branches->pluck('id'));
-            }
+            $query->whereIn('branch_id', $userBranchIds);
         }
+
         return $query;
     }
 }

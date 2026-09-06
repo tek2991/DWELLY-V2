@@ -231,4 +231,20 @@ class BulkGenerateOwnerPayoutsPageTest extends TestCase
         $this->assertCount(10, $paginated->items());
         $this->assertEquals(4, $paginated->lastPage()); // 31 / 10 = 4 pages
     }
+
+    /**
+     * Test 5: Single property disbursement from details modal.
+     */
+    public function test_single_property_can_be_disbursed_individually()
+    {
+        Livewire::test(BulkGenerateOwnerPayouts::class)
+            ->set('month', 8)
+            ->set('year', 2026)
+            ->call('disburseSingleProperty', (string) $this->property->id);
+
+        $payout = OwnerPayout::where('property_id', $this->property->id)->first();
+        $this->assertNotNull($payout);
+        $this->assertEquals(3000.00, (float) $payout->management_fee);
+        $this->assertEquals(27000.00, (float) $payout->amount);
+    }
 }

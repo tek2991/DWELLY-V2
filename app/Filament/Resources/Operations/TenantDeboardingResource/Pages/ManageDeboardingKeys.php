@@ -20,9 +20,9 @@ class ManageDeboardingKeys extends EditRecord
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedKey;
 
-    protected static ?string $navigationLabel = '4. Key Return & Badges';
+    protected static ?string $navigationLabel = '4. Key Return';
 
-    protected static ?string $title = 'Deboarding – Key & Society Badge Handover';
+    protected static ?string $title = 'Deboarding – Key Handover';
 
     public function form(Schema $schema): Schema
     {

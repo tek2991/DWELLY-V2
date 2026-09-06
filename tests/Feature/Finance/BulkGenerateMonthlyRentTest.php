@@ -345,7 +345,14 @@ class BulkGenerateMonthlyRentTest extends TestCase
         $this->assertNotNull($maintLine);
         $this->assertEquals(1200.00, $maintLine->line_total);
 
-        // Verify underlying maintenance invoice is settled as Paid
+        // Verify underlying maintenance invoice remains open upon demand generation
+        $maintInvoice->refresh();
+        $this->assertNotEquals(InvoiceStatus::Paid, $maintInvoice->status);
+
+        // 4. Record payment against the rent demand
+        $service->recordPayment($demand, 21200.00);
+
+        // Now underlying maintenance invoice is settled as Paid
         $maintInvoice->refresh();
         $this->assertEquals(InvoiceStatus::Paid, $maintInvoice->status);
         $this->assertEquals(0.0, $maintInvoice->balance_due);

@@ -3,6 +3,7 @@
 namespace App\Domain\Property\Models;
 
 use App\Domain\Shared\Models\DomainModel;
+use App\Domain\Shared\Traits\BelongsToBranch;
 use App\Domain\Geographic\Models\Locality;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Spatie\Activitylog\Traits\LogsActivity;
@@ -10,7 +11,7 @@ use Spatie\Activitylog\LogOptions;
 
 class Property extends DomainModel
 {
-    use LogsActivity;
+    use LogsActivity, BelongsToBranch;
 
     protected $table = 'properties';
 

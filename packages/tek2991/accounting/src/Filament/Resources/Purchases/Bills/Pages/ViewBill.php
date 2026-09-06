@@ -10,6 +10,7 @@ use Tek2991\Accounting\Services\BillService;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Textarea;
 use Tek2991\Accounting\Models\Account;
 use Tek2991\Accounting\Enums\AccountType;
 
@@ -30,7 +31,7 @@ class ViewBill extends ViewRecord
                 ->action(function ($record, ViewBill $livewire) {
                     try {
                         app(BillService::class)->post($record);
-                        \Filament\Notifications\Notification::make()->title('Bill posted')->success()->send();
+                        \Filament\Notifications\Notification::make()->title('Bill posted successfully')->success()->send();
                         $livewire->getRecord()->refresh();
                         $livewire->fillForm();
                     } catch (\Exception $e) {
@@ -56,30 +57,8 @@ class ViewBill extends ViewRecord
                         ->required(),
                     Select::make('payment_account_id')
                         ->label('Paid From (Bank / Cash Account)')
-                        ->options(function () {
-                            $defaultId = \Tek2991\Accounting\Facades\Accounting::getDefaultBankAccountId();
-
-                            return Account::where('type', \Tek2991\Accounting\Enums\AccountType::Asset)
-                                ->where(function ($q) {
-                                    $q->whereIn('system_role', [
-                                        \Tek2991\Accounting\Enums\SystemRole::Bank,
-                                        \Tek2991\Accounting\Enums\SystemRole::Cash,
-                                    ])
-                                    ->orWhere('code', 'like', '11%')
-                                    ->orWhere('name', 'like', '%Current Account%')
-                                    ->orWhere('name', 'like', '%Savings Account%')
-                                    ->orWhere('name', 'like', '%Bank%')
-                                    ->orWhere('name', 'like', '%Cash%');
-                                })
-                                ->where('is_control_account', false)
-                                ->get()
-                                ->mapWithKeys(function (Account $acc) use ($defaultId) {
-                                    if ($acc->id === $defaultId) {
-                                        return [$acc->id => "<div style='display: flex; align-items: center; justify-content: space-between; width: 100%;'><span>{$acc->name}</span><span style='font-size: 10px; font-weight: 700; background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 9999px; text-transform: uppercase;'>Default</span></div>"];
-                                    }
-                                    return [$acc->id => "<div>{$acc->name}</div>"];
-                                });
-                        })
+                        ->options(fn () => Account::bankAndCashOptionsWithDefault())
+                        ->default(fn () => \Tek2991\Accounting\Facades\Accounting::getDefaultBankAccountId())
                         ->allowHtml()
                         ->searchable()
                         ->preload()
@@ -88,6 +67,10 @@ class ViewBill extends ViewRecord
                         ->required(),
                     TextInput::make('reference')
                         ->label('Payment Reference (UTR / Cheque #)'),
+                    Textarea::make('notes')
+                        ->label('Payment Remarks')
+                        ->placeholder('e.g. Paid via RTGS / Corporate Net Banking')
+                        ->rows(2),
                 ])
                 ->action(function ($record, array $data, ViewBill $livewire) {
                     try {

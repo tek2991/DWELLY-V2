@@ -79,7 +79,7 @@ class ProcessOwnerPayoutAction
             // 3. Calculate Management Fee (Commission)
             $managementFeePercent = isset($options['management_fee_percent'])
                 ? (float) $options['management_fee_percent']
-                : 10.00;
+                : app(\App\Domain\Finance\Services\OwnerPayoutService::class)->getManagementFeePercent($property);
             $managementFee = round(($rentCollected * $managementFeePercent) / 100, 2);
 
             // 4. Calculate Advance Offset (e.g. Geyser purchase / repair advance recovery)
@@ -215,8 +215,22 @@ class ProcessOwnerPayoutAction
                 ]);
             }
 
-            // 9. Create Payout Record
-            $payout = OwnerPayout::create([
+            // 9. Create or Update Payout Record
+            $payout = null;
+            if (! empty($options['payout_id'])) {
+                $payout = OwnerPayout::find($options['payout_id']);
+            }
+            if (! $payout && ! empty($options['draft_payout_id'])) {
+                $payout = OwnerPayout::where('id', $options['draft_payout_id'])->whereIn('status', ['draft', 'pending'])->first();
+            }
+            if (! $payout) {
+                $payout = OwnerPayout::where('property_id', $property->id)
+                    ->whereDate('period_start', $periodStart)
+                    ->whereIn('status', ['draft', 'pending'])
+                    ->first();
+            }
+
+            $payoutData = [
                 'branch_id' => $branchId,
                 'owner_id' => $owner->id,
                 'property_id' => $property->id,
@@ -228,11 +242,17 @@ class ProcessOwnerPayoutAction
                 'reserve_deduction' => $reserveDeduction,
                 'amount' => $netPayout,
                 'status' => 'completed',
-                'notes' => $options['notes'] ?? "Owner Payout for {$periodStart} to {$periodEnd}",
+                'notes' => $options['notes'] ?? $payout?->notes ?? "Owner Payout for {$periodStart} to {$periodEnd}",
                 'period_start' => Carbon::parse($periodStart),
                 'period_end' => Carbon::parse($periodEnd),
                 'processed_at' => now(),
-            ]);
+            ];
+
+            if ($payout) {
+                $payout->update($payoutData);
+            } else {
+                $payout = OwnerPayout::create($payoutData);
+            }
 
             // 10. Settle Linked Maintenance Invoices
             $maintenanceInvoiceIds = $options['maintenance_invoice_ids'] ?? null;
@@ -240,11 +260,8 @@ class ProcessOwnerPayoutAction
                 $reqIds = \App\Domain\Maintenance\Models\MaintenanceRequest::where('property_id', $property->id)->pluck('id');
                 $maintenanceInvoiceIds = Invoice::where('reference_type', \App\Domain\Maintenance\Models\MaintenanceRequest::class)
                     ->whereIn('reference_id', $reqIds)
-                    ->whereIn('status', [
-                        InvoiceStatus::Draft,
-                        InvoiceStatus::Sent,
-                        InvoiceStatus::PartiallyPaid,
-                    ])
+                    ->whereNotIn('status', [InvoiceStatus::Paid, InvoiceStatus::Cancelled])
+                    ->where('balance_due', '>', 0)
                     ->pluck('id')
                     ->toArray();
             }
@@ -252,7 +269,8 @@ class ProcessOwnerPayoutAction
             if (!empty($maintenanceInvoiceIds)) {
                 foreach ($maintenanceInvoiceIds as $mInvId) {
                     $mInv = Invoice::find($mInvId);
-                    if ($mInv && $mInv->status !== InvoiceStatus::Paid) {
+                    // Idempotent check: skip if already paid or has no outstanding balance
+                    if ($mInv && $mInv->status !== InvoiceStatus::Paid && (float) $mInv->balance_due > 0) {
                         $mInv->amount_paid = $mInv->grand_total;
                         $mInv->balance_due = 0.00;
                         $mInv->status = InvoiceStatus::Paid;

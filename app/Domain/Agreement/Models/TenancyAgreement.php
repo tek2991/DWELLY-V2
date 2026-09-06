@@ -6,6 +6,7 @@ use App\Domain\Shared\Models\DomainModel;
 use App\Domain\Property\Models\Property;
 use App\Domain\Audit\Models\Audit;
 use App\Domain\Party\Models\Party;
+use App\Domain\Shared\Traits\BelongsToBranch;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Spatie\MediaLibrary\HasMedia;
@@ -13,11 +14,12 @@ use Spatie\MediaLibrary\InteractsWithMedia;
 
 class TenancyAgreement extends DomainModel implements HasMedia
 {
-    use InteractsWithMedia;
+    use InteractsWithMedia, BelongsToBranch;
 
     protected $table = 'tenancy_agreements';
 
     protected $fillable = [
+        'branch_id',
         'property_id',
         'audit_id',
         'code',

@@ -18,7 +18,69 @@
 
     <div x-data="{
         confirmModalOpen: false,
+        confirmSingleModalOpen: false,
+        singleDisburseItem: null,
         activeRowDetails: null,
+        isEditing: false,
+        editForm: {
+            rent_collected: 0,
+            management_fee_percent: 10,
+            management_fee: 0,
+            advance_offset: 0,
+            reserve_deduction: 0,
+            selected_maintenance_invoice_ids: [],
+            notes: '',
+        },
+        openDetails(item) {
+            this.activeRowDetails = item;
+            this.isEditing = false;
+            this.initEditForm(item);
+        },
+        initEditForm(item) {
+            if (!item) return;
+            this.editForm = {
+                rent_collected: Number(item.gross_rent || 0),
+                management_fee_percent: Number(item.management_fee_percent || 10),
+                management_fee: Number(item.management_fee || 0),
+                advance_offset: Number(item.advance_offset || 0),
+                reserve_deduction: Number(item.reserve_deduction || 0),
+                selected_maintenance_invoice_ids: item.selected_maintenance_invoice_ids ? [...item.selected_maintenance_invoice_ids] : (item.maintenance_invoices ? item.maintenance_invoices.map(m => m.id) : []),
+                notes: item.notes || '',
+            };
+        },
+        recalcFee() {
+            const rent = parseFloat(this.editForm.rent_collected) || 0;
+            const pct = parseFloat(this.editForm.management_fee_percent) || 0;
+            this.editForm.management_fee = Math.round(((rent * pct) / 100) * 100) / 100;
+        },
+        calcNetPayout() {
+            const rent = parseFloat(this.editForm.rent_collected) || 0;
+            const fee = parseFloat(this.editForm.management_fee) || 0;
+            const adv = parseFloat(this.editForm.advance_offset) || 0;
+            const res = parseFloat(this.editForm.reserve_deduction) || 0;
+            return Math.max(0, Math.round((rent - fee - adv - res) * 100) / 100);
+        },
+        async saveAdjustment() {
+            if (!this.activeRowDetails) return;
+            const payload = {
+                rent_collected: this.editForm.rent_collected,
+                management_fee_percent: this.editForm.management_fee_percent,
+                management_fee: this.editForm.management_fee,
+                advance_offset: this.editForm.advance_offset,
+                reserve_deduction: this.editForm.reserve_deduction,
+                selected_maintenance_invoice_ids: this.editForm.selected_maintenance_invoice_ids,
+                notes: this.editForm.notes,
+            };
+            await $wire.savePayoutAdjustment(this.activeRowDetails.property_id, payload);
+            this.isEditing = false;
+            this.activeRowDetails = null;
+        },
+        async resetAdjustment() {
+            if (!this.activeRowDetails) return;
+            await $wire.resetPayoutAdjustment(this.activeRowDetails.property_id);
+            this.isEditing = false;
+            this.activeRowDetails = null;
+        }
     }" style="display: flex; flex-direction: column; gap: 1.5rem; width: 100%;">
 
         <!-- Post-Execution Summary Banner (If just executed) -->
@@ -175,7 +237,7 @@
                     ₹{{ number_format($summary['total_management_fee'], 2) }}
                 </div>
                 <div style="font-size: 0.75rem; color: #92400e; margin-top: 0.25rem;">
-                    ★ 10% Mgmt Tax Invoices auto-generated
+                    ★ Agreed MOU Tax Invoices auto-generated
                 </div>
             </div>
 
@@ -301,13 +363,20 @@
 
                                 <!-- Property & Owner Details -->
                                 <td style="padding: 0.875rem 1rem;">
-                                    <button 
-                                        type="button" 
-                                        @click="activeRowDetails = @js($item)"
-                                        title="Click to view full payout calculation and links"
-                                        style="background: transparent; border: none; padding: 0; text-align: left; cursor: pointer; font-weight: 700; color: #4f46e5; font-size: 0.875rem; text-decoration: underline;">
-                                        {{ $item['property_name'] }}
-                                    </button>
+                                    <div style="display: flex; align-items: center; gap: 0.375rem; flex-wrap: wrap;">
+                                        <button 
+                                            type="button" 
+                                            @click="openDetails(@js($item))"
+                                            title="Click to view full payout calculation and links"
+                                            style="background: transparent; border: none; padding: 0; text-align: left; cursor: pointer; font-weight: 700; color: #4f46e5; font-size: 0.875rem; text-decoration: underline;">
+                                            {{ $item['property_name'] }}
+                                        </button>
+                                        @if(!empty($item['is_adjusted']))
+                                            <span style="font-size: 0.625rem; font-weight: 700; color: #92400e; background: #fef3c7; border: 1px solid #fde68a; padding: 0.05rem 0.35rem; border-radius: 0.25rem;">
+                                                Adjusted
+                                            </span>
+                                        @endif
+                                    </div>
                                     <div style="font-size: 0.75rem; color: #475569; margin-top: 0.125rem;">
                                         👤 <strong>{{ $item['owner_name'] }}</strong>
                                         <span style="color: #94a3b8; margin: 0 0.25rem;">•</span>
@@ -340,8 +409,13 @@
                                 </td>
 
                                 <!-- Management Fee -->
-                                <td style="padding: 0.875rem 1rem; text-align: right; font-weight: 600; color: #dc2626;">
-                                    -₹{{ number_format($item['management_fee'], 2) }}
+                                <td style="padding: 0.875rem 1rem; text-align: right;">
+                                    <div style="font-weight: 600; color: #dc2626;">
+                                        -₹{{ number_format($item['management_fee'], 2) }}
+                                    </div>
+                                    <div style="font-size: 0.6875rem; color: #64748b;">
+                                        ({{ $item['management_fee_percent'] }}% MOU)
+                                    </div>
                                 </td>
 
                                 <!-- Maintenance & Advance Offset -->
@@ -370,9 +444,15 @@
                                 <!-- Status Badge -->
                                 <td style="padding: 0.875rem 1rem; text-align: center;">
                                     @if($item['status'] === 'ready')
-                                        <span style="background: #dcfce7; color: #166534; font-size: 0.75rem; font-weight: 700; padding: 0.25rem 0.625rem; border-radius: 9999px; border: 1px solid #bbf7d0;">
-                                            Ready to Disburse
-                                        </span>
+                                        @if(!empty($item['is_adjusted']))
+                                            <span style="background: #fef3c7; color: #92400e; font-size: 0.75rem; font-weight: 700; padding: 0.25rem 0.625rem; border-radius: 9999px; border: 1px solid #fde68a;">
+                                                Ready • Adjusted
+                                            </span>
+                                        @else
+                                            <span style="background: #dcfce7; color: #166534; font-size: 0.75rem; font-weight: 700; padding: 0.25rem 0.625rem; border-radius: 9999px; border: 1px solid #bbf7d0;">
+                                                Ready to Disburse
+                                            </span>
+                                        @endif
                                     @elseif($item['status'] === 'already_processed')
                                         <span style="background: #dbeafe; color: #1e40af; font-size: 0.75rem; font-weight: 600; padding: 0.25rem 0.625rem; border-radius: 9999px; border: 1px solid #bfdbfe;">
                                             Paid & Processed
@@ -386,27 +466,20 @@
 
                                 <!-- Action Column -->
                                 <td style="padding: 0.875rem 1rem; text-align: right;">
-                                    <div style="display: flex; align-items: center; justify-content: flex-end; gap: 0.375rem;">
+                                    <div style="display: flex; align-items: center; justify-content: flex-end;">
                                         <button 
                                             type="button" 
-                                            @click="activeRowDetails = @js($item)"
+                                            @click="openDetails(@js($item))"
                                             title="View Payout Breakdown & Resource Links"
-                                            style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.6875rem; font-weight: 600; color: #475569; background: #f8fafc; border: 1px solid #cbd5e1; padding: 0.25rem 0.5rem; border-radius: 0.375rem; cursor: pointer; transition: all 0.15s ease;">
+                                            style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.6875rem; font-weight: 600; color: #475569; background: #f8fafc; border: 1px solid #cbd5e1; padding: 0.25rem 0.5rem; border-radius: 0.375rem; cursor: pointer; transition: all 0.15s ease;"
+                                            onmouseover="this.style.background='#f1f5f9'"
+                                            onmouseout="this.style.background='#f8fafc'">
                                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor" style="width: 0.875rem; height: 0.875rem;">
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
                                             </svg>
                                             <span>Details</span>
                                         </button>
-
-                                        @if($isReady)
-                                            <button 
-                                                type="button" 
-                                                wire:click="processSinglePayout('{{ $propId }}')"
-                                                style="font-size: 0.6875rem; font-weight: 700; color: #166534; background: #dcfce7; border: 1px solid #bbf7d0; padding: 0.25rem 0.5rem; border-radius: 0.375rem; cursor: pointer;">
-                                                ⚡ Disburse
-                                            </button>
-                                        @endif
                                     </div>
                                 </td>
                             </tr>
@@ -503,86 +576,120 @@
         </div>
 
         <!-- Confirmation Modal -->
-        <div 
-            x-show="confirmModalOpen" 
-            style="position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 1rem;"
-            x-cloak
-            x-transition>
+        <template x-teleport="body">
             <div 
-                @click.away="confirmModalOpen = false"
-                style="background: #ffffff; border-radius: 1rem; max-width: 32rem; width: 100%; padding: 1.5rem; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);">
-                <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
-                    <div style="width: 2.75rem; height: 2.75rem; border-radius: 9999px; background: #dcfce7; color: #16a34a; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 1.5rem; height: 1.5rem;">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                        </svg>
-                    </div>
-                    <div>
-                        <h3 style="font-size: 1.125rem; font-weight: 700; color: #0f172a; margin: 0;">
-                            Confirm Batch Owner Payouts
-                        </h3>
-                        <p style="font-size: 0.8125rem; color: #64748b; margin: 0.25rem 0 0 0;">
-                            Billing Cycle: <strong>{{ $monthName }}</strong>
+                x-show="confirmModalOpen" 
+                x-cloak
+                @keydown.escape.window="confirmModalOpen = false"
+                style="position: fixed; inset: 0; z-index: 9999; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); overflow-y: auto;"
+                x-transition:enter="transition ease-out duration-200"
+                x-transition:enter-start="opacity-0"
+                x-transition:enter-end="opacity-100"
+                x-transition:leave="transition ease-in duration-150"
+                x-transition:leave-start="opacity-100"
+                x-transition:leave-end="opacity-0">
+                <div 
+                    style="min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 1.5rem; width: 100%; box-sizing: border-box;"
+                    @click.self="confirmModalOpen = false">
+                    <div 
+                        @click.away="confirmModalOpen = false"
+                        style="background: #ffffff; border-radius: 1rem; max-width: 32rem; width: 100%; margin: auto; padding: 1.5rem; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); position: relative;"
+                        x-show="confirmModalOpen"
+                        x-transition:enter="transition ease-out duration-200"
+                        x-transition:enter-start="opacity-0 scale-95"
+                        x-transition:enter-end="opacity-100 scale-100"
+                        x-transition:leave="transition ease-in duration-150"
+                        x-transition:leave-start="opacity-100 scale-100"
+                        x-transition:leave-end="opacity-0 scale-95">
+                        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+                            <div style="width: 2.75rem; height: 2.75rem; border-radius: 9999px; background: #dcfce7; color: #16a34a; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 1.5rem; height: 1.5rem;">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 style="font-size: 1.125rem; font-weight: 700; color: #0f172a; margin: 0;">
+                                    Confirm Batch Owner Payouts
+                                </h3>
+                                <p style="font-size: 0.8125rem; color: #64748b; margin: 0.25rem 0 0 0;">
+                                    Billing Cycle: <strong>{{ $monthName }}</strong>
+                                </p>
+                            </div>
+                        </div>
+
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 1rem; margin-bottom: 1.25rem; font-size: 0.8125rem;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <span style="color: #64748b;">Properties to Disburse:</span>
+                                <strong style="color: #0f172a;">{{ $selectedSummary['count'] }} Properties</strong>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <span style="color: #64748b;">Total Gross Rent:</span>
+                                <span style="color: #0f172a; font-weight: 600;">₹{{ number_format($selectedSummary['total_gross_rent'], 2) }}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <span style="color: #64748b;">Total Commission Invoiced:</span>
+                                <span style="color: #d97706; font-weight: 600;">-₹{{ number_format($selectedSummary['total_management_fee'], 2) }}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <span style="color: #64748b;">Maintenance Offsets Settled:</span>
+                                <span style="color: #dc2626; font-weight: 600;">-₹{{ number_format($selectedSummary['total_advance_offset'], 2) }}</span>
+                            </div>
+                            <div style="border-top: 1px solid #cbd5e1; padding-top: 0.5rem; display: flex; justify-content: space-between; font-size: 0.9375rem;">
+                                <strong style="color: #0f172a;">Total Net Cash Disbursement:</strong>
+                                <strong style="color: #16a34a;">₹{{ number_format($selectedSummary['total_net_payout'], 2) }}</strong>
+                            </div>
+                        </div>
+
+                        <p style="font-size: 0.75rem; color: #64748b; margin-bottom: 1.25rem; line-height: 1.4;">
+                            ⚠️ This operation will record bank outflow transactions, create official Owner Charges Tax Invoices, settle included maintenance invoices, and compile immutable Payout Statement PDFs.
                         </p>
-                    </div>
-                </div>
 
-                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 1rem; margin-bottom: 1.25rem; font-size: 0.8125rem;">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                        <span style="color: #64748b;">Properties to Disburse:</span>
-                        <strong style="color: #0f172a;">{{ $selectedSummary['count'] }} Properties</strong>
+                        <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+                            <button 
+                                type="button" 
+                                @click="confirmModalOpen = false"
+                                style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 0.375rem; padding: 0.5rem 1rem; font-size: 0.8125rem; font-weight: 600; color: #475569; cursor: pointer;">
+                                Cancel
+                            </button>
+                            <button 
+                                type="button" 
+                                wire:click="disburseSelected"
+                                @click="confirmModalOpen = false"
+                                style="background: #16a34a; border: none; border-radius: 0.375rem; padding: 0.5rem 1.25rem; font-size: 0.8125rem; font-weight: 700; color: #ffffff; cursor: pointer;">
+                                Yes, Disburse Payouts
+                            </button>
+                        </div>
                     </div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                        <span style="color: #64748b;">Total Gross Rent:</span>
-                        <span style="color: #0f172a; font-weight: 600;">₹{{ number_format($selectedSummary['total_gross_rent'], 2) }}</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                        <span style="color: #64748b;">Total Commission Invoiced:</span>
-                        <span style="color: #d97706; font-weight: 600;">-₹{{ number_format($selectedSummary['total_management_fee'], 2) }}</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                        <span style="color: #64748b;">Maintenance Offsets Settled:</span>
-                        <span style="color: #dc2626; font-weight: 600;">-₹{{ number_format($selectedSummary['total_advance_offset'], 2) }}</span>
-                    </div>
-                    <div style="border-top: 1px solid #cbd5e1; padding-top: 0.5rem; display: flex; justify-content: space-between; font-size: 0.9375rem;">
-                        <strong style="color: #0f172a;">Total Net Cash Disbursement:</strong>
-                        <strong style="color: #16a34a;">₹{{ number_format($selectedSummary['total_net_payout'], 2) }}</strong>
-                    </div>
-                </div>
-
-                <p style="font-size: 0.75rem; color: #64748b; margin-bottom: 1.25rem; line-height: 1.4;">
-                    ⚠️ This operation will record bank outflow transactions, create official Owner Charges Tax Invoices, settle included maintenance invoices, and compile immutable Payout Statement PDFs.
-                </p>
-
-                <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
-                    <button 
-                        type="button" 
-                        @click="confirmModalOpen = false"
-                        style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 0.375rem; padding: 0.5rem 1rem; font-size: 0.8125rem; font-weight: 600; color: #475569; cursor: pointer;">
-                        Cancel
-                    </button>
-                    <button 
-                        type="button" 
-                        wire:click="disburseSelected"
-                        @click="confirmModalOpen = false"
-                        style="background: #16a34a; border: none; border-radius: 0.375rem; padding: 0.5rem 1.25rem; font-size: 0.8125rem; font-weight: 700; color: #ffffff; cursor: pointer;">
-                        Yes, Disburse Payouts
-                    </button>
                 </div>
             </div>
-        </div>
+        </template>
 
         <!-- Owner Payout Item Breakdown & Links Modal -->
-        <div 
-            x-show="activeRowDetails !== null" 
-            x-cloak 
-            style="position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); padding: 1.5rem;"
-            @keydown.escape.window="activeRowDetails = null"
-        >
+        <template x-teleport="body">
             <div 
-                @click.away="activeRowDetails = null"
-                style="background: #ffffff; border-radius: 1rem; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.04); max-width: 44rem; width: 100%; max-height: 90vh; overflow-y: auto; border: 1px solid #e2e8f0; animation: fadeIn 0.15s ease-out;"
-            >
+                x-show="activeRowDetails !== null" 
+                x-cloak 
+                @keydown.escape.window="activeRowDetails = null"
+                style="position: fixed; inset: 0; z-index: 9998; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); overflow-y: auto;"
+                x-transition:enter="transition ease-out duration-200"
+                x-transition:enter-start="opacity-0"
+                x-transition:enter-end="opacity-100"
+                x-transition:leave="transition ease-in duration-150"
+                x-transition:leave-start="opacity-100"
+                x-transition:leave-end="opacity-0">
+                <div 
+                    style="min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 1.5rem; width: 100%; box-sizing: border-box;"
+                    @click.self="activeRowDetails = null">
+                    <div 
+                        @click.away="activeRowDetails = null"
+                        style="background: #ffffff; border-radius: 1rem; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.04); max-width: 44rem; width: 100%; margin: auto; max-height: 90vh; overflow-y: auto; border: 1px solid #e2e8f0; position: relative;"
+                        x-show="activeRowDetails !== null"
+                        x-transition:enter="transition ease-out duration-200"
+                        x-transition:enter-start="opacity-0 scale-95"
+                        x-transition:enter-end="opacity-100 scale-100"
+                        x-transition:leave="transition ease-in duration-150"
+                        x-transition:leave-start="opacity-100 scale-100"
+                        x-transition:leave-end="opacity-0 scale-95">
                 <!-- Modal Header -->
                 <div style="padding: 1.25rem 1.5rem; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; background: #fafafa; border-top-left-radius: 1rem; border-top-right-radius: 1rem;">
                     <div style="display: flex; align-items: center; gap: 0.75rem;">
@@ -592,9 +699,12 @@
                             </svg>
                         </div>
                         <div>
-                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                                 <h3 style="font-size: 1.0625rem; font-weight: 800; color: #0f172a; margin: 0;" x-text="'Owner Payout: ' + (activeRowDetails?.property_name || '')"></h3>
-                                <template x-if="activeRowDetails?.status === 'ready'">
+                                <template x-if="activeRowDetails?.is_adjusted">
+                                    <span style="font-size: 0.6875rem; font-weight: 700; color: #92400e; background: #fef3c7; border: 1px solid #fde68a; padding: 0.15rem 0.45rem; border-radius: 9999px;">Adjusted Draft</span>
+                                </template>
+                                <template x-if="activeRowDetails?.status === 'ready' && !activeRowDetails?.is_adjusted">
                                     <span style="font-size: 0.6875rem; font-weight: 700; color: #166534; background: #dcfce7; border: 1px solid #bbf7d0; padding: 0.15rem 0.45rem; border-radius: 9999px;">Ready to Disburse</span>
                                 </template>
                                 <template x-if="activeRowDetails?.status === 'already_processed'">
@@ -617,158 +727,453 @@
 
                 <!-- Modal Body -->
                 <template x-if="activeRowDetails">
-                    <div style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem;">
-                        
-                        <!-- Quick Resource Navigation Links -->
-                        <div>
-                            <div style="font-size: 0.6875rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">
-                                Quick Resource Navigation
-                            </div>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
-                                <a 
-                                    :href="activeRowDetails.property_url" 
-                                    target="_blank"
-                                    style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 0.5rem; text-decoration: none; color: #1e293b; transition: all 0.15s ease;"
-                                    onmouseover="this.style.background='#f0fdf4'; this.style.borderColor='#86efac';"
-                                    onmouseout="this.style.background='#f8fafc'; this.style.borderColor='#cbd5e1';"
-                                >
-                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                        <span style="font-size: 1rem;">🏢</span>
-                                        <div>
-                                            <div style="font-size: 0.8125rem; font-weight: 700; color: #0f172a;" x-text="activeRowDetails.property_name"></div>
-                                            <div style="font-size: 0.6875rem; color: #64748b;">Property Record</div>
-                                        </div>
-                                    </div>
-                                    <span style="font-size: 0.75rem; font-weight: 600; color: #16a34a;">Open ↗</span>
-                                </a>
-
-                                <template x-if="activeRowDetails.agreement_url">
-                                    <a 
-                                        :href="activeRowDetails.agreement_url" 
-                                        target="_blank"
-                                        style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 0.5rem; text-decoration: none; color: #1e293b; transition: all 0.15s ease;"
-                                        onmouseover="this.style.background='#eef2ff'; this.style.borderColor='#a5b4fc';"
-                                        onmouseout="this.style.background='#f8fafc'; this.style.borderColor='#cbd5e1';"
-                                    >
-                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                            <span style="font-size: 1rem;">📄</span>
-                                            <div>
-                                                <div style="font-size: 0.8125rem; font-weight: 700; color: #4f46e5;" x-text="activeRowDetails.agreement_code"></div>
-                                                <div style="font-size: 0.6875rem; color: #64748b;">Active Tenancy</div>
-                                            </div>
-                                        </div>
-                                        <span style="font-size: 0.75rem; font-weight: 600; color: #4f46e5;">Open ↗</span>
-                                    </a>
-                                </template>
-                            </div>
-                        </div>
-
-                        <!-- Owner & Bank Details -->
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; background: #f8fafc; padding: 0.875rem 1rem; border-radius: 0.625rem; border: 1px solid #e2e8f0;">
-                            <div>
-                                <span style="font-size: 0.6875rem; font-weight: 600; color: #64748b; text-transform: uppercase;">Beneficiary Owner</span>
-                                <div style="font-size: 0.8125rem; font-weight: 700; color: #0f172a; margin-top: 0.125rem;" x-text="activeRowDetails.owner_name"></div>
-                            </div>
-                            <div>
-                                <span style="font-size: 0.6875rem; font-weight: 600; color: #64748b; text-transform: uppercase;">Banking Account</span>
-                                <div style="font-size: 0.8125rem; font-weight: 700; color: #0f172a; margin-top: 0.125rem;" x-text="activeRowDetails.bank_details_formatted"></div>
-                            </div>
-                            <div>
-                                <span style="font-size: 0.6875rem; font-weight: 600; color: #64748b; text-transform: uppercase;">Handover Date</span>
-                                <div style="font-size: 0.8125rem; font-weight: 700; color: #0f172a; margin-top: 0.125rem;" x-text="activeRowDetails.handover_date_formatted || 'N/A'"></div>
-                            </div>
-                            <div>
-                                <span style="font-size: 0.6875rem; font-weight: 600; color: #64748b; text-transform: uppercase;">Disbursement Period</span>
-                                <div style="font-size: 0.8125rem; font-weight: 700; color: #0f172a; margin-top: 0.125rem;" x-text="activeRowDetails.formatted_period"></div>
-                            </div>
-                        </div>
-
-                        <!-- Itemized Financial Calculation Box -->
-                        <div style="border: 1px solid #e2e8f0; border-radius: 0.625rem; overflow: hidden;">
-                            <div style="background: #f8fafc; padding: 0.625rem 1rem; font-size: 0.75rem; font-weight: 700; color: #475569; border-bottom: 1px solid #e2e8f0; text-transform: uppercase; letter-spacing: 0.025em; display: flex; align-items: center; justify-content: space-between;">
-                                <span>Disbursement Statement Breakdown</span>
-                                <span style="font-size: 0.6875rem; font-weight: 400; color: #64748b;">(INR ₹)</span>
-                            </div>
-                            <div style="padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                    <div>
+                        <!-- Read / Inspect View -->
+                        <template x-if="!isEditing">
+                            <div style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem;">
                                 
-                                <!-- Gross Rent Collected -->
-                                <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8125rem;">
-                                    <div>
-                                        <div style="font-weight: 600; color: #0f172a; display: flex; align-items: center; gap: 0.375rem;">
-                                            <span>Gross Rent Collected</span>
-                                            <template x-if="activeRowDetails.is_prorated">
-                                                <span style="font-size: 0.6875rem; font-weight: 700; color: #d97706; background: #fffbeb; border: 1px solid #fde68a; padding: 0.1rem 0.35rem; border-radius: 0.25rem;" x-text="'⚡ Prorated (' + activeRowDetails.days_active + '/' + activeRowDetails.total_days_in_month + ' days)'"></span>
-                                            </template>
-                                        </div>
+                                <!-- Quick Resource Navigation Links -->
+                                <div>
+                                    <div style="font-size: 0.6875rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">
+                                        Quick Resource Navigation
                                     </div>
-                                    <span style="font-weight: 700; color: #0f172a;" x-text="'₹' + Number(activeRowDetails.gross_rent).toLocaleString('en-IN', {minimumFractionDigits: 2})"></span>
-                                </div>
-
-                                <!-- Dwelly Management Fee -->
-                                <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8125rem;">
-                                    <div>
-                                        <span style="font-weight: 600; color: #dc2626;">Dwelly Management Fee</span>
-                                        <span style="font-size: 0.6875rem; color: #64748b;" x-text="'(' + activeRowDetails.management_fee_percent + '% Invoiced)'"></span>
-                                    </div>
-                                    <span style="font-weight: 700; color: #dc2626;" x-text="'-₹' + Number(activeRowDetails.management_fee).toLocaleString('en-IN', {minimumFractionDigits: 2})"></span>
-                                </div>
-
-                                <!-- Maintenance & Advance Deductions -->
-                                <template x-if="activeRowDetails.advance_offset > 0 || (activeRowDetails.maintenance_invoices && activeRowDetails.maintenance_invoices.length > 0)">
-                                    <div style="border-top: 1px dashed #e2e8f0; padding-top: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem;">
-                                        <div style="font-size: 0.6875rem; font-weight: 700; color: #d97706; text-transform: uppercase; letter-spacing: 0.025em;">
-                                            Owner-Payable Deductions & Maintenance Offsets
-                                        </div>
-                                        <template x-for="m in activeRowDetails.maintenance_invoices" :key="m.id">
-                                            <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8125rem; background: #fffdf5; padding: 0.375rem 0.625rem; border-radius: 0.375rem; border: 1px solid #fde68a;">
-                                                <div style="display: flex; align-items: center; gap: 0.375rem;">
-                                                    <span style="font-weight: 700; color: #92400e;" x-text="'🔧 ' + m.ticket_number + ':'"></span>
-                                                    <span style="color: #78350f;" x-text="m.title"></span>
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                                        <a 
+                                            :href="activeRowDetails.property_url" 
+                                            target="_blank"
+                                            style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 0.5rem; text-decoration: none; color: #1e293b; transition: all 0.15s ease;"
+                                            onmouseover="this.style.background='#f0fdf4'; this.style.borderColor='#86efac';"
+                                            onmouseout="this.style.background='#f8fafc'; this.style.borderColor='#cbd5e1';"
+                                        >
+                                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                                <span style="font-size: 1rem;">🏢</span>
+                                                <div>
+                                                    <div style="font-size: 0.8125rem; font-weight: 700; color: #0f172a;" x-text="activeRowDetails.property_name"></div>
+                                                    <div style="font-size: 0.6875rem; color: #64748b;">Property Record</div>
                                                 </div>
-                                                <span style="font-weight: 700; color: #d97706;" x-text="'-₹' + Number(m.amount).toLocaleString('en-IN', {minimumFractionDigits: 2})"></span>
+                                            </div>
+                                            <span style="font-size: 0.75rem; font-weight: 600; color: #16a34a;">Open ↗</span>
+                                        </a>
+
+                                        <template x-if="activeRowDetails.agreement_url">
+                                            <a 
+                                                :href="activeRowDetails.agreement_url" 
+                                                target="_blank"
+                                                style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 0.5rem; text-decoration: none; color: #1e293b; transition: all 0.15s ease;"
+                                                onmouseover="this.style.background='#eef2ff'; this.style.borderColor='#a5b4fc';"
+                                                onmouseout="this.style.background='#f8fafc'; this.style.borderColor='#cbd5e1';"
+                                            >
+                                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                                    <span style="font-size: 1rem;">📄</span>
+                                                    <div>
+                                                        <div style="font-size: 0.8125rem; font-weight: 700; color: #4f46e5;" x-text="activeRowDetails.agreement_code"></div>
+                                                        <div style="font-size: 0.6875rem; color: #64748b;">Active Tenancy</div>
+                                                    </div>
+                                                </div>
+                                                <span style="font-size: 0.75rem; font-weight: 600; color: #4f46e5;">Open ↗</span>
+                                            </a>
+                                        </template>
+                                    </div>
+                                </div>
+
+                                <!-- Owner & Bank Details -->
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; background: #f8fafc; padding: 0.875rem 1rem; border-radius: 0.625rem; border: 1px solid #e2e8f0;">
+                                    <div>
+                                        <span style="font-size: 0.6875rem; font-weight: 600; color: #64748b; text-transform: uppercase;">Beneficiary Owner</span>
+                                        <div style="font-size: 0.8125rem; font-weight: 700; color: #0f172a; margin-top: 0.125rem;" x-text="activeRowDetails.owner_name"></div>
+                                    </div>
+                                    <div>
+                                        <span style="font-size: 0.6875rem; font-weight: 600; color: #64748b; text-transform: uppercase;">Banking Account</span>
+                                        <div style="font-size: 0.8125rem; font-weight: 700; color: #0f172a; margin-top: 0.125rem;" x-text="activeRowDetails.bank_details_formatted"></div>
+                                    </div>
+                                    <div>
+                                        <span style="font-size: 0.6875rem; font-weight: 600; color: #64748b; text-transform: uppercase;">Handover Date</span>
+                                        <div style="font-size: 0.8125rem; font-weight: 700; color: #0f172a; margin-top: 0.125rem;" x-text="activeRowDetails.handover_date_formatted || 'N/A'"></div>
+                                    </div>
+                                    <div>
+                                        <span style="font-size: 0.6875rem; font-weight: 600; color: #64748b; text-transform: uppercase;">Disbursement Period</span>
+                                        <div style="font-size: 0.8125rem; font-weight: 700; color: #0f172a; margin-top: 0.125rem;" x-text="activeRowDetails.formatted_period"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Itemized Financial Calculation Box -->
+                                <div style="border: 1px solid #e2e8f0; border-radius: 0.625rem; overflow: hidden;">
+                                    <div style="background: #f8fafc; padding: 0.625rem 1rem; font-size: 0.75rem; font-weight: 700; color: #475569; border-bottom: 1px solid #e2e8f0; text-transform: uppercase; letter-spacing: 0.025em; display: flex; align-items: center; justify-content: space-between;">
+                                        <span>Disbursement Statement Breakdown</span>
+                                        <span style="font-size: 0.6875rem; font-weight: 400; color: #64748b;">(INR ₹)</span>
+                                    </div>
+                                    <div style="padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                                        
+                                        <!-- Gross Rent Collected -->
+                                        <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8125rem;">
+                                            <div>
+                                                <div style="font-weight: 600; color: #0f172a; display: flex; align-items: center; gap: 0.375rem;">
+                                                    <span>Gross Rent Collected</span>
+                                                    <template x-if="activeRowDetails.is_prorated">
+                                                        <span style="font-size: 0.6875rem; font-weight: 700; color: #d97706; background: #fffbeb; border: 1px solid #fde68a; padding: 0.1rem 0.35rem; border-radius: 0.25rem;" x-text="'⚡ Prorated (' + activeRowDetails.days_active + '/' + activeRowDetails.total_days_in_month + ' days)'"></span>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                            <span style="font-weight: 700; color: #0f172a;" x-text="'₹' + Number(activeRowDetails.gross_rent).toLocaleString('en-IN', {minimumFractionDigits: 2})"></span>
+                                        </div>
+
+                                        <!-- Dwelly Management Fee -->
+                                        <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8125rem;">
+                                            <div>
+                                                <span style="font-weight: 600; color: #dc2626;">Dwelly Management Fee</span>
+                                                <span style="font-size: 0.6875rem; color: #64748b;" x-text="'(' + activeRowDetails.management_fee_percent + '% Invoiced)'"></span>
+                                            </div>
+                                            <span style="font-weight: 700; color: #dc2626;" x-text="'-₹' + Number(activeRowDetails.management_fee).toLocaleString('en-IN', {minimumFractionDigits: 2})"></span>
+                                        </div>
+
+                                        <!-- Maintenance & Advance Deductions -->
+                                        <template x-if="activeRowDetails.advance_offset > 0 || (activeRowDetails.maintenance_invoices && activeRowDetails.maintenance_invoices.length > 0)">
+                                            <div style="border-top: 1px dashed #e2e8f0; padding-top: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                                                <div style="font-size: 0.6875rem; font-weight: 700; color: #d97706; text-transform: uppercase; letter-spacing: 0.025em;">
+                                                    Owner-Payable Deductions & Maintenance Offsets
+                                                </div>
+                                                <template x-for="m in activeRowDetails.maintenance_invoices" :key="m.id">
+                                                    <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8125rem; background: #fffdf5; padding: 0.375rem 0.625rem; border-radius: 0.375rem; border: 1px solid #fde68a;">
+                                                        <div style="display: flex; align-items: center; gap: 0.375rem;">
+                                                            <span style="font-weight: 700; color: #92400e;" x-text="'🔧 ' + m.ticket_number + ':'"></span>
+                                                            <span style="color: #78350f;" x-text="m.title"></span>
+                                                        </div>
+                                                        <span style="font-weight: 700; color: #d97706;" x-text="'-₹' + Number(m.amount).toLocaleString('en-IN', {minimumFractionDigits: 2})"></span>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </template>
+
+                                        <!-- Reserve Deduction (If any) -->
+                                        <template x-if="activeRowDetails.reserve_deduction > 0">
+                                            <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8125rem;">
+                                                <span style="font-weight: 600; color: #475569;">Reserve / Security Deduction</span>
+                                                <span style="font-weight: 700; color: #475569;" x-text="'-₹' + Number(activeRowDetails.reserve_deduction).toLocaleString('en-IN', {minimumFractionDigits: 2})"></span>
+                                            </div>
+                                        </template>
+
+                                        <!-- Net Cash Disbursement -->
+                                        <div style="border-top: 1px solid #cbd5e1; padding-top: 0.75rem; display: flex; align-items: center; justify-content: space-between; font-size: 1.0625rem; font-weight: 800;">
+                                            <span style="color: #0f172a;">Net Outflow to Beneficiary</span>
+                                            <span style="color: #16a34a;" x-text="'₹' + Number(activeRowDetails.net_payout).toLocaleString('en-IN', {minimumFractionDigits: 2})"></span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Operator Adjustment Notes (If present) -->
+                                <template x-if="activeRowDetails.notes">
+                                    <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 0.5rem; padding: 0.75rem 1rem; font-size: 0.8125rem;">
+                                        <div style="font-weight: 700; color: #92400e; font-size: 0.75rem; text-transform: uppercase; margin-bottom: 0.25rem;">Operator Adjustment Notes</div>
+                                        <div style="color: #78350f;" x-text="activeRowDetails.notes"></div>
+                                    </div>
+                                </template>
+
+                                <!-- Read View Footer Actions -->
+                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-top: 0.5rem; flex-wrap: wrap;">
+                                    <button 
+                                        type="button" 
+                                        @click="activeRowDetails = null"
+                                        style="padding: 0.5rem 1rem; font-size: 0.8125rem; font-weight: 600; color: #64748b; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 0.5rem; cursor: pointer; transition: all 0.15s ease;"
+                                        onmouseover="this.style.background='#f1f5f9'"
+                                        onmouseout="this.style.background='#f8fafc'"
+                                    >
+                                        Close
+                                    </button>
+
+                                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                        <template x-if="activeRowDetails.status === 'ready'">
+                                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                                <template x-if="activeRowDetails.is_adjusted">
+                                                    <button 
+                                                        type="button" 
+                                                        @click="resetAdjustment()"
+                                                        title="Revert all adjustments back to calculated defaults"
+                                                        style="display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.5rem 0.875rem; font-size: 0.8125rem; font-weight: 600; color: #b45309; background: #fef3c7; border: 1px solid #fde68a; border-radius: 0.5rem; cursor: pointer; transition: all 0.15s ease;"
+                                                        onmouseover="this.style.background='#fde68a'"
+                                                        onmouseout="this.style.background='#fef3c7'">
+                                                        <span>↺ Revert to Defaults</span>
+                                                    </button>
+                                                </template>
+                                                <button 
+                                                    type="button" 
+                                                    @click="isEditing = true"
+                                                    title="Edit pre-disbursement numbers"
+                                                    style="display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.5rem 0.875rem; font-size: 0.8125rem; font-weight: 600; color: #1e293b; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 0.5rem; cursor: pointer; transition: all 0.15s ease;"
+                                                    onmouseover="this.style.background='#e2e8f0'"
+                                                    onmouseout="this.style.background='#f1f5f9'">
+                                                    <span>✏️ Adjust Figures</span>
+                                                </button>
+                                                <button 
+                                                    type="button" 
+                                                    @click="singleDisburseItem = activeRowDetails; confirmSingleModalOpen = true;"
+                                                    style="display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.5rem 1.25rem; font-size: 0.8125rem; font-weight: 700; color: #ffffff; background: #16a34a; border: none; border-radius: 0.5rem; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.1); transition: all 0.15s ease;"
+                                                    onmouseover="this.style.background='#15803d'"
+                                                    onmouseout="this.style.background='#16a34a'"
+                                                >
+                                                    <span>⚡ Disburse Payout</span>
+                                                </button>
                                             </div>
                                         </template>
                                     </div>
+                                </div>
+
+                            </div>
+                        </template>
+
+                        <!-- Edit / Adjust View -->
+                        <template x-if="isEditing">
+                            <div style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem;">
+                                <!-- Informational Banner -->
+                                <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 0.5rem; padding: 0.75rem 1rem; font-size: 0.8125rem; color: #1e40af; display: flex; align-items: center; gap: 0.5rem;">
+                                    <span style="font-size: 1.125rem;">✏️</span>
+                                    <span>Edit payout figures before disbursement. Saving persists these custom numbers as a draft across sessions.</span>
+                                </div>
+
+                                <!-- Inputs Grid -->
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                                    <div>
+                                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #334155; margin-bottom: 0.25rem;">
+                                            Gross Rent Collected (₹)
+                                        </label>
+                                        <input 
+                                            type="number" 
+                                            step="0.01" 
+                                            x-model.number="editForm.rent_collected" 
+                                            @input="recalcFee()"
+                                            style="width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; font-size: 0.875rem; font-weight: 600; color: #0f172a; box-sizing: border-box;" 
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #334155; margin-bottom: 0.25rem;">
+                                            Management Fee % (MOU)
+                                        </label>
+                                        <input 
+                                            type="number" 
+                                            step="0.01" 
+                                            x-model.number="editForm.management_fee_percent" 
+                                            @input="recalcFee()"
+                                            style="width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; font-size: 0.875rem; font-weight: 600; color: #0f172a; box-sizing: border-box;" 
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #334155; margin-bottom: 0.25rem;">
+                                            Management Fee Amount (₹)
+                                        </label>
+                                        <input 
+                                            type="number" 
+                                            step="0.01" 
+                                            x-model.number="editForm.management_fee" 
+                                            style="width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; font-size: 0.875rem; font-weight: 600; color: #dc2626; box-sizing: border-box;" 
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #334155; margin-bottom: 0.25rem;">
+                                            Advance Offset / Deductions (₹)
+                                        </label>
+                                        <input 
+                                            type="number" 
+                                            step="0.01" 
+                                            x-model.number="editForm.advance_offset" 
+                                            style="width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; font-size: 0.875rem; font-weight: 600; color: #d97706; box-sizing: border-box;" 
+                                        />
+                                    </div>
+                                    <div style="grid-column: span 2;">
+                                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #334155; margin-bottom: 0.25rem;">
+                                            Reserve / Security Deduction (₹)
+                                        </label>
+                                        <input 
+                                            type="number" 
+                                            step="0.01" 
+                                            x-model.number="editForm.reserve_deduction" 
+                                            style="width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; font-size: 0.875rem; font-weight: 600; color: #475569; box-sizing: border-box;" 
+                                        />
+                                    </div>
+                                </div>
+
+                                <!-- Maintenance Invoices Selection (If any exist) -->
+                                <template x-if="activeRowDetails.maintenance_invoices && activeRowDetails.maintenance_invoices.length > 0">
+                                    <div style="border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 0.75rem 1rem; background: #fafafa;">
+                                        <div style="font-size: 0.75rem; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 0.5rem;">
+                                            Select Maintenance Invoices to Deduct:
+                                        </div>
+                                        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                                            <template x-for="m in activeRowDetails.maintenance_invoices" :key="m.id">
+                                                <label style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8125rem; background: #ffffff; padding: 0.375rem 0.625rem; border-radius: 0.375rem; border: 1px solid #cbd5e1; cursor: pointer;">
+                                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            :value="m.id" 
+                                                            x-model="editForm.selected_maintenance_invoice_ids"
+                                                            style="border-radius: 0.25rem;" 
+                                                        />
+                                                        <span style="font-weight: 600; color: #0f172a;" x-text="m.ticket_number + ': ' + m.title"></span>
+                                                    </div>
+                                                    <span style="font-weight: 700; color: #d97706;" x-text="'₹' + Number(m.amount).toLocaleString('en-IN', {minimumFractionDigits: 2})"></span>
+                                                </label>
+                                            </template>
+                                        </div>
+                                    </div>
                                 </template>
 
-                                <!-- Net Cash Disbursement -->
-                                <div style="border-top: 1px solid #cbd5e1; padding-top: 0.75rem; display: flex; align-items: center; justify-content: space-between; font-size: 1.0625rem; font-weight: 800;">
-                                    <span style="color: #0f172a;">Net Outflow to Beneficiary</span>
-                                    <span style="color: #16a34a;" x-text="'₹' + Number(activeRowDetails.net_payout).toLocaleString('en-IN', {minimumFractionDigits: 2})"></span>
+                                <!-- Adjustment Notes -->
+                                <div>
+                                    <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #334155; margin-bottom: 0.25rem;">
+                                        Adjustment Reason / Operator Notes
+                                    </label>
+                                    <textarea 
+                                        x-model="editForm.notes" 
+                                        rows="2" 
+                                        placeholder="Enter reason for manual adjustment (optional)..."
+                                        style="width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 0.375rem; font-size: 0.8125rem; color: #0f172a; resize: vertical; box-sizing: border-box;"
+                                    ></textarea>
                                 </div>
-                            </div>
-                        </div>
 
-                        <!-- Footer Actions -->
-                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-top: 0.5rem;">
-                            <button 
-                                type="button" 
-                                @click="activeRowDetails = null"
-                                style="padding: 0.5rem 1rem; font-size: 0.8125rem; font-weight: 600; color: #64748b; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 0.5rem; cursor: pointer; transition: all 0.15s ease;"
-                                onmouseover="this.style.background='#f1f5f9'"
-                                onmouseout="this.style.background='#f8fafc'"
-                            >
-                                Close
-                            </button>
+                                <!-- Net Calculation Preview Card -->
+                                <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 0.5rem; padding: 0.875rem 1rem; display: flex; align-items: center; justify-content: space-between;">
+                                    <div>
+                                        <div style="font-size: 0.6875rem; font-weight: 700; color: #166534; text-transform: uppercase;">Estimated Net Payout</div>
+                                        <div style="font-size: 0.75rem; color: #15803d;">Gross Rent - Fee - Advance - Reserve</div>
+                                    </div>
+                                    <div style="font-size: 1.25rem; font-weight: 800; color: #166534;" x-text="'₹' + Number(calcNetPayout()).toLocaleString('en-IN', {minimumFractionDigits: 2})"></div>
+                                </div>
 
-                            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <template x-if="activeRowDetails.status === 'ready'">
+                                <!-- Edit Footer Action Buttons -->
+                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-top: 0.5rem; border-top: 1px solid #e2e8f0; padding-top: 1rem;">
                                     <button 
                                         type="button" 
-                                        @click="$wire.processSinglePayout(activeRowDetails.property_id); activeRowDetails = null;"
-                                        style="display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.5rem 1.25rem; font-size: 0.8125rem; font-weight: 700; color: #ffffff; background: #16a34a; border: none; border-radius: 0.5rem; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.1); transition: all 0.15s ease;"
-                                        onmouseover="this.style.background='#15803d'"
-                                        onmouseout="this.style.background='#16a34a'"
+                                        @click="isEditing = false"
+                                        style="padding: 0.5rem 1rem; font-size: 0.8125rem; font-weight: 600; color: #64748b; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 0.5rem; cursor: pointer; transition: all 0.15s ease;"
+                                        onmouseover="this.style.background='#f1f5f9'"
+                                        onmouseout="this.style.background='#f8fafc'"
                                     >
-                                        <span>⚡ Disburse Payout Now</span>
+                                        Cancel
                                     </button>
-                                </template>
+
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <template x-if="activeRowDetails.is_adjusted">
+                                            <button 
+                                                type="button" 
+                                                @click="resetAdjustment()"
+                                                style="padding: 0.5rem 0.875rem; font-size: 0.8125rem; font-weight: 600; color: #b45309; background: #fef3c7; border: 1px solid #fde68a; border-radius: 0.5rem; cursor: pointer; transition: all 0.15s ease;"
+                                                onmouseover="this.style.background='#fde68a'"
+                                                onmouseout="this.style.background='#fef3c7'">
+                                                ↺ Revert to Defaults
+                                            </button>
+                                        </template>
+                                        <button 
+                                            type="button" 
+                                            @click="saveAdjustment()"
+                                            style="display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.5rem 1.25rem; font-size: 0.8125rem; font-weight: 700; color: #ffffff; background: #2563eb; border: none; border-radius: 0.5rem; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.1); transition: all 0.15s ease;"
+                                            onmouseover="this.style.background='#1d4ed8'"
+                                            onmouseout="this.style.background='#2563eb'"
+                                        >
+                                            <span>💾 Save Adjustments</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <!-- Single Property Payout Confirmation Modal -->
+        <template x-teleport="body">
+            <div 
+                x-show="confirmSingleModalOpen" 
+                x-cloak
+                @keydown.escape.window="confirmSingleModalOpen = false"
+                style="position: fixed; inset: 0; z-index: 9999; background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(4px); overflow-y: auto;"
+                x-transition:enter="transition ease-out duration-200"
+                x-transition:enter-start="opacity-0"
+                x-transition:enter-end="opacity-100"
+                x-transition:leave="transition ease-in duration-150"
+                x-transition:leave-start="opacity-100"
+                x-transition:leave-end="opacity-0">
+                <div 
+                    style="min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 1.5rem; width: 100%; box-sizing: border-box;"
+                    @click.self="confirmSingleModalOpen = false">
+                    <div 
+                        @click.away="confirmSingleModalOpen = false"
+                        style="background: #ffffff; border-radius: 1rem; max-width: 32rem; width: 100%; margin: auto; padding: 1.5rem; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.05); position: relative;"
+                        x-show="confirmSingleModalOpen"
+                        x-transition:enter="transition ease-out duration-200"
+                        x-transition:enter-start="opacity-0 scale-95"
+                        x-transition:enter-end="opacity-100 scale-100"
+                        x-transition:leave="transition ease-in duration-150"
+                        x-transition:leave-start="opacity-100 scale-100"
+                        x-transition:leave-end="opacity-0 scale-95">
+                        
+                        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+                            <div style="width: 2.75rem; height: 2.75rem; border-radius: 9999px; background: #dcfce7; color: #16a34a; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 1.5rem; height: 1.5rem;">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 style="font-size: 1.125rem; font-weight: 700; color: #0f172a; margin: 0;">
+                                    Confirm Owner Payout
+                                </h3>
+                                <p style="font-size: 0.8125rem; color: #64748b; margin: 0.25rem 0 0 0;" x-text="singleDisburseItem ? (singleDisburseItem.property_name + ' • ' + singleDisburseItem.formatted_period) : ''">
+                                </p>
                             </div>
                         </div>
 
+                        <template x-if="singleDisburseItem">
+                            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 1rem; margin-bottom: 1.25rem; font-size: 0.8125rem;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                    <span style="color: #64748b;">Beneficiary:</span>
+                                    <strong style="color: #0f172a;" x-text="singleDisburseItem.owner_name"></strong>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                    <span style="color: #64748b;">Bank Account:</span>
+                                    <span style="color: #0f172a; font-weight: 500;" x-text="singleDisburseItem.bank_details_formatted"></span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                    <span style="color: #64748b;">Gross Rent:</span>
+                                    <span style="color: #0f172a; font-weight: 600;" x-text="'₹' + Number(singleDisburseItem.gross_rent).toLocaleString('en-IN', {minimumFractionDigits: 2})"></span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                    <span style="color: #64748b;">MOU Commission:</span>
+                                    <span style="color: #dc2626; font-weight: 600;" x-text="'-₹' + Number(singleDisburseItem.management_fee).toLocaleString('en-IN', {minimumFractionDigits: 2}) + ' (' + singleDisburseItem.management_fee_percent + '%)'"></span>
+                                </div>
+                                <template x-if="singleDisburseItem.advance_offset > 0">
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                        <span style="color: #64748b;">Maintenance / Advances:</span>
+                                        <span style="color: #d97706; font-weight: 600;" x-text="'-₹' + Number(singleDisburseItem.advance_offset).toLocaleString('en-IN', {minimumFractionDigits: 2})"></span>
+                                    </div>
+                                </template>
+                                <div style="border-top: 1px solid #cbd5e1; padding-top: 0.5rem; display: flex; justify-content: space-between; font-size: 0.9375rem;">
+                                    <strong style="color: #0f172a;">Net Outflow:</strong>
+                                    <strong style="color: #16a34a;" x-text="'₹' + Number(singleDisburseItem.net_payout).toLocaleString('en-IN', {minimumFractionDigits: 2})"></strong>
+                                </div>
+                            </div>
+                        </template>
+
+                        <p style="font-size: 0.75rem; color: #64748b; margin-bottom: 1.25rem; line-height: 1.4;">
+                            ⚠️ This operation will record bank outflow transactions, create official Owner Charges Tax Invoices, settle included maintenance invoices, and compile immutable Payout Statement PDFs.
+                        </p>
+
+                        <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+                            <button 
+                                type="button" 
+                                @click="confirmSingleModalOpen = false"
+                                style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 0.375rem; padding: 0.5rem 1rem; font-size: 0.8125rem; font-weight: 600; color: #475569; cursor: pointer;">
+                                Cancel
+                            </button>
+                            <button 
+                                type="button" 
+                                @click="confirmSingleModalOpen = false; activeRowDetails = null; $wire.disburseSingleProperty(singleDisburseItem.property_id);"
+                                style="background: #16a34a; border: none; border-radius: 0.375rem; padding: 0.5rem 1.25rem; font-size: 0.8125rem; font-weight: 700; color: #ffffff; cursor: pointer;">
+                                Yes, Disburse Payout
+                            </button>
+                        </div>
                     </div>
-                </template>
+                </div>
             </div>
-        </div>
+        </template>
     </div>
 </x-filament-panels::page>

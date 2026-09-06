@@ -440,14 +440,14 @@ class TenantDeboardingForm
         return $schema
             ->columns(1)
             ->components([
-                Section::make('4. Key & Society Badge Handover')
+                Section::make('4. Key Handover')
                     ->description('Record physical keys and society RFID tags returned by the vacating tenant.')
                     ->columnSpanFull()
                     ->schema([
                         Grid::make(3)
                             ->schema([
                                 Toggle::make('keys_returned')
-                                    ->label('Keys & Badges Returned')
+                                    ->label('Keys Returned')
                                     ->helperText('Tenant has formally handed over all physical keys and RFID cards.')
                                     ->live(),
 

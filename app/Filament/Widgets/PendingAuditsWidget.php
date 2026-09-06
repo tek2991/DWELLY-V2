@@ -29,14 +29,10 @@ class PendingAuditsWidget extends BaseWidget
             )
             ->columns([
                 Tables\Columns\TextColumn::make('audit_number')
-                    ->label('Audit #')
+                    ->label('Audit')
+                    ->description(fn (Audit $record): ?string => $record->property?->building_name ?? $record->property?->title)
                     ->searchable()
                     ->sortable(),
-
-                Tables\Columns\TextColumn::make('property.title')
-                    ->label('Property')
-                    ->placeholder('N/A')
-                    ->searchable(),
 
                 Tables\Columns\TextColumn::make('audit_type')
                     ->label('Type')
@@ -44,14 +40,6 @@ class PendingAuditsWidget extends BaseWidget
 
                 Tables\Columns\TextColumn::make('status')
                     ->badge(),
-
-                Tables\Columns\TextColumn::make('inspector.name')
-                    ->label('Inspector')
-                    ->placeholder('Unassigned'),
-
-                Tables\Columns\TextColumn::make('updated_at')
-                    ->label('Last Activity')
-                    ->since(),
             ])
             ->actions([
                 Action::make('review')

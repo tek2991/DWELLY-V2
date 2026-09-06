@@ -17,11 +17,12 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\MediaLibrary\HasMedia;
+use App\Domain\Shared\Traits\BelongsToBranch;
 use Spatie\MediaLibrary\InteractsWithMedia;
 
 class Task extends DomainModel implements HasMedia
 {
-    use SoftDeletes, LogsActivity, InteractsWithMedia;
+    use SoftDeletes, LogsActivity, InteractsWithMedia, BelongsToBranch;
 
     protected $table = 'tasks';
 

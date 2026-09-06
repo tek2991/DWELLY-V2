@@ -10,6 +10,7 @@ use App\Domain\Maintenance\Enums\PayerType;
 use App\Domain\Party\Models\Party;
 use App\Domain\Property\Models\Property;
 use App\Domain\Shared\Models\DomainModel;
+use App\Domain\Shared\Traits\BelongsToBranch;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -19,7 +20,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
 
 class MaintenanceRequest extends DomainModel implements HasMedia
 {
-    use SoftDeletes, InteractsWithMedia;
+    use SoftDeletes, InteractsWithMedia, BelongsToBranch;
 
     protected $table = 'maintenance_requests';
 
@@ -35,6 +36,7 @@ class MaintenanceRequest extends DomainModel implements HasMedia
     }
 
     protected $fillable = [
+        'branch_id',
         'ticket_number',
         'property_id',
         'tenant_id',

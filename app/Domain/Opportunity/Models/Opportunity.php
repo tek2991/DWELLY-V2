@@ -6,6 +6,7 @@ use App\Domain\Opportunity\Enums\OpportunityStatus;
 use App\Domain\Party\Models\Party;
 use App\Domain\Property\Models\PropertyType;
 use App\Domain\Shared\Models\DomainModel;
+use App\Domain\Shared\Traits\BelongsToBranch;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -17,10 +18,12 @@ class Opportunity extends DomainModel implements HasMedia
 {
     use InteractsWithMedia;
     use SoftDeletes;
+    use BelongsToBranch;
 
     protected $table = 'opportunities';
 
     protected $fillable = [
+        'branch_id',
         'number',
         'title',
         'status',

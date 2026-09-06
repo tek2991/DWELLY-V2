@@ -9,6 +9,7 @@ use App\Domain\Shared\Models\DomainModel;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Domain\Shared\Traits\BelongsToBranch;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 
@@ -16,10 +17,12 @@ class Mou extends DomainModel implements HasMedia
 {
     use InteractsWithMedia;
     use SoftDeletes;
+    use BelongsToBranch;
 
     protected $table = 'mous';
 
     protected $fillable = [
+        'branch_id',
         'number',
         'version',
         'opportunity_id',

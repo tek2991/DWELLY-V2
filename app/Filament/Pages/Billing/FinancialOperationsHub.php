@@ -478,7 +478,10 @@ class FinancialOperationsHub extends Page
             ->modalHeading('Record Tenant Security Deposit Receipt')
             ->modalWidth(Width::Large)
             ->modalDescription('Post double-entry transaction (DR Bank Account, CR Tenant Deposit Liability).')
-            ->fillForm(fn (array $arguments) => $arguments)
+            ->fillForm(fn (array $arguments) => array_merge([
+                'bank_account_id' => \Tek2991\Accounting\Facades\Accounting::getDefaultBankAccountId(),
+                'payment_date' => now()->toDateString(),
+            ], $arguments))
             ->form([
                 Select::make('tenancy_agreement_id')
                     ->label('Tenancy Agreement')
@@ -505,7 +508,11 @@ class FinancialOperationsHub extends Page
 
                 Select::make('bank_account_id')
                     ->label('Receiving Bank / Cash Account')
-                    ->options(fn () => Account::where('type', 'asset')->pluck('name', 'id'))
+                    ->options(fn () => Account::bankAndCashOptionsWithDefault())
+                    ->default(fn () => \Tek2991\Accounting\Facades\Accounting::getDefaultBankAccountId())
+                    ->allowHtml()
+                    ->searchable()
+                    ->preload()
                     ->required(),
 
                 DatePicker::make('payment_date')
@@ -546,7 +553,10 @@ class FinancialOperationsHub extends Page
             ->modalHeading('Place Deposit: Owner Transfer vs FD Escrow')
             ->modalWidth(Width::Large)
             ->modalDescription('Transfer security deposit to Property Owner and/or place into Fixed Deposit Escrow.')
-            ->fillForm(fn (array $arguments) => $arguments)
+            ->fillForm(fn (array $arguments) => array_merge([
+                'bank_account_id' => \Tek2991\Accounting\Facades\Accounting::getDefaultBankAccountId(),
+                'placement_date' => now()->toDateString(),
+            ], $arguments))
             ->form([
                 Select::make('tenancy_agreement_id')
                     ->label('Tenancy Agreement')
@@ -572,7 +582,11 @@ class FinancialOperationsHub extends Page
 
                 Select::make('bank_account_id')
                     ->label('Disbursement Bank Account')
-                    ->options(fn () => Account::where('type', 'asset')->pluck('name', 'id'))
+                    ->options(fn () => Account::bankAndCashOptionsWithDefault())
+                    ->default(fn () => \Tek2991\Accounting\Facades\Accounting::getDefaultBankAccountId())
+                    ->allowHtml()
+                    ->searchable()
+                    ->preload()
                     ->required(),
 
                 DatePicker::make('placement_date')
@@ -707,8 +721,12 @@ class FinancialOperationsHub extends Page
                     ->required(),
 
                 Select::make('bank_account_id')
-                    ->label('Deposit / Bank Account')
-                    ->options(fn () => Account::where('type', 'asset')->pluck('name', 'id'))
+                    ->label('Deposit To (Bank / Cash Account)')
+                    ->options(fn () => Account::bankAndCashOptionsWithDefault())
+                    ->default(fn () => \Tek2991\Accounting\Facades\Accounting::getDefaultBankAccountId())
+                    ->allowHtml()
+                    ->searchable()
+                    ->preload()
                     ->required(),
 
                 DatePicker::make('payment_date')
@@ -775,8 +793,12 @@ class FinancialOperationsHub extends Page
                     ->required(),
 
                 Select::make('bank_account_id')
-                    ->label('Payment / Bank Account')
-                    ->options(fn () => Account::where('type', 'asset')->pluck('name', 'id'))
+                    ->label('Paid From (Bank / Cash Account)')
+                    ->options(fn () => Account::bankAndCashOptionsWithDefault())
+                    ->default(fn () => \Tek2991\Accounting\Facades\Accounting::getDefaultBankAccountId())
+                    ->allowHtml()
+                    ->searchable()
+                    ->preload()
                     ->required(),
 
                 DatePicker::make('payment_date')
@@ -790,15 +812,13 @@ class FinancialOperationsHub extends Page
             ])
             ->action(function (array $data, BillService $billService) {
                 $bill = Bill::findOrFail($data['bill_id']);
-                $bankAccount = Account::findOrFail($data['bank_account_id']);
 
-                $billService->recordPayment(
-                    $bill,
-                    $bankAccount,
-                    (float) $data['amount'],
-                    $data['payment_date'],
-                    $data['reference'] ?? null
-                );
+                $billService->recordPayment($bill, [
+                    'amount' => (float) $data['amount'],
+                    'payment_account_id' => (int) $data['bank_account_id'],
+                    'payment_date' => $data['payment_date'],
+                    'reference' => $data['reference'] ?? null,
+                ]);
 
                 Notification::make()
                     ->title('Vendor Payment Recorded')

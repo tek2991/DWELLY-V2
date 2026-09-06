@@ -10,6 +10,7 @@ use Tek2991\Accounting\Services\InvoiceService;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Textarea;
 use Tek2991\Accounting\Models\Account;
 use Tek2991\Accounting\Enums\AccountType;
 
@@ -28,13 +29,17 @@ class ViewInvoice extends ViewRecord
                 ->requiresConfirmation()
                 ->visible(fn ($record) => $record->status === InvoiceStatus::Draft)
                 ->action(function ($record, ViewInvoice $livewire) {
-                    app(InvoiceService::class)->post($record);
-                    \Filament\Notifications\Notification::make()->title('Invoice posted')->success()->send();
-                    $livewire->getRecord()->refresh();
-                    $livewire->fillForm();
+                    try {
+                        app(InvoiceService::class)->post($record);
+                        \Filament\Notifications\Notification::make()->title('Invoice posted successfully')->success()->send();
+                        $livewire->getRecord()->refresh();
+                        $livewire->fillForm();
+                    } catch (\Exception $e) {
+                        \Filament\Notifications\Notification::make()->title('Failed to post invoice')->body($e->getMessage())->danger()->send();
+                    }
                 }),
-            Actions\Action::make('download_pdf')
-                ->label('Invoice PDF')
+            Actions\Action::make('download_invoice')
+                ->label('Download PDF')
                 ->icon('heroicon-o-document-arrow-down')
                 ->color('primary')
                 ->modalHeading(fn ($record) => "Invoice - {$record->invoice_number}")
@@ -43,7 +48,7 @@ class ViewInvoice extends ViewRecord
                 ->modalSubmitAction(false)
                 ->modalCancelActionLabel('Close'),
             Actions\Action::make('download_receipt')
-                ->label('Receipt PDF')
+                ->label('Download Receipt')
                 ->icon('heroicon-o-arrow-down-tray')
                 ->color('success')
                 ->visible(fn ($record) => $record->payments()->exists())
@@ -74,30 +79,8 @@ class ViewInvoice extends ViewRecord
                         ->required(),
                     Select::make('payment_account_id')
                         ->label('Deposit To (Bank / Cash Account)')
-                        ->options(function () {
-                            $defaultId = \Tek2991\Accounting\Facades\Accounting::getDefaultBankAccountId();
-
-                            return Account::where('type', \Tek2991\Accounting\Enums\AccountType::Asset)
-                                ->where(function ($q) {
-                                    $q->whereIn('system_role', [
-                                        \Tek2991\Accounting\Enums\SystemRole::Bank,
-                                        \Tek2991\Accounting\Enums\SystemRole::Cash,
-                                    ])
-                                    ->orWhere('code', 'like', '11%')
-                                    ->orWhere('name', 'like', '%Current Account%')
-                                    ->orWhere('name', 'like', '%Savings Account%')
-                                    ->orWhere('name', 'like', '%Bank%')
-                                    ->orWhere('name', 'like', '%Cash%');
-                                })
-                                ->where('is_control_account', false)
-                                ->get()
-                                ->mapWithKeys(function (Account $acc) use ($defaultId) {
-                                    if ($acc->id === $defaultId) {
-                                        return [$acc->id => "<div style='display: flex; align-items: center; justify-content: space-between; width: 100%;'><span>{$acc->name}</span><span style='font-size: 10px; font-weight: 700; background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 9999px; text-transform: uppercase;'>Default</span></div>"];
-                                    }
-                                    return [$acc->id => "<div>{$acc->name}</div>"];
-                                });
-                        })
+                        ->options(fn () => Account::bankAndCashOptionsWithDefault())
+                        ->default(fn () => \Tek2991\Accounting\Facades\Accounting::getDefaultBankAccountId())
                         ->allowHtml()
                         ->searchable()
                         ->preload()
@@ -106,6 +89,10 @@ class ViewInvoice extends ViewRecord
                         ->required(),
                     TextInput::make('reference')
                         ->label('Payment Reference (UTR / Cheque #)'),
+                    Textarea::make('notes')
+                        ->label('Payment Remarks')
+                        ->placeholder('e.g. Received via NEFT / UPI / Cheque')
+                        ->rows(2),
                 ])
                 ->action(function ($record, array $data, ViewInvoice $livewire) {
                     $payment = app(InvoiceService::class)->recordPayment($record, $data);

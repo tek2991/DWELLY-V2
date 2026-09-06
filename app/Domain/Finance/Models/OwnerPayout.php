@@ -3,12 +3,15 @@
 namespace App\Domain\Finance\Models;
 
 use App\Domain\Shared\Models\DomainModel;
+use App\Domain\Shared\Traits\BelongsToBranch;
 use App\Domain\Party\Models\Party;
 use App\Domain\Property\Models\Property;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class OwnerPayout extends DomainModel
 {
+    use BelongsToBranch;
+
     protected $table = 'owner_payouts';
 
     protected $fillable = [
