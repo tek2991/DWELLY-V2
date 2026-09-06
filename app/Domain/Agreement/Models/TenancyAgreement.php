@@ -57,6 +57,11 @@ class TenancyAgreement extends DomainModel implements HasMedia
         'deposit_deductions_breakdown',
         'net_deposit_refund',
         'deposit_settlement_status',
+        'previous_agreement_id',
+        'is_renewal',
+        'renewal_notes',
+        'documentation_charge',
+        'documentation_invoice_id',
     ];
 
     protected $casts = [
@@ -70,9 +75,11 @@ class TenancyAgreement extends DomainModel implements HasMedia
         'keys_returned_at' => 'datetime',
         'rent_amount' => 'decimal:2',
         'first_month_rent' => 'decimal:2',
+        'documentation_charge' => 'decimal:2',
         'security_deposit' => 'decimal:2',
         'booking_amount' => 'decimal:2',
         'net_deposit_refund' => 'decimal:2',
+        'is_renewal' => 'boolean',
         'signed_by_tenant' => 'boolean',
         'keys_handed_over' => 'boolean',
         'keys_returned' => 'boolean',
@@ -142,6 +149,26 @@ class TenancyAgreement extends DomainModel implements HasMedia
     public function tasks(): \Illuminate\Database\Eloquent\Relations\MorphMany
     {
         return $this->morphMany(\App\Domain\Task\Models\Task::class, 'taskable');
+    }
+
+    public function previousAgreement(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'previous_agreement_id');
+    }
+
+    public function renewals(): HasMany
+    {
+        return $this->hasMany(self::class, 'previous_agreement_id');
+    }
+
+    public function latestRenewal(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(self::class, 'previous_agreement_id')->latestOfMany();
+    }
+
+    public function documentationInvoice(): BelongsTo
+    {
+        return $this->belongsTo(\Tek2991\Accounting\Models\Invoice::class, 'documentation_invoice_id');
     }
 }
 

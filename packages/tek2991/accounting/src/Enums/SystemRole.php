@@ -27,6 +27,7 @@ enum SystemRole: string implements HasLabel
     case MaintenanceIncome = 'maintenance_income';
     case MaintenanceExpense = 'maintenance_expense';
     case RentIncome = 'rent_income';
+    case DocumentationFeeRevenue = 'documentation_fee_revenue';
 
     public function getLabel(): ?string
     {
@@ -50,6 +51,7 @@ enum SystemRole: string implements HasLabel
             self::MaintenanceIncome => 'Maintenance Service Income',
             self::MaintenanceExpense => 'Maintenance Direct Expense',
             self::RentIncome => 'Rental Income (Direct)',
+            self::DocumentationFeeRevenue => 'Agreement Documentation Fee Income',
         };
     }
 }

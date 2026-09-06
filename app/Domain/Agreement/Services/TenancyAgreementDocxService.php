@@ -163,8 +163,15 @@ class TenancyAgreementDocxService
         $noticeDays = $agreement->notice_period_days ?? 30;
         $section->addListItem($this->esc("If the Licensee wants to vacate the premises before the agreement tenure then {$noticeDays} days' notice period (one month) needs to be issued at the beginning of a month."), 0, null, null, $listStyle);
         $section->addListItem($this->esc('The Licensor has an option to renew this agreement with a 5% increase in license fee upon mutually agreed terms. Minimum INR 1,000.00 will be charged by the Service provider for renewal paperwork.'), 0, null, null, $listStyle);
-        $section->addListItem($this->esc('Minimum Rupees Two Thousand only (INR 2,000.00) will be deducted from the security deposit at the time of refund towards cleaning charges.'), 0, null, null, $listStyle);
-        $section->addListItem($this->esc('Rupees One Thousand and Five Hundred only (INR 1,500.00) will be charged by the Service provider to the Licensee for the paperwork.'), 0, null, null, $listStyle);
+        $docCharge = (float) ($agreement->documentation_charge ?? ($agreement->is_renewal ? 1000.00 : 1500.00));
+        $docChargeWords = $this->numberToWords((int) $docCharge);
+        $docFormatted = number_format($docCharge, 2);
+
+        if ($agreement->is_renewal) {
+            $section->addListItem($this->esc("Rupees {$docChargeWords} only (INR {$docFormatted}) will be charged by the Service provider to the Licensee for the renewal paperwork."), 0, null, null, $listStyle);
+        } else {
+            $section->addListItem($this->esc("Rupees {$docChargeWords} only (INR {$docFormatted}) will be charged by the Service provider to the Licensee for the paperwork."), 0, null, null, $listStyle);
+        }
 
         // Special Terms (if any)
         if (! empty($agreement->special_terms)) {

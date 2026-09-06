@@ -2,11 +2,14 @@
 
 namespace App\Filament\Resources\TenancyAgreements\Tables;
 
+use App\Domain\Agreement\Actions\RenewTenancyAgreementAction;
 use App\Domain\Agreement\Models\TenancyAgreement;
+use App\Filament\Resources\TenancyAgreements\Schemas\TenancyAgreementForm;
 use App\Filament\Resources\TenancyAgreements\TenancyAgreementResource;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\DatePicker;
+use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
@@ -24,7 +27,8 @@ class TenancyAgreementsTable
                     ->label('Agreement Code')
                     ->searchable()
                     ->sortable()
-                    ->weight('bold'),
+                    ->weight('bold')
+                    ->description(fn (TenancyAgreement $record) => $record->is_renewal ? 'Renewal' . ($record->previousAgreement ? ' (from ' . $record->previousAgreement->code . ')' : '') : 'Fresh Lease'),
 
                 TextColumn::make('property.building_name')
                     ->label('Property')
@@ -54,6 +58,12 @@ class TenancyAgreementsTable
                     ->money('INR')
                     ->sortable(),
 
+                TextColumn::make('documentation_charge')
+                    ->label('Doc Fee (₹)')
+                    ->money('INR')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+
                 TextColumn::make('status')
                     ->label('Status & Keys')
                     ->html()
@@ -65,6 +75,7 @@ class TenancyAgreementsTable
                             'draft' => 'background-color: #f1f5f9; color: #334155; border: 1px solid #cbd5e1;',
                             'signed' => 'background-color: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;',
                             'active' => 'background-color: #dcfce7; color: #15803d; border: 1px solid #bbf7d0;',
+                            'renewed' => 'background-color: #f3e8ff; color: #7e22ce; border: 1px solid #d8b4fe;',
                             'deboarding_initiated' => 'background-color: #fef3c7; color: #b45309; border: 1px solid #fde68a;',
                             'vacated', 'terminated' => 'background-color: #fee2e2; color: #b91c1c; border: 1px solid #fecaca;',
                             'archived' => 'background-color: #f3f4f6; color: #4b5563; border: 1px solid #d1d5db;',
@@ -107,6 +118,7 @@ class TenancyAgreementsTable
                         'draft' => 'Draft',
                         'signed' => 'Signed',
                         'active' => 'Active',
+                        'renewed' => 'Renewed',
                         'deboarding_initiated' => 'Deboarding Initiated',
                         'vacated' => 'Vacated',
                         'terminated' => 'Terminated',
@@ -119,6 +131,11 @@ class TenancyAgreementsTable
                     ->relationship('property', 'building_name')
                     ->searchable()
                     ->preload(),
+
+                TernaryFilter::make('is_renewal')
+                    ->label('Agreement Type')
+                    ->trueLabel('Renewal Agreements')
+                    ->falseLabel('Fresh Agreements'),
 
                 TernaryFilter::make('keys_handed_over')
                     ->label('Key Handover Status')
@@ -149,6 +166,27 @@ class TenancyAgreementsTable
             ])
             ->recordActions([
                 EditAction::make(),
+                Action::make('renewAgreement')
+                    ->label('Renew')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('purple')
+                    ->visible(fn (TenancyAgreement $record) => $record->status === 'active')
+                    ->modalHeading('Renew Tenancy Agreement & Draft 11-Month Lease')
+                    ->modalDescription('Carries forward tenant KYC, inventory audit references, and security deposit, establishing a renewed 11-month lease term with updated commercial terms.')
+                    ->modalSubmitActionLabel('Draft Renewal Agreement')
+                    ->form(fn (TenancyAgreement $record) => TenancyAgreementForm::getRenewalFormSchema($record))
+                    ->action(function (TenancyAgreement $record, array $data) {
+                        $action = app(RenewTenancyAgreementAction::class);
+                        $renewal = $action->execute($record, $data, auth()->user());
+
+                        Notification::make()
+                            ->title('Renewal Agreement Drafted')
+                            ->body("Agreement {$renewal->code} has been drafted with carried-over KYC and audit records.")
+                            ->success()
+                            ->send();
+
+                        return redirect(TenancyAgreementResource::getUrl('edit', ['record' => $renewal]));
+                    }),
                 Action::make('deboardTenancy')
                     ->label('Deboarding')
                     ->icon('heroicon-o-arrow-left-on-rectangle')

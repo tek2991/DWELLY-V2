@@ -3,14 +3,21 @@
 namespace App\Filament\Resources\TenancyAgreements\Pages\Concerns;
 
 use App\Domain\Agreement\Actions\ActivateTenancyAction;
+use App\Domain\Agreement\Actions\RenewTenancyAgreementAction;
 use App\Domain\Agreement\Services\TenancyDeboardingService;
+use App\Domain\Finance\Services\AccountingProvisioningService;
 use App\Filament\Resources\TenancyAgreements\Schemas\TenancyAgreementForm;
 use App\Filament\Resources\TenancyAgreements\TenancyAgreementResource;
+use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Illuminate\Contracts\View\View;
 
 trait HasTenancyWorkflowHeader
@@ -135,6 +142,65 @@ trait HasTenancyWorkflowHeader
                 ->modalDescription('Are you sure you want to activate this tenancy agreement? This will mark the agreement as active, transition property status to occupied, and permanently lock the linked Move-In Audit.')
                 ->modalSubmitActionLabel('Yes, Activate Tenancy')
                 ->action(fn () => $this->activateTenancy())
+                ->extraAttributes(['style' => 'display: none;']),
+
+            Action::make('renewTenancyHeader')
+                ->label('Renew Tenancy Agreement')
+                ->icon('heroicon-o-arrow-path')
+                ->color('purple')
+                ->modalHeading('Renew Tenancy Agreement & Draft 11-Month Lease')
+                ->modalDescription('Carries forward tenant KYC, inventory audit references, and security deposit, establishing a renewed 11-month lease term with updated commercial terms.')
+                ->modalSubmitActionLabel('Draft Renewal Agreement')
+                ->form(fn () => TenancyAgreementForm::getRenewalFormSchema($this->getRecord()))
+                ->action(function (array $data) {
+                    $record = $this->getRecord();
+                    $action = app(RenewTenancyAgreementAction::class);
+                    $renewal = $action->execute($record, $data, auth()->user());
+
+                    Notification::make()
+                        ->title('Renewal Agreement Drafted')
+                        ->body("Agreement {$renewal->code} has been drafted with carried-over KYC and audit records.")
+                        ->success()
+                        ->send();
+
+                    $this->redirect(TenancyAgreementResource::getUrl('edit', ['record' => $renewal]));
+                })
+                ->extraAttributes(['style' => 'display: none;']),
+
+            Action::make('generateDocInvoiceHeader')
+                ->label('Generate Documentation Invoice')
+                ->icon('heroicon-o-document-currency-rupee')
+                ->color('primary')
+                ->requiresConfirmation()
+                ->modalHeading('Generate Documentation Fee Invoice')
+                ->modalDescription(function () {
+                    $record = $this->getRecord();
+                    $fee = (float) ($record?->documentation_charge ?? ($record?->is_renewal ? 1000.00 : 1500.00));
+
+                    return 'This will generate and post a firm Sales Invoice of ₹' . number_format($fee, 2) . " to the tenant's account for agreement documentation and legal execution.";
+                })
+                ->modalSubmitActionLabel('Yes, Generate Invoice')
+                ->action(function () {
+                    $record = $this->getRecord();
+                    $provisioning = app(AccountingProvisioningService::class);
+                    $invoice = $provisioning->generateDocumentationChargeInvoice($record);
+
+                    if ($invoice) {
+                        Notification::make()
+                            ->title('Documentation Invoice Created')
+                            ->body("Invoice {$invoice->invoice_number} has been generated and posted to the General Ledger.")
+                            ->success()
+                            ->send();
+                    } else {
+                        Notification::make()
+                            ->title('Invoicing Ineligible')
+                            ->body('Could not generate documentation invoice. Please check documentation charge amount and tenant profile.')
+                            ->warning()
+                            ->send();
+                    }
+
+                    $this->redirect(TenancyAgreementResource::getUrl('edit', ['record' => $record]));
+                })
                 ->extraAttributes(['style' => 'display: none;']),
         ];
     }

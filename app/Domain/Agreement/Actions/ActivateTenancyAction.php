@@ -21,6 +21,15 @@ class ActivateTenancyAction
             $agreement->status = 'active';
             $agreement->save();
 
+            // 1b. If renewal, transition previous agreement to 'renewed'
+            if ($agreement->is_renewal && $agreement->previous_agreement_id) {
+                $previousAgreement = $agreement->previousAgreement;
+                if ($previousAgreement) {
+                    $previousAgreement->status = 'renewed';
+                    $previousAgreement->save();
+                }
+            }
+
             // 2. Lock linked Move-In Audit permanently
             if ($agreement->audit) {
                 app(\App\Domain\Audit\Services\AuditReviewService::class)->lockAudit($agreement->audit, $actor);

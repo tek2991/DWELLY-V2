@@ -2,11 +2,15 @@
 
 namespace App\Filament\Resources\Properties\RelationManagers;
 
+use App\Domain\Agreement\Actions\RenewTenancyAgreementAction;
+use App\Domain\Agreement\Models\TenancyAgreement;
+use App\Filament\Resources\TenancyAgreements\Schemas\TenancyAgreementForm;
 use App\Filament\Resources\TenancyAgreements\TenancyAgreementResource;
-use Filament\Resources\RelationManagers\RelationManager;
-use Filament\Tables\Table;
-use Filament\Tables\Columns\TextColumn;
 use Filament\Actions\Action;
+use Filament\Notifications\Notification;
+use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Table;
 
 class TenancyAgreementsRelationManager extends RelationManager
 {
@@ -27,6 +31,7 @@ class TenancyAgreementsRelationManager extends RelationManager
                     ->sortable()
                     ->weight('bold')
                     ->color('primary')
+                    ->description(fn (TenancyAgreement $record) => $record->is_renewal ? 'Renewal' : 'Fresh Lease')
                     ->url(fn ($record) => TenancyAgreementResource::getUrl('edit', ['record' => $record->id])),
 
                 TextColumn::make('primaryTenant.party.display_name')
@@ -58,6 +63,7 @@ class TenancyAgreementsRelationManager extends RelationManager
                     ->badge()
                     ->color(fn (?string $state): string => match ($state) {
                         'active' => 'success',
+                        'renewed' => 'purple',
                         'deboarding_initiated' => 'warning',
                         'vacated', 'terminated' => 'danger',
                         'draft' => 'gray',
@@ -80,6 +86,29 @@ class TenancyAgreementsRelationManager extends RelationManager
                     ->icon('heroicon-o-pencil-square')
                     ->color('primary')
                     ->url(fn ($record) => TenancyAgreementResource::getUrl('edit', ['record' => $record->id])),
+
+                Action::make('renewAgreement')
+                    ->label('Renew')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('purple')
+                    ->visible(fn (TenancyAgreement $record) => $record->status === 'active')
+                    ->modalHeading('Renew Tenancy Agreement & Draft 11-Month Lease')
+                    ->modalDescription('Carries forward tenant KYC, inventory audit references, and security deposit, establishing a renewed 11-month lease term with updated commercial terms.')
+                    ->modalSubmitActionLabel('Draft Renewal Agreement')
+                    ->form(fn (TenancyAgreement $record) => TenancyAgreementForm::getRenewalFormSchema($record))
+                    ->action(function (TenancyAgreement $record, array $data) {
+                        $action = app(RenewTenancyAgreementAction::class);
+                        $renewal = $action->execute($record, $data, auth()->user());
+
+                        Notification::make()
+                            ->title('Renewal Agreement Drafted')
+                            ->body("Agreement {$renewal->code} has been drafted with carried-over KYC and audit records.")
+                            ->success()
+                            ->send();
+
+                        return redirect(TenancyAgreementResource::getUrl('edit', ['record' => $renewal]));
+                    }),
             ]);
     }
 }
+

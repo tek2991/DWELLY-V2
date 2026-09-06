@@ -47,6 +47,9 @@ class RentDemandsResource extends Resource
         return $query->where(function ($q) {
             $q->where('reference_type', TenancyAgreement::class)
                 ->orWhere('notes', 'like', '%Rent%');
+        })->where(function ($q) {
+            $q->whereNull('document_snapshot->invoice_category')
+              ->orWhere('document_snapshot->invoice_category', '!=', 'documentation_charge');
         });
     }
 

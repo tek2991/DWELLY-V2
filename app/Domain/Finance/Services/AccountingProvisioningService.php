@@ -9,8 +9,15 @@ use Tek2991\Accounting\Models\Account;
 use Tek2991\Accounting\Enums\ContactType;
 use Tek2991\Accounting\Enums\AccountType;
 use Tek2991\Accounting\Enums\SystemRole;
+use Tek2991\Accounting\Models\Invoice;
+use Tek2991\Accounting\Models\InvoiceItem;
+use Tek2991\Accounting\Enums\InvoiceStatus;
+use Tek2991\Accounting\Enums\DocumentLineType;
+use App\Domain\Agreement\Models\TenancyAgreement;
 use App\Domain\Finance\Models\OwnerPayout;
 use Brick\Money\Money;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class AccountingProvisioningService
 {
@@ -174,6 +181,19 @@ class AccountingProvisioningService
                 'type' => AccountType::Expense,
                 'system_role' => SystemRole::MaintenanceExpense,
                 'name' => 'Contractor & Maintenance Repair Expense',
+                'is_control_account' => false,
+            ]);
+    }
+
+    public function getDocumentationFeeIncomeAccount(): Account
+    {
+        return Account::where('system_role', SystemRole::DocumentationFeeRevenue)->first()
+            ?? Account::where('type', AccountType::Revenue)->where('name', 'like', '%Documentation%')->first()
+            ?? Account::where('type', AccountType::Revenue)->first()
+            ?? Account::create([
+                'type' => AccountType::Revenue,
+                'system_role' => SystemRole::DocumentationFeeRevenue,
+                'name' => 'Agreement Documentation Fee Income',
                 'is_control_account' => false,
             ]);
     }
@@ -365,8 +385,101 @@ class AccountingProvisioningService
         }
     }
 
-    public function postInitialInvoices(\App\Domain\Agreement\Models\TenancyAgreement $agreement): void
+    public function generateDocumentationChargeInvoice(TenancyAgreement $agreement, array $options = []): ?Invoice
     {
-        \Illuminate\Support\Facades\Log::info("Posted initial invoices for Tenancy {$agreement->id}");
+        if ($agreement->documentation_invoice_id) {
+            $existingInvoice = Invoice::find($agreement->documentation_invoice_id);
+            if ($existingInvoice) {
+                return $existingInvoice;
+            }
+        }
+
+        $chargeAmount = (float) ($options['amount'] ?? $agreement->documentation_charge ?? ($agreement->is_renewal ? 1000.00 : 1500.00));
+        if ($chargeAmount <= 0) {
+            return null;
+        }
+
+        $primaryRole = $agreement->primaryTenant ?? $agreement->roles()->where('is_primary', true)->first() ?? $agreement->roles()->first();
+        $primaryTenantParty = $primaryRole?->party ?? $agreement->tenants()->first();
+
+        if (! $primaryTenantParty) {
+            Log::warning("Cannot generate documentation invoice for Tenancy {$agreement->id}: No primary tenant party found.");
+            return null;
+        }
+
+        return DB::transaction(function () use ($agreement, $primaryTenantParty, $chargeAmount, $options) {
+            $this->ensurePartyAccountingReady($primaryTenantParty);
+            $contact = $this->ensureAccountingContact($primaryTenantParty);
+
+            $branch = $agreement->branch ?? $agreement->property?->branch ?? \App\Models\Branch::first();
+            $branchId = $branch?->id ?? app(\Tek2991\Accounting\Services\BranchContext::class)->getCurrentId();
+
+            $docNumberService = app(\Tek2991\Accounting\Services\DocumentNumberService::class);
+            $invoiceNumber = $options['invoice_number'] ?? $docNumberService->nextInvoiceNumber($branch);
+
+            $issueDate = $options['issue_date'] ?? now()->toDateString();
+            $dueDate = $options['due_date'] ?? now()->addDays(7)->toDateString();
+
+            $invoice = Invoice::create([
+                'branch_id' => $branchId,
+                'contact_id' => $contact->id,
+                'invoice_number' => $invoiceNumber,
+                'reference_type' => TenancyAgreement::class,
+                'reference_id' => $agreement->id,
+                'status' => InvoiceStatus::Draft,
+                'issue_date' => $issueDate,
+                'due_date' => $dueDate,
+                'currency_code' => 'INR',
+                'notes' => $options['notes'] ?? ($agreement->is_renewal
+                    ? "Agreement Documentation & Renewal Execution Fee for Tenancy {$agreement->code}"
+                    : "Agreement Documentation & Legal Execution Fee for Tenancy {$agreement->code}"),
+                'document_snapshot' => [
+                    'invoice_category' => 'documentation_charge',
+                    'agreement_id' => $agreement->id,
+                    'agreement_code' => $agreement->code,
+                    'is_renewal' => (bool) $agreement->is_renewal,
+                ],
+            ]);
+
+            $incomeAccount = $this->getDocumentationFeeIncomeAccount();
+
+            InvoiceItem::create([
+                'invoice_id' => $invoice->id,
+                'line_type' => DocumentLineType::Account,
+                'sort_order' => 1,
+                'description' => $agreement->is_renewal
+                    ? "Tenancy Agreement Renewal Paperwork & Legal Documentation Fee ({$agreement->code})"
+                    : "Tenancy Agreement Legal Documentation & Verification Fee ({$agreement->code})",
+                'quantity' => 1,
+                'unit_price' => $chargeAmount,
+                'line_total' => $chargeAmount,
+                'gross_amount' => $chargeAmount,
+                'net_amount' => $chargeAmount,
+                'income_account_id' => $incomeAccount->id,
+            ]);
+
+            $invoiceService = app(\Tek2991\Accounting\Services\InvoiceService::class);
+            $invoiceService->recalculateTotals($invoice);
+            $invoice->refresh();
+
+            // Post to General Ledger: DR Tenant Accounts Receivable, CR Documentation Fee Revenue
+            $invoiceService->post($invoice);
+            $invoice->refresh();
+
+            $agreement->updateQuietly([
+                'documentation_invoice_id' => $invoice->id,
+            ]);
+
+            return $invoice;
+        });
+    }
+
+    public function postInitialInvoices(TenancyAgreement $agreement): void
+    {
+        if ((float) $agreement->documentation_charge > 0 && ! $agreement->documentation_invoice_id) {
+            $this->generateDocumentationChargeInvoice($agreement);
+        }
+
+        Log::info("Posted initial invoices for Tenancy {$agreement->id}");
     }
 }

@@ -49,10 +49,12 @@ class InvoiceResource extends Resource
         $query = parent::getEloquentQuery();
         app(\Tek2991\Accounting\Services\BranchContext::class)->applyQueryScope($query);
 
-        // Exclude residential pass-through rent demands from general firm sales invoices
+        // Exclude residential pass-through rent demands from general firm sales invoices,
+        // but include firm revenue invoices like agreement documentation charges
         $query->where(function ($q) {
             $q->whereNull('reference_type')
-              ->orWhere('reference_type', '!=', 'App\Domain\Agreement\Models\TenancyAgreement');
+              ->orWhere('reference_type', '!=', 'App\Domain\Agreement\Models\TenancyAgreement')
+              ->orWhere('document_snapshot->invoice_category', 'documentation_charge');
         });
 
         return $query;

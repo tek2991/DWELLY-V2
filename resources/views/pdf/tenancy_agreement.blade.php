@@ -232,7 +232,15 @@
         <li>If the Licensee wants to vacate the premises before the agreement tenure then <strong>one month’s notice period</strong> needs to be issued at the beginning of a month.</li>
         <li>The Licensor has an option to renew this agreement with a <strong>5% increase</strong> in license fee upon mutually agreed terms. Minimum INR 1,000.00 will be charged by the Service provider for renewal paperwork.</li>
         <li>Minimum Rupees Two Thousand only (INR 2,000.00) will be deducted from the security deposit at the time of refund towards cleaning charges.</li>
-        <li>Rupees One Thousand and Five Hundred only (INR 1,500.00) will be charged by the Service provider to the Licensee for the paperwork.</li>
+        @php
+            $docChargeAmount = (float) ($agreement->documentation_charge ?? ($agreement->is_renewal ? 1000.00 : 1500.00));
+            $docWords = $docChargeInWords ?? 'One Thousand and Five Hundred';
+        @endphp
+        @if($agreement->is_renewal)
+            <li>Rupees {{ $docWords }} only (INR {{ number_format($docChargeAmount, 2) }}) will be charged by the Service provider to the Licensee for the renewal paperwork.</li>
+        @else
+            <li>Rupees {{ $docWords }} only (INR {{ number_format($docChargeAmount, 2) }}) will be charged by the Service provider to the Licensee for the paperwork.</li>
+        @endif
     </ul>
 
     @if(!empty($agreement->special_terms))

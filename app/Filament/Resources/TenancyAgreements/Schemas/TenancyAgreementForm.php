@@ -448,10 +448,26 @@ class TenancyAgreementForm
                 '<span>✓ Tenancy Agreement is Active</span>'.
                 '<span style="font-size: 12px; font-weight: 500; color: #059669;">&bull; Move-In Audit is permanently locked</span>'.
                 '</div>'.
+                '<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">'.
+                '<button type="button" wire:click="mountAction(\'renewTenancyHeader\')" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 15px; background-color: #7c3aed; color: #ffffff; font-weight: 600; font-size: 13px; border-radius: 6px; border: none; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: background-color 150ms;">'.
+                '<svg style="width: 15px; height: 15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>'.
+                'Renew Agreement'.
+                '</button>'.
                 '<button type="button" wire:click="mountAction(\'initiateDeboardingHeader\')" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 15px; background-color: #d97706; color: #ffffff; font-weight: 600; font-size: 13px; border-radius: 6px; border: none; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: background-color 150ms;">'.
                 '<svg style="width: 15px; height: 15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>'.
                 'Initiate Deboarding & Exit Audit'.
                 '</button>'.
+                '</div>'.
+                '</div>';
+        } elseif ($status === 'renewed') {
+            $latestRenewal = $record->latestRenewal;
+            $renewalUrl = $latestRenewal ? TenancyAgreementResource::getUrl('edit', ['record' => $latestRenewal]) : '#';
+            $activationBannerHtml = '<div style="margin-top: 1rem; padding: 0.85rem 1.25rem; background-color: rgba(124, 58, 237, 0.08); border: 1px solid rgba(124, 58, 237, 0.3); border-radius: 0.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">'.
+                '<div>'.
+                '<div style="font-weight: 700; font-size: 14px; color: #6d28d9;">🔄 Tenancy Agreement Renewed</div>'.
+                '<div style="font-size: 12px; color: rgba(128, 128, 128, 0.85); margin-top: 2px;">This lease has been renewed and superseded by a subsequent agreement.</div>'.
+                '</div>'.
+                ($latestRenewal ? '<a href="'.e($renewalUrl).'" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 15px; background-color: #7c3aed; color: #ffffff; font-weight: 600; font-size: 13px; border-radius: 6px; text-decoration: none; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">Open Active Renewal ('.e($latestRenewal->code).') &rarr;</a>' : '').
                 '</div>';
         } elseif (in_array($status, ['deboarding_initiated', 'vacated'])) {
             $deboardUrl = $record->deboarding 
@@ -498,6 +514,7 @@ class TenancyAgreementForm
                 '<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">'.
                 '<span style="font-size: 1.15rem; font-weight: 800; color: inherit;">'.e($propertyName).'</span>'.
                 ($propertyCode ? '<span style="display: inline-flex; align-items: center; font-family: monospace; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; background-color: rgba(37, 99, 235, 0.15); color: #2563eb;">'.e($propertyCode).'</span>' : '').
+                ($record->is_renewal && $record->previousAgreement ? '<a href="'.e(TenancyAgreementResource::getUrl('edit', ['record' => $record->previousAgreement])).'" style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; background-color: rgba(124, 58, 237, 0.12); color: #7c3aed; font-size: 11px; font-weight: 700; text-decoration: none;" title="View Previous Agreement">🔄 Renewed from '.e($record->previousAgreement->code).'</a>' : '').
                 '<a href="'.e($propertyUrl).'" target="_blank" style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; background-color: rgba(37, 99, 235, 0.1); color: #2563eb; font-size: 12px; font-weight: 600; text-decoration: none;" title="View Property Profile">'.
                 'View Property Profile &rarr;'.
                 '</a>'.
@@ -609,6 +626,109 @@ class TenancyAgreementForm
                                         $buttonLabel.
                                         '</a>'.
                                         '</div>'
+                                );
+                            })
+                            ->columnSpanFull(),
+                    ]),
+
+                Section::make('Renewal Lineage & History')
+                    ->description('Linked prior and subsequent agreement terms for this lease lifecycle.')
+                    ->visible(fn ($record) => $record && ($record->is_renewal || $record->renewals()->exists()))
+                    ->schema([
+                        Placeholder::make('renewal_lineage_card')
+                            ->label('Agreement Lineage')
+                            ->content(function ($record) {
+                                if (! $record) {
+                                    return '';
+                                }
+
+                                $html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
+
+                                if ($record->is_renewal && $record->previousAgreement) {
+                                    $prev = $record->previousAgreement;
+                                    $prevUrl = TenancyAgreementResource::getUrl('edit', ['record' => $prev]);
+                                    $html .= '<div style="padding: 10px 14px; background-color: rgba(124, 58, 237, 0.06); border: 1px solid rgba(124, 58, 237, 0.2); border-radius: 6px; font-size: 13px;">'.
+                                        '🔄 <strong>Renewed from Previous Agreement:</strong> <a href="'.e($prevUrl).'" style="color: #7c3aed; font-weight: 700; text-decoration: underline;">'.e($prev->code).'</a> '.
+                                        '('.($prev->start_date ? $prev->start_date->format('d M Y') : '').' &ndash; '.($prev->end_date ? $prev->end_date->format('d M Y') : '').') &bull; Status: <span style="font-weight: 600; text-transform: uppercase;">'.e($prev->status).'</span>'.
+                                    '</div>';
+                                }
+
+                                if ($record->renewals()->exists()) {
+                                    foreach ($record->renewals as $ren) {
+                                        $renUrl = TenancyAgreementResource::getUrl('edit', ['record' => $ren]);
+                                        $html .= '<div style="padding: 10px 14px; background-color: rgba(16, 185, 129, 0.06); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 6px; font-size: 13px;">'.
+                                            '⏩ <strong>Subsequent Renewal:</strong> <a href="'.e($renUrl).'" style="color: #059669; font-weight: 700; text-decoration: underline;">'.e($ren->code).'</a> '.
+                                            '('.($ren->start_date ? $ren->start_date->format('d M Y') : '').' &ndash; '.($ren->end_date ? $ren->end_date->format('d M Y') : '').') &bull; Status: <span style="font-weight: 600; text-transform: uppercase;">'.e($ren->status).'</span>'.
+                                        '</div>';
+                                    }
+                                }
+
+                                $html .= '</div>';
+
+                                return new HtmlString($html);
+                            })
+                            ->columnSpanFull(),
+                    ]),
+
+                Section::make('2. Agreement Documentation Fee & Invoicing')
+                    ->description('One-time administrative documentation & legal execution fee invoiced to tenant.')
+                    ->schema([
+                        Placeholder::make('documentation_invoicing_card')
+                            ->label('Documentation Fee Invoicing Status')
+                            ->content(function ($record) {
+                                if (! $record) {
+                                    return '';
+                                }
+
+                                $charge = (float) ($record->documentation_charge ?? ($record->is_renewal ? 1000.00 : 1500.00));
+                                $formattedCharge = '₹'.number_format($charge, 2);
+
+                                $invoice = $record->documentationInvoice;
+
+                                if ($invoice) {
+                                    $invoiceStatus = $invoice->status instanceof \Tek2991\Accounting\Enums\InvoiceStatus
+                                        ? $invoice->status->value
+                                        : (string) ($invoice->status ?? 'posted');
+
+                                    $statusColor = match ($invoiceStatus) {
+                                        'paid' => '#10b981',
+                                        'sent', 'posted' => '#3b82f6',
+                                        'draft' => '#f59e0b',
+                                        default => '#6b7280',
+                                    };
+
+                                    $statusBg = match ($invoiceStatus) {
+                                        'paid' => '#d1fae5',
+                                        'sent', 'posted' => '#dbeafe',
+                                        'draft' => '#fef3c7',
+                                        default => '#f3f4f6',
+                                    };
+
+                                    return new HtmlString(
+                                        '<div style="background-color: rgba(128, 128, 128, 0.03); border: 1px solid rgba(128, 128, 128, 0.2); padding: 16px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; color: inherit; flex-wrap: wrap; gap: 12px;">'.
+                                            '<div>'.
+                                                '<div style="font-weight: 700; font-size: 15px; color: inherit;">Documentation Fee Invoice: '.e($invoice->invoice_number).'</div>'.
+                                                '<div style="font-size: 13px; color: rgba(128, 128, 128, 0.85); margin-top: 4px;">Amount: <strong>'.$formattedCharge.'</strong> | Status: <span style="padding: 2px 8px; font-size: 11px; border-radius: 4px; font-weight: 600; background-color: '.$statusBg.'; color: '.$statusColor.'; text-transform: uppercase;">'.e($invoiceStatus).'</span> | Balance Due: <strong>₹'.number_format($invoice->balance_due ?? 0, 2).'</strong></div>'.
+                                                '<div style="font-size: 12px; color: rgba(128, 128, 128, 0.7); margin-top: 4px;">Posted to General Ledger (DR: Tenant Accounts Receivable &bull; CR: Agreement Documentation Fee Income)</div>'.
+                                            '</div>'.
+                                            '<a href="'.url("/accounting/sales/invoices/{$invoice->id}").'" target="_blank" style="display: inline-flex; align-items: center; padding: 8px 16px; background-color: #2563eb; color: #ffffff; font-weight: 600; font-size: 13px; border-radius: 6px; text-decoration: none; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">'.
+                                                'View Sales Invoice &rarr;'.
+                                            '</a>'.
+                                        '</div>'
+                                    );
+                                }
+
+                                return new HtmlString(
+                                    '<div style="background-color: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.25); padding: 16px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; color: inherit; flex-wrap: wrap; gap: 12px;">'.
+                                        '<div>'.
+                                            '<div style="font-weight: 700; font-size: 15px; color: #b45309;">Documentation Charge: '.$formattedCharge.' (Uninvoiced)</div>'.
+                                            '<div style="font-size: 13px; color: rgba(128, 128, 128, 0.85); margin-top: 4px;">Fee is automatically invoiced and posted upon agreement activation, or you can generate it now.</div>'.
+                                        '</div>'.
+                                        '<button type="button" wire:click="mountAction(\'generateDocInvoiceHeader\')" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background-color: #0284c7; color: #ffffff; font-weight: 600; font-size: 13px; border-radius: 6px; border: none; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">'.
+                                            '<svg style="width: 15px; height: 15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>'.
+                                            'Generate Documentation Invoice Now'.
+                                        '</button>'.
+                                    '</div>'
                                 );
                             })
                             ->columnSpanFull(),
@@ -743,6 +863,15 @@ class TenancyAgreementForm
                             ->numeric()
                             ->required()
                             ->default(30)
+                            ->columnSpan(1),
+
+                        TextInput::make('documentation_charge')
+                            ->label('Documentation & Legal Fee')
+                            ->numeric()
+                            ->prefix('₹')
+                            ->required()
+                            ->default(fn ($record) => $record?->is_renewal ? 1000.00 : 1500.00)
+                            ->helperText('Standard administrative documentation fee (₹1,500 fresh / ₹1,000 renewal)')
                             ->columnSpan(1),
 
                         Select::make('electricity_provider_id')
@@ -1446,4 +1575,69 @@ class TenancyAgreementForm
             'ifsc_code' => 'INDB0000662',
         ];
     }
+
+    public static function getRenewalFormSchema(?TenancyAgreement $record): array
+    {
+        $prevEndDate = $record?->end_date;
+        $defaultStart = $prevEndDate ? Carbon::parse($prevEndDate)->addDay()->format('Y-m-d') : Carbon::today()->format('Y-m-d');
+        $defaultEnd = Carbon::parse($defaultStart)->addMonths(11)->subDay()->format('Y-m-d');
+        $currentRent = (float) ($record?->rent_amount ?? 0);
+        $escalatedRent = round($currentRent * 1.05);
+
+        return [
+            Grid::make(2)
+                ->schema([
+                    DatePicker::make('start_date')
+                        ->label('Renewal Start Date')
+                        ->default($defaultStart)
+                        ->required()
+                        ->live(onBlur: true)
+                        ->afterStateUpdated(function (Get $get, Set $set, ?string $state) {
+                            if ($state) {
+                                try {
+                                    $set('end_date', Carbon::parse($state)->addMonths(11)->subDay()->format('Y-m-d'));
+                                } catch (\Throwable $e) {
+                                    // ignore
+                                }
+                            }
+                        }),
+
+                    DatePicker::make('end_date')
+                        ->label('Renewal End Date (11-Month Term)')
+                        ->default($defaultEnd)
+                        ->required(),
+
+                    TextInput::make('rent_amount')
+                        ->label('Renewal Monthly Rent (₹)')
+                        ->numeric()
+                        ->prefix('₹')
+                        ->default($escalatedRent ?: $currentRent)
+                        ->helperText('Current: ₹' . number_format($currentRent, 2) . ' | 5% Escalated: ₹' . number_format($escalatedRent, 2))
+                        ->required(),
+
+                    TextInput::make('security_deposit')
+                        ->label('Security Deposit Carried Forward (₹)')
+                        ->numeric()
+                        ->prefix('₹')
+                        ->default($record?->security_deposit ?? 0)
+                        ->helperText('Carried forward from current lease')
+                        ->required(),
+
+                    TextInput::make('documentation_charge')
+                        ->label('Renewal Documentation Fee (₹)')
+                        ->numeric()
+                        ->prefix('₹')
+                        ->default(1000.00)
+                        ->helperText('Standard renewal paperwork fee (₹1,000.00)')
+                        ->required(),
+
+                    Textarea::make('renewal_notes')
+                        ->label('Renewal Remarks / Escalation Terms')
+                        ->placeholder('e.g. 5% annual escalation applied upon mutual agreement')
+                        ->default('Renewed for 11-month lease term upon mutual agreement.')
+                        ->columnSpanFull(),
+                ]),
+        ];
+    }
 }
+

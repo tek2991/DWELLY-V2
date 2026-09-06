@@ -40,6 +40,8 @@ class TenancyAgreementPdfService
 
         $rentInWords = $this->numberToWords((int) $agreement->rent_amount);
         $depositInWords = $this->numberToWords((int) $agreement->security_deposit);
+        $docCharge = (float) ($agreement->documentation_charge ?? ($agreement->is_renewal ? 1000.00 : 1500.00));
+        $docChargeInWords = $this->numberToWords((int) $docCharge);
 
         $tenantBankDetails = $agreement->tenant_bank_details ?? [];
 
@@ -66,6 +68,7 @@ class TenancyAgreementPdfService
             'propertyAddress' => $propertyAddress,
             'rentInWords' => $rentInWords,
             'depositInWords' => $depositInWords,
+            'docChargeInWords' => $docChargeInWords,
             'annexure1BankDetails' => $annexure1BankDetails,
             'tenantBankDetails' => $tenantBankDetails,
             'audit' => $agreement->audit,
