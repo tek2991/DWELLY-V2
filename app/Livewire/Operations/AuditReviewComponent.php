@@ -2,26 +2,36 @@
 
 namespace App\Livewire\Operations;
 
+use App\Domain\Audit\Enums\AuditType;
+use App\Domain\Audit\Enums\ItemStatus;
 use App\Domain\Audit\Models\Audit;
 use App\Domain\Audit\Models\AuditItem;
-use App\Domain\Audit\Enums\ItemStatus;
-use Filament\Forms\Concerns\InteractsWithForms;
-use Filament\Forms\Contracts\HasForms;
-use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\Select;
+use App\Domain\Audit\Services\AuditReviewService;
+use App\Domain\Property\Models\PropertyAmenity;
+use App\Domain\Property\Models\PropertyEstablishment;
+use App\Domain\Property\Models\PropertyInventory;
+use Filament\Actions\Action;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
-use Filament\Actions\Action;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Concerns\InteractsWithForms;
+use Filament\Forms\Contracts\HasForms;
+use Filament\Notifications\Notification;
+use Illuminate\Support\HtmlString;
 use Livewire\Component;
 
-class AuditReviewComponent extends Component implements HasForms, HasActions
+class AuditReviewComponent extends Component implements HasActions, HasForms
 {
-    use InteractsWithForms;
     use InteractsWithActions;
+    use InteractsWithForms;
 
     public Audit $audit;
+
     public $referenceItems = [];
+
     public ?string $referenceAuditNumber = null;
+
     public $activeCategoryId = null;
 
     public function mount(Audit $audit)
@@ -45,8 +55,8 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
 
                 foreach ($referenceAudit->items as $refItem) {
                     $key = ($refItem->source_type && $refItem->source_id)
-                        ? ($refItem->source_type . '_' . $refItem->source_id)
-                        : ('name_' . mb_strtolower(trim($refItem->name)));
+                        ? ($refItem->source_type.'_'.$refItem->source_id)
+                        : ('name_'.mb_strtolower(trim($refItem->name)));
 
                     $evidenceList = [];
                     foreach ($refItem->evidence as $ev) {
@@ -57,8 +67,8 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
                             $appUrl = rtrim(config('app.url'), '/');
                             if (str_starts_with($url, $appUrl)) {
                                 $url = substr($url, strlen($appUrl));
-                                if (!str_starts_with($url, '/')) {
-                                    $url = '/' . $url;
+                                if (! str_starts_with($url, '/')) {
+                                    $url = '/'.$url;
                                 }
                             }
                         } else {
@@ -66,8 +76,8 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
                         }
 
                         if ($url) {
-                            $hasAnnotations = !empty($ev->annotation_json) 
-                                && isset($ev->annotation_json['canvas']['objects']) 
+                            $hasAnnotations = ! empty($ev->annotation_json)
+                                && isset($ev->annotation_json['canvas']['objects'])
                                 && count($ev->annotation_json['canvas']['objects']) > 0;
 
                             $evidenceList[] = [
@@ -113,11 +123,11 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
             ->color('success')
             ->icon('heroicon-o-check-circle')
             ->button()
-            ->visible(fn () => $this->audit->canReview())
+            ->visible(fn () => $this->audit->canReview() && (auth()->user()?->can('review', $this->audit) ?? false))
             ->action(function () {
-                app(\App\Domain\Audit\Services\AuditReviewService::class)->approveVideo($this->audit, auth()->user());
+                app(AuditReviewService::class)->approveVideo($this->audit, auth()->user());
                 $this->refreshAuditRelations();
-                \Filament\Notifications\Notification::make()
+                Notification::make()
                     ->title('Property layout video approved.')
                     ->success()
                     ->send();
@@ -131,7 +141,7 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
             ->color('danger')
             ->icon('heroicon-o-x-circle')
             ->button()
-            ->visible(fn () => $this->audit->canReview())
+            ->visible(fn () => $this->audit->canReview() && (auth()->user()?->can('review', $this->audit) ?? false))
             ->form([
                 Select::make('comment_type')
                     ->label('Issue Type')
@@ -149,14 +159,14 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
                     ->required(),
             ])
             ->action(function (array $data) {
-                app(\App\Domain\Audit\Services\AuditReviewService::class)->rejectVideo(
+                app(AuditReviewService::class)->rejectVideo(
                     $this->audit,
                     auth()->user(),
                     $data['reason'],
                     $data['comment_type']
                 );
                 $this->refreshAuditRelations();
-                \Filament\Notifications\Notification::make()
+                Notification::make()
                     ->title('Property layout video rejected.')
                     ->danger()
                     ->send();
@@ -170,11 +180,11 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
             ->color('gray')
             ->icon('heroicon-o-arrow-path')
             ->button()
-            ->visible(fn () => $this->audit->canReview())
+            ->visible(fn () => $this->audit->canReview() && (auth()->user()?->can('review', $this->audit) ?? false))
             ->action(function () {
-                app(\App\Domain\Audit\Services\AuditReviewService::class)->resetVideo($this->audit, auth()->user());
+                app(AuditReviewService::class)->resetVideo($this->audit, auth()->user());
                 $this->refreshAuditRelations();
-                \Filament\Notifications\Notification::make()
+                Notification::make()
                     ->title('Property layout video decision reset to pending.')
                     ->info()
                     ->send();
@@ -192,10 +202,10 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
             ->modalHeading('Accept All Items & Review Sync Flags')
             ->modalDescription(function () {
                 $this->refreshAuditRelations();
-                $newItems = $this->audit->items->filter(fn ($item) => !empty($item->snapshot_data['is_new']));
+                $newItems = $this->audit->items->filter(fn ($item) => ! empty($item->snapshot_data['is_new']));
 
                 if ($newItems->isEmpty()) {
-                    return new \Illuminate\Support\HtmlString('Are you sure you want to accept all remaining items in this audit? No new items were added by the inspector.');
+                    return new HtmlString('Are you sure you want to accept all remaining items in this audit? No new items were added by the inspector.');
                 }
 
                 $html = '<div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: 0.5rem; text-align: left;">';
@@ -203,29 +213,29 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
                 $html .= '<div style="max-height: 220px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 0.375rem; padding: 0.5rem; background: #f9fafb; display: flex; flex-direction: column; gap: 0.5rem;">';
 
                 foreach ($newItems as $item) {
-                    $isExcluded = !empty($item->snapshot_data['exclude_from_sync']);
-                    $syncStatus = $isExcluded 
+                    $isExcluded = ! empty($item->snapshot_data['exclude_from_sync']);
+                    $syncStatus = $isExcluded
                         ? '<span style="background: #f3f4f6; color: #4b5563; padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; font-weight: 600; border: 1px solid #d1d5db;">🚫 Excluded</span>'
                         : '<span style="background: #dcfce7; color: #15803d; padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; font-weight: 600; border: 1px solid #bbf7d0;">⚡ Will Sync</span>';
 
                     $categoryName = e($item->category?->name ?? 'General');
                     $itemName = e($item->name);
 
-                    $html .= "<div style=\"display: flex; align-items: center; justify-content: space-between; font-size: 0.875rem; padding: 0.5rem; background: white; border-radius: 0.375rem; border: 1px solid #e5e7eb; gap: 0.5rem;\">";
+                    $html .= '<div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.875rem; padding: 0.5rem; background: white; border-radius: 0.375rem; border: 1px solid #e5e7eb; gap: 0.5rem;">';
                     $html .= "<div><strong>{$itemName}</strong> <span style=\"color: #6b7280; font-size: 0.75rem;\">({$categoryName})</span></div>";
                     $html .= "<div>{$syncStatus}</div>";
-                    $html .= "</div>";
+                    $html .= '</div>';
                 }
 
                 $html .= '</div></div>';
 
-                return new \Illuminate\Support\HtmlString($html);
+                return new HtmlString($html);
             })
-            ->visible(fn () => $this->audit->canReview())
+            ->visible(fn () => $this->audit->canReview() && (auth()->user()?->can('review', $this->audit) ?? false))
             ->action(function () {
-                app(\App\Domain\Audit\Services\AuditReviewService::class)->acceptAllItems($this->audit, auth()->user());
+                app(AuditReviewService::class)->acceptAllItems($this->audit, auth()->user());
                 $this->refreshAuditRelations();
-                \Filament\Notifications\Notification::make()
+                Notification::make()
                     ->title('All items accepted successfully.')
                     ->success()
                     ->send();
@@ -237,21 +247,21 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
         $canApprove = $this->audit->canApprove();
 
         $tooltip = null;
-        if (!$canApprove) {
+        if (! $canApprove) {
             $totalItems = $this->audit->items->count();
-            $approvedItems = $this->audit->items->where('status', \App\Domain\Audit\Enums\ItemStatus::APPROVED)->count();
-            $requiresVideo = $this->audit->audit_type !== \App\Domain\Audit\Enums\AuditType::MAINTENANCE;
+            $approvedItems = $this->audit->items->where('status', ItemStatus::APPROVED)->count();
+            $requiresVideo = $this->audit->audit_type !== AuditType::MAINTENANCE;
             $hasVideo = $this->audit->getFirstMedia('layout_video') !== null;
-            $videoApproved = $hasVideo ? ($this->audit->video_status === 'approved') : !$requiresVideo;
+            $videoApproved = $hasVideo ? ($this->audit->video_status === 'approved') : ! $requiresVideo;
 
             if ($totalItems === 0) {
                 $tooltip = 'No items in audit to approve.';
-            } elseif ($approvedItems < $totalItems && !$videoApproved) {
+            } elseif ($approvedItems < $totalItems && ! $videoApproved) {
                 $tooltip = 'All items and property layout video must be approved before approving the audit.';
             } elseif ($approvedItems < $totalItems) {
                 $unapproved = $totalItems - $approvedItems;
                 $tooltip = "{$unapproved} item(s) must be approved before approving the audit.";
-            } elseif (!$videoApproved) {
+            } elseif (! $videoApproved) {
                 $tooltip = 'Property layout video must be approved before approving the audit.';
             }
         }
@@ -261,17 +271,17 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
             ->color('success')
             ->icon('heroicon-o-check-circle')
             ->button()
-            ->disabled(!$canApprove)
+            ->disabled(! $canApprove)
             ->tooltip($tooltip)
             ->requiresConfirmation()
             ->modalHeading('Approve & Finalize Audit')
             ->modalDescription('Are you sure you want to approve this audit? This will finalize the audit report and sync approved staged items to the property.')
             ->modalSubmitActionLabel('Yes, Approve Audit')
-            ->visible(fn () => $this->audit->canReview())
+            ->visible(fn () => $this->audit->canReview() && (auth()->user()?->can('review', $this->audit) ?? false))
             ->action(function () {
-                app(\App\Domain\Audit\Services\AuditReviewService::class)->approveAudit($this->audit, auth()->user());
+                app(AuditReviewService::class)->approveAudit($this->audit, auth()->user());
                 $this->refreshAuditRelations();
-                \Filament\Notifications\Notification::make()
+                Notification::make()
                     ->title('Audit approved successfully.')
                     ->success()
                     ->send();
@@ -293,14 +303,14 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
                     ->label('Notes for Inspector (Optional)')
                     ->placeholder('Specify any additional details or items required...'),
             ])
-            ->visible(fn () => $this->audit->canRequestChanges())
+            ->visible(fn () => $this->audit->canRequestChanges() && (auth()->user()?->can('review', $this->audit) ?? false))
             ->action(function (array $data) {
-                if (!empty($data['notes'])) {
+                if (! empty($data['notes'])) {
                     $this->audit->update(['notes' => $data['notes']]);
                 }
-                app(\App\Domain\Audit\Services\AuditReviewService::class)->requestChanges($this->audit);
+                app(AuditReviewService::class)->requestChanges($this->audit);
                 $this->refreshAuditRelations();
-                \Filament\Notifications\Notification::make()
+                Notification::make()
                     ->title('Audit sent back to inspector')
                     ->success()
                     ->send();
@@ -317,26 +327,28 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
             ->requiresConfirmation()
             ->modalHeading('Reopen Approved Audit')
             ->modalDescription('Are you sure you want to reopen this approved audit? It will return to in-review status so findings can be updated.')
-            ->visible(fn () => $this->audit->canReopen())
+            ->visible(fn () => $this->audit->canReopen() && (auth()->user()?->can('review', $this->audit) ?? false))
             ->action(function () {
-                app(\App\Domain\Audit\Services\AuditReviewService::class)->reopenAudit($this->audit, auth()->user());
+                app(AuditReviewService::class)->reopenAudit($this->audit, auth()->user());
                 $this->refreshAuditRelations();
-                \Filament\Notifications\Notification::make()
+                Notification::make()
                     ->title('Audit reopened successfully')
                     ->success()
                     ->send();
             });
     }
+
     public function approveItemAction(): Action
     {
         return Action::make('approveItem')
             ->label('Approve')
             ->color('success')
             ->button()
+            ->visible(fn () => $this->audit->canReview() && (auth()->user()?->can('review', $this->audit) ?? false))
             ->action(function (array $arguments) {
                 $item = AuditItem::find($arguments['item_id']);
                 if ($item) {
-                    app(\App\Domain\Audit\Services\AuditReviewService::class)->approveItem($item, auth()->user());
+                    app(AuditReviewService::class)->approveItem($item, auth()->user());
                     $this->refreshAuditRelations();
                 }
             });
@@ -348,6 +360,7 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
             ->label('Reject')
             ->color('danger')
             ->button()
+            ->visible(fn () => $this->audit->canReview() && (auth()->user()?->can('review', $this->audit) ?? false))
             ->form([
                 Select::make('comment_type')
                     ->label('Issue Type')
@@ -366,7 +379,7 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
             ->action(function (array $data, array $arguments) {
                 $item = AuditItem::find($arguments['item_id']);
                 if ($item) {
-                    app(\App\Domain\Audit\Services\AuditReviewService::class)->rejectItem($item, auth()->user(), $data['reason'], $data['comment_type']);
+                    app(AuditReviewService::class)->rejectItem($item, auth()->user(), $data['reason'], $data['comment_type']);
                     $this->refreshAuditRelations();
                 }
             });
@@ -379,10 +392,11 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
             ->color('gray')
             ->icon('heroicon-o-arrow-path')
             ->button()
+            ->visible(fn () => $this->audit->canReview() && (auth()->user()?->can('review', $this->audit) ?? false))
             ->action(function (array $arguments) {
                 $item = AuditItem::find($arguments['item_id']);
                 if ($item) {
-                    app(\App\Domain\Audit\Services\AuditReviewService::class)->resetItem($item, auth()->user());
+                    app(AuditReviewService::class)->resetItem($item, auth()->user());
                     $this->refreshAuditRelations();
                 }
             });
@@ -393,15 +407,18 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
         return Action::make('toggleExcludeFromSync')
             ->label(function (array $arguments) {
                 $item = AuditItem::find($arguments['item_id'] ?? null);
-                return !empty($item?->snapshot_data['exclude_from_sync']) ? 'Include in Sync' : 'Exclude from Sync';
+
+                return ! empty($item?->snapshot_data['exclude_from_sync']) ? 'Include in Sync' : 'Exclude from Sync';
             })
             ->color(function (array $arguments) {
                 $item = AuditItem::find($arguments['item_id'] ?? null);
-                return !empty($item?->snapshot_data['exclude_from_sync']) ? 'success' : 'warning';
+
+                return ! empty($item?->snapshot_data['exclude_from_sync']) ? 'success' : 'warning';
             })
             ->icon(function (array $arguments) {
                 $item = AuditItem::find($arguments['item_id'] ?? null);
-                return !empty($item?->snapshot_data['exclude_from_sync']) ? 'heroicon-o-check-circle' : 'heroicon-o-minus-circle';
+
+                return ! empty($item?->snapshot_data['exclude_from_sync']) ? 'heroicon-o-check-circle' : 'heroicon-o-minus-circle';
             })
             ->button()
             ->action(function (array $arguments) {
@@ -412,11 +429,11 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
                     $item->update(['snapshot_data' => $snapshot]);
                     $this->refreshAuditRelations();
 
-                    $msg = !empty($snapshot['exclude_from_sync'])
+                    $msg = ! empty($snapshot['exclude_from_sync'])
                         ? "Item '{$item->name}' will be excluded from property sync."
                         : "Item '{$item->name}' will be included in property sync.";
 
-                    \Filament\Notifications\Notification::make()
+                    Notification::make()
                         ->title($msg)
                         ->info()
                         ->send();
@@ -435,9 +452,9 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
                 Select::make('item_type')
                     ->label('Property Item Type')
                     ->options([
-                        \App\Domain\Property\Models\PropertyInventory::class => 'Inventory',
-                        \App\Domain\Property\Models\PropertyAmenity::class => 'Amenity',
-                        \App\Domain\Property\Models\PropertyEstablishment::class => 'Establishment',
+                        PropertyInventory::class => 'Inventory',
+                        PropertyAmenity::class => 'Amenity',
+                        PropertyEstablishment::class => 'Establishment',
                     ])
                     ->required(),
                 // In a real scenario, we'd add fields like 'inventory_type_id' depending on the item_type.
@@ -448,7 +465,7 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
                 if ($item && $item->isApproved() && empty($item->source_id)) {
                     $propertyId = $this->audit->property_id;
                     $modelClass = $data['item_type'];
-                    
+
                     // Create the new property asset
                     $newAsset = $modelClass::create([
                         'property_id' => $propertyId,
@@ -467,8 +484,8 @@ class AuditReviewComponent extends Component implements HasForms, HasActions
                     $snapshot = $item->snapshot_data;
                     unset($snapshot['is_new']);
                     $item->update(['snapshot_data' => $snapshot]);
-                    
-                    \Filament\Notifications\Notification::make()
+
+                    Notification::make()
                         ->title('Item synced to property successfully.')
                         ->success()
                         ->send();

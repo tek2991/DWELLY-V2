@@ -3,7 +3,7 @@
 namespace App\Filament\Resources\Operations;
 
 use App\Domain\Opportunity\Models\Opportunity;
-use App\Filament\Resources\Operations\MOUResource;
+use App\Filament\Infolists\Components\ActivityTimeline;
 use App\Filament\Resources\Operations\OpportunityResource\Pages;
 use App\Filament\Resources\Operations\OpportunityResource\Schemas\OpportunityForm;
 use App\Filament\Resources\Operations\OpportunityResource\Tables\OpportunitiesTable;
@@ -18,6 +18,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class OpportunityResource extends Resource
@@ -25,20 +26,35 @@ class OpportunityResource extends Resource
     protected static ?string $model = Opportunity::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSparkles;
-    
+
     protected static \UnitEnum|string|null $navigationGroup = 'Directory & CRM';
 
     protected static ?string $navigationLabel = 'Sales Opportunities';
-    
+
     protected static ?int $navigationSort = 2;
 
-    public static function canEdit(?\Illuminate\Database\Eloquent\Model $record = null): bool
+    public static function canViewAny(): bool
+    {
+        return auth()->user()?->can('viewAny', Opportunity::class) ?? false;
+    }
+
+    public static function canCreate(): bool
+    {
+        return auth()->user()?->can('create', Opportunity::class) ?? false;
+    }
+
+    public static function canEdit(?Model $record = null): bool
     {
         if (! $record) {
-            return true;
+            return auth()->user()?->can('create', Opportunity::class) ?? false;
         }
 
-        return ! $record->mou()->exists();
+        return auth()->user()?->can('update', $record) ?? false;
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return auth()->user()?->can('delete', $record) ?? false;
     }
 
     public static function form(Schema $schema): Schema
@@ -128,7 +144,7 @@ class OpportunityResource extends Resource
                 Group::make([
                     Section::make('🕒 Activity & History')
                         ->schema([
-                            \App\Filament\Infolists\Components\ActivityTimeline::make('activities'),
+                            ActivityTimeline::make('activities'),
                         ]),
                 ])->columnSpan(['lg' => 1]),
             ])->columns(3);

@@ -5,7 +5,6 @@ namespace App\Filament\Resources\TenancyAgreements\Pages;
 use App\Domain\Agreement\Enums\DeboardingStatus;
 use App\Domain\Agreement\Models\TenancyAgreement;
 use App\Domain\Agreement\Services\TenancyDeboardingService;
-use App\Domain\Audit\Enums\AuditStatus;
 use App\Filament\Resources\Operations\AuditResource;
 use App\Filament\Resources\Operations\TenantDeboardingResource;
 use App\Filament\Resources\TenancyAgreements\Pages\Concerns\HasTenancyWorkflowHeader;
@@ -125,11 +124,11 @@ class DeboardTenancy extends EditRecord
 
                                 if (! $deboarding) {
                                     return new HtmlString(
-                                        '<div style="padding: 20px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">' .
-                                            '<div>' .
-                                                '<div style="font-weight: 700; font-size: 15px; color: #92400e;">⚠️ Deboarding Not Yet Initiated</div>' .
-                                                '<div style="font-size: 13px; color: #b45309; margin-top: 2px;">This tenancy agreement is currently Active. When the tenant gives notice or agreement expires, initiate the deboarding workflow.</div>' .
-                                            '</div>' .
+                                        '<div style="padding: 20px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">'.
+                                            '<div>'.
+                                                '<div style="font-weight: 700; font-size: 15px; color: #92400e;">⚠️ Deboarding Not Yet Initiated</div>'.
+                                                '<div style="font-size: 13px; color: #b45309; margin-top: 2px;">This tenancy agreement is currently Active. When the tenant gives notice or agreement expires, initiate the deboarding workflow.</div>'.
+                                            '</div>'.
                                         '</div>'
                                     );
                                 }
@@ -139,23 +138,23 @@ class DeboardTenancy extends EditRecord
                                 $workflowUrl = TenantDeboardingResource::getUrl('edit', ['record' => $deboarding->id]);
 
                                 return new HtmlString(
-                                    '<div style="padding: 20px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;">' .
-                                        '<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">' .
-                                            '<div>' .
-                                                '<div style="display: flex; align-items: center; gap: 10px;">' .
-                                                    '<span style="font-size: 1.15rem; font-weight: 800; color: #0f172a;">Deboarding #' . e($deboarding->code) . '</span>' .
-                                                    '<span style="display: inline-flex; padding: 3px 10px; font-size: 12px; font-weight: 700; border-radius: 9999px; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;">' . e($statusLabel) . '</span>' .
-                                                '</div>' .
-                                                '<div style="font-size: 13px; color: #64748b; margin-top: 4px;">' .
-                                                    'Notice Date: <strong>' . e($deboarding->notice_date?->format('d M Y') ?? 'N/A') . '</strong> | Target Vacate: <strong>' . e($deboarding->target_vacating_date?->format('d M Y') ?? 'N/A') . '</strong>' .
-                                                '</div>' .
-                                            '</div>' .
-                                            '<div>' .
-                                                '<a href="' . e($workflowUrl) . '" style="display: inline-flex; align-items: center; gap: 6px; padding: 10px 18px; background: #2563eb; color: #ffffff; font-weight: 600; font-size: 13px; border-radius: 8px; text-decoration: none; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">' .
-                                                    'Open Dedicated Deboarding Workflow →' .
-                                                '</a>' .
-                                            '</div>' .
-                                        '</div>' .
+                                    '<div style="padding: 20px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;">'.
+                                        '<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">'.
+                                            '<div>'.
+                                                '<div style="display: flex; align-items: center; gap: 10px;">'.
+                                                    '<span style="font-size: 1.15rem; font-weight: 800; color: #0f172a;">Deboarding #'.e($deboarding->code).'</span>'.
+                                                    '<span style="display: inline-flex; padding: 3px 10px; font-size: 12px; font-weight: 700; border-radius: 9999px; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;">'.e($statusLabel).'</span>'.
+                                                '</div>'.
+                                                '<div style="font-size: 13px; color: #64748b; margin-top: 4px;">'.
+                                                    'Notice Date: <strong>'.e($deboarding->notice_date?->format('d M Y') ?? 'N/A').'</strong> | Target Vacate: <strong>'.e($deboarding->target_vacating_date?->format('d M Y') ?? 'N/A').'</strong>'.
+                                                '</div>'.
+                                            '</div>'.
+                                            '<div>'.
+                                                '<a href="'.e($workflowUrl).'" style="display: inline-flex; align-items: center; gap: 6px; padding: 10px 18px; background: #2563eb; color: #ffffff; font-weight: 600; font-size: 13px; border-radius: 8px; text-decoration: none; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">'.
+                                                    'Open Dedicated Deboarding Workflow →'.
+                                                '</a>'.
+                                            '</div>'.
+                                        '</div>'.
                                     '</div>'
                                 );
                             })
@@ -181,14 +180,14 @@ class DeboardTenancy extends EditRecord
                                 $auditUrl = AuditResource::getUrl('edit', ['record' => $audit->id]);
 
                                 return new HtmlString(
-                                    '<div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px;">' .
-                                        '<div>' .
-                                            '<div style="font-weight: 600; font-size: 14px;">Move-Out Audit #' . e($audit->audit_number) . '</div>' .
-                                            '<div style="font-size: 12px; color: #64748b; margin-top: 2px;">Status: <strong>' . e($statusLabel) . '</strong> | Inspector: ' . e($audit->inspector?->name ?? 'Unassigned') . '</div>' .
-                                        '</div>' .
-                                        '<div>' .
-                                            '<a href="' . e($auditUrl) . '" target="_blank" style="font-size: 12px; color: #4f46e5; font-weight: 600;">View Audit Details →</a>' .
-                                        '</div>' .
+                                    '<div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px;">'.
+                                        '<div>'.
+                                            '<div style="font-weight: 600; font-size: 14px;">Move-Out Audit #'.e($audit->audit_number).'</div>'.
+                                            '<div style="font-size: 12px; color: #64748b; margin-top: 2px;">Status: <strong>'.e($statusLabel).'</strong> | Inspector: '.e($audit->inspector?->name ?? 'Unassigned').'</div>'.
+                                        '</div>'.
+                                        '<div>'.
+                                            '<a href="'.e($auditUrl).'" target="_blank" style="font-size: 12px; color: #4f46e5; font-weight: 600;">View Audit Details →</a>'.
+                                        '</div>'.
                                     '</div>'
                                 );
                             })
@@ -205,7 +204,7 @@ class DeboardTenancy extends EditRecord
 
                                 Placeholder::make('net_refund_summary')
                                     ->label('Net Deposit Refund')
-                                    ->content(fn (?TenancyAgreement $record) => '₹' . number_format((float) ($record?->deboarding?->net_deposit_refund ?? $record?->net_deposit_refund ?? 0.00), 2)),
+                                    ->content(fn (?TenancyAgreement $record) => '₹'.number_format((float) ($record?->deboarding?->net_deposit_refund ?? $record?->net_deposit_refund ?? 0.00), 2)),
 
                                 Placeholder::make('settlement_status_summary')
                                     ->label('Settlement Status')

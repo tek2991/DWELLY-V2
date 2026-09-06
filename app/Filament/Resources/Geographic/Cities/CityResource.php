@@ -3,22 +3,26 @@
 namespace App\Filament\Resources\Geographic\Cities;
 
 use App\Domain\Geographic\Models\City;
+use App\Filament\Clusters\GeographicCluster;
 use App\Filament\Resources\Geographic\Cities\Pages\ManageCities;
+use App\Rules\ValidSlug;
 use BackedEnum;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
-use Filament\Schemas\Components\Utilities\Set;
-use Illuminate\Support\Str;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class CityResource extends Resource
 {
@@ -26,9 +30,49 @@ class CityResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
-    protected static ?string $cluster = \App\Filament\Clusters\GeographicCluster::class;
+    protected static ?string $cluster = GeographicCluster::class;
 
     protected static ?string $recordTitleAttribute = 'name';
+
+    public static function canViewAny(): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        return $user->hasRole('Business Owner') || $user->can('admin.geographic.viewAny') || $user->hasRole('City Manager') || $user->roles->isEmpty();
+    }
+
+    public static function canCreate(): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        return $user->hasRole('Business Owner') || $user->can('admin.geographic.manage') || $user->roles->isEmpty();
+    }
+
+    public static function canEdit(?Model $record = null): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        return $user->hasRole('Business Owner') || $user->can('admin.geographic.manage') || $user->roles->isEmpty();
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        return $user->hasRole('Business Owner') || $user->can('admin.geographic.manage') || $user->roles->isEmpty();
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -48,7 +92,7 @@ class CityResource extends Resource
                             ->maxLength(255)
                             ->live(debounce: 500)
                             ->afterStateUpdated(fn (Set $set, ?string $state) => $set('slug', Str::slug($state))),
-                        TextInput::make('slug')->rule(new \App\Rules\ValidSlug())
+                        TextInput::make('slug')->rule(new ValidSlug)
                             ->required()
                             ->maxLength(255)
                             ->unique('districts', 'slug'),
@@ -60,7 +104,7 @@ class CityResource extends Resource
                     ->maxLength(255)
                     ->live(debounce: 500)
                     ->afterStateUpdated(fn (Set $set, ?string $state) => $set('slug', Str::slug($state))),
-                TextInput::make('slug')->rule(new \App\Rules\ValidSlug())
+                TextInput::make('slug')->rule(new ValidSlug)
                     ->required()
                     ->maxLength(255)
                     ->unique(ignoreRecord: true),
@@ -87,7 +131,7 @@ class CityResource extends Resource
                     ->searchable(),
                 TextColumn::make('slug')
                     ->searchable(),
-                \Filament\Tables\Columns\ToggleColumn::make('is_active'),
+                ToggleColumn::make('is_active'),
             ])
             ->filters([
                 //

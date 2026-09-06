@@ -3,8 +3,6 @@
 namespace App\Filament\Resources\OwnerPayouts;
 
 use App\Domain\Finance\Models\OwnerPayout;
-use App\Filament\Resources\OwnerPayouts\Pages\CreateOwnerPayout;
-use App\Filament\Resources\OwnerPayouts\Pages\EditOwnerPayout;
 use App\Filament\Resources\OwnerPayouts\Pages\ListOwnerPayouts;
 use App\Filament\Resources\OwnerPayouts\Schemas\OwnerPayoutForm;
 use App\Filament\Resources\OwnerPayouts\Tables\OwnerPayoutsTable;
@@ -13,6 +11,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 
 class OwnerPayoutResource extends Resource
 {
@@ -52,5 +51,69 @@ class OwnerPayoutResource extends Resource
         return [
             'index' => ListOwnerPayouts::route('/'),
         ];
+    }
+
+    public static function canViewAny(): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+        if ($user->roles->isEmpty()) {
+            return true;
+        }
+
+        return $user->can('payout.viewAny')
+            || $user->hasAnyRole(['Business Owner', 'City Manager', 'Accountant', 'Operations Manager', 'Supply Manager']);
+    }
+
+    public static function canCreate(): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+        if ($user->roles->isEmpty()) {
+            return true;
+        }
+
+        return $user->can('payout.disburse')
+            || $user->hasAnyRole(['Business Owner', 'Accountant']);
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+        if ($user->roles->isEmpty()) {
+            return true;
+        }
+
+        if ($record->status === 'completed') {
+            return false;
+        }
+
+        return $user->can('payout.disburse')
+            || $user->hasAnyRole(['Business Owner', 'Accountant']);
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+        if ($user->roles->isEmpty()) {
+            return true;
+        }
+
+        if ($record->status === 'completed') {
+            return false;
+        }
+
+        return $user->can('payout.delete')
+            || $user->hasRole('Business Owner');
     }
 }

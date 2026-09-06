@@ -2,30 +2,37 @@
 
 namespace App\Filament\Resources\Properties\RelationManagers;
 
+use App\Domain\Geographic\Models\City;
+use App\Domain\Property\Models\Establishment;
+use App\Domain\Property\Models\EstablishmentType;
+use App\Filament\Resources\Properties\RelationManagers\Traits\LocksDuringPropertyOnboarding;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\Grid;
-use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rules\Unique;
 
 class EstablishmentsRelationManager extends RelationManager
 {
-    use \App\Filament\Resources\Properties\RelationManagers\Traits\LocksDuringPropertyOnboarding;
+    use LocksDuringPropertyOnboarding;
 
     protected static string $relationship = 'establishments';
 
@@ -35,7 +42,7 @@ class EstablishmentsRelationManager extends RelationManager
             ->components([
                 Select::make('city_id')
                     ->label('Filter by City')
-                    ->options(fn () => \App\Domain\Geographic\Models\City::pluck('name', 'id'))
+                    ->options(fn () => City::pluck('name', 'id'))
                     ->default(fn (RelationManager $livewire) => $livewire->getOwnerRecord()->city_id)
                     ->live()
                     ->dehydrated(false),
@@ -43,27 +50,28 @@ class EstablishmentsRelationManager extends RelationManager
                     ->label('Establishment')
                     ->options(function (Get $get, RelationManager $livewire) {
                         $cityId = $get('city_id') ?? $livewire->getOwnerRecord()->city_id;
-                        $query = \App\Domain\Property\Models\Establishment::query();
+                        $query = Establishment::query();
                         if ($cityId) {
                             $query->where('city_id', $cityId);
                         }
+
                         return $query->pluck('name', 'id');
                     })
                     ->searchable()
                     ->preload()
                     ->required()
-                    ->unique(modifyRuleUsing: function (\Illuminate\Validation\Rules\Unique $rule, RelationManager $livewire) {
+                    ->unique(modifyRuleUsing: function (Unique $rule, RelationManager $livewire) {
                         return $rule->where('property_id', $livewire->getOwnerRecord()->id);
                     }, ignoreRecord: true)
                     ->createOptionForm([
                         Select::make('city_id')
                             ->label('City')
-                            ->options(fn () => \App\Domain\Geographic\Models\City::pluck('name', 'id'))
+                            ->options(fn () => City::pluck('name', 'id'))
                             ->default(fn (RelationManager $livewire) => $livewire->getOwnerRecord()->city_id)
                             ->required(),
                         Select::make('establishment_type_id')
                             ->label('Establishment Type')
-                            ->options(fn() => \Illuminate\Support\Facades\DB::table('establishment_types')->pluck('name', 'id'))
+                            ->options(fn () => DB::table('establishment_types')->pluck('name', 'id'))
                             ->required(),
                         TextInput::make('name')
                             ->required()
@@ -119,8 +127,8 @@ class EstablishmentsRelationManager extends RelationManager
                         $cityId = $property->city_id;
                         $initialCityIds = $cityId ? [$cityId] : [];
 
-                        $initialTypes = !empty($initialCityIds)
-                            ? \App\Domain\Property\Models\EstablishmentType::whereHas('cities', fn ($q) => $q->whereIn('cities.id', $initialCityIds))->distinct()->orderBy('name')->get()
+                        $initialTypes = ! empty($initialCityIds)
+                            ? EstablishmentType::whereHas('cities', fn ($q) => $q->whereIn('cities.id', $initialCityIds))->distinct()->orderBy('name')->get()
                             : collect();
 
                         $defaultItems = $initialTypes->map(fn ($type) => [
@@ -136,7 +144,7 @@ class EstablishmentsRelationManager extends RelationManager
                                 ->label('Filter & Suggest by Cities')
                                 ->placeholder('Select cities...')
                                 ->helperText('Select cities to automatically suggest mapped establishment types and filter establishment names.')
-                                ->options(fn () => \App\Domain\Geographic\Models\City::orderBy('name')->pluck('name', 'id'))
+                                ->options(fn () => City::orderBy('name')->pluck('name', 'id'))
                                 ->multiple()
                                 ->searchable()
                                 ->preload()
@@ -146,17 +154,18 @@ class EstablishmentsRelationManager extends RelationManager
                                     $selectedCityIds = $state ?? [];
                                     if (empty($selectedCityIds)) {
                                         $set('establishments', []);
+
                                         return;
                                     }
 
-                                    $types = \App\Domain\Property\Models\EstablishmentType::whereHas('cities', function ($q) use ($selectedCityIds) {
+                                    $types = EstablishmentType::whereHas('cities', function ($q) use ($selectedCityIds) {
                                         $q->whereIn('cities.id', $selectedCityIds);
                                     })->distinct()->orderBy('name')->get();
 
                                     $currentItems = $get('establishments') ?? [];
                                     $existingByType = [];
                                     foreach ($currentItems as $item) {
-                                        if (!empty($item['establishment_type_id'])) {
+                                        if (! empty($item['establishment_type_id'])) {
                                             $existingByType[$item['establishment_type_id']] = $item;
                                         }
                                     }
@@ -165,6 +174,7 @@ class EstablishmentsRelationManager extends RelationManager
                                         if (isset($existingByType[$type->id])) {
                                             return $existingByType[$type->id];
                                         }
+
                                         return [
                                             'is_default' => true,
                                             'establishment_type_id' => $type->id,
@@ -184,12 +194,12 @@ class EstablishmentsRelationManager extends RelationManager
                                 ->itemHeaders(false)
                                 ->compact()
                                 ->schema([
-                                    \Filament\Forms\Components\Hidden::make('is_default'),
+                                    Hidden::make('is_default'),
                                     Grid::make(12)
                                         ->schema([
-                                             Select::make('establishment_type_id')
+                                            Select::make('establishment_type_id')
                                                 ->label('Establishment Type')
-                                                ->options(fn () => \App\Domain\Property\Models\EstablishmentType::orderBy('name')->pluck('name', 'id'))
+                                                ->options(fn () => EstablishmentType::orderBy('name')->pluck('name', 'id'))
                                                 ->required()
                                                 ->live()
                                                 ->disabled(fn (Get $get) => (bool) $get('is_default'))
@@ -206,16 +216,17 @@ class EstablishmentsRelationManager extends RelationManager
                                                         $selectedCities = $cityId ? [$cityId] : [];
                                                     }
 
-                                                    $query = \App\Domain\Property\Models\Establishment::query();
+                                                    $query = Establishment::query();
                                                     if ($typeId) {
                                                         $query->where('establishment_type_id', $typeId);
                                                     }
-                                                    if (!empty($selectedCities)) {
+                                                    if (! empty($selectedCities)) {
                                                         $query->where(function ($q) use ($selectedCities) {
                                                             $q->whereIn('city_id', $selectedCities)
-                                                              ->orWhereNull('city_id');
+                                                                ->orWhereNull('city_id');
                                                         });
                                                     }
+
                                                     return $query->pluck('name', 'id');
                                                 })
                                                 ->searchable()
@@ -226,7 +237,7 @@ class EstablishmentsRelationManager extends RelationManager
                                                         ->required(),
                                                     Select::make('city_id')
                                                         ->label('City')
-                                                        ->options(fn () => \App\Domain\Geographic\Models\City::orderBy('name')->pluck('name', 'id'))
+                                                        ->options(fn () => City::orderBy('name')->pluck('name', 'id'))
                                                         ->default(fn (RelationManager $livewire) => $livewire->getOwnerRecord()->city_id)
                                                         ->searchable()
                                                         ->preload(),
@@ -235,7 +246,7 @@ class EstablishmentsRelationManager extends RelationManager
                                                     $typeId = $get('establishment_type_id');
                                                     $cityId = $data['city_id'] ?? $livewire->getOwnerRecord()->city_id;
 
-                                                    $establishment = \App\Domain\Property\Models\Establishment::create([
+                                                    $establishment = Establishment::create([
                                                         'name' => trim($data['name']),
                                                         'establishment_type_id' => $typeId,
                                                         'city_id' => $cityId,
@@ -260,15 +271,15 @@ class EstablishmentsRelationManager extends RelationManager
                                                 ->label('Time (Mins)')
                                                 ->numeric()
                                                 ->columnSpan(2),
-                                            \Filament\Schemas\Components\Actions::make([
+                                            Actions::make([
                                                 Action::make('deleteRow')
                                                     ->hiddenLabel()
                                                     ->icon('heroicon-m-trash')
                                                     ->color('danger')
                                                     ->iconButton()
                                                     ->tooltip('Remove row')
-                                                    ->visible(fn (Get $get) => !$get('is_default'))
-                                                    ->action(function (array $arguments, \Filament\Schemas\Components\Actions $component, Get $get, Set $set) {
+                                                    ->visible(fn (Get $get) => ! $get('is_default'))
+                                                    ->action(function (array $arguments, Actions $component, Get $get, Set $set) {
                                                         $statePath = $component->getContainer()->getStatePath();
                                                         $key = last(explode('.', $statePath));
 
@@ -290,8 +301,8 @@ class EstablishmentsRelationManager extends RelationManager
                                                         }
                                                     }),
                                             ])
-                                            ->columnSpan(1)
-                                            ->alignEnd(),
+                                                ->columnSpan(1)
+                                                ->alignEnd(),
                                         ]),
                                 ]),
                         ];
@@ -312,9 +323,9 @@ class EstablishmentsRelationManager extends RelationManager
                                 continue;
                             }
 
-                            $establishment = \App\Domain\Property\Models\Establishment::find($estIdOrName);
-                            if (!$establishment) {
-                                $establishment = \App\Domain\Property\Models\Establishment::firstOrCreate([
+                            $establishment = Establishment::find($estIdOrName);
+                            if (! $establishment) {
+                                $establishment = Establishment::firstOrCreate([
                                     'name' => trim($estIdOrName),
                                     'establishment_type_id' => $typeId,
                                     'city_id' => $property->city_id,
@@ -325,7 +336,7 @@ class EstablishmentsRelationManager extends RelationManager
                                 ->where('establishment_id', $establishment->id)
                                 ->first();
 
-                            if (!$existing) {
+                            if (! $existing) {
                                 $property->establishments()->create([
                                     'establishment_id' => $establishment->id,
                                     'distance_km' => $dist,
@@ -342,13 +353,13 @@ class EstablishmentsRelationManager extends RelationManager
                         }
 
                         if ($addedCount > 0) {
-                            \Filament\Notifications\Notification::make()
+                            Notification::make()
                                 ->title("{$addedCount} Establishments mapped successfully")
                                 ->success()
                                 ->send();
                         } else {
-                            \Filament\Notifications\Notification::make()
-                                ->title("No establishment entries updated")
+                            Notification::make()
+                                ->title('No establishment entries updated')
                                 ->warning()
                                 ->send();
                         }

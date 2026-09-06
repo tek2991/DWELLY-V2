@@ -3,10 +3,17 @@
 namespace App\Filament\Resources\Properties;
 
 use App\Domain\Property\Models\UtilityType;
+use App\Filament\Clusters\ReferenceData\ReferenceDataCluster;
 use App\Filament\Resources\Properties\UtilityTypeResource\Pages;
+use App\Rules\ValidSlug;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
 use Filament\Forms;
-use Filament\Schemas\Schema;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Utilities\Set;
+use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Support\Str;
@@ -17,7 +24,7 @@ class UtilityTypeResource extends Resource
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-bolt';
 
-    protected static ?string $cluster = \App\Filament\Clusters\ReferenceData\ReferenceDataCluster::class;
+    protected static ?string $cluster = ReferenceDataCluster::class;
 
     public static function form(Schema $form): Schema
     {
@@ -27,8 +34,8 @@ class UtilityTypeResource extends Resource
                     ->required()
                     ->maxLength(255)
                     ->live(onBlur: true)
-                    ->afterStateUpdated(fn (string $operation, $state, \Filament\Schemas\Components\Utilities\Set $set) => $operation === 'create' ? $set('slug', Str::slug($state)) : null),
-                Forms\Components\TextInput::make('slug')->rule(new \App\Rules\ValidSlug())
+                    ->afterStateUpdated(fn (string $operation, $state, Set $set) => $operation === 'create' ? $set('slug', Str::slug($state)) : null),
+                Forms\Components\TextInput::make('slug')->rule(new ValidSlug)
                     ->required()
                     ->maxLength(255)
                     ->unique(UtilityType::class, 'slug', ignoreRecord: true),
@@ -55,12 +62,12 @@ class UtilityTypeResource extends Resource
                 //
             ])
             ->actions([
-                \Filament\Actions\EditAction::make(),
-                \Filament\Actions\DeleteAction::make(),
+                EditAction::make(),
+                DeleteAction::make(),
             ])
             ->bulkActions([
-                \Filament\Actions\BulkActionGroup::make([
-                    \Filament\Actions\DeleteBulkAction::make(),
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ]);
     }

@@ -2,16 +2,36 @@
 
 namespace App\Filament\Resources\Properties\RelationManagers;
 
+use App\Domain\Agreement\Models\TenancyAgreement;
+use App\Domain\Audit\Models\Audit;
+use App\Domain\Audit\Models\AuditItem;
+use App\Domain\Maintenance\Models\MaintenanceRequest;
+use App\Domain\Mou\Models\Mou;
+use App\Domain\Property\Models\AmenityType;
+use App\Domain\Property\Models\Establishment;
+use App\Domain\Property\Models\InventoryType;
+use App\Domain\Property\Models\OnboardingProject;
+use App\Domain\Property\Models\PropertyAmenity;
+use App\Domain\Property\Models\PropertyDocument;
+use App\Domain\Property\Models\PropertyEstablishment;
+use App\Domain\Property\Models\PropertyFinancialTerm;
+use App\Domain\Property\Models\PropertyInventory;
+use App\Domain\Property\Models\PropertyPhoto;
+use App\Domain\Property\Models\PropertyRoom;
+use App\Domain\Property\Models\PropertyUtility;
+use App\Domain\Property\Models\RoomDefinition;
+use App\Filament\Resources\Properties\RelationManagers\Traits\LocksDuringPropertyOnboarding;
 use Filament\Forms;
-use Filament\Schemas\Schema;
 use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Spatie\Activitylog\Models\Activity;
 
 class ActivitiesRelationManager extends RelationManager
 {
-    use \App\Filament\Resources\Properties\RelationManagers\Traits\LocksDuringPropertyOnboarding;
+    use LocksDuringPropertyOnboarding;
 
     protected static string $relationship = 'activities';
 
@@ -30,7 +50,7 @@ class ActivitiesRelationManager extends RelationManager
     protected function getTableQuery(): Builder
     {
         $property = $this->getOwnerRecord();
-        if (!$property) {
+        if (! $property) {
             return parent::getTableQuery();
         }
 
@@ -52,51 +72,51 @@ class ActivitiesRelationManager extends RelationManager
         $photoIds = $property->photos()->pluck('id')->toArray();
         $financialTermIds = $property->financialTerms()->pluck('id')->toArray();
 
-        return \Spatie\Activitylog\Models\Activity::query()
+        return Activity::query()
             ->where(function ($query) use ($property, $onboardingProjectId, $roomIds, $inventoryIds, $utilityIds, $amenityIds, $establishmentIds, $documentIds, $photoIds, $financialTermIds, $agreementIds, $auditIds, $auditItemIds, $maintenanceIds, $mouIds) {
-                $query->where(fn($q) => $q->where('subject_type', get_class($property))->where('subject_id', $property->id));
+                $query->where(fn ($q) => $q->where('subject_type', get_class($property))->where('subject_id', $property->id));
 
                 if ($onboardingProjectId) {
-                    $query->orWhere(fn($q) => $q->where('subject_type', \App\Domain\Property\Models\OnboardingProject::class)->where('subject_id', $onboardingProjectId));
+                    $query->orWhere(fn ($q) => $q->where('subject_type', OnboardingProject::class)->where('subject_id', $onboardingProjectId));
                 }
-                if (!empty($roomIds)) {
-                    $query->orWhere(fn($q) => $q->where('subject_type', \App\Domain\Property\Models\PropertyRoom::class)->whereIn('subject_id', $roomIds));
+                if (! empty($roomIds)) {
+                    $query->orWhere(fn ($q) => $q->where('subject_type', PropertyRoom::class)->whereIn('subject_id', $roomIds));
                 }
-                if (!empty($inventoryIds)) {
-                    $query->orWhere(fn($q) => $q->where('subject_type', \App\Domain\Property\Models\PropertyInventory::class)->whereIn('subject_id', $inventoryIds));
+                if (! empty($inventoryIds)) {
+                    $query->orWhere(fn ($q) => $q->where('subject_type', PropertyInventory::class)->whereIn('subject_id', $inventoryIds));
                 }
-                if (!empty($utilityIds)) {
-                    $query->orWhere(fn($q) => $q->where('subject_type', \App\Domain\Property\Models\PropertyUtility::class)->whereIn('subject_id', $utilityIds));
+                if (! empty($utilityIds)) {
+                    $query->orWhere(fn ($q) => $q->where('subject_type', PropertyUtility::class)->whereIn('subject_id', $utilityIds));
                 }
-                if (!empty($amenityIds)) {
-                    $query->orWhere(fn($q) => $q->where('subject_type', \App\Domain\Property\Models\PropertyAmenity::class)->whereIn('subject_id', $amenityIds));
+                if (! empty($amenityIds)) {
+                    $query->orWhere(fn ($q) => $q->where('subject_type', PropertyAmenity::class)->whereIn('subject_id', $amenityIds));
                 }
-                if (!empty($establishmentIds)) {
-                    $query->orWhere(fn($q) => $q->where('subject_type', \App\Domain\Property\Models\PropertyEstablishment::class)->whereIn('subject_id', $establishmentIds));
+                if (! empty($establishmentIds)) {
+                    $query->orWhere(fn ($q) => $q->where('subject_type', PropertyEstablishment::class)->whereIn('subject_id', $establishmentIds));
                 }
-                if (!empty($documentIds)) {
-                    $query->orWhere(fn($q) => $q->where('subject_type', \App\Domain\Property\Models\PropertyDocument::class)->whereIn('subject_id', $documentIds));
+                if (! empty($documentIds)) {
+                    $query->orWhere(fn ($q) => $q->where('subject_type', PropertyDocument::class)->whereIn('subject_id', $documentIds));
                 }
-                if (!empty($photoIds)) {
-                    $query->orWhere(fn($q) => $q->where('subject_type', \App\Domain\Property\Models\PropertyPhoto::class)->whereIn('subject_id', $photoIds));
+                if (! empty($photoIds)) {
+                    $query->orWhere(fn ($q) => $q->where('subject_type', PropertyPhoto::class)->whereIn('subject_id', $photoIds));
                 }
-                if (!empty($financialTermIds)) {
-                    $query->orWhere(fn($q) => $q->where('subject_type', \App\Domain\Property\Models\PropertyFinancialTerm::class)->whereIn('subject_id', $financialTermIds));
+                if (! empty($financialTermIds)) {
+                    $query->orWhere(fn ($q) => $q->where('subject_type', PropertyFinancialTerm::class)->whereIn('subject_id', $financialTermIds));
                 }
-                if (!empty($agreementIds)) {
-                    $query->orWhere(fn($q) => $q->where('subject_type', \App\Domain\Agreement\Models\TenancyAgreement::class)->whereIn('subject_id', $agreementIds));
+                if (! empty($agreementIds)) {
+                    $query->orWhere(fn ($q) => $q->where('subject_type', TenancyAgreement::class)->whereIn('subject_id', $agreementIds));
                 }
-                if (!empty($auditIds)) {
-                    $query->orWhere(fn($q) => $q->where('subject_type', \App\Domain\Audit\Models\Audit::class)->whereIn('subject_id', $auditIds));
+                if (! empty($auditIds)) {
+                    $query->orWhere(fn ($q) => $q->where('subject_type', Audit::class)->whereIn('subject_id', $auditIds));
                 }
-                if (!empty($auditItemIds)) {
-                    $query->orWhere(fn($q) => $q->where('subject_type', \App\Domain\Audit\Models\AuditItem::class)->whereIn('subject_id', $auditItemIds));
+                if (! empty($auditItemIds)) {
+                    $query->orWhere(fn ($q) => $q->where('subject_type', AuditItem::class)->whereIn('subject_id', $auditItemIds));
                 }
-                if (!empty($maintenanceIds)) {
-                    $query->orWhere(fn($q) => $q->where('subject_type', \App\Domain\Maintenance\Models\MaintenanceRequest::class)->whereIn('subject_id', $maintenanceIds));
+                if (! empty($maintenanceIds)) {
+                    $query->orWhere(fn ($q) => $q->where('subject_type', MaintenanceRequest::class)->whereIn('subject_id', $maintenanceIds));
                 }
-                if (!empty($mouIds)) {
-                    $query->orWhere(fn($q) => $q->where('subject_type', \App\Domain\Mou\Models\Mou::class)->whereIn('subject_id', $mouIds));
+                if (! empty($mouIds)) {
+                    $query->orWhere(fn ($q) => $q->where('subject_type', Mou::class)->whereIn('subject_id', $mouIds));
                 }
             });
     }
@@ -110,6 +130,7 @@ class ActivitiesRelationManager extends RelationManager
                     ->label('Module')
                     ->formatStateUsing(function ($state) {
                         $basename = class_basename($state);
+
                         return match ($basename) {
                             'Property' => 'Property',
                             'OnboardingProject' => 'Onboarding',
@@ -132,6 +153,7 @@ class ActivitiesRelationManager extends RelationManager
                     ->badge()
                     ->color(function ($state) {
                         $basename = class_basename($state);
+
                         return match ($basename) {
                             'Property' => 'primary',
                             'OnboardingProject' => 'info',
@@ -165,7 +187,7 @@ class ActivitiesRelationManager extends RelationManager
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Date & Time')
                     ->dateTime('M j, Y g:i A')
-                    ->description(fn($record) => $record->created_at?->diffForHumans())
+                    ->description(fn ($record) => $record->created_at?->diffForHumans())
                     ->sortable(),
             ])
             ->filters([
@@ -193,8 +215,9 @@ class ActivitiesRelationManager extends RelationManager
                         }
                         $selected = $data['value'];
                         if ($selected === 'Audit') {
-                            return $query->whereIn('subject_type', [\App\Domain\Audit\Models\Audit::class, \App\Domain\Audit\Models\AuditItem::class]);
+                            return $query->whereIn('subject_type', [Audit::class, AuditItem::class]);
                         }
+
                         return $query->where('subject_type', 'like', "%{$selected}%");
                     }),
             ])
@@ -229,7 +252,7 @@ class ActivitiesRelationManager extends RelationManager
             default => $subjectType ?: 'Record',
         };
 
-        if ($desc && !in_array(strtolower(trim($desc)), ['created', 'updated', 'deleted'])) {
+        if ($desc && ! in_array(strtolower(trim($desc)), ['created', 'updated', 'deleted'])) {
             return $desc;
         }
 
@@ -240,31 +263,31 @@ class ActivitiesRelationManager extends RelationManager
         // Determine item name if applicable
         $itemName = $properties['item_name'] ?? null;
 
-        if (!$itemName && $record->subject) {
+        if (! $itemName && $record->subject) {
             $subject = $record->subject;
-            if ($subject instanceof \App\Domain\Property\Models\PropertyRoom) {
+            if ($subject instanceof PropertyRoom) {
                 $itemName = $subject->custom_name ?: ($subject->roomDefinition?->name ?? null);
-            } elseif ($subject instanceof \App\Domain\Property\Models\PropertyInventory) {
+            } elseif ($subject instanceof PropertyInventory) {
                 $itemName = $subject->inventoryType?->name;
-            } elseif ($subject instanceof \App\Domain\Property\Models\PropertyAmenity) {
+            } elseif ($subject instanceof PropertyAmenity) {
                 $itemName = $subject->amenityType?->name;
-            } elseif ($subject instanceof \App\Domain\Property\Models\PropertyEstablishment) {
+            } elseif ($subject instanceof PropertyEstablishment) {
                 $itemName = $subject->establishment?->name;
             }
         }
 
-        if (!$itemName) {
-            $attrSource = !empty($attributes) ? $attributes : $old;
-            if (!empty($attrSource['establishment_id'])) {
-                $itemName = \App\Domain\Property\Models\Establishment::find($attrSource['establishment_id'])?->name;
-            } elseif (!empty($attrSource['amenity_type_id'])) {
-                $itemName = \App\Domain\Property\Models\AmenityType::find($attrSource['amenity_type_id'])?->name;
-            } elseif (!empty($attrSource['inventory_type_id'])) {
-                $itemName = \App\Domain\Property\Models\InventoryType::find($attrSource['inventory_type_id'])?->name;
-            } elseif (!empty($attrSource['custom_name'])) {
+        if (! $itemName) {
+            $attrSource = ! empty($attributes) ? $attributes : $old;
+            if (! empty($attrSource['establishment_id'])) {
+                $itemName = Establishment::find($attrSource['establishment_id'])?->name;
+            } elseif (! empty($attrSource['amenity_type_id'])) {
+                $itemName = AmenityType::find($attrSource['amenity_type_id'])?->name;
+            } elseif (! empty($attrSource['inventory_type_id'])) {
+                $itemName = InventoryType::find($attrSource['inventory_type_id'])?->name;
+            } elseif (! empty($attrSource['custom_name'])) {
                 $itemName = $attrSource['custom_name'];
-            } elseif (!empty($attrSource['room_definition_id'])) {
-                $itemName = \App\Domain\Property\Models\RoomDefinition::find($attrSource['room_definition_id'])?->name;
+            } elseif (! empty($attrSource['room_definition_id'])) {
+                $itemName = RoomDefinition::find($attrSource['room_definition_id'])?->name;
             }
         }
 
@@ -278,7 +301,7 @@ class ActivitiesRelationManager extends RelationManager
             return "{$subjectLabel}{$namePrefix} Deleted";
         }
 
-        if (!empty($attributes)) {
+        if (! empty($attributes)) {
             $changes = [];
             foreach ($attributes as $key => $newValue) {
                 if (in_array($key, ['updated_at', 'created_at', 'deleted_at', 'remember_token'])) {
@@ -287,11 +310,19 @@ class ActivitiesRelationManager extends RelationManager
 
                 $oldValue = $old[$key] ?? null;
 
-                if (is_bool($newValue)) $newValue = $newValue ? 'Yes' : 'No';
-                if (is_bool($oldValue)) $oldValue = $oldValue ? 'Yes' : 'No';
+                if (is_bool($newValue)) {
+                    $newValue = $newValue ? 'Yes' : 'No';
+                }
+                if (is_bool($oldValue)) {
+                    $oldValue = $oldValue ? 'Yes' : 'No';
+                }
 
-                if (is_array($newValue)) $newValue = json_encode($newValue);
-                if (is_array($oldValue)) $oldValue = json_encode($oldValue);
+                if (is_array($newValue)) {
+                    $newValue = json_encode($newValue);
+                }
+                if (is_array($oldValue)) {
+                    $oldValue = json_encode($oldValue);
+                }
 
                 $keyName = ucwords(str_replace('_', ' ', $key));
 
@@ -302,8 +333,8 @@ class ActivitiesRelationManager extends RelationManager
                 }
             }
 
-            if (!empty($changes)) {
-                return "{$subjectLabel}{$namePrefix} Updated (" . implode(', ', array_slice($changes, 0, 3)) . (count($changes) > 3 ? '...' : '') . ")";
+            if (! empty($changes)) {
+                return "{$subjectLabel}{$namePrefix} Updated (".implode(', ', array_slice($changes, 0, 3)).(count($changes) > 3 ? '...' : '').')';
             }
         }
 

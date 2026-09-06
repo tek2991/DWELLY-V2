@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\Operations\TenantDeboardingResource\Pages;
 
 use App\Domain\Agreement\Enums\DeboardingStatus;
-use App\Domain\Agreement\Models\TenantDeboarding;
 use App\Filament\Resources\Operations\TenantDeboardingResource;
 use App\Filament\Resources\Operations\TenantDeboardingResource\Pages\Concerns\HasDeboardingWorkflowHeader;
 use App\Filament\Resources\Operations\TenantDeboardingResource\Schemas\TenantDeboardingForm;
@@ -23,6 +22,25 @@ class ManageDeboardingKeys extends EditRecord
     protected static ?string $navigationLabel = '4. Key Return';
 
     protected static ?string $title = 'Deboarding – Key Handover';
+
+    public static function canAccess(array $parameters = []): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->roles->isEmpty()) {
+            return true;
+        }
+
+        if ($user->hasAnyRole(['Supply Manager', 'Demand Manager']) && ! $user->hasAnyRole(['Business Owner', 'City Manager', 'Operations Manager'])) {
+            return false;
+        }
+
+        return $user->can('deboarding.keys.return')
+            || $user->hasAnyRole(['Business Owner', 'City Manager', 'Operations Manager', 'Operations Executive', 'Accountant']);
+    }
 
     public function form(Schema $schema): Schema
     {

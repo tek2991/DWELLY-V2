@@ -29,8 +29,17 @@ class EditAgreementTerms extends EditRecord
 
     protected function getFormActions(): array
     {
-        if (in_array($this->getRecord()?->status, ['active', 'vacated'])) {
+        $record = $this->getRecord();
+        $user = auth()->user();
+
+        if ($user && ! $user->can('update', $record)) {
             return [];
+        }
+
+        if (in_array($record?->status, ['active', 'vacated', 'terminated', 'deboarded'])) {
+            if ($user && ! $user->can('updateTerms', $record)) {
+                return [];
+            }
         }
 
         return parent::getFormActions();

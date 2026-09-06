@@ -4,13 +4,16 @@ namespace App\Filament\Pages\Operations;
 
 use App\Domain\Audit\Enums\AuditStatus;
 use App\Domain\Audit\Models\Audit;
+use App\Filament\Clusters\AuditsCluster;
 use App\Filament\Resources\Operations\AuditResource;
 use Filament\Actions\Action;
 use Filament\Pages\Page;
+use Filament\Resources\Components\Tab;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 
 class InspectionQueue extends Page implements HasTable
@@ -19,20 +22,29 @@ class InspectionQueue extends Page implements HasTable
 
     protected string $view = 'filament.pages.operations.inspection-queue';
 
-    protected static ?string $cluster = \App\Filament\Clusters\AuditsCluster::class;
+    protected static ?string $cluster = AuditsCluster::class;
 
     protected static ?string $navigationLabel = 'Inspection Queue';
 
     protected static ?int $navigationSort = 2;
 
-    public function getTitle(): string|\Illuminate\Contracts\Support\Htmlable
+    public function getTitle(): string|Htmlable
     {
         return 'Inspection Queue';
     }
 
     public static function canAccess(): bool
     {
-        return true;
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->roles->isEmpty()) {
+            return true;
+        }
+
+        return $user->can('audit.viewAny') || $user->hasAnyRole(['Business Owner', 'City Manager', 'Operations Manager', 'Operations Executive']);
     }
 
     public function table(Table $table): Table
@@ -88,9 +100,10 @@ class InspectionQueue extends Page implements HasTable
                     ->icon('heroicon-o-clipboard-document-check')
                     ->color(fn (Audit $record) => $record->status === AuditStatus::PARTIALLY_APPROVED ? 'warning' : 'primary')
                     ->action(function (Audit $record) {
-                        if (!$record->inspector_id) {
+                        if (! $record->inspector_id) {
                             $record->update(['inspector_id' => auth()->id()]);
                         }
+
                         return redirect(AuditResource::getUrl('inspect', ['record' => $record]));
                     }),
             ]);
@@ -99,13 +112,13 @@ class InspectionQueue extends Page implements HasTable
     public function getTabs(): array
     {
         return [
-            'assigned' => \Filament\Resources\Components\Tab::make('Assigned To Me')
+            'assigned' => Tab::make('Assigned To Me')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('inspector_id', auth()->id())),
-            'changes_requested' => \Filament\Resources\Components\Tab::make('Changes Requested')
+            'changes_requested' => Tab::make('Changes Requested')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('status', AuditStatus::PARTIALLY_APPROVED)->where('inspector_id', auth()->id())),
-            'unassigned' => \Filament\Resources\Components\Tab::make('Unassigned')
+            'unassigned' => Tab::make('Unassigned')
                 ->modifyQueryUsing(fn (Builder $query) => $query->whereNull('inspector_id')),
-            'all' => \Filament\Resources\Components\Tab::make('All Active'),
+            'all' => Tab::make('All Active'),
         ];
     }
 }

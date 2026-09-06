@@ -31,11 +31,31 @@ class ManageDeboardingCompletion extends EditRecord
 
     protected static ?string $title = 'Deboarding – Final Handover & Property Release';
 
+    public static function canAccess(array $parameters = []): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->roles->isEmpty()) {
+            return true;
+        }
+
+        if ($user->hasAnyRole(['Operations Executive', 'Demand Manager', 'Supply Manager']) && ! $user->hasAnyRole(['Business Owner', 'City Manager', 'Operations Manager', 'Accountant'])) {
+            return false;
+        }
+
+        return $user->can('deboarding.complete')
+            || $user->hasAnyRole(['Business Owner', 'City Manager', 'Operations Manager', 'Accountant']);
+    }
+
     protected function getHeaderActions(): array
     {
         /** @var TenantDeboarding $record */
         $record = $this->getRecord();
         $isCompleted = $record && $record->status === DeboardingStatus::COMPLETED;
+        $canComplete = auth()->user()?->hasAnyRole(['Business Owner', 'City Manager', 'Operations Manager', 'Accountant']) || auth()->user()?->roles->isEmpty();
 
         return [
             Action::make('completeDeboarding')
@@ -43,6 +63,7 @@ class ManageDeboardingCompletion extends EditRecord
                 ->icon('heroicon-o-check-badge')
                 ->color('danger')
                 ->disabled($isCompleted)
+                ->visible($canComplete)
                 ->modalHeading('Finalize Deboarding & Vacate Property')
                 ->modalDescription('This will permanently lock the exit audit, finalize the security deposit settlement, mark the tenancy agreement as Vacated, and update property status.')
                 ->form([

@@ -3,27 +3,77 @@
 namespace App\Filament\Resources\Settings;
 
 use App\Domain\Opportunity\Models\FinancialModel;
+use App\Filament\Clusters\ReferenceData\ReferenceDataCluster;
+use App\Filament\Resources\Settings\FinancialModelResource\Pages\ManageFinancialModels;
+use App\Rules\ValidSlug;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
 use Filament\Forms;
-use Filament\Schemas\Schema;
 use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 
 class FinancialModelResource extends Resource
 {
     protected static ?string $model = FinancialModel::class;
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-banknotes';
-    
-    protected static ?string $cluster = \App\Filament\Clusters\ReferenceData\ReferenceDataCluster::class;
-    
+
+    protected static ?string $cluster = ReferenceDataCluster::class;
+
     protected static ?int $navigationSort = 12;
+
+    public static function canViewAny(): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        return $user->hasRole('Business Owner')
+            || $user->can('admin.masters.viewAny')
+            || $user->hasAnyRole(['City Manager', 'Accountant'])
+            || $user->roles->isEmpty();
+    }
+
+    public static function canCreate(): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        return $user->hasRole('Business Owner') || $user->can('admin.masters.manage') || $user->roles->isEmpty();
+    }
+
+    public static function canEdit(?Model $record = null): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        return $user->hasRole('Business Owner') || $user->can('admin.masters.manage') || $user->roles->isEmpty();
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        return $user->hasRole('Business Owner') || $user->can('admin.masters.manage') || $user->roles->isEmpty();
+    }
 
     public static function form(Schema $schema): Schema
     {
         return $schema
             ->schema([
-                Forms\Components\TextInput::make('slug')->rule(new \App\Rules\ValidSlug())
+                Forms\Components\TextInput::make('slug')->rule(new ValidSlug)
                     ->required()
                     ->maxLength(255)
                     ->unique(ignoreRecord: true),
@@ -69,11 +119,11 @@ class FinancialModelResource extends Resource
                 //
             ])
             ->actions([
-                \Filament\Actions\EditAction::make(),
+                EditAction::make(),
             ])
             ->bulkActions([
-                \Filament\Actions\BulkActionGroup::make([
-                    \Filament\Actions\DeleteBulkAction::make(),
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ]);
     }
@@ -81,7 +131,7 @@ class FinancialModelResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => \App\Filament\Resources\Settings\FinancialModelResource\Pages\ManageFinancialModels::route('/'),
+            'index' => ManageFinancialModels::route('/'),
         ];
     }
 }

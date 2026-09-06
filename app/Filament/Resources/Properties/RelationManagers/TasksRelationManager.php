@@ -20,6 +20,7 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Validation\ValidationException;
 
 class TasksRelationManager extends RelationManager
 {
@@ -66,6 +67,7 @@ class TasksRelationManager extends RelationManager
                             return 'gray';
                         }
                         [$done, $total] = explode('/', $state);
+
                         return ((int) $done === (int) $total) ? 'success' : 'warning';
                     }),
 
@@ -92,6 +94,7 @@ class TasksRelationManager extends RelationManager
                     ->mutateFormDataUsing(function (array $data) {
                         $data['created_by_id'] = auth()->id();
                         $data['status'] = $data['status'] ?? TaskStatus::PENDING->value;
+
                         return $data;
                     }),
             ])
@@ -117,7 +120,7 @@ class TasksRelationManager extends RelationManager
                                 ->title('Task Marked Complete')
                                 ->success()
                                 ->send();
-                        } catch (\Illuminate\Validation\ValidationException $e) {
+                        } catch (ValidationException $e) {
                             Notification::make()
                                 ->title('Cannot Complete Task')
                                 ->body($e->getMessage())

@@ -28,7 +28,7 @@ class TenancyAgreementsTable
                     ->searchable()
                     ->sortable()
                     ->weight('bold')
-                    ->description(fn (TenancyAgreement $record) => $record->is_renewal ? 'Renewal' . ($record->previousAgreement ? ' (from ' . $record->previousAgreement->code . ')' : '') : 'Fresh Lease'),
+                    ->description(fn (TenancyAgreement $record) => $record->is_renewal ? 'Renewal'.($record->previousAgreement ? ' (from '.$record->previousAgreement->code.')' : '') : 'Fresh Lease'),
 
                 TextColumn::make('property.building_name')
                     ->label('Property')
@@ -170,7 +170,7 @@ class TenancyAgreementsTable
                     ->label('Renew')
                     ->icon('heroicon-o-arrow-path')
                     ->color('purple')
-                    ->visible(fn (TenancyAgreement $record) => $record->status === 'active')
+                    ->visible(fn (TenancyAgreement $record) => $record->status === 'active' && (auth()->user()?->can('renew', $record) ?? true))
                     ->modalHeading('Renew Tenancy Agreement & Draft 11-Month Lease')
                     ->modalDescription('Carries forward tenant KYC, inventory audit references, and security deposit, establishing a renewed 11-month lease term with updated commercial terms.')
                     ->modalSubmitActionLabel('Draft Renewal Agreement')
@@ -192,7 +192,7 @@ class TenancyAgreementsTable
                     ->icon('heroicon-o-arrow-left-on-rectangle')
                     ->color('warning')
                     ->url(fn ($record) => TenancyAgreementResource::getUrl('deboard', ['record' => $record->id]))
-                    ->visible(fn ($record) => in_array($record->status, ['active', 'deboarding_initiated', 'vacated'])),
+                    ->visible(fn ($record) => in_array($record->status, ['active', 'deboarding_initiated', 'vacated']) && (auth()->user()?->can('deboard', $record) ?? true)),
             ])
             ->toolbarActions([
                 //

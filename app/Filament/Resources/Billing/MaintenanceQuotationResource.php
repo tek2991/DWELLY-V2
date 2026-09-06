@@ -19,6 +19,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 
 class MaintenanceQuotationResource extends Resource
 {
@@ -75,9 +76,24 @@ class MaintenanceQuotationResource extends Resource
         return [];
     }
 
+    public static function canViewAny(): bool
+    {
+        return auth()->user()?->can('viewAny', MaintenanceClientQuote::class) ?? false;
+    }
+
     public static function canCreate(): bool
     {
         return false;
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return auth()->user()?->can('update', $record) ?? false;
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return auth()->user()?->can('delete', $record) ?? false;
     }
 
     public static function getPages(): array

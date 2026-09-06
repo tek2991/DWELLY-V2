@@ -2,20 +2,22 @@
 
 namespace App\Filament\Resources\Properties\RelationManagers;
 
+use App\Filament\Resources\Properties\RelationManagers\Traits\LocksDuringPropertyOnboarding;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
 use Filament\Forms;
-use Filament\Schemas\Schema;
+use Filament\Forms\Components\Select;
 use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Filament\Actions\CreateAction;
-use Filament\Actions\EditAction;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
 
 class PhotosRelationManager extends RelationManager
 {
-    use \App\Filament\Resources\Properties\RelationManagers\Traits\LocksDuringPropertyOnboarding;
+    use LocksDuringPropertyOnboarding;
 
     protected static string $relationship = 'photos';
 
@@ -25,12 +27,12 @@ class PhotosRelationManager extends RelationManager
     {
         return $schema
             ->components([
-                \Filament\Forms\Components\Select::make('property_room_id')
+                Select::make('property_room_id')
                     ->label('Room (Optional)')
-                    ->relationship('room', 'id', modifyQueryUsing: function ($query, \Filament\Resources\RelationManagers\RelationManager $livewire) {
+                    ->relationship('room', 'id', modifyQueryUsing: function ($query, RelationManager $livewire) {
                         return $query->where('property_id', $livewire->getOwnerRecord()->id);
                     })
-                    ->getOptionLabelFromRecordUsing(fn ($record) => $record->custom_name ?: ($record->roomDefinition ? $record->roomDefinition->name : 'Room ' . $record->id))
+                    ->getOptionLabelFromRecordUsing(fn ($record) => $record->custom_name ?: ($record->roomDefinition ? $record->roomDefinition->name : 'Room '.$record->id))
                     ->nullable()
                     ->searchable()
                     ->preload()

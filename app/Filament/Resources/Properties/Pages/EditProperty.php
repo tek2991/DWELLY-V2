@@ -2,13 +2,15 @@
 
 namespace App\Filament\Resources\Properties\Pages;
 
-
 use App\Domain\Property\Models\Property;
-
 use App\Filament\Resources\Properties\PropertyResource;
+use App\Filament\Resources\Properties\Widgets\PropertyAuditWidget;
 use Filament\Actions\Action;
 use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
+use Filament\Schemas\Schema;
+use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\HtmlString;
 
 class EditProperty extends EditRecord
 {
@@ -56,7 +58,7 @@ class EditProperty extends EditRecord
         return $this->getResource()::getUrl('index');
     }
 
-    public function getSubheading(): ?\Illuminate\Contracts\Support\Htmlable
+    public function getSubheading(): ?Htmlable
     {
         /** @var Property $record */
         $record = $this->getRecord();
@@ -70,29 +72,29 @@ class EditProperty extends EditRecord
         };
 
         $codeBadge = $record->code
-            ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-mono font-bold bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200 border border-gray-300 dark:border-gray-700">#' . e($record->code) . '</span>'
+            ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-mono font-bold bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200 border border-gray-300 dark:border-gray-700">#'.e($record->code).'</span>'
             : '';
 
         $rent = $record->pricingVersions()->latest('effective_from')->value('rent');
         $rentBadge = $rent > 0
-            ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200">💰 ₹' . number_format((float) $rent) . ' /mo</span>'
+            ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200">💰 ₹'.number_format((float) $rent).' /mo</span>'
             : '';
 
         $onboardingAlert = '';
         if ($record->isLockedDuringOnboarding()) {
-            $onboardingAlert = '<div class="mt-2 text-xs font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900 rounded-md p-2 flex items-center gap-2">' .
-                '<span>⚠️</span> <span>Property must complete onboarding checklist and be activated before primary edits can be submitted.</span>' .
+            $onboardingAlert = '<div class="mt-2 text-xs font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900 rounded-md p-2 flex items-center gap-2">'.
+                '<span>⚠️</span> <span>Property must complete onboarding checklist and be activated before primary edits can be submitted.</span>'.
                 '</div>';
         }
 
-        return new \Illuminate\Support\HtmlString(
-            '<div class="flex flex-col">' .
-            '<div class="flex items-center gap-2 text-sm text-gray-500 mt-1 flex-wrap">' .
-            '<span>Status: <strong class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs ' . $color . '">' . e(ucfirst($statusStr)) . '</strong></span>' .
-            ($codeBadge ? '<span class="text-gray-300 dark:text-gray-700">&bull;</span>' . $codeBadge : '') .
-            ($rentBadge ? '<span class="text-gray-300 dark:text-gray-700">&bull;</span>' . $rentBadge : '') .
-            '</div>' .
-            $onboardingAlert .
+        return new HtmlString(
+            '<div class="flex flex-col">'.
+            '<div class="flex items-center gap-2 text-sm text-gray-500 mt-1 flex-wrap">'.
+            '<span>Status: <strong class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs '.$color.'">'.e(ucfirst($statusStr)).'</strong></span>'.
+            ($codeBadge ? '<span class="text-gray-300 dark:text-gray-700">&bull;</span>'.$codeBadge : '').
+            ($rentBadge ? '<span class="text-gray-300 dark:text-gray-700">&bull;</span>'.$rentBadge : '').
+            '</div>'.
+            $onboardingAlert.
             '</div>'
         );
     }
@@ -100,7 +102,7 @@ class EditProperty extends EditRecord
     protected function getHeaderWidgets(): array
     {
         return [
-            \App\Filament\Resources\Properties\Widgets\PropertyAuditWidget::class,
+            PropertyAuditWidget::class,
         ];
     }
 
@@ -113,11 +115,10 @@ class EditProperty extends EditRecord
         return parent::getFormActions();
     }
 
-    public function form(\Filament\Schemas\Schema $schema): \Filament\Schemas\Schema
+    public function form(Schema $schema): Schema
     {
         return parent::form($schema)
-            ->disabled(fn (\App\Domain\Property\Models\Property $record): bool => 
-                $record->isLockedDuringOnboarding()
+            ->disabled(fn (Property $record): bool => $record->isLockedDuringOnboarding()
             );
     }
 }

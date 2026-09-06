@@ -2,21 +2,26 @@
 
 namespace App\Filament\Resources\Properties\RelationManagers;
 
+use App\Filament\Resources\Properties\RelationManagers\Traits\LocksDuringPropertyOnboarding;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
 use Filament\Forms;
-use Filament\Schemas\Schema;
 use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class UtilitiesRelationManager extends RelationManager
 {
-    use \App\Filament\Resources\Properties\RelationManagers\Traits\LocksDuringPropertyOnboarding;
+    use LocksDuringPropertyOnboarding;
 
     protected static string $relationship = 'utilities';
 
     protected static ?string $title = 'Utilities';
+
     protected static ?string $modelLabel = 'Utility Configuration';
 
     public function form(Schema $form): Schema
@@ -107,15 +112,15 @@ class UtilitiesRelationManager extends RelationManager
                     ]),
             ])
             ->headerActions([
-                \Filament\Actions\CreateAction::make(),
+                CreateAction::make(),
             ])
             ->recordActions([
-                \Filament\Actions\EditAction::make(),
-                \Filament\Actions\DeleteAction::make(),
+                EditAction::make(),
+                DeleteAction::make(),
             ])
             ->toolbarActions([
-                \Filament\Actions\BulkActionGroup::make([
-                    \Filament\Actions\DeleteBulkAction::make(),
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ]);
     }

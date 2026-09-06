@@ -4,25 +4,33 @@ namespace App\Filament\Resources\Properties\RelationManagers;
 
 use App\Domain\Audit\Enums\AuditStatus;
 use App\Domain\Audit\Enums\AuditType;
+use App\Domain\Audit\Models\Audit;
+use App\Domain\Property\Models\Property;
+use App\Filament\Resources\Operations\AuditResource;
+use App\Filament\Resources\Properties\Pages\OnboardingDashboard;
+use App\Filament\Resources\Properties\RelationManagers\Traits\LocksDuringPropertyOnboarding;
+use Filament\Actions\Action;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Forms;
-use Filament\Schemas\Schema;
 use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Illuminate\Database\Eloquent\Model;
 
 class AuditsRelationManager extends RelationManager
 {
-    use \App\Filament\Resources\Properties\RelationManagers\Traits\LocksDuringPropertyOnboarding;
+    use LocksDuringPropertyOnboarding;
 
     protected static string $relationship = 'audits';
 
     protected static ?string $title = 'Audits';
 
-    public static function canViewForRecord(\Illuminate\Database\Eloquent\Model $ownerRecord, string $pageClass): bool
+    public static function canViewForRecord(Model $ownerRecord, string $pageClass): bool
     {
-        if ($pageClass === \App\Filament\Resources\Properties\Pages\OnboardingDashboard::class) {
+        if ($pageClass === OnboardingDashboard::class) {
             return false;
         }
 
@@ -39,14 +47,15 @@ class AuditsRelationManager extends RelationManager
                 Forms\Components\Select::make('reference_audit_id')
                     ->label('Reference Audit')
                     ->options(function () {
-                        // In RelationManager, ownerRecord is available via $this->getOwnerRecord() 
+                        // In RelationManager, ownerRecord is available via $this->getOwnerRecord()
                         // But inside a closure, it's safer to query it directly or let the user choose
                         // Actually, I can't easily access $this in a static context if it was static, but form() is not static.
                         $propertyId = $this->getOwnerRecord()->id;
-                        return \App\Domain\Audit\Models\Audit::where('property_id', $propertyId)
+
+                        return Audit::where('property_id', $propertyId)
                             ->whereIn('status', [AuditStatus::COMPLETED, AuditStatus::APPROVED])
                             ->get()
-                            ->mapWithKeys(fn ($a) => [$a->id => $a->audit_number . ' (' . $a->audit_type->getLabel() . ')']);
+                            ->mapWithKeys(fn ($a) => [$a->id => $a->audit_number.' ('.$a->audit_type->getLabel().')']);
                     })
                     ->searchable()
                     ->preload(),
@@ -90,25 +99,28 @@ class AuditsRelationManager extends RelationManager
                 //
             ])
             ->headerActions([
-                \Filament\Actions\CreateAction::make()
-                    ->disabled(function (\Filament\Resources\RelationManagers\RelationManager $livewire) {
+                CreateAction::make()
+                    ->disabled(function (RelationManager $livewire) {
                         $record = $livewire->getOwnerRecord();
-                        if ($record instanceof \App\Domain\Property\Models\Property) {
+                        if ($record instanceof Property) {
                             return empty($record->code) || $record->onboardingProject?->status !== 'Activated';
                         }
+
                         return false;
                     })
-                    ->tooltip(function (\Filament\Resources\RelationManagers\RelationManager $livewire) {
+                    ->tooltip(function (RelationManager $livewire) {
                         $record = $livewire->getOwnerRecord();
-                        if ($record instanceof \App\Domain\Property\Models\Property) {
+                        if ($record instanceof Property) {
                             $isDisabled = empty($record->code) || $record->onboardingProject?->status !== 'Activated';
+
                             return $isDisabled ? 'Complete onboarding and generate property code first.' : null;
                         }
+
                         return null;
                     })
                     ->mutateFormDataUsing(function (array $data): array {
-                        if (!isset($data['reference_audit_id'])) {
-                            $latestAudit = \App\Domain\Audit\Models\Audit::where('property_id', $this->getOwnerRecord()->id)
+                        if (! isset($data['reference_audit_id'])) {
+                            $latestAudit = Audit::where('property_id', $this->getOwnerRecord()->id)
                                 ->whereIn('status', [AuditStatus::COMPLETED, AuditStatus::APPROVED])
                                 ->orderBy('created_at', 'desc')
                                 ->first();
@@ -116,18 +128,19 @@ class AuditsRelationManager extends RelationManager
                                 $data['reference_audit_id'] = $latestAudit->id;
                             }
                         }
+
                         return $data;
                     }),
             ])
             ->actions([
-                \Filament\Actions\Action::make('openAudit')
+                Action::make('openAudit')
                     ->label('Manage')
                     ->icon('heroicon-o-arrow-top-right-on-square')
-                    ->url(fn (\App\Domain\Audit\Models\Audit $record): string => \App\Filament\Resources\Operations\AuditResource::getUrl('edit', ['record' => $record])),
+                    ->url(fn (Audit $record): string => AuditResource::getUrl('edit', ['record' => $record])),
             ])
             ->bulkActions([
-                \Filament\Actions\BulkActionGroup::make([
-                    \Filament\Actions\DeleteBulkAction::make(),
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ]);
     }

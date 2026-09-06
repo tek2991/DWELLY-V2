@@ -2,63 +2,82 @@
 
 namespace App\Filament\Resources\Operations;
 
-use App\Domain\Audit\Models\Audit;
-use App\Domain\Audit\Enums\AuditType;
 use App\Domain\Audit\Enums\AuditStatus;
+use App\Domain\Audit\Enums\AuditType;
+use App\Domain\Audit\Models\Audit;
+use App\Filament\Clusters\AuditsCluster;
 use App\Filament\Resources\Operations\AuditResource\Pages;
+use Filament\Actions\Action;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
 use Filament\Forms;
-use Filament\Schemas\Schema;
 use Filament\Resources\Resource;
-use Filament\Tables;
-use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
+use Filament\Schemas\Components\Group;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
-use Illuminate\Support\Carbon;
+use Filament\Schemas\Schema;
+use Filament\Support\Enums\Width;
+use Filament\Tables;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\HtmlString;
 
 class AuditResource extends Resource
 {
     protected static ?string $model = Audit::class;
 
-    protected static ?string $cluster = \App\Filament\Clusters\AuditsCluster::class;
+    protected static ?string $cluster = AuditsCluster::class;
 
     protected static ?string $navigationLabel = 'All Audits';
 
     protected static ?int $navigationSort = 1;
 
-    public static function canCreate(): bool
+    public static function canViewAny(): bool
     {
-        return false;
+        return auth()->user()?->can('viewAny', Audit::class) ?? false;
     }
 
-    public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
+    public static function canCreate(): bool
     {
-        return $record->status !== AuditStatus::APPROVED && !$record->is_locked;
+        return auth()->user()?->can('create', Audit::class) ?? false;
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return auth()->user()?->can('update', $record) ?? false;
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return auth()->user()?->can('delete', $record) ?? false;
     }
 
     public static function form(Schema $schema): Schema
     {
         return $schema
             ->schema([
-                \Filament\Schemas\Components\Group::make()->schema([
-                    \Filament\Schemas\Components\Section::make('Audit Details')
+                Group::make()->schema([
+                    Section::make('Audit Details')
                         ->schema([
                             Forms\Components\Select::make('property_id')
                                 ->relationship('property', 'code')
-                                ->getOptionLabelFromRecordUsing(fn($record) => $record->building_name . ($record->code ? ' (' . $record->code . ')' : ''))
+                                ->getOptionLabelFromRecordUsing(fn ($record) => $record->building_name.($record->code ? ' ('.$record->code.')' : ''))
                                 ->searchable()
                                 ->preload()
                                 ->required()
                                 ->default(request()->query('property_id'))
-                                ->disabled(fn(string $operation): bool => $operation === 'edit' || request()->has('property_id'))
+                                ->disabled(fn (string $operation): bool => $operation === 'edit' || request()->has('property_id'))
                                 ->dehydrated()
                                 ->live()
                                 ->afterStateUpdated(function (Set $set, $state) {
-                                    if (!$state) {
+                                    if (! $state) {
                                         $set('reference_audit_id', null);
+
                                         return;
                                     }
-                                    $latestAudit = \App\Domain\Audit\Models\Audit::where('property_id', $state)
+                                    $latestAudit = Audit::where('property_id', $state)
                                         ->whereIn('status', [AuditStatus::COMPLETED, AuditStatus::APPROVED])
                                         ->orderBy('created_at', 'desc')
                                         ->first();
@@ -71,7 +90,7 @@ class AuditResource extends Resource
                                 ->options(AuditType::class)
                                 ->required()
                                 ->default(request()->query('audit_type'))
-                                ->disabled(fn(string $operation): bool => $operation === 'edit'),
+                                ->disabled(fn (string $operation): bool => $operation === 'edit'),
 
                             Forms\Components\Select::make('tenant_id')
                                 ->label('Linked Tenant')
@@ -84,7 +103,9 @@ class AuditResource extends Resource
                                 ->label('Reference Audit')
                                 ->options(function (Get $get, ?Audit $record) {
                                     $propertyId = $get('property_id');
-                                    if (!$propertyId) return [];
+                                    if (! $propertyId) {
+                                        return [];
+                                    }
 
                                     $query = Audit::where('property_id', $propertyId)
                                         ->whereIn('status', [AuditStatus::COMPLETED, AuditStatus::APPROVED]);
@@ -94,7 +115,7 @@ class AuditResource extends Resource
                                     }
 
                                     return $query->get()->mapWithKeys(function ($audit) {
-                                        return [$audit->id => $audit->audit_number . ' (' . $audit->audit_type->getLabel() . ')'];
+                                        return [$audit->id => $audit->audit_number.' ('.$audit->audit_type->getLabel().')'];
                                     });
                                 })
                                 ->searchable()
@@ -106,7 +127,7 @@ class AuditResource extends Resource
                                 ->searchable()
                                 ->preload()
                                 ->required()
-                                ->default(fn() => auth()->id()),
+                                ->default(fn () => auth()->id()),
 
                             Forms\Components\Select::make('reviewer_id')
                                 ->label('Assigned Reviewer')
@@ -114,13 +135,13 @@ class AuditResource extends Resource
                                 ->searchable()
                                 ->preload()
                                 ->required()
-                                ->default(fn() => auth()->id()),
+                                ->default(fn () => auth()->id()),
 
                             Forms\Components\DatePicker::make('scheduled_at')
                                 ->label('Scheduled Date'),
                         ])->columns(2),
 
-                    \Filament\Schemas\Components\Section::make('Notes')
+                    Section::make('Notes')
                         ->schema([
                             Forms\Components\Textarea::make('notes')
                                 ->maxLength(65535)
@@ -128,15 +149,15 @@ class AuditResource extends Resource
                         ]),
                 ])->columnSpan(['lg' => 2]),
 
-                \Filament\Schemas\Components\Group::make()->schema([
-                    \Filament\Schemas\Components\Section::make('Status')
+                Group::make()->schema([
+                    Section::make('Status')
                         ->schema([
                             Forms\Components\Placeholder::make('audit_number')
                                 ->label('Audit Number')
-                                ->content(fn(?Audit $record): string => $record?->audit_number ?? 'Auto-generated'),
+                                ->content(fn (?Audit $record): string => $record?->audit_number ?? 'Auto-generated'),
 
                             Forms\Components\Placeholder::make('status')
-                                ->content(function (?Audit $record): \Illuminate\Support\HtmlString {
+                                ->content(function (?Audit $record): HtmlString {
                                     $label = $record?->status?->getLabel() ?? 'Draft';
                                     $color = match ($record?->status) {
                                         AuditStatus::IN_PROGRESS => 'text-info-600',
@@ -144,18 +165,19 @@ class AuditResource extends Resource
                                         AuditStatus::APPROVED => 'text-primary-600',
                                         default => 'text-gray-600',
                                     };
-                                    return new \Illuminate\Support\HtmlString("<span class=\"font-medium {$color}\">{$label}</span>");
+
+                                    return new HtmlString("<span class=\"font-medium {$color}\">{$label}</span>");
                                 }),
 
                             Forms\Components\Placeholder::make('completed_by_id')
                                 ->label('Completed By')
-                                ->content(fn(?Audit $record): ?string => $record?->completedBy?->name ?? '-')
-                                ->visible(fn(?Audit $record) => $record && $record->completed_at),
+                                ->content(fn (?Audit $record): ?string => $record?->completedBy?->name ?? '-')
+                                ->visible(fn (?Audit $record) => $record && $record->completed_at),
 
                             Forms\Components\Placeholder::make('approved_by_id')
                                 ->label('Approved By')
-                                ->content(fn(?Audit $record): ?string => $record?->approvedBy?->name ?? '-')
-                                ->visible(fn(?Audit $record) => $record && $record->approved_at),
+                                ->content(fn (?Audit $record): ?string => $record?->approvedBy?->name ?? '-')
+                                ->visible(fn (?Audit $record) => $record && $record->approved_at),
                         ]),
                 ])->columnSpan(['lg' => 1]),
             ])
@@ -199,18 +221,18 @@ class AuditResource extends Resource
 
                         $baseStyle = 'display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; line-height: 1.25;';
 
-                        $typeBadge = '<span style="' . $baseStyle . ' ' . $getBadgeStyle($typeColor) . '">' . e($typeLabel) . '</span>';
-                        $statusBadge = '<span style="' . $baseStyle . ' ' . $getBadgeStyle($statusColor) . '">' . e($statusLabel) . '</span>';
+                        $typeBadge = '<span style="'.$baseStyle.' '.$getBadgeStyle($typeColor).'">'.e($typeLabel).'</span>';
+                        $statusBadge = '<span style="'.$baseStyle.' '.$getBadgeStyle($statusColor).'">'.e($statusLabel).'</span>';
 
                         $lockedStyle = 'background-color: #ffe4e6; color: #be123c; border: 1px solid #fecdd3; gap: 4px;';
                         $lockedBadge = $record->is_locked
-                            ? '<span style="' . $baseStyle . ' ' . $lockedStyle . '" title="Audit is locked"><svg style="width: 0.75rem; height: 0.75rem; color: #be123c;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>Locked</span>'
+                            ? '<span style="'.$baseStyle.' '.$lockedStyle.'" title="Audit is locked"><svg style="width: 0.75rem; height: 0.75rem; color: #be123c;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>Locked</span>'
                             : '';
 
-                        return '<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px;">' .
-                            $typeBadge .
-                            $statusBadge .
-                            $lockedBadge .
+                        return '<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px;">'.
+                            $typeBadge.
+                            $statusBadge.
+                            $lockedBadge.
                             '</div>';
                     }),
                 Tables\Columns\TextColumn::make('inspector.name')
@@ -233,21 +255,21 @@ class AuditResource extends Resource
                     ->label('Locked Status'),
             ])
             ->actions([
-                \Filament\Actions\Action::make('pdfReport')
+                Action::make('pdfReport')
                     ->label('PDF Report')
                     ->icon('heroicon-o-document-arrow-down')
                     ->color('gray')
                     ->tooltip('View / Download Inspection PDF Report')
                     ->modalHeading(fn (Audit $record) => "Inspection Report - {$record->audit_number}")
-                    ->modalWidth(\Filament\Support\Enums\Width::SevenExtraLarge)
+                    ->modalWidth(Width::SevenExtraLarge)
                     ->modalContent(fn (Audit $record) => view('components.audit-report-modal', ['audit' => $record]))
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Close'),
-                \Filament\Actions\EditAction::make(),
+                EditAction::make(),
             ])
             ->bulkActions([
-                \Filament\Actions\BulkActionGroup::make([
-                    \Filament\Actions\DeleteBulkAction::make(),
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ]);
     }

@@ -10,6 +10,7 @@ use App\Domain\Property\Models\Property;
 use App\Domain\Property\Models\UtilityProvider;
 use App\Domain\Shared\Enums\DocumentType;
 use App\Filament\Resources\Operations\AuditResource;
+use App\Filament\Resources\Operations\TenantDeboardingResource;
 use App\Filament\Resources\Parties\PartyResource;
 use App\Filament\Resources\Properties\PropertyResource;
 use App\Filament\Resources\TenancyAgreements\TenancyAgreementResource;
@@ -35,6 +36,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\HtmlString;
 use Illuminate\Validation\Rule;
+use Tek2991\Accounting\Enums\InvoiceStatus;
 
 class TenancyAgreementForm
 {
@@ -443,20 +445,31 @@ class TenancyAgreementForm
         $canActivate = empty($pendingList) && $status !== 'active';
 
         if ($status === 'active') {
+            $user = auth()->user();
+            $canRenew = ! $user || $user->can('renew', $record);
+            $canDeboard = ! $user || $user->can('deboard', $record);
+
+            $actionButtons = '';
+            if ($canRenew) {
+                $actionButtons .= '<button type="button" wire:click="mountAction(\'renewTenancyHeader\')" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 15px; background-color: #7c3aed; color: #ffffff; font-weight: 600; font-size: 13px; border-radius: 6px; border: none; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: background-color 150ms;">'.
+                    '<svg style="width: 15px; height: 15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>'.
+                    'Renew Agreement'.
+                    '</button>';
+            }
+            if ($canDeboard) {
+                $actionButtons .= '<button type="button" wire:click="mountAction(\'initiateDeboardingHeader\')" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 15px; background-color: #d97706; color: #ffffff; font-weight: 600; font-size: 13px; border-radius: 6px; border: none; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: background-color 150ms;">'.
+                    '<svg style="width: 15px; height: 15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>'.
+                    'Initiate Deboarding & Exit Audit'.
+                    '</button>';
+            }
+
             $activationBannerHtml = '<div style="margin-top: 1rem; padding: 0.85rem 1.25rem; background-color: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 0.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">'.
                 '<div style="display: flex; align-items: center; gap: 8px; color: #047857; font-weight: 700; font-size: 14px;">'.
                 '<span>✓ Tenancy Agreement is Active</span>'.
                 '<span style="font-size: 12px; font-weight: 500; color: #059669;">&bull; Move-In Audit is permanently locked</span>'.
                 '</div>'.
                 '<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">'.
-                '<button type="button" wire:click="mountAction(\'renewTenancyHeader\')" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 15px; background-color: #7c3aed; color: #ffffff; font-weight: 600; font-size: 13px; border-radius: 6px; border: none; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: background-color 150ms;">'.
-                '<svg style="width: 15px; height: 15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>'.
-                'Renew Agreement'.
-                '</button>'.
-                '<button type="button" wire:click="mountAction(\'initiateDeboardingHeader\')" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 15px; background-color: #d97706; color: #ffffff; font-weight: 600; font-size: 13px; border-radius: 6px; border: none; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: background-color 150ms;">'.
-                '<svg style="width: 15px; height: 15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>'.
-                'Initiate Deboarding & Exit Audit'.
-                '</button>'.
+                $actionButtons.
                 '</div>'.
                 '</div>';
         } elseif ($status === 'renewed') {
@@ -470,8 +483,8 @@ class TenancyAgreementForm
                 ($latestRenewal ? '<a href="'.e($renewalUrl).'" style="display: inline-flex; align-items: center; gap: 6px; padding: 7px 15px; background-color: #7c3aed; color: #ffffff; font-weight: 600; font-size: 13px; border-radius: 6px; text-decoration: none; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">Open Active Renewal ('.e($latestRenewal->code).') &rarr;</a>' : '').
                 '</div>';
         } elseif (in_array($status, ['deboarding_initiated', 'vacated'])) {
-            $deboardUrl = $record->deboarding 
-                ? \App\Filament\Resources\Operations\TenantDeboardingResource::getUrl('edit', ['record' => $record->deboarding->id])
+            $deboardUrl = $record->deboarding
+                ? TenantDeboardingResource::getUrl('edit', ['record' => $record->deboarding->id])
                 : TenancyAgreementResource::getUrl('deboard', ['record' => $record]);
             $activationBannerHtml = '<div style="margin-top: 1rem; padding: 0.85rem 1.25rem; background-color: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 0.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">'.
                 '<div>'.
@@ -483,15 +496,22 @@ class TenancyAgreementForm
                 '</a>'.
                 '</div>';
         } elseif ($canActivate) {
+            $user = auth()->user();
+            $canUserActivate = ! $user || $user->can('activate', $record);
+
+            $buttonHtml = $canUserActivate
+                ? '<button type="button" wire:click="mountAction(\'activateTenancyHeader\')" wire:loading.attr="disabled" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 18px; background-color: #16a34a; color: #ffffff; font-weight: 700; font-size: 13px; border-radius: 6px; border: none; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: background-color 150ms;">'.
+                    '<svg style="width: 15px; height: 15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>'.
+                    'Activate Tenancy Now'.
+                    '</button>'
+                : '<span style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; border-radius: 6px; background-color: rgba(22, 163, 74, 0.1); color: #15803d; font-size: 12px; font-weight: 600;">Awaiting Dual-Key Activation Clearance</span>';
+
             $activationBannerHtml = '<div style="margin-top: 1rem; padding: 0.85rem 1.25rem; background-color: rgba(22, 163, 74, 0.08); border: 1px solid rgba(22, 163, 74, 0.3); border-radius: 0.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">'.
                 '<div>'.
                 '<div style="font-weight: 700; font-size: 14px; color: #15803d;">⚡ All Onboarding Checks Complete!</div>'.
                 '<div style="font-size: 12px; color: rgba(128, 128, 128, 0.9); margin-top: 2px;">Ready to activate tenancy, set property to occupied, and lock move-in audit.</div>'.
                 '</div>'.
-                '<button type="button" wire:click="mountAction(\'activateTenancyHeader\')" wire:loading.attr="disabled" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 18px; background-color: #16a34a; color: #ffffff; font-weight: 700; font-size: 13px; border-radius: 6px; border: none; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: background-color 150ms;">'.
-                '<svg style="width: 15px; height: 15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>'.
-                'Activate Tenancy Now'.
-                '</button>'.
+                $buttonHtml.
                 '</div>';
         } else {
             $pendingText = 'Pending checks: '.implode(', ', array_map('lcfirst', $pendingList));
@@ -686,7 +706,7 @@ class TenancyAgreementForm
                                 $invoice = $record->documentationInvoice;
 
                                 if ($invoice) {
-                                    $invoiceStatus = $invoice->status instanceof \Tek2991\Accounting\Enums\InvoiceStatus
+                                    $invoiceStatus = $invoice->status instanceof InvoiceStatus
                                         ? $invoice->status->value
                                         : (string) ($invoice->status ?? 'posted');
 
@@ -1612,7 +1632,7 @@ class TenancyAgreementForm
                         ->numeric()
                         ->prefix('₹')
                         ->default($escalatedRent ?: $currentRent)
-                        ->helperText('Current: ₹' . number_format($currentRent, 2) . ' | 5% Escalated: ₹' . number_format($escalatedRent, 2))
+                        ->helperText('Current: ₹'.number_format($currentRent, 2).' | 5% Escalated: ₹'.number_format($escalatedRent, 2))
                         ->required(),
 
                     TextInput::make('security_deposit')
@@ -1640,4 +1660,3 @@ class TenancyAgreementForm
         ];
     }
 }
-

@@ -5,15 +5,18 @@ namespace App\Filament\Pages\Properties;
 use App\Domain\Property\Enums\OnboardingStatus;
 use App\Domain\Property\Models\Property;
 use App\Domain\Property\Services\PropertyOnboardingValidator;
+use App\Filament\Clusters\PropertiesCluster;
 use App\Filament\Resources\Properties\PropertyResource;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Pages\Page;
+use Filament\Resources\Components\Tab;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 
 class OnboardingQueue extends Page implements HasTable
@@ -22,7 +25,7 @@ class OnboardingQueue extends Page implements HasTable
 
     protected string $view = 'filament.pages.properties.onboarding-queue';
 
-    protected static ?string $cluster = \App\Filament\Clusters\PropertiesCluster::class;
+    protected static ?string $cluster = PropertiesCluster::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentList;
 
@@ -30,7 +33,7 @@ class OnboardingQueue extends Page implements HasTable
 
     protected static ?int $navigationSort = 2;
 
-    public function getTitle(): string|\Illuminate\Contracts\Support\Htmlable
+    public function getTitle(): string|Htmlable
     {
         return 'Onboarding Queue';
     }
@@ -87,7 +90,7 @@ class OnboardingQueue extends Page implements HasTable
                         $validator = app(PropertyOnboardingValidator::class);
                         $data = $validator->validate($record);
 
-                        return $data['progress'] . '%';
+                        return $data['progress'].'%';
                     })
                     ->badge()
                     ->color(fn (string $state): string => (int) $state === 100 ? 'success' : ((int) $state >= 50 ? 'warning' : 'danger')),
@@ -143,11 +146,8 @@ class OnboardingQueue extends Page implements HasTable
                             return false;
                         }
 
-                        if ($user->roles->isEmpty()) {
-                            return true;
-                        }
-
-                        return $user->hasAnyRole(['Business Owner', 'Operations Manager', 'Admin', 'Super Admin']);
+                        return $user->can('review', $record)
+                            || $user->hasAnyRole(['Business Owner', 'City Manager', 'Operations Manager', 'Admin', 'Super Admin']);
                     })
                     ->url(fn (Property $record): string => PropertyResource::getUrl('onboarding', ['record' => $record])),
 
@@ -162,18 +162,18 @@ class OnboardingQueue extends Page implements HasTable
     public function getTabs(): array
     {
         return [
-            'all' => \Filament\Resources\Components\Tab::make('All Onboarding'),
-            'pending_review' => \Filament\Resources\Components\Tab::make('Pending Review')
+            'all' => Tab::make('All Onboarding'),
+            'pending_review' => Tab::make('Pending Review')
                 ->badge(fn () => Property::whereHas('onboardingProject', fn ($q) => $q->where('status', 'Pending Review'))->count())
                 ->badgeColor('warning')
                 ->modifyQueryUsing(fn (Builder $query) => $query->whereHas('onboardingProject', fn ($q) => $q->where('status', 'Pending Review'))),
-            'changes_requested' => \Filament\Resources\Components\Tab::make('Changes Requested')
+            'changes_requested' => Tab::make('Changes Requested')
                 ->modifyQueryUsing(fn (Builder $query) => $query->whereHas('onboardingProject', fn ($q) => $q->where('status', 'Changes Requested'))),
-            'in_progress' => \Filament\Resources\Components\Tab::make('In Progress')
+            'in_progress' => Tab::make('In Progress')
                 ->modifyQueryUsing(fn (Builder $query) => $query->whereHas('onboardingProject', fn ($q) => $q->where('status', 'In Progress'))),
-            'draft' => \Filament\Resources\Components\Tab::make('Draft')
+            'draft' => Tab::make('Draft')
                 ->modifyQueryUsing(fn (Builder $query) => $query->whereHas('onboardingProject', fn ($q) => $q->where('status', 'Draft'))),
-            'audit_pending' => \Filament\Resources\Components\Tab::make('Audit Pending')
+            'audit_pending' => Tab::make('Audit Pending')
                 ->modifyQueryUsing(fn (Builder $query) => $query->whereHas('onboardingProject', fn ($q) => $q->where('status', 'Audit Pending'))),
         ];
     }

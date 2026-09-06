@@ -2,24 +2,29 @@
 
 namespace App\Filament\Resources\Properties\RelationManagers;
 
-use Filament\Actions\AssociateAction;
+use App\Domain\Property\Models\RoomDefinition;
+use App\Domain\Property\Models\RoomType;
+use App\Filament\Resources\Properties\RelationManagers\Traits\LocksDuringPropertyOnboarding;
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
-use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\DissociateAction;
-use Filament\Actions\DissociateBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\CheckboxList;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rules\Unique;
 
 class RoomsRelationManager extends RelationManager
 {
-    use \App\Filament\Resources\Properties\RelationManagers\Traits\LocksDuringPropertyOnboarding;
+    use LocksDuringPropertyOnboarding;
 
     protected static string $relationship = 'rooms';
 
@@ -27,21 +32,21 @@ class RoomsRelationManager extends RelationManager
     {
         return $schema
             ->components([
-                \Filament\Forms\Components\Select::make('room_definition_id')
+                Select::make('room_definition_id')
                     ->relationship('roomDefinition', 'name')
                     ->searchable()
                     ->preload()
                     ->required()
-                    ->unique(modifyRuleUsing: function (\Illuminate\Validation\Rules\Unique $rule, \Filament\Resources\RelationManagers\RelationManager $livewire) {
+                    ->unique(modifyRuleUsing: function (Unique $rule, RelationManager $livewire) {
                         return $rule->where('property_id', $livewire->getOwnerRecord()->id);
                     }, ignoreRecord: true),
-                \Filament\Forms\Components\TextInput::make('custom_name')
+                TextInput::make('custom_name')
                     ->maxLength(255),
-                \Filament\Forms\Components\TextInput::make('floor')
+                TextInput::make('floor')
                     ->numeric(),
-                \Filament\Forms\Components\TextInput::make('area')
+                TextInput::make('area')
                     ->numeric(),
-                \Filament\Forms\Components\Textarea::make('description'),
+                Textarea::make('description'),
             ]);
     }
 
@@ -50,70 +55,69 @@ class RoomsRelationManager extends RelationManager
         return $table
             ->recordTitleAttribute('id')
             ->columns([
-                Tables\Columns\TextColumn::make('roomDefinition.roomType.name')
+                TextColumn::make('roomDefinition.roomType.name')
                     ->label('Type')
                     ->sortable()
                     ->searchable(),
-                Tables\Columns\TextColumn::make('roomDefinition.name')
+                TextColumn::make('roomDefinition.name')
                     ->label('Definition')
                     ->sortable()
                     ->searchable(),
-                Tables\Columns\TextColumn::make('custom_name')
+                TextColumn::make('custom_name')
                     ->label('Custom Name')
                     ->searchable(),
-                Tables\Columns\TextColumn::make('floor')
+                TextColumn::make('floor')
                     ->sortable(),
             ])
             ->filters([
                 //
             ])
             ->headerActions([
-                \Filament\Actions\Action::make('addRooms')
-                    ->hidden(fn (\Filament\Resources\RelationManagers\RelationManager $livewire) => $livewire->isReadOnly())
+                Action::make('addRooms')
+                    ->hidden(fn (RelationManager $livewire) => $livewire->isReadOnly())
                     ->label('Add Rooms')
                     ->icon('heroicon-o-plus')
                     ->form([
-                        \Filament\Forms\Components\Select::make('room_type_id')
+                        Select::make('room_type_id')
                             ->label('Room Type')
-                            ->options(\App\Domain\Property\Models\RoomType::query()->pluck('name', 'id'))
+                            ->options(RoomType::query()->pluck('name', 'id'))
                             ->live()
                             ->afterStateUpdated(fn ($set) => $set('room_definition_ids', [])),
-                        
-                        \Filament\Forms\Components\CheckboxList::make('room_definition_ids')
+
+                        CheckboxList::make('room_definition_ids')
                             ->label('Room Definitions')
-                            ->options(fn ($get) => \App\Domain\Property\Models\RoomDefinition::query()
+                            ->options(fn ($get) => RoomDefinition::query()
                                 ->where('room_type_id', $get('room_type_id'))
                                 ->pluck('name', 'id')
                             )
-                            ->disableOptionWhen(fn (string $value, \Filament\Resources\RelationManagers\RelationManager $livewire) => 
-                                $livewire->getOwnerRecord()->rooms()->where('room_definition_id', $value)->exists()
+                            ->disableOptionWhen(fn (string $value, RelationManager $livewire) => $livewire->getOwnerRecord()->rooms()->where('room_definition_id', $value)->exists()
                             )
                             ->visible(fn ($get) => filled($get('room_type_id')))
                             ->columns(2)
                             ->bulkToggleable()
                             ->hintAction(
-                                \Filament\Actions\Action::make('createDefinition')
+                                Action::make('createDefinition')
                                     ->label('Add New Definition')
                                     ->icon('heroicon-m-plus')
                                     ->form([
-                                        \Filament\Forms\Components\TextInput::make('name')
+                                        TextInput::make('name')
                                             ->required()
                                             ->maxLength(255),
                                     ])
                                     ->action(function (array $data, $get, $set) {
-                                        $def = \App\Domain\Property\Models\RoomDefinition::create([
+                                        $def = RoomDefinition::create([
                                             'room_type_id' => $get('room_type_id'),
                                             'name' => $data['name'],
-                                            'slug' => \Illuminate\Support\Str::slug($data['name'] . '-' . uniqid()),
+                                            'slug' => Str::slug($data['name'].'-'.uniqid()),
                                         ]);
-                                        
+
                                         $current = $get('room_definition_ids') ?? [];
                                         $current[] = (string) $def->id;
                                         $set('room_definition_ids', $current);
                                     })
                             ),
                     ])
-                    ->action(function (array $data, \Filament\Resources\RelationManagers\RelationManager $livewire) {
+                    ->action(function (array $data, RelationManager $livewire) {
                         $property = $livewire->getOwnerRecord();
                         $definitionIds = $data['room_definition_ids'] ?? [];
                         foreach ($definitionIds as $defId) {
@@ -121,7 +125,7 @@ class RoomsRelationManager extends RelationManager
                                 'room_definition_id' => $defId,
                             ]);
                         }
-                        \Filament\Notifications\Notification::make()
+                        Notification::make()
                             ->title('Rooms added successfully')
                             ->success()
                             ->send();

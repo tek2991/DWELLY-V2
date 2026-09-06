@@ -3,13 +3,16 @@
 namespace App\Filament\Pages\Operations;
 
 use App\Domain\Audit\Models\Audit;
+use App\Filament\Clusters\AuditsCluster;
 use App\Filament\Resources\Operations\AuditResource;
+use Filament\Actions\Action;
 use Filament\Pages\Page;
+use Filament\Resources\Components\Tab;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
-use Filament\Tables\Columns\TextColumn;
-use Filament\Actions\Action;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 
 class ReviewQueue extends Page implements HasTable
@@ -18,20 +21,34 @@ class ReviewQueue extends Page implements HasTable
 
     protected string $view = 'filament.pages.operations.review-queue';
 
-    protected static ?string $cluster = \App\Filament\Clusters\AuditsCluster::class;
+    protected static ?string $cluster = AuditsCluster::class;
 
-    protected static ?string $navigationLabel = 'Review Queue';
+    protected static ?string $navigationLabel = 'Audit Review Queue';
 
     protected static ?int $navigationSort = 3;
 
-    public function getTitle(): string|\Illuminate\Contracts\Support\Htmlable
+    public function getTitle(): string|Htmlable
     {
-        return 'Review Queue';
+        return 'Audit Review Queue';
     }
 
     public static function canAccess(): bool
     {
-        return true;
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->roles->isEmpty()) {
+            return true;
+        }
+
+        // 4-Eyes Gate: Operations Executives CANNOT access the Audit Review Queue
+        if ($user->hasRole('Operations Executive') && ! $user->hasAnyRole(['Business Owner', 'City Manager', 'Operations Manager'])) {
+            return false;
+        }
+
+        return $user->can('audit.review') || $user->hasAnyRole(['Business Owner', 'City Manager', 'Operations Manager']);
     }
 
     public function table(Table $table): Table
@@ -63,11 +80,11 @@ class ReviewQueue extends Page implements HasTable
     public function getTabs(): array
     {
         return [
-            'assigned' => \Filament\Resources\Components\Tab::make('Assigned To Me')
+            'assigned' => Tab::make('Assigned To Me')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('reviewer_id', auth()->id())),
-            'unassigned' => \Filament\Resources\Components\Tab::make('Unassigned')
+            'unassigned' => Tab::make('Unassigned')
                 ->modifyQueryUsing(fn (Builder $query) => $query->whereNull('reviewer_id')),
-            'all' => \Filament\Resources\Components\Tab::make('All Pending'),
+            'all' => Tab::make('All Pending'),
         ];
     }
 }

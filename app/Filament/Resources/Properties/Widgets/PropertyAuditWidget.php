@@ -2,13 +2,12 @@
 
 namespace App\Filament\Resources\Properties\Widgets;
 
-use App\Domain\Property\Models\Property;
-use App\Domain\Audit\Models\Audit;
 use App\Domain\Audit\Enums\AuditStatus;
+use App\Domain\Audit\Models\Audit;
 use App\Filament\Resources\Operations\AuditResource;
+use Filament\Actions\Action;
 use Filament\Widgets\Widget;
 use Illuminate\Database\Eloquent\Model;
-use Filament\Actions\Action;
 
 class PropertyAuditWidget extends Widget
 {
@@ -16,7 +15,7 @@ class PropertyAuditWidget extends Widget
 
     public ?Model $record = null;
 
-    protected int | string | array $columnSpan = 'full';
+    protected int|string|array $columnSpan = 'full';
 
     public function getLatestAudit(): ?Audit
     {
@@ -36,6 +35,7 @@ class PropertyAuditWidget extends Widget
     public function getAuditStats(): array
     {
         $audits = Audit::where('property_id', $this->record->id)->get();
+
         return [
             'total' => $audits->count(),
             'approved' => $audits->where('status', AuditStatus::APPROVED)->count(),

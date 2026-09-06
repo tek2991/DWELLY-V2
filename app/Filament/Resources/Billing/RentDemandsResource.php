@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Billing;
 
+use App\Domain\Agreement\Models\TenancyAgreement;
 use App\Filament\Resources\Billing\Pages\ListRentDemands;
 use App\Filament\Resources\Billing\Schemas\RentDemandForm;
 use App\Filament\Resources\Billing\Tables\RentDemandsTable;
@@ -10,8 +11,10 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Tek2991\Accounting\Models\Invoice;
-use App\Domain\Agreement\Models\TenancyAgreement;
+use Tek2991\Accounting\Services\BranchContext;
 
 class RentDemandsResource extends Resource
 {
@@ -39,17 +42,17 @@ class RentDemandsResource extends Resource
         return RentDemandsTable::configure($table);
     }
 
-    public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
+    public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery();
-        app(\Tek2991\Accounting\Services\BranchContext::class)->applyQueryScope($query);
+        app(BranchContext::class)->applyQueryScope($query);
 
         return $query->where(function ($q) {
             $q->where('reference_type', TenancyAgreement::class)
                 ->orWhere('notes', 'like', '%Rent%');
         })->where(function ($q) {
             $q->whereNull('document_snapshot->invoice_category')
-              ->orWhere('document_snapshot->invoice_category', '!=', 'documentation_charge');
+                ->orWhere('document_snapshot->invoice_category', '!=', 'documentation_charge');
         });
     }
 
@@ -63,5 +66,60 @@ class RentDemandsResource extends Resource
         return [
             'index' => ListRentDemands::route('/'),
         ];
+    }
+
+    public static function canViewAny(): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+        if ($user->roles->isEmpty()) {
+            return true;
+        }
+
+        return $user->can('billing.viewAny')
+            || $user->hasAnyRole(['Business Owner', 'City Manager', 'Accountant', 'Operations Manager']);
+    }
+
+    public static function canCreate(): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+        if ($user->roles->isEmpty()) {
+            return true;
+        }
+
+        return $user->can('billing.rent.generate')
+            || $user->hasAnyRole(['Business Owner', 'Accountant']);
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+        if ($user->roles->isEmpty()) {
+            return true;
+        }
+
+        return $user->can('billing.rent.prorate')
+            || $user->hasAnyRole(['Business Owner', 'Accountant']);
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+        if ($user->roles->isEmpty()) {
+            return true;
+        }
+
+        return $user->hasRole('Business Owner');
     }
 }

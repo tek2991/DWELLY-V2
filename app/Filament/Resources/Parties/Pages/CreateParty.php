@@ -2,10 +2,9 @@
 
 namespace App\Filament\Resources\Parties\Pages;
 
-use App\Filament\Resources\Parties\PartyResource;
-use Filament\Actions;
-use Filament\Resources\Pages\CreateRecord;
 use App\Domain\Party\Actions\CreatePartyAction;
+use App\Filament\Resources\Parties\PartyResource;
+use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Database\Eloquent\Model;
 
 class CreateParty extends CreateRecord
@@ -19,6 +18,7 @@ class CreateParty extends CreateRecord
         unset($data['roles']);
 
         $action = app(CreatePartyAction::class);
+
         return $action->execute($data, $roles, []);
     }
 

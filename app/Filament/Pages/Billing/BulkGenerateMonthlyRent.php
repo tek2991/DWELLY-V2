@@ -5,6 +5,7 @@ namespace App\Filament\Pages\Billing;
 use App\Domain\Agreement\Models\TenancyAgreement;
 use App\Domain\Finance\Services\RentBillingService;
 use App\Domain\Property\Models\Property;
+use App\Filament\Resources\Billing\RentDemandsResource;
 use BackedEnum;
 use Carbon\Carbon;
 use Filament\Actions\Action;
@@ -78,7 +79,19 @@ class BulkGenerateMonthlyRent extends Page
 
     public static function canAccess(): bool
     {
-        return true;
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->roles->isEmpty()) {
+            return true;
+        }
+
+        // Allowed: Business Owner, Accountant, City Manager (preview summary)
+        // Forbidden: Operations Executive, Operations Manager, Demand Manager, Supply Manager
+        return $user->can('billing.rent.generate')
+            || $user->hasAnyRole(['Business Owner', 'Accountant', 'City Manager']);
     }
 
     protected function getHeaderActions(): array
@@ -88,13 +101,13 @@ class BulkGenerateMonthlyRent extends Page
                 ->label('Rent Demands & Collections')
                 ->icon('heroicon-o-banknotes')
                 ->color('gray')
-                ->url(fn (): string => \App\Filament\Resources\Billing\RentDemandsResource::getUrl('index')),
+                ->url(fn (): string => RentDemandsResource::getUrl('index')),
 
             Action::make('operations_hub')
                 ->label('Financial Operations Hub')
                 ->icon('heroicon-o-scale')
                 ->color('gray')
-                ->url(fn (): string => \App\Filament\Pages\Billing\FinancialOperationsHub::getUrl()),
+                ->url(fn (): string => FinancialOperationsHub::getUrl()),
         ];
     }
 
@@ -202,6 +215,7 @@ class BulkGenerateMonthlyRent extends Page
     public function getPreviewData(): array
     {
         $service = app(RentBillingService::class);
+
         return $service->getBulkGenerationPreview($this->month, $this->year, $this->propertyId);
     }
 
@@ -214,7 +228,7 @@ class BulkGenerateMonthlyRent extends Page
             $items = array_filter($items, fn ($i) => $i['status'] === $this->statusFilter);
         }
 
-        if (!empty(trim($this->search))) {
+        if (! empty(trim($this->search))) {
             $term = strtolower(trim($this->search));
             $items = array_filter($items, function ($i) use ($term) {
                 return str_contains(strtolower($i['agreement_code'] ?? ''), $term)
@@ -278,12 +292,15 @@ class BulkGenerateMonthlyRent extends Page
      */
     public function generateSingle(string $agreementId): void
     {
+        abort_unless(auth()->user()?->can('billing.rent.generate') || auth()->user()?->hasAnyRole(['Business Owner', 'Accountant']) || (bool) auth()->user()?->roles->isEmpty(), 403, 'Unauthorized to generate rent demands.');
+
         $agreement = TenancyAgreement::find($agreementId);
-        if (!$agreement) {
+        if (! $agreement) {
             Notification::make()
                 ->title('Agreement not found')
                 ->danger()
                 ->send();
+
             return;
         }
 
@@ -315,6 +332,8 @@ class BulkGenerateMonthlyRent extends Page
      */
     public function generateSelected(): void
     {
+        abort_unless(auth()->user()?->can('billing.rent.generate') || auth()->user()?->hasAnyRole(['Business Owner', 'Accountant']) || (bool) auth()->user()?->roles->isEmpty(), 403, 'Unauthorized to generate rent demands.');
+
         $selectedSummary = $this->getSelectedSummary();
         if ($selectedSummary['count'] === 0) {
             Notification::make()
@@ -322,6 +341,7 @@ class BulkGenerateMonthlyRent extends Page
                 ->body('Please select at least one ready tenancy agreement to generate rent demands.')
                 ->warning()
                 ->send();
+
             return;
         }
 
@@ -347,7 +367,7 @@ class BulkGenerateMonthlyRent extends Page
         if ($summary['count'] > 0) {
             Notification::make()
                 ->title('Bulk Generation Completed')
-                ->body("Successfully generated {$summary['count']} rent demands totaling ₹" . number_format($summary['total_amount'], 2) . " for {$monthName}.")
+                ->body("Successfully generated {$summary['count']} rent demands totaling ₹".number_format($summary['total_amount'], 2)." for {$monthName}.")
                 ->success()
                 ->send();
         } else {
@@ -369,9 +389,12 @@ class BulkGenerateMonthlyRent extends Page
      */
     public function saveDemandAdjustment(string $agreementId, array $data): void
     {
+        abort_unless(auth()->user()?->can('billing.rent.generate') || auth()->user()?->hasAnyRole(['Business Owner', 'Accountant']) || (bool) auth()->user()?->roles->isEmpty(), 403, 'Unauthorized to adjust rent demands.');
+
         $agreement = TenancyAgreement::find($agreementId);
         if (! $agreement) {
             Notification::make()->title('Agreement Not Found')->danger()->send();
+
             return;
         }
 
@@ -406,9 +429,12 @@ class BulkGenerateMonthlyRent extends Page
      */
     public function resetDemandAdjustment(string $agreementId): void
     {
+        abort_unless(auth()->user()?->can('billing.rent.generate') || auth()->user()?->hasAnyRole(['Business Owner', 'Accountant']) || (bool) auth()->user()?->roles->isEmpty(), 403, 'Unauthorized to adjust rent demands.');
+
         $agreement = TenancyAgreement::find($agreementId);
         if (! $agreement) {
             Notification::make()->title('Agreement Not Found')->danger()->send();
+
             return;
         }
 
@@ -436,4 +462,3 @@ class BulkGenerateMonthlyRent extends Page
         }
     }
 }
-

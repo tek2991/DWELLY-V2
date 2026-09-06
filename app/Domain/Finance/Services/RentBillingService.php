@@ -581,7 +581,7 @@ class RentBillingService
     }
 
     /**
-     * Backward-compatible alias for generateRentDemand.
+     * @deprecated Use generateRentDemand() instead. Backward-compatible alias.
      */
     public function generateRentInvoice(TenancyAgreement $agreement, int $month, int $year, array $overrides = []): Invoice
     {
@@ -602,6 +602,9 @@ class RentBillingService
         return $summary['count'];
     }
 
+    /**
+     * @deprecated Use bulkGenerateRentDemands() instead. Backward-compatible alias.
+     */
     public function bulkGenerateRentInvoices(
         int $month,
         int $year,

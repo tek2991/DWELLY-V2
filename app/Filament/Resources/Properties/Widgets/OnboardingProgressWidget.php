@@ -2,12 +2,16 @@
 
 namespace App\Filament\Resources\Properties\Widgets;
 
+use App\Domain\Auth\Enums\RoleName;
+use App\Domain\Property\Services\PropertyOnboardingValidator;
+use App\Filament\Resources\Properties\PropertyResource;
 use Filament\Actions\Action;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
+use Filament\Notifications\Notification;
 use Filament\Widgets\Widget;
 use Illuminate\Database\Eloquent\Model;
 use Livewire\Attributes\On;
@@ -21,7 +25,7 @@ class OnboardingProgressWidget extends Widget implements HasActions, HasForms
 
     public ?Model $record = null;
 
-    protected int | string | array $columnSpan = 'full';
+    protected int|string|array $columnSpan = 'full';
 
     protected $listeners = [
         'refresh-onboarding-progress' => 'refreshProgress',
@@ -46,7 +50,7 @@ class OnboardingProgressWidget extends Widget implements HasActions, HasForms
     public function canUserReview(): bool
     {
         $user = auth()->user();
-        if (!$user) {
+        if (! $user) {
             return false;
         }
 
@@ -54,7 +58,17 @@ class OnboardingProgressWidget extends Widget implements HasActions, HasForms
             return true;
         }
 
-        return $user->hasAnyRole(['Business Owner', 'Operations Manager', 'Admin', 'Super Admin']);
+        if ($this->record && $user->can('review', $this->record)) {
+            return true;
+        }
+
+        return $user->hasAnyRole([
+            RoleName::BUSINESS_OWNER,
+            RoleName::CITY_MANAGER,
+            RoleName::OPERATIONS_MANAGER,
+            'Admin',
+            'Super Admin',
+        ]);
     }
 
     public function submitForReviewAction(): Action
@@ -63,27 +77,28 @@ class OnboardingProgressWidget extends Widget implements HasActions, HasForms
             ->label('Submit for Review')
             ->icon('heroicon-o-paper-airplane')
             ->color('primary')
+            ->visible(fn (): bool => (bool) $this->record && (auth()->user()?->can('update', $this->record) ?? false))
             ->requiresConfirmation()
             ->modalHeading('Submit for Operations Review')
             ->modalDescription('Are you sure all onboarding checklist steps are complete and ready for operations review?')
             ->modalIcon('heroicon-o-paper-airplane')
             ->modalSubmitActionLabel('Yes, Submit for Review')
             ->disabled(function (): bool {
-                if (!$this->record) {
+                if (! $this->record) {
                     return true;
                 }
 
-                $validationData = app(\App\Domain\Property\Services\PropertyOnboardingValidator::class)->validate($this->record);
+                $validationData = app(PropertyOnboardingValidator::class)->validate($this->record);
                 $status = $this->record->onboardingProject?->status;
 
                 return ($validationData['progress'] ?? 0) != 100 || in_array($status, ['Pending Review', 'Activated']);
             })
             ->action(function () {
-                if (!$this->record) {
+                if (! $this->record) {
                     return;
                 }
 
-                $validationData = app(\App\Domain\Property\Services\PropertyOnboardingValidator::class)->validate($this->record);
+                $validationData = app(PropertyOnboardingValidator::class)->validate($this->record);
                 if (($validationData['progress'] ?? 0) != 100) {
                     return;
                 }
@@ -100,7 +115,7 @@ class OnboardingProgressWidget extends Widget implements HasActions, HasForms
 
                 $this->record->refresh();
 
-                \Filament\Notifications\Notification::make()
+                Notification::make()
                     ->success()
                     ->title('Submitted for Review')
                     ->body('Onboarding checklist submitted. Awaiting Operations Manager review and activation.')
@@ -121,14 +136,14 @@ class OnboardingProgressWidget extends Widget implements HasActions, HasForms
             ->modalIcon('heroicon-o-check-badge')
             ->modalSubmitActionLabel('Yes, Approve & Activate')
             ->disabled(function (): bool {
-                if (!$this->record) {
+                if (! $this->record) {
                     return true;
                 }
 
                 return $this->record->onboardingProject?->status === 'Activated';
             })
             ->action(function () {
-                if (!$this->record) {
+                if (! $this->record) {
                     return;
                 }
 
@@ -147,13 +162,13 @@ class OnboardingProgressWidget extends Widget implements HasActions, HasForms
                     ->causedBy(auth()->user())
                     ->log('Onboarding: Approved & Activated Property (Status updated to Vacant)');
 
-                \Filament\Notifications\Notification::make()
+                Notification::make()
                     ->success()
                     ->title('Property Activated')
                     ->body('All onboarding steps approved. Property is now Vacant.')
                     ->send();
 
-                $this->redirect(\App\Filament\Resources\Properties\PropertyResource::getUrl('index'));
+                $this->redirect(PropertyResource::getUrl('index'));
             });
     }
 
@@ -175,7 +190,7 @@ class OnboardingProgressWidget extends Widget implements HasActions, HasForms
                     ->rows(3),
             ])
             ->action(function (array $data) {
-                if (!$this->record) {
+                if (! $this->record) {
                     return;
                 }
 
@@ -192,11 +207,11 @@ class OnboardingProgressWidget extends Widget implements HasActions, HasForms
                     ->performedOn($this->record)
                     ->causedBy(auth()->user())
                     ->withProperties(['review_notes' => $reviewNotes])
-                    ->log('Onboarding: Revisions Requested — Feedback: ' . $reviewNotes);
+                    ->log('Onboarding: Revisions Requested — Feedback: '.$reviewNotes);
 
                 $this->record->refresh();
 
-                \Filament\Notifications\Notification::make()
+                Notification::make()
                     ->warning()
                     ->title('Revisions Requested')
                     ->body('Onboarding status updated to Changes Requested. Feedback sent to team.')

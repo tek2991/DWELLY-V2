@@ -8,8 +8,6 @@ use App\Domain\Property\Models\PropertyUtility;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Select;
@@ -20,7 +18,6 @@ use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
-use Filament\Tables\Columns\SpatieMediaLibraryImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -60,7 +57,7 @@ class ItemsRelationManager extends RelationManager
                         $propertyId = $livewire->getOwnerRecord()->property_id;
                         $type = $get('itemable_type');
 
-                        if (!$propertyId || !$type || $type === 'general') {
+                        if (! $propertyId || ! $type || $type === 'general') {
                             return [];
                         }
 
@@ -68,7 +65,7 @@ class ItemsRelationManager extends RelationManager
                             return PropertyRoom::where('property_id', $propertyId)
                                 ->get()
                                 ->mapWithKeys(fn ($r) => [
-                                    $r->id => $r->custom_name ?: ($r->roomDefinition?->name ?? "Room #{$r->id}")
+                                    $r->id => $r->custom_name ?: ($r->roomDefinition?->name ?? "Room #{$r->id}"),
                                 ]);
                         }
 
@@ -76,7 +73,7 @@ class ItemsRelationManager extends RelationManager
                             return PropertyInventory::where('property_id', $propertyId)
                                 ->get()
                                 ->mapWithKeys(fn ($i) => [
-                                    $i->id => ($i->inventoryType?->name ?? "Item #{$i->id}") . " (Qty: {$i->count})"
+                                    $i->id => ($i->inventoryType?->name ?? "Item #{$i->id}")." (Qty: {$i->count})",
                                 ]);
                         }
 
@@ -84,7 +81,7 @@ class ItemsRelationManager extends RelationManager
                             return PropertyUtility::where('property_id', $propertyId)
                                 ->get()
                                 ->mapWithKeys(fn ($u) => [
-                                    $u->id => ($u->utilityType?->name ?? "Utility #{$u->id}") . " (Paid by: {$u->paid_by})"
+                                    $u->id => ($u->utilityType?->name ?? "Utility #{$u->id}")." (Paid by: {$u->paid_by})",
                                 ]);
                         }
 
@@ -140,18 +137,19 @@ class ItemsRelationManager extends RelationManager
                 TextColumn::make('item_name')
                     ->label('Target Item')
                     ->state(function ($record) {
-                        if (!$record->itemable) {
+                        if (! $record->itemable) {
                             return 'General Property Area';
                         }
                         if ($record->itemable instanceof PropertyRoom) {
-                            return '🚪 Room: ' . ($record->itemable->custom_name ?: ($record->itemable->roomDefinition?->name ?? "Room #{$record->itemable->id}"));
+                            return '🚪 Room: '.($record->itemable->custom_name ?: ($record->itemable->roomDefinition?->name ?? "Room #{$record->itemable->id}"));
                         }
                         if ($record->itemable instanceof PropertyInventory) {
-                            return '📦 Inventory: ' . ($record->itemable->inventoryType?->name ?? "Item #{$record->itemable->id}");
+                            return '📦 Inventory: '.($record->itemable->inventoryType?->name ?? "Item #{$record->itemable->id}");
                         }
                         if ($record->itemable instanceof PropertyUtility) {
-                            return '⚡ Utility: ' . ($record->itemable->utilityType?->name ?? "Utility #{$record->itemable->id}");
+                            return '⚡ Utility: '.($record->itemable->utilityType?->name ?? "Utility #{$record->itemable->id}");
                         }
+
                         return 'Item';
                     })
                     ->weight('bold')
@@ -173,23 +171,25 @@ class ItemsRelationManager extends RelationManager
                     ->state(function ($record) {
                         $count = $record->getMedia('issue_photos')->count();
                         if ($count === 0) {
-                            return "<span style=\"display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 500; background: rgba(128, 128, 128, 0.1); color: #94a3b8;\">No Photos</span>";
+                            return '<span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 500; background: rgba(128, 128, 128, 0.1); color: #94a3b8;">No Photos</span>';
                         }
-                        return "<span style=\"display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600; background: rgba(37, 99, 235, 0.1); color: #2563eb; cursor: pointer;\" title=\"Click to inspect photos\">📸 {$count} Photo" . ($count > 1 ? 's' : '') . "</span>";
+
+                        return "<span style=\"display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600; background: rgba(37, 99, 235, 0.1); color: #2563eb; cursor: pointer;\" title=\"Click to inspect photos\">📸 {$count} Photo".($count > 1 ? 's' : '').'</span>';
                     })
                     ->action(
                         Action::make('viewDefectPhotosModal')
                             ->label('Inspect Defect Photos')
-                            ->modalHeading(fn ($record) => 'Defect Photos: ' . ($record->issue_description ?: 'Defect Item'))
+                            ->modalHeading(fn ($record) => 'Defect Photos: '.($record->issue_description ?: 'Defect Item'))
                             ->modalDescription(function ($record) {
                                 $target = 'General Property Area';
                                 if ($record->itemable instanceof PropertyRoom) {
-                                    $target = '🚪 Room: ' . ($record->itemable->custom_name ?: ($record->itemable->roomDefinition?->name ?? "Room #{$record->itemable->id}"));
+                                    $target = '🚪 Room: '.($record->itemable->custom_name ?: ($record->itemable->roomDefinition?->name ?? "Room #{$record->itemable->id}"));
                                 } elseif ($record->itemable instanceof PropertyInventory) {
-                                    $target = '📦 Inventory: ' . ($record->itemable->inventoryType?->name ?? "Item #{$record->itemable->id}");
+                                    $target = '📦 Inventory: '.($record->itemable->inventoryType?->name ?? "Item #{$record->itemable->id}");
                                 } elseif ($record->itemable instanceof PropertyUtility) {
-                                    $target = '⚡ Utility: ' . ($record->itemable->utilityType?->name ?? "Utility #{$record->itemable->id}");
+                                    $target = '⚡ Utility: '.($record->itemable->utilityType?->name ?? "Utility #{$record->itemable->id}");
                                 }
+
                                 return "Target: {$target} &bull; Click any thumbnail to open fullscreen swipe lightbox.";
                             })
                             ->modalWidth('3xl')

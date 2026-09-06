@@ -3,8 +3,8 @@
 namespace App\Filament\Resources\OwnerPayouts\Tables;
 
 use App\Domain\Finance\Actions\ProcessOwnerPayoutAction;
-use App\Domain\Finance\Services\OwnerPayoutService;
 use App\Domain\Finance\Models\OwnerPayout;
+use App\Domain\Finance\Services\OwnerPayoutService;
 use App\Domain\Property\Models\Property;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -21,6 +21,9 @@ use Filament\Schemas\Components\View;
 use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Tek2991\Accounting\Enums\AccountType;
+use Tek2991\Accounting\Enums\SystemRole;
+use Tek2991\Accounting\Facades\Accounting;
 use Tek2991\Accounting\Models\Account;
 
 class OwnerPayoutsTable
@@ -98,6 +101,7 @@ class OwnerPayoutsTable
                     ->label('Generate Owner Payout')
                     ->icon('heroicon-o-banknotes')
                     ->color('primary')
+                    ->visible(fn (): bool => auth()->user()?->can('payout.disburse') || auth()->user()?->hasAnyRole(['Business Owner', 'Accountant']) || (bool) auth()->user()?->roles->isEmpty())
                     ->modalHeading('Generate Single Owner Payout')
                     ->modalWidth(Width::FourExtraLarge)
                     ->modalDescription('Review the billing period, gross rent, management fee, and advance deductions before disbursing.')
@@ -105,7 +109,7 @@ class OwnerPayoutsTable
                     ->form([
                         Select::make('property_id')
                             ->label('Property')
-                            ->options(fn() => Property::pluck('building_name', 'id'))
+                            ->options(fn () => Property::pluck('building_name', 'id'))
                             ->searchable()
                             ->required()
                             ->live()
@@ -201,9 +205,9 @@ class OwnerPayoutsTable
 
                         CheckboxList::make('maintenance_invoice_ids')
                             ->label('Select Pending Maintenance Invoices / Tickets to Deduct')
-                            ->options(fn(Get $get, OwnerPayoutService $service) => ($pId = $get('property_id')) && ($prop = Property::find($pId)) ? $service->getPendingMaintenanceOptions($prop) : [])
-                            ->default(fn(Get $get, OwnerPayoutService $service) => ($pId = $get('property_id')) && ($prop = Property::find($pId)) ? array_keys($service->getPendingMaintenanceOptions($prop)) : [])
-                            ->visible(fn(Get $get, OwnerPayoutService $service) => ($pId = $get('property_id')) && ($prop = Property::find($pId)) && !empty($service->getPendingMaintenanceOptions($prop)))
+                            ->options(fn (Get $get, OwnerPayoutService $service) => ($pId = $get('property_id')) && ($prop = Property::find($pId)) ? $service->getPendingMaintenanceOptions($prop) : [])
+                            ->default(fn (Get $get, OwnerPayoutService $service) => ($pId = $get('property_id')) && ($prop = Property::find($pId)) ? array_keys($service->getPendingMaintenanceOptions($prop)) : [])
+                            ->visible(fn (Get $get, OwnerPayoutService $service) => ($pId = $get('property_id')) && ($prop = Property::find($pId)) && ! empty($service->getPendingMaintenanceOptions($prop)))
                             ->live()
                             ->afterStateUpdated(function (Set $set, Get $get, $state, OwnerPayoutService $service) {
                                 $pId = $get('property_id');
@@ -237,19 +241,19 @@ class OwnerPayoutsTable
                         Select::make('bank_account_id')
                             ->label('Disbursement Bank Account')
                             ->options(function () {
-                                $defaultId = \Tek2991\Accounting\Facades\Accounting::getDefaultBankAccountId();
+                                $defaultId = Accounting::getDefaultBankAccountId();
 
-                                return Account::where('type', \Tek2991\Accounting\Enums\AccountType::Asset)
+                                return Account::where('type', AccountType::Asset)
                                     ->where(function ($q) {
                                         $q->whereIn('system_role', [
-                                            \Tek2991\Accounting\Enums\SystemRole::Bank,
-                                            \Tek2991\Accounting\Enums\SystemRole::Cash,
+                                            SystemRole::Bank,
+                                            SystemRole::Cash,
                                         ])
-                                        ->orWhere('code', 'like', '11%')
-                                        ->orWhere('name', 'like', '%Current Account%')
-                                        ->orWhere('name', 'like', '%Savings Account%')
-                                        ->orWhere('name', 'like', '%Bank%')
-                                        ->orWhere('name', 'like', '%Cash%');
+                                            ->orWhere('code', 'like', '11%')
+                                            ->orWhere('name', 'like', '%Current Account%')
+                                            ->orWhere('name', 'like', '%Savings Account%')
+                                            ->orWhere('name', 'like', '%Bank%')
+                                            ->orWhere('name', 'like', '%Cash%');
                                     })
                                     ->where('is_control_account', false)
                                     ->get()
@@ -257,10 +261,11 @@ class OwnerPayoutsTable
                                         if ($acc->id === $defaultId) {
                                             return [$acc->id => "<div style='display: flex; align-items: center; justify-content: space-between; width: 100%;'><span>{$acc->name}</span><span style='font-size: 10px; font-weight: 700; background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 9999px; text-transform: uppercase;'>Default</span></div>"];
                                         }
+
                                         return [$acc->id => "<div>{$acc->name}</div>"];
                                     });
                             })
-                            ->default(fn () => \Tek2991\Accounting\Facades\Accounting::getDefaultBankAccountId())
+                            ->default(fn () => Accounting::getDefaultBankAccountId())
                             ->allowHtml()
                             ->searchable()
                             ->preload()
@@ -271,6 +276,8 @@ class OwnerPayoutsTable
                             ->columnSpanFull(),
                     ])
                     ->action(function (array $data) {
+                        abort_unless(auth()->user()?->can('payout.disburse') || auth()->user()?->hasAnyRole(['Business Owner', 'Accountant']) || (bool) auth()->user()?->roles->isEmpty(), 403, 'Unauthorized to disburse owner payouts.');
+
                         $property = Property::findOrFail($data['property_id']);
                         $payout = app(ProcessOwnerPayoutAction::class)->execute(
                             $property,
@@ -287,10 +294,10 @@ class OwnerPayoutsTable
                                 'notes' => $data['notes'] ?? null,
                             ]
                         );
-                        
+
                         Notification::make()
                             ->title('Owner Payout Processed')
-                            ->body("Disbursed net amount of ₹" . number_format($payout->amount, 2) . " for {$property->building_name}")
+                            ->body('Disbursed net amount of ₹'.number_format($payout->amount, 2)." for {$property->building_name}")
                             ->success()
                             ->send();
                     }),
@@ -301,6 +308,7 @@ class OwnerPayoutsTable
                         ->label('Owner Monthly Report (PDF)')
                         ->icon('heroicon-o-document-chart-bar')
                         ->color('success')
+                        ->visible(fn (): bool => auth()->user()?->can('payout.statement.generate') || auth()->user()?->hasAnyRole(['Business Owner', 'City Manager', 'Supply Manager', 'Accountant']) || (bool) auth()->user()?->roles->isEmpty())
                         ->modalHeading(fn (OwnerPayout $record) => "Owner Monthly Performance & Payout Report - {$record->property?->building_name}")
                         ->modalWidth(Width::SevenExtraLarge)
                         ->modalContent(fn (OwnerPayout $record) => view('components.payout-pdf-modal', ['payout' => $record]))
@@ -311,7 +319,7 @@ class OwnerPayoutsTable
                         ->label('Owner Charges Invoice (PDF)')
                         ->icon('heroicon-o-document-text')
                         ->color('primary')
-                        ->visible(fn (OwnerPayout $record) => !empty($record->commission_invoice_id))
+                        ->visible(fn (OwnerPayout $record) => ! empty($record->commission_invoice_id))
                         ->modalHeading(fn (OwnerPayout $record) => "Owner Charges Tax Invoice #{$record->commissionInvoice?->invoice_number}")
                         ->modalWidth(Width::SevenExtraLarge)
                         ->modalContent(fn (OwnerPayout $record) => view('components.invoice-pdf-modal', ['invoice' => $record->commissionInvoice]))
@@ -324,5 +332,3 @@ class OwnerPayoutsTable
             ->toolbarActions([]);
     }
 }
-
-

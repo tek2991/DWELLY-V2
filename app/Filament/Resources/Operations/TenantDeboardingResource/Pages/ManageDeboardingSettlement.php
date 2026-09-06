@@ -27,11 +27,33 @@ class ManageDeboardingSettlement extends EditRecord
 
     protected static ?string $title = 'Deboarding – Security Deposit Settlement & Refund';
 
+    public static function canAccess(array $parameters = []): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->roles->isEmpty()) {
+            return true;
+        }
+
+        // Operations Executive, Demand Manager, and Supply Manager are strictly barred from Settlement!
+        if ($user->hasAnyRole(['Operations Executive', 'Demand Manager', 'Supply Manager']) && ! $user->hasAnyRole(['Business Owner', 'City Manager', 'Operations Manager', 'Accountant'])) {
+            return false;
+        }
+
+        return $user->can('deboarding.settlement.draft')
+            || $user->can('deboarding.settlement.approve')
+            || $user->hasAnyRole(['Business Owner', 'City Manager', 'Operations Manager', 'Accountant']);
+    }
+
     protected function getHeaderActions(): array
     {
         /** @var TenantDeboarding $record */
         $record = $this->getRecord();
         $isCompleted = $record && $record->status === DeboardingStatus::COMPLETED;
+        $canRecalculate = auth()->user()?->hasAnyRole(['Business Owner', 'City Manager', 'Operations Manager', 'Accountant']) || auth()->user()?->roles->isEmpty();
 
         return [
             Action::make('recalculateSettlement')
@@ -39,6 +61,7 @@ class ManageDeboardingSettlement extends EditRecord
                 ->icon('heroicon-o-calculator')
                 ->color('gray')
                 ->disabled($isCompleted)
+                ->visible($canRecalculate)
                 ->action(function () use ($record) {
                     $service = app(TenancyDeboardingService::class);
                     $result = $service->calculateSettlement($record);

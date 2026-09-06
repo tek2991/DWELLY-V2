@@ -2,20 +2,15 @@
 
 namespace App\Filament\Resources\Properties\RelationManagers;
 
-use App\Domain\Maintenance\Enums\MaintenancePriority;
-use App\Domain\Maintenance\Enums\MaintenanceStatus;
-use App\Domain\Maintenance\Enums\PayerType;
-use App\Domain\Maintenance\Services\MaintenanceAuditTriggerService;
 use App\Filament\Resources\Operations\MaintenanceRequestResource;
-use Filament\Actions\Action;
+use App\Filament\Resources\Properties\Pages\OnboardingDashboard;
 use Filament\Actions\CreateAction;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 
 class MaintenanceRequestsRelationManager extends RelationManager
 {
@@ -23,9 +18,9 @@ class MaintenanceRequestsRelationManager extends RelationManager
 
     protected static ?string $title = 'Maintenance Requests';
 
-    public static function canViewForRecord(\Illuminate\Database\Eloquent\Model $ownerRecord, string $pageClass): bool
+    public static function canViewForRecord(Model $ownerRecord, string $pageClass): bool
     {
-        if ($pageClass === \App\Filament\Resources\Properties\Pages\OnboardingDashboard::class) {
+        if ($pageClass === OnboardingDashboard::class) {
             return false;
         }
 

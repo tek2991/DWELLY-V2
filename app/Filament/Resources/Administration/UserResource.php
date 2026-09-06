@@ -2,13 +2,21 @@
 
 namespace App\Filament\Resources\Administration;
 
+use App\Domain\Auth\Enums\RoleName;
+use App\Filament\Clusters\AdministrationCluster;
 use App\Filament\Resources\Administration\UserResource\Pages;
 use App\Models\User;
+use Filament\Actions\Action;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
 use Filament\Forms;
-use Filament\Schemas\Schema;
 use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Hash;
 
 class UserResource extends Resource
@@ -16,8 +24,66 @@ class UserResource extends Resource
     protected static ?string $model = User::class;
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-users';
-    protected static ?string $cluster = \App\Filament\Clusters\AdministrationCluster::class;
+
+    protected static ?string $cluster = AdministrationCluster::class;
+
     protected static ?int $navigationSort = 2;
+
+    public static function canViewAny(): bool
+    {
+        return auth()->user()?->can('viewAny', User::class) ?? false;
+    }
+
+    public static function canCreate(): bool
+    {
+        return auth()->user()?->can('create', User::class) ?? false;
+    }
+
+    public static function canEdit(?Model $record = null): bool
+    {
+        if (! $record) {
+            return auth()->user()?->can('create', User::class) ?? false;
+        }
+
+        return auth()->user()?->can('update', $record) ?? false;
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return auth()->user()?->can('delete', $record) ?? false;
+    }
+
+    public static function canDeleteAny(): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        return $user->hasRole(RoleName::BUSINESS_OWNER) || $user->can('admin.users.delete') || $user->roles->isEmpty();
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+        $user = auth()->user();
+
+        if (! $user || $user->hasRole(RoleName::BUSINESS_OWNER) || $user->roles->isEmpty()) {
+            return $query;
+        }
+
+        if ($user->hasRole(RoleName::CITY_MANAGER)) {
+            $branchIds = $user->branches->pluck('id')->toArray();
+
+            return $query->where(function ($q) use ($branchIds, $user) {
+                $q->whereHas('branches', function ($b) use ($branchIds) {
+                    $b->whereIn('branches.id', $branchIds);
+                })->orWhere('id', $user->id);
+            });
+        }
+
+        return $query;
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -43,10 +109,18 @@ class UserResource extends Resource
                 Forms\Components\Select::make('roles')
                     ->multiple()
                     ->relationship('roles', 'name')
-                    ->preload(),
+                    ->getOptionLabelFromRecordUsing(fn ($record) => $record->display_name ? "{$record->display_name} ({$record->name})" : $record->name)
+                    ->preload()
+                    ->visible(fn () => auth()->user()?->can('admin.roles.assign') || auth()->user()?->hasRole(RoleName::BUSINESS_OWNER)),
                 Forms\Components\Select::make('branches')
                     ->multiple()
-                    ->relationship('branches', 'name')
+                    ->relationship(
+                        'branches',
+                        'name',
+                        modifyQueryUsing: fn ($query) => (auth()->user()?->hasRole(RoleName::BUSINESS_OWNER) || auth()->user()?->roles->isEmpty())
+                            ? $query
+                            : $query->whereIn('branches.id', auth()->user()?->branches->pluck('id') ?? [])
+                    )
                     ->preload(),
             ]);
     }
@@ -77,18 +151,19 @@ class UserResource extends Resource
                     ->boolean(),
             ])
             ->actions([
-                \Filament\Actions\EditAction::make(),
-                \Filament\Actions\Action::make('toggle_status')
+                EditAction::make(),
+                Action::make('toggle_status')
                     ->label(fn (User $record) => $record->is_active ? 'Block' : 'Enable')
                     ->color(fn (User $record) => $record->is_active ? 'danger' : 'success')
                     ->icon(fn (User $record) => $record->is_active ? 'heroicon-o-no-symbol' : 'heroicon-o-check-circle')
+                    ->visible(fn (User $record) => auth()->user()?->can('update', $record) ?? false)
                     ->action(function (User $record) {
-                        $record->update(['is_active' => !$record->is_active]);
+                        $record->update(['is_active' => ! $record->is_active]);
                     }),
             ])
             ->bulkActions([
-                \Filament\Actions\BulkActionGroup::make([
-                    \Filament\Actions\DeleteBulkAction::make(),
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ]);
     }

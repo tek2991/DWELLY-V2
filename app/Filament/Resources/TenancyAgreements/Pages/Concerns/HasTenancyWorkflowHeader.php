@@ -5,19 +5,16 @@ namespace App\Filament\Resources\TenancyAgreements\Pages\Concerns;
 use App\Domain\Agreement\Actions\ActivateTenancyAction;
 use App\Domain\Agreement\Actions\RenewTenancyAgreementAction;
 use App\Domain\Agreement\Services\TenancyDeboardingService;
+use App\Domain\Auth\Enums\RoleName;
 use App\Domain\Finance\Services\AccountingProvisioningService;
+use App\Filament\Resources\Operations\TenantDeboardingResource;
 use App\Filament\Resources\TenancyAgreements\Schemas\TenancyAgreementForm;
 use App\Filament\Resources\TenancyAgreements\TenancyAgreementResource;
-use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
-use Filament\Schemas\Components\Grid;
-use Filament\Schemas\Components\Utilities\Get;
-use Filament\Schemas\Components\Utilities\Set;
 use Illuminate\Contracts\View\View;
 
 trait HasTenancyWorkflowHeader
@@ -48,6 +45,16 @@ trait HasTenancyWorkflowHeader
                 ->title('Tenancy Already Active')
                 ->body('This tenancy agreement is already active.')
                 ->info()
+                ->send();
+
+            return;
+        }
+
+        if (auth()->check() && ! auth()->user()->can('activate', $record)) {
+            Notification::make()
+                ->title('Unauthorized')
+                ->body('You do not have permission to activate this tenancy agreement.')
+                ->danger()
                 ->send();
 
             return;
@@ -93,6 +100,7 @@ trait HasTenancyWorkflowHeader
                 ->label('Initiate Deboarding & Exit Audit')
                 ->icon('heroicon-o-arrow-left-on-rectangle')
                 ->color('warning')
+                ->authorize(fn () => auth()->user()?->can('deboard', $this->getRecord()) ?? false)
                 ->modalHeading('Initiate Tenant Deboarding & Trigger Exit Audit')
                 ->modalDescription('Record notice dates, reason for exit, and automatically trigger the Move-Out Verification Audit.')
                 ->form([
@@ -125,11 +133,11 @@ trait HasTenancyWorkflowHeader
 
                     Notification::make()
                         ->title('Deboarding Initiated & Exit Audit Triggered')
-                        ->body("Notice recorded. Move-Out Verification Audit has been created.")
+                        ->body('Notice recorded. Move-Out Verification Audit has been created.')
                         ->success()
                         ->send();
 
-                    $this->redirect(\App\Filament\Resources\Operations\TenantDeboardingResource::getUrl('edit', ['record' => $deboarding->id]));
+                    $this->redirect(TenantDeboardingResource::getUrl('edit', ['record' => $deboarding->id]));
                 })
                 ->extraAttributes(['style' => 'display: none;']),
 
@@ -137,6 +145,7 @@ trait HasTenancyWorkflowHeader
                 ->label('Activate Tenancy')
                 ->icon('heroicon-o-bolt')
                 ->color('success')
+                ->authorize(fn () => auth()->user()?->can('activate', $this->getRecord()) ?? false)
                 ->requiresConfirmation()
                 ->modalHeading('Activate Tenancy Agreement')
                 ->modalDescription('Are you sure you want to activate this tenancy agreement? This will mark the agreement as active, transition property status to occupied, and permanently lock the linked Move-In Audit.')
@@ -148,6 +157,7 @@ trait HasTenancyWorkflowHeader
                 ->label('Renew Tenancy Agreement')
                 ->icon('heroicon-o-arrow-path')
                 ->color('purple')
+                ->authorize(fn () => auth()->user()?->can('renew', $this->getRecord()) ?? false)
                 ->modalHeading('Renew Tenancy Agreement & Draft 11-Month Lease')
                 ->modalDescription('Carries forward tenant KYC, inventory audit references, and security deposit, establishing a renewed 11-month lease term with updated commercial terms.')
                 ->modalSubmitActionLabel('Draft Renewal Agreement')
@@ -171,13 +181,14 @@ trait HasTenancyWorkflowHeader
                 ->label('Generate Documentation Invoice')
                 ->icon('heroicon-o-document-currency-rupee')
                 ->color('primary')
+                ->authorize(fn () => auth()->user()?->hasAnyRole([RoleName::BUSINESS_OWNER, RoleName::CITY_MANAGER, RoleName::ACCOUNTANT]) ?? false)
                 ->requiresConfirmation()
                 ->modalHeading('Generate Documentation Fee Invoice')
                 ->modalDescription(function () {
                     $record = $this->getRecord();
                     $fee = (float) ($record?->documentation_charge ?? ($record?->is_renewal ? 1000.00 : 1500.00));
 
-                    return 'This will generate and post a firm Sales Invoice of ₹' . number_format($fee, 2) . " to the tenant's account for agreement documentation and legal execution.";
+                    return 'This will generate and post a firm Sales Invoice of ₹'.number_format($fee, 2)." to the tenant's account for agreement documentation and legal execution.";
                 })
                 ->modalSubmitActionLabel('Yes, Generate Invoice')
                 ->action(function () {

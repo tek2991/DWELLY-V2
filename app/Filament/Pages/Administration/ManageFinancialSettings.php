@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages\Administration;
 
+use App\Domain\Auth\Enums\RoleName;
 use App\Domain\Shared\Services\SettingService;
 use App\Filament\Clusters\AdministrationCluster;
 use Filament\Actions\Action;
@@ -32,6 +33,19 @@ class ManageFinancialSettings extends Page implements HasForms
 
     public ?array $data = [];
 
+    public static function canAccess(): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        return $user->hasRole(RoleName::BUSINESS_OWNER)
+            || $user->can('admin.masters.viewAny')
+            || $user->hasAnyRole([RoleName::CITY_MANAGER, RoleName::ACCOUNTANT])
+            || $user->roles->isEmpty();
+    }
+
     public function mount(): void
     {
         $this->form->fill([
@@ -43,6 +57,10 @@ class ManageFinancialSettings extends Page implements HasForms
 
     public function form(Schema $schema): Schema
     {
+        $canManage = auth()->user()?->hasRole(RoleName::BUSINESS_OWNER)
+            || auth()->user()?->can('admin.masters.manage')
+            || (auth()->user()?->roles->isEmpty() ?? true);
+
         return $schema
             ->schema([
                 Section::make('💵 Maintenance Quotation & Pricing Defaults')
@@ -57,6 +75,7 @@ class ManageFinancialSettings extends Page implements HasForms
                                     ->suffix('%')
                                     ->minValue(0)
                                     ->maxValue(100)
+                                    ->disabled(! $canManage)
                                     ->required(),
 
                                 TextInput::make('default_gst_percentage')
@@ -66,6 +85,7 @@ class ManageFinancialSettings extends Page implements HasForms
                                     ->suffix('%')
                                     ->minValue(0)
                                     ->maxValue(100)
+                                    ->disabled(! $canManage)
                                     ->required(),
 
                                 TextInput::make('default_quotation_validity_days')
@@ -75,6 +95,7 @@ class ManageFinancialSettings extends Page implements HasForms
                                     ->suffix('days')
                                     ->minValue(1)
                                     ->maxValue(365)
+                                    ->disabled(! $canManage)
                                     ->required(),
                             ]),
                     ]),
@@ -84,6 +105,14 @@ class ManageFinancialSettings extends Page implements HasForms
 
     protected function getFormActions(): array
     {
+        $canManage = auth()->user()?->hasRole(RoleName::BUSINESS_OWNER)
+            || auth()->user()?->can('admin.masters.manage')
+            || (auth()->user()?->roles->isEmpty() ?? true);
+
+        if (! $canManage) {
+            return [];
+        }
+
         return [
             Action::make('save')
                 ->label('Save Financial Settings')
@@ -95,6 +124,14 @@ class ManageFinancialSettings extends Page implements HasForms
 
     public function save(): void
     {
+        $canManage = auth()->user()?->hasRole(RoleName::BUSINESS_OWNER)
+            || auth()->user()?->can('admin.masters.manage')
+            || (auth()->user()?->roles->isEmpty() ?? true);
+
+        if (! $canManage) {
+            abort(403, 'Unauthorized to modify financial system settings.');
+        }
+
         $state = $this->form->getState();
 
         SettingService::set(

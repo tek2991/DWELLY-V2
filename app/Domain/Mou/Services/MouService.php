@@ -385,6 +385,7 @@ class MouService
                 PartyUpdated::dispatch($party, 'owner');
             }
 
+            $party->load(['individual', 'organization', 'addresses']);
             $ownerDetails = $this->getOwnerDetails($party, $mou->opportunity);
             $mouUpdateData = [
                 'party_id' => $party->id,
@@ -423,7 +424,7 @@ class MouService
             }
 
             // Reload and provision accounting entity
-            $party->loadMissing(['individual', 'organization', 'bankAccounts', 'addresses', 'ownerProfile', 'tenantProfile', 'vendorProfile']);
+            $party->load(['individual', 'organization', 'bankAccounts', 'addresses', 'ownerProfile', 'tenantProfile', 'vendorProfile']);
             $this->accountingProvisioning->ensurePartyAccountingReady($party);
         });
     }

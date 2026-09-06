@@ -29,26 +29,26 @@ class ViewOpportunity extends ViewRecord
         $statusLabel = e($status->getLabel());
 
         $ownerBadge = $record->owner_name
-            ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200">👤 ' . e($record->owner_name) . '</span>'
+            ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200">👤 '.e($record->owner_name).'</span>'
             : '';
 
         $rentBadge = $record->expected_rent > 0
-            ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200">💰 ₹' . number_format((float) $record->expected_rent) . ' /mo</span>'
+            ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200">💰 ₹'.number_format((float) $record->expected_rent).' /mo</span>'
             : '';
 
         $mouBadge = '';
         if ($record->mou) {
-            $mouBadge = '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200">📄 MOU #' . e($record->mou->number) . '</span>';
+            $mouBadge = '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200">📄 MOU #'.e($record->mou->number).'</span>';
         } elseif ($record->status === OpportunityStatus::READY_FOR_MOU) {
             $mouBadge = '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200 animate-pulse">⏳ Ready for MOU Creation</span>';
         }
 
         return new HtmlString(
-            '<div class="flex items-center gap-2 text-sm text-gray-500 mt-1 flex-wrap">' .
-            '<span>Status: <strong class="text-gray-900 dark:text-gray-100">' . $statusLabel . '</strong></span>' .
-            ($ownerBadge ? '<span class="text-gray-300 dark:text-gray-700">&bull;</span>' . $ownerBadge : '') .
-            ($rentBadge ? '<span class="text-gray-300 dark:text-gray-700">&bull;</span>' . $rentBadge : '') .
-            ($mouBadge ? '<span class="text-gray-300 dark:text-gray-700">&bull;</span>' . $mouBadge : '') .
+            '<div class="flex items-center gap-2 text-sm text-gray-500 mt-1 flex-wrap">'.
+            '<span>Status: <strong class="text-gray-900 dark:text-gray-100">'.$statusLabel.'</strong></span>'.
+            ($ownerBadge ? '<span class="text-gray-300 dark:text-gray-700">&bull;</span>'.$ownerBadge : '').
+            ($rentBadge ? '<span class="text-gray-300 dark:text-gray-700">&bull;</span>'.$rentBadge : '').
+            ($mouBadge ? '<span class="text-gray-300 dark:text-gray-700">&bull;</span>'.$mouBadge : '').
             '</div>'
         );
     }
@@ -68,7 +68,7 @@ class ViewOpportunity extends ViewRecord
                 ->modalDescription('Confirm that initial owner consultations and commercial terms have been validated. This will unlock official MOU agreement generation.')
                 ->modalSubmitActionLabel('Yes, Mark Ready for MOU')
                 ->modalIcon('heroicon-o-check-badge')
-                ->visible(fn (Opportunity $record) => $record->status === OpportunityStatus::NEW)
+                ->visible(fn (Opportunity $record) => $record->status === OpportunityStatus::NEW && (auth()->user()?->can('update', $record) ?? false))
                 ->action(function (Opportunity $record) {
                     $readiness = app(OpportunityReadinessService::class)->canCreateMOU($record);
                     if (! $readiness['is_ready']) {
@@ -89,7 +89,17 @@ class ViewOpportunity extends ViewRecord
                 ->label(fn (Opportunity $record) => Mou::where('opportunity_id', $record->id)->exists() ? 'Open MOU Agreement' : 'Create Onboarding MOU')
                 ->icon('heroicon-o-document-text')
                 ->color('primary')
-                ->visible(fn (Opportunity $record) => in_array($record->status, [OpportunityStatus::READY_FOR_MOU, OpportunityStatus::CONVERTED]))
+                ->visible(function (Opportunity $record) {
+                    if (! in_array($record->status, [OpportunityStatus::READY_FOR_MOU, OpportunityStatus::CONVERTED])) {
+                        return false;
+                    }
+                    $mou = Mou::where('opportunity_id', $record->id)->first();
+                    if ($mou) {
+                        return auth()->user()?->can('view', $mou) ?? false;
+                    }
+
+                    return auth()->user()?->can('create', Mou::class) ?? false;
+                })
                 ->requiresConfirmation(fn (Opportunity $record) => ! Mou::where('opportunity_id', $record->id)->exists())
                 ->modalHeading('Initialize Onboarding MOU')
                 ->modalDescription('This will launch the MOU workspace and pre-populate owner, property estimates, and financial terms.')
@@ -108,7 +118,7 @@ class ViewOpportunity extends ViewRecord
                 ->label('Close Lost')
                 ->icon('heroicon-o-x-circle')
                 ->color('danger')
-                ->visible(fn (Opportunity $record) => ! in_array($record->status, [OpportunityStatus::CLOSED_LOST, OpportunityStatus::CANCELLED, OpportunityStatus::CONVERTED]))
+                ->visible(fn (Opportunity $record) => ! in_array($record->status, [OpportunityStatus::CLOSED_LOST, OpportunityStatus::CANCELLED, OpportunityStatus::CONVERTED]) && (auth()->user()?->can('update', $record) ?? false))
                 ->modalHeading('Mark Lead as Closed / Lost')
                 ->modalDescription('Specify the reason for losing this opportunity.')
                 ->form([

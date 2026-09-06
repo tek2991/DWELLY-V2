@@ -33,6 +33,18 @@ class ManageAgreementDocuments extends EditRecord
     public function generateDraftDocuments(): void
     {
         $record = $this->getRecord();
+        $user = auth()->user();
+
+        if ($user && ! $user->can('generateDraft', $record)) {
+            Notification::make()
+                ->title('Unauthorized')
+                ->body('You do not have permission to compile agreement draft documents.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
         try {
             app(TenancyAgreementPdfService::class)->saveDraftPdf($record);
             app(TenancyAgreementDocxService::class)->saveDraftDocx($record);
@@ -95,7 +107,14 @@ class ManageAgreementDocuments extends EditRecord
 
     protected function getFormActions(): array
     {
-        if (in_array($this->getRecord()?->status, ['active', 'vacated'])) {
+        $record = $this->getRecord();
+        $user = auth()->user();
+
+        if (in_array($record?->status, ['active', 'vacated', 'terminated', 'deboarded'])) {
+            return [];
+        }
+
+        if ($user && ! $user->can('update', $record)) {
             return [];
         }
 

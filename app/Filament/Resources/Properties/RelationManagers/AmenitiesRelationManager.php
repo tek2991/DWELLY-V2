@@ -2,23 +2,28 @@
 
 namespace App\Filament\Resources\Properties\RelationManagers;
 
-use Filament\Actions\AssociateAction;
+use App\Domain\Property\Models\AmenityType;
+use App\Filament\Resources\Properties\RelationManagers\Traits\LocksDuringPropertyOnboarding;
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\DissociateAction;
-use Filament\Actions\DissociateBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\CheckboxList;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Validation\Rules\Unique;
 
 class AmenitiesRelationManager extends RelationManager
 {
-    use \App\Filament\Resources\Properties\RelationManagers\Traits\LocksDuringPropertyOnboarding;
+    use LocksDuringPropertyOnboarding;
 
     protected static string $relationship = 'amenities';
 
@@ -26,20 +31,20 @@ class AmenitiesRelationManager extends RelationManager
     {
         return $schema
             ->components([
-                \Filament\Forms\Components\Select::make('amenity_type_id')
+                Select::make('amenity_type_id')
                     ->relationship('amenityType', 'name')
                     ->searchable()
                     ->preload()
                     ->required()
-                    ->unique(modifyRuleUsing: function (\Illuminate\Validation\Rules\Unique $rule, \Filament\Resources\RelationManagers\RelationManager $livewire) {
+                    ->unique(modifyRuleUsing: function (Unique $rule, RelationManager $livewire) {
                         return $rule->where('property_id', $livewire->getOwnerRecord()->id);
                     }, ignoreRecord: true)
                     ->createOptionForm([
-                        \Filament\Forms\Components\TextInput::make('name')
+                        TextInput::make('name')
                             ->required()
                             ->maxLength(255),
                     ]),
-                \Filament\Forms\Components\Textarea::make('notes')
+                Textarea::make('notes')
                     ->maxLength(65535)
                     ->columnSpanFull(),
             ]);
@@ -50,11 +55,11 @@ class AmenitiesRelationManager extends RelationManager
         return $table
             ->recordTitleAttribute('amenity_type_id')
             ->columns([
-                \Filament\Tables\Columns\TextColumn::make('amenityType.name')
+                TextColumn::make('amenityType.name')
                     ->label('Amenity')
                     ->searchable()
                     ->sortable(),
-                \Filament\Tables\Columns\TextColumn::make('notes')
+                TextColumn::make('notes')
                     ->limit(50)
                     ->searchable(),
             ])
@@ -63,28 +68,29 @@ class AmenitiesRelationManager extends RelationManager
             ])
             ->headerActions([
                 CreateAction::make(),
-                \Filament\Actions\Action::make('bulkCreate')
+                Action::make('bulkCreate')
                     ->label('Bulk Create')
                     ->icon('heroicon-o-squares-plus')
                     ->form(function () {
-                        $types = \App\Domain\Property\Models\AmenityType::where('is_active', true)->get();
+                        $types = AmenityType::where('is_active', true)->get();
+
                         return [
-                            \Filament\Forms\Components\CheckboxList::make('amenities')
+                            CheckboxList::make('amenities')
                                 ->options($types->pluck('name', 'id'))
-                                ->columns(3)
+                                ->columns(3),
                         ];
                     })
-                    ->action(function (array $data, \Filament\Resources\RelationManagers\RelationManager $livewire) {
+                    ->action(function (array $data, RelationManager $livewire) {
                         $property = $livewire->getOwnerRecord();
                         foreach ($data['amenities'] as $typeId) {
                             $existing = $property->amenities()->where('amenity_type_id', $typeId)->first();
-                            if (!$existing) {
+                            if (! $existing) {
                                 $property->amenities()->create([
                                     'amenity_type_id' => $typeId,
                                 ]);
                             }
                         }
-                        \Filament\Notifications\Notification::make()->title('Amenities added successfully')->success()->send();
+                        Notification::make()->title('Amenities added successfully')->success()->send();
                         $livewire->dispatch('refresh-onboarding-progress');
                     }),
             ])

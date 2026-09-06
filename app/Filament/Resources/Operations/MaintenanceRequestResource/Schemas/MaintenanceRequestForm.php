@@ -4,7 +4,12 @@ namespace App\Filament\Resources\Operations\MaintenanceRequestResource\Schemas;
 
 use App\Domain\Maintenance\Enums\MaintenanceStatus;
 use App\Domain\Maintenance\Enums\PayerType;
+use App\Domain\Maintenance\Services\MaintenanceBillingService;
 use App\Domain\Property\Models\Property;
+use App\Filament\Resources\Billing\MaintenanceQuotationResource;
+use App\Filament\Resources\Operations\AuditResource;
+use App\Filament\Resources\Operations\MaintenanceRequestResource;
+use App\Models\User;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Radio;
@@ -15,9 +20,9 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\View;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
+use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Illuminate\Support\HtmlString;
 
@@ -43,15 +48,15 @@ class MaintenanceRequestForm
 
                                     $reason = $record->is_direct_vendor
                                         ? 'On-site repairs have been authorized and are in progress under the Direct Repair route.'
-                                        : ($quote ? 'The Maintenance Quotation' . e($quoteNumber) . ' for this ticket has been approved.' : 'Repairs have been authorized and are in progress.');
+                                        : ($quote ? 'The Maintenance Quotation'.e($quoteNumber).' for this ticket has been approved.' : 'Repairs have been authorized and are in progress.');
 
                                     return new HtmlString(
-                                        '<div style="background-color: rgba(30, 58, 138, 0.06); border: 1px solid rgba(37, 99, 235, 0.25); border-left: 4px solid #2563eb; padding: 14px 18px; border-radius: 8px; margin-bottom: 8px; font-size: 13px; color: #1e3a8a; display: flex; align-items: flex-start; gap: 12px;">' .
-                                        '<span style="font-size: 20px; line-height: 1;">🔒</span>' .
-                                        '<div>' .
-                                        '<strong style="font-size: 14px; display: block; margin-bottom: 2px;">Maintenance Request Locked</strong>' .
-                                        '<span>' . $reason . ' Target property, issue details, defect items, and financial responsibility are permanently locked to preserve contract and billing integrity. Track ongoing repairs in the Repair Execution tab.</span>' .
-                                        '</div>' .
+                                        '<div style="background-color: rgba(30, 58, 138, 0.06); border: 1px solid rgba(37, 99, 235, 0.25); border-left: 4px solid #2563eb; padding: 14px 18px; border-radius: 8px; margin-bottom: 8px; font-size: 13px; color: #1e3a8a; display: flex; align-items: flex-start; gap: 12px;">'.
+                                        '<span style="font-size: 20px; line-height: 1;">🔒</span>'.
+                                        '<div>'.
+                                        '<strong style="font-size: 14px; display: block; margin-bottom: 2px;">Maintenance Request Locked</strong>'.
+                                        '<span>'.$reason.' Target property, issue details, defect items, and financial responsibility are permanently locked to preserve contract and billing integrity. Track ongoing repairs in the Repair Execution tab.</span>'.
+                                        '</div>'.
                                         '</div>'
                                     );
                                 }),
@@ -62,7 +67,7 @@ class MaintenanceRequestForm
                                     Select::make('property_id')
                                         ->label('Target Property')
                                         ->options(fn () => Property::all()->mapWithKeys(fn ($p) => [
-                                            $p->id => ($p->code ? "{$p->code} - " : '') . ($p->building_name ?: "Property #{$p->id}")
+                                            $p->id => ($p->code ? "{$p->code} - " : '').($p->building_name ?: "Property #{$p->id}"),
                                         ]))
                                         ->searchable()
                                         ->required()
@@ -72,7 +77,7 @@ class MaintenanceRequestForm
                                             if ($state) {
                                                 $property = Property::find($state);
                                                 $hasActiveTenant = $property && $property->agreements()->where('status', 'active')->whereHas('tenants')->exists();
-                                                if (!$hasActiveTenant) {
+                                                if (! $hasActiveTenant) {
                                                     if ($get('payer_type') === 'tenant') {
                                                         $set('payer_type', null);
                                                         $set('is_direct_vendor', null);
@@ -87,6 +92,7 @@ class MaintenanceRequestForm
                                             if ($record && $record->isLocked()) {
                                                 return '🔒 Locked: Target property cannot be changed because the quotation has been approved.';
                                             }
+
                                             return 'Select the property where maintenance is required.';
                                         }),
 
@@ -95,36 +101,38 @@ class MaintenanceRequestForm
                                         ->columnSpanFull()
                                         ->content(function (Get $get) {
                                             $propertyId = $get('property_id');
-                                            if (!$propertyId) {
+                                            if (! $propertyId) {
                                                 return new HtmlString(
-                                                    '<div style="background-color: rgba(128, 128, 128, 0.05); border: 1px dashed rgba(128, 128, 128, 0.25); border-radius: 8px; padding: 14px; text-align: center; color: rgba(128, 128, 128, 0.8); font-size: 13px;">' .
-                                                    '📍 Select a target property to view owner, tenant, and active ticket context.' .
+                                                    '<div style="background-color: rgba(128, 128, 128, 0.05); border: 1px dashed rgba(128, 128, 128, 0.25); border-radius: 8px; padding: 14px; text-align: center; color: rgba(128, 128, 128, 0.8); font-size: 13px;">'.
+                                                    '📍 Select a target property to view owner, tenant, and active ticket context.'.
                                                     '</div>'
                                                 );
                                             }
 
                                             $property = Property::with(['mous.party', 'agreements.tenants', 'maintenanceRequests'])->find($propertyId);
-                                            if (!$property) return '';
+                                            if (! $property) {
+                                                return '';
+                                            }
 
                                             $ownerName = $property->mous->first()?->party?->display_name ?? 'Not Specified';
                                             $latestAgreement = $property->agreements()->where('status', 'active')->first();
                                             $tenantName = $latestAgreement?->tenants->first()?->display_name ?? 'Vacant / No Active Tenant';
                                             $openTicketsCount = $property->maintenanceRequests()->whereNotIn('status', ['closed', 'cancelled'])->count();
-                                            $code = $property->code ? e($property->code) . ' - ' : '';
-                                            $buildingName = e($property->building_name ?: 'Property #' . $property->id);
+                                            $code = $property->code ? e($property->code).' - ' : '';
+                                            $buildingName = e($property->building_name ?: 'Property #'.$property->id);
 
                                             return new HtmlString(
-                                                '<div style="background-color: rgba(37, 99, 235, 0.04); border: 1px solid rgba(37, 99, 235, 0.15); border-radius: 8px; padding: 16px; font-size: 13px; color: inherit;">' .
-                                                '<div style="font-weight: 700; font-size: 14px; margin-bottom: 8px; color: inherit; display: flex; align-items: center; justify-content: space-between;">' .
-                                                '<span>📍 Property Context Panel</span>' .
-                                                '<span style="padding: 2px 8px; font-size: 10px; border-radius: 4px; background: #2563eb; color: #fff; font-weight: 600;">ACTIVE</span>' .
-                                                '</div>' .
-                                                '<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">' .
-                                                '<div><span style="color: rgba(128, 128, 128, 0.8); font-size: 11px;">Property</span><br><strong>' . $code . $buildingName . '</strong></div>' .
-                                                '<div><span style="color: rgba(128, 128, 128, 0.8); font-size: 11px;">Owner</span><br><strong>' . e($ownerName) . '</strong></div>' .
-                                                '<div><span style="color: rgba(128, 128, 128, 0.8); font-size: 11px;">Tenant</span><br><strong>' . e($tenantName) . '</strong></div>' .
-                                                '<div><span style="color: rgba(128, 128, 128, 0.8); font-size: 11px;">Open Maintenance</span><br><strong style="color: #d97706;">' . $openTicketsCount . ' Active Ticket(s)</strong></div>' .
-                                                '</div>' .
+                                                '<div style="background-color: rgba(37, 99, 235, 0.04); border: 1px solid rgba(37, 99, 235, 0.15); border-radius: 8px; padding: 16px; font-size: 13px; color: inherit;">'.
+                                                '<div style="font-weight: 700; font-size: 14px; margin-bottom: 8px; color: inherit; display: flex; align-items: center; justify-content: space-between;">'.
+                                                '<span>📍 Property Context Panel</span>'.
+                                                '<span style="padding: 2px 8px; font-size: 10px; border-radius: 4px; background: #2563eb; color: #fff; font-weight: 600;">ACTIVE</span>'.
+                                                '</div>'.
+                                                '<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">'.
+                                                '<div><span style="color: rgba(128, 128, 128, 0.8); font-size: 11px;">Property</span><br><strong>'.$code.$buildingName.'</strong></div>'.
+                                                '<div><span style="color: rgba(128, 128, 128, 0.8); font-size: 11px;">Owner</span><br><strong>'.e($ownerName).'</strong></div>'.
+                                                '<div><span style="color: rgba(128, 128, 128, 0.8); font-size: 11px;">Tenant</span><br><strong>'.e($tenantName).'</strong></div>'.
+                                                '<div><span style="color: rgba(128, 128, 128, 0.8); font-size: 11px;">Open Maintenance</span><br><strong style="color: #d97706;">'.$openTicketsCount.' Active Ticket(s)</strong></div>'.
+                                                '</div>'.
                                                 '</div>'
                                             );
                                         }),
@@ -264,7 +272,7 @@ class MaintenanceRequestForm
                                             }
 
                                             try {
-                                                app(\App\Domain\Maintenance\Services\MaintenanceBillingService::class)->archiveQuotationAndUnlock($record);
+                                                app(MaintenanceBillingService::class)->archiveQuotationAndUnlock($record);
 
                                                 Notification::make()
                                                     ->title('Financial Responsibility Unlocked')
@@ -273,7 +281,7 @@ class MaintenanceRequestForm
                                                     ->send();
 
                                                 $livewire->redirect(
-                                                    \App\Filament\Resources\Operations\MaintenanceRequestResource::getUrl('edit', ['record' => $record])
+                                                    MaintenanceRequestResource::getUrl('edit', ['record' => $record])
                                                 );
                                             } catch (\Throwable $e) {
                                                 Notification::make()
@@ -403,14 +411,14 @@ class MaintenanceRequestForm
                                                     ? 'Direct Repair Route (Client handles contractor directly)'
                                                     : 'Dwelly-Coordinated Route';
 
-                                                return new HtmlString('<div style="font-size: 13px; color: #1e3a8a; background-color: rgba(30, 58, 138, 0.06); border-left: 4px solid #2563eb; padding: 10px 14px; border-radius: 4px;">🔒 <strong>Financial Responsibility & Execution Route Locked:</strong> Repairs are authorized & in progress (' . e($routeText) . '). Financial decision is permanently locked.</div>');
+                                                return new HtmlString('<div style="font-size: 13px; color: #1e3a8a; background-color: rgba(30, 58, 138, 0.06); border-left: 4px solid #2563eb; padding: 10px 14px; border-radius: 4px;">🔒 <strong>Financial Responsibility & Execution Route Locked:</strong> Repairs are authorized & in progress ('.e($routeText).'). Financial decision is permanently locked.</div>');
                                             }
 
                                             if ($hasQuotation) {
                                                 $quote = $record->currentClientQuote ?? $record->clientQuotes()->where('status', '!=', 'archived')->latest()->first();
                                                 $quoteNum = $quote ? $quote->quote_number : 'Active';
 
-                                                return new HtmlString('<div style="font-size: 13px; color: #1e3a8a; background-color: rgba(30, 58, 138, 0.06); border-left: 4px solid #2563eb; padding: 10px 14px; border-radius: 4px;">🔒 <strong>Financial Responsibility Locked:</strong> Maintenance Quotation <strong>#' . e($quoteNum) . '</strong> is created. Financial responsibility and execution route are locked to ensure billing integrity. To reassign, click <strong>Unlock & Archive Quotation</strong> in the section header.</div>');
+                                                return new HtmlString('<div style="font-size: 13px; color: #1e3a8a; background-color: rgba(30, 58, 138, 0.06); border-left: 4px solid #2563eb; padding: 10px 14px; border-radius: 4px;">🔒 <strong>Financial Responsibility Locked:</strong> Maintenance Quotation <strong>#'.e($quoteNum).'</strong> is created. Financial responsibility and execution route are locked to ensure billing integrity. To reassign, click <strong>Unlock & Archive Quotation</strong> in the section header.</div>');
                                             }
 
                                             if ($isDirect) {
@@ -423,48 +431,52 @@ class MaintenanceRequestForm
 
                             // 💳 Financial & Quotations Bridge Section (Visible when a Quotation exists)
                             Section::make('💳 Financial Quotations & Settlement Job')
-                                ->visible(fn (Get $get, $record) => $record && !$get('is_direct_vendor') && (bool)($record->currentClientQuote ?? $record->clientQuotes()->where('status', '!=', 'archived')->first()))
+                                ->visible(fn (Get $get, $record) => $record && ! $get('is_direct_vendor') && (bool) ($record->currentClientQuote ?? $record->clientQuotes()->where('status', '!=', 'archived')->first()))
                                 ->schema([
                                     Placeholder::make('financial_workflow_bridge')
                                         ->label('')
                                         ->columnSpanFull()
                                         ->content(function ($record) {
-                                            if (!$record) return '';
+                                            if (! $record) {
+                                                return '';
+                                            }
 
                                             $quote = $record->currentClientQuote ?? $record->clientQuotes()->latest()->first();
-                                            if (!$quote) return '';
+                                            if (! $quote) {
+                                                return '';
+                                            }
 
-                                            $quoteUrl = \App\Filament\Resources\Billing\MaintenanceQuotationResource::getUrl('edit', ['record' => $quote]);
+                                            $quoteUrl = MaintenanceQuotationResource::getUrl('edit', ['record' => $quote]);
                                             $quoteStatus = e(ucfirst($quote->status));
-                                            $color = match($quote->status) {
+                                            $color = match ($quote->status) {
                                                 'approved' => '#16a34a',
                                                 'rejected' => '#dc2626',
                                                 'pending_approval' => '#d97706',
                                                 default => '#6b7280',
                                             };
-                                            $totalVendor = number_format((float)$record->total_vendor_cost, 2);
-                                            $totalClient = number_format((float)$quote->total_amount, 2);
+                                            $totalVendor = number_format((float) $record->total_vendor_cost, 2);
+                                            $totalClient = number_format((float) $quote->total_amount, 2);
                                             $vendorQuotesCount = $record->vendorQuotes()->count();
 
                                             $pendingAlert = '';
                                             if ($quote->status !== 'approved') {
-                                                $pendingAlert = '<div style="background-color: rgba(217, 119, 6, 0.08); border-left: 4px solid #d97706; padding: 10px 14px; border-radius: 4px; margin-bottom: 12px; font-size: 13px; color: #b45309;">' .
-                                                    '<strong>⏳ Quotation Approval Pending:</strong> Physical repairs are locked until client approval proof is recorded in the Billing & Finance module.' .
+                                                $pendingAlert = '<div style="background-color: rgba(217, 119, 6, 0.08); border-left: 4px solid #d97706; padding: 10px 14px; border-radius: 4px; margin-bottom: 12px; font-size: 13px; color: #b45309;">'.
+                                                    '<strong>⏳ Quotation Approval Pending:</strong> Physical repairs are locked until client approval proof is recorded in the Billing & Finance module.'.
                                                     '</div>';
                                             }
 
                                             return new HtmlString(
-                                                '<div style="background-color: rgba(128, 128, 128, 0.03); border: 1px solid rgba(128, 128, 128, 0.2); padding: 18px; border-radius: 8px;">' .
-                                                $pendingAlert .
-                                                '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">' .
-                                                '<div><strong style="font-size: 15px;">Quotation #' . e($quote->quote_number) . '</strong> <span style="margin-left: 8px; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; background-color: ' . $color . '; color: #fff; text-transform: uppercase;">' . $quoteStatus . '</span></div>' .
-                                                '<a href="' . e($quoteUrl) . '" target="_blank" style="display: inline-flex; align-items: center; padding: 6px 14px; background-color: #2563eb; color: #fff; font-weight: 600; font-size: 12px; border-radius: 6px; text-decoration: none;">Open Financial Workflow &rarr;</a>' .
-                                                '</div>' .
-                                                '<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; font-size: 13px;">' .
-                                                '<div><span style="color: gray;">Vendor Estimates (' . $vendorQuotesCount . ' trades):</span><br><strong style="font-size: 15px;">₹' . $totalVendor . '</strong></div>' .
-                                                '<div><span style="color: gray;">Client Quoted Price:</span><br><strong style="font-size: 15px; color: #2563eb;">₹' . $totalClient . '</strong></div>' .
-                                                '<div><span style="color: gray;">Payer Share (Owner / Tenant):</span><br><strong>₹' . number_format((float)$quote->owner_amount, 2) . ' / ₹' . number_format((float)$quote->tenant_amount, 2) . '</strong></div>' .
-                                                '</div>' .
+                                                '<div style="background-color: rgba(128, 128, 128, 0.03); border: 1px solid rgba(128, 128, 128, 0.2); padding: 18px; border-radius: 8px;">'.
+                                                $pendingAlert.
+                                                '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">'.
+                                                '<div><strong style="font-size: 15px;">Quotation #'.e($quote->quote_number).'</strong> <span style="margin-left: 8px; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; background-color: '.$color.'; color: #fff; text-transform: uppercase;">'.$quoteStatus.'</span></div>'.
+                                                '<a href="'.e($quoteUrl).'" target="_blank" style="display: inline-flex; align-items: center; padding: 6px 14px; background-color: #2563eb; color: #fff; font-weight: 600; font-size: 12px; border-radius: 6px; text-decoration: none;">Open Financial Workflow &rarr;</a>'.
+                                                '</div>'.
+                                                '<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; font-size: 13px;">'.
+                                                '<div><span style="color: gray;">Vendor Estimates ('.$vendorQuotesCount.' trades):</span><br><strong style="font-size: 15px;">₹'.$totalVendor.'</strong></div>'.
+                                                '<div><span style="color: gray;">Client Quoted Price:</span><br><strong style="font-size: 15px; color: #2563eb;">₹'.$totalClient.'</strong></div>'.
+                                                '<div><span style="color: gray;">Payer Share (Owner / Tenant):</span><br><strong>₹'.number_format((float) $quote->owner_amount, 2).' / ₹'.number_format((float) $quote->tenant_amount, 2).'</strong></div>'.
+                                                '</div>'.
                                                 '</div>'
                                             );
                                         }),
@@ -478,13 +490,13 @@ class MaintenanceRequestForm
                                         ->label('')
                                         ->columnSpanFull()
                                         ->content(function ($record) {
-                                            if (!$record || !$record->triggered_audit_id || !$record->triggeredAudit) {
+                                            if (! $record || ! $record->triggered_audit_id || ! $record->triggeredAudit) {
                                                 return new HtmlString(
-                                                    '<div style="background-color: rgba(128, 128, 128, 0.03); border: 1px dashed rgba(128, 128, 128, 0.25); padding: 16px; border-radius: 8px; color: inherit; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">' .
-                                                        '<div>' .
-                                                        '<div style="font-weight: 700; font-size: 14px; color: inherit;">No Verification Audit Triggered Yet</div>' .
-                                                        '<div style="font-size: 13px; color: rgba(128, 128, 128, 0.85); margin-top: 2px;">Trigger post-repair audit after repairs are completed to conduct quality inspection.</div>' .
-                                                        '</div>' .
+                                                    '<div style="background-color: rgba(128, 128, 128, 0.03); border: 1px dashed rgba(128, 128, 128, 0.25); padding: 16px; border-radius: 8px; color: inherit; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">'.
+                                                        '<div>'.
+                                                        '<div style="font-weight: 700; font-size: 14px; color: inherit;">No Verification Audit Triggered Yet</div>'.
+                                                        '<div style="font-size: 13px; color: rgba(128, 128, 128, 0.85); margin-top: 2px;">Trigger post-repair audit after repairs are completed to conduct quality inspection.</div>'.
+                                                        '</div>'.
                                                         '</div>'
                                                 );
                                             }
@@ -496,28 +508,28 @@ class MaintenanceRequestForm
                                             $inspectorName = e($audit->inspector?->name ?? $record->assignedInspector?->name ?? 'Unassigned');
 
                                             try {
-                                                $inspectUrl = \App\Filament\Resources\Operations\AuditResource::getUrl('inspect', ['record' => $audit]);
+                                                $inspectUrl = AuditResource::getUrl('inspect', ['record' => $audit]);
                                             } catch (\Throwable $e) {
                                                 $inspectUrl = url("/operations/audits/{$audit->id}/inspect");
                                             }
 
                                             try {
-                                                $editUrl = \App\Filament\Resources\Operations\AuditResource::getUrl('edit', ['record' => $audit]);
+                                                $editUrl = AuditResource::getUrl('edit', ['record' => $audit]);
                                             } catch (\Throwable $e) {
                                                 $editUrl = url("/operations/audits/{$audit->id}/edit");
                                             }
 
                                             return new HtmlString(
-                                                '<div style="background-color: rgba(128, 128, 128, 0.03); border: 1px solid rgba(128, 128, 128, 0.2); padding: 16px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; color: inherit; flex-wrap: wrap; gap: 12px;">' .
-                                                    '<div>' .
-                                                    '<div style="font-weight: 700; font-size: 15px; color: inherit;">Audit #' . $auditNumber . '</div>' .
-                                                    '<div style="font-size: 13px; color: rgba(128, 128, 128, 0.85); margin-top: 4px;">Type: <strong>' . $typeLabel . '</strong> | Status: <span style="padding: 2px 8px; font-size: 11px; border-radius: 4px; font-weight: 600; background-color: #dbeafe; color: #1e40af; text-transform: uppercase;">' . $statusLabel . '</span></div>' .
-                                                    '<div style="font-size: 12px; color: rgba(128, 128, 128, 0.7); margin-top: 4px;">Assigned Inspector: <strong>' . $inspectorName . '</strong></div>' .
-                                                    '</div>' .
-                                                    '<div style="display: flex; gap: 8px; align-items: center;">' .
-                                                    '<a href="' . e($editUrl) . '" target="_blank" style="display: inline-flex; align-items: center; padding: 6px 12px; background-color: rgba(37, 99, 235, 0.1); color: #2563eb; font-weight: 600; font-size: 12px; border-radius: 6px; text-decoration: none;">View Audit &rarr;</a>' .
-                                                    '<a href="' . e($inspectUrl) . '" target="_blank" style="display: inline-flex; align-items: center; padding: 6px 14px; background-color: #2563eb; color: #ffffff; font-weight: 600; font-size: 12px; border-radius: 6px; text-decoration: none;">Inspect &rarr;</a>' .
-                                                    '</div>' .
+                                                '<div style="background-color: rgba(128, 128, 128, 0.03); border: 1px solid rgba(128, 128, 128, 0.2); padding: 16px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; color: inherit; flex-wrap: wrap; gap: 12px;">'.
+                                                    '<div>'.
+                                                    '<div style="font-weight: 700; font-size: 15px; color: inherit;">Audit #'.$auditNumber.'</div>'.
+                                                    '<div style="font-size: 13px; color: rgba(128, 128, 128, 0.85); margin-top: 4px;">Type: <strong>'.$typeLabel.'</strong> | Status: <span style="padding: 2px 8px; font-size: 11px; border-radius: 4px; font-weight: 600; background-color: #dbeafe; color: #1e40af; text-transform: uppercase;">'.$statusLabel.'</span></div>'.
+                                                    '<div style="font-size: 12px; color: rgba(128, 128, 128, 0.7); margin-top: 4px;">Assigned Inspector: <strong>'.$inspectorName.'</strong></div>'.
+                                                    '</div>'.
+                                                    '<div style="display: flex; gap: 8px; align-items: center;">'.
+                                                    '<a href="'.e($editUrl).'" target="_blank" style="display: inline-flex; align-items: center; padding: 6px 12px; background-color: rgba(37, 99, 235, 0.1); color: #2563eb; font-weight: 600; font-size: 12px; border-radius: 6px; text-decoration: none;">View Audit &rarr;</a>'.
+                                                    '<a href="'.e($inspectUrl).'" target="_blank" style="display: inline-flex; align-items: center; padding: 6px 14px; background-color: #2563eb; color: #ffffff; font-weight: 600; font-size: 12px; border-radius: 6px; text-decoration: none;">Inspect &rarr;</a>'.
+                                                    '</div>'.
                                                     '</div>'
                                             );
                                         }),
@@ -576,10 +588,10 @@ class MaintenanceRequestForm
 
                                     Placeholder::make('quotation_status_badge')
                                         ->label('Quotation Status')
-                                        ->visible(fn (Get $get, $record) => $record && !$get('is_direct_vendor'))
+                                        ->visible(fn (Get $get, $record) => $record && ! $get('is_direct_vendor'))
                                         ->content(function ($record) {
                                             $quote = $record->currentClientQuote ?? $record->clientQuotes()->latest()->first();
-                                            if (!$quote) {
+                                            if (! $quote) {
                                                 return new HtmlString('<span style="font-size: 12px; color: #6b7280; font-weight: 500;">Not Created Yet</span>');
                                             }
                                             if ($quote->status === 'approved') {
@@ -588,6 +600,7 @@ class MaintenanceRequestForm
                                             if ($quote->status === 'rejected') {
                                                 return new HtmlString('<span style="display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 9999px; font-size: 12px; font-weight: 600; background: rgba(239, 68, 68, 0.15); color: #b91c1c; border: 1px solid rgba(239, 68, 68, 0.3);">❌ Rejected</span>');
                                             }
+
                                             return new HtmlString('<span style="display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 9999px; font-size: 12px; font-weight: 600; background: rgba(245, 158, 11, 0.15); color: #b45309; border: 1px solid rgba(245, 158, 11, 0.3);">⏳ Pending Approval</span>');
                                         }),
 
@@ -595,12 +608,13 @@ class MaintenanceRequestForm
                                         ->label('')
                                         ->content(function ($record) {
                                             $ticketNum = $record?->ticket_number ?? 'Generated after creation';
+
                                             return new HtmlString("<div style=\"font-size: 12px; color: #6b7280;\">Ticket #: <strong>{$ticketNum}</strong></div>");
                                         }),
 
                                     Select::make('assigned_inspector_id')
                                         ->label('Assigned Inspector / Staff')
-                                        ->options(fn () => \App\Models\User::pluck('name', 'id'))
+                                        ->options(fn () => User::pluck('name', 'id'))
                                         ->searchable()
                                         ->preload()
                                         ->nullable()

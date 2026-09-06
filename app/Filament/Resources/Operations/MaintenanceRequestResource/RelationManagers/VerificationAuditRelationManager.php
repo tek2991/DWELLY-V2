@@ -2,32 +2,29 @@
 
 namespace App\Filament\Resources\Operations\MaintenanceRequestResource\RelationManagers;
 
-use App\Domain\Audit\Enums\AuditStatus;
-use App\Domain\Audit\Enums\AuditType;
 use App\Domain\Audit\Models\Audit;
 use App\Domain\Maintenance\Enums\MaintenanceStatus;
 use App\Domain\Maintenance\Enums\PayerType;
 use App\Domain\Maintenance\Models\MaintenanceRequest;
 use App\Domain\Maintenance\Services\MaintenanceAuditTriggerService;
+use App\Domain\Maintenance\Services\MaintenanceBillingService;
 use App\Domain\Property\Models\PropertyInventory;
 use App\Domain\Property\Models\PropertyRoom;
-use App\Domain\Property\Models\PropertyUtility;
-use App\Domain\Maintenance\Services\MaintenanceBillingService;
+use App\Filament\Resources\Operations\AuditResource;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
-use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\HtmlString;
 
 class VerificationAuditRelationManager extends RelationManager
@@ -98,18 +95,18 @@ class VerificationAuditRelationManager extends RelationManager
                     $this->getTriggerOptionalAuditAction(),
                     $this->getViewPdfModalAction(),
                 ])
-                ->label('More')
-                ->icon('heroicon-m-ellipsis-vertical')
-                ->color('gray')
-                ->button()
-                ->size('sm'),
+                    ->label('More')
+                    ->icon('heroicon-m-ellipsis-vertical')
+                    ->color('gray')
+                    ->button()
+                    ->size('sm'),
             ])
             ->recordActions([
                 Action::make('openAudit')
                     ->label('Open Audit')
                     ->icon('heroicon-o-arrow-top-right-on-square')
                     ->color('primary')
-                    ->url(fn (Audit $record): string => \App\Filament\Resources\Operations\AuditResource::getUrl('edit', ['record' => $record])),
+                    ->url(fn (Audit $record): string => AuditResource::getUrl('edit', ['record' => $record])),
             ])
             ->emptyStateHeading('No Quality Verification Audit Initiated')
             ->emptyStateDescription('On-site quality audits are optional. Upload paying party acceptance proof to mark work completed directly, or trigger a quality audit if inspection is required.')
@@ -125,7 +122,7 @@ class VerificationAuditRelationManager extends RelationManager
             ->label('Maintenance PDF')
             ->icon('heroicon-o-document-text')
             ->color('gray')
-            ->modalHeading(fn (RelationManager $livewire) => 'Maintenance Dossier: Ticket #' . $livewire->getOwnerRecord()?->ticket_number)
+            ->modalHeading(fn (RelationManager $livewire) => 'Maintenance Dossier: Ticket #'.$livewire->getOwnerRecord()?->ticket_number)
             ->modalWidth('7xl')
             ->modalSubmitAction(false)
             ->modalCancelActionLabel('Close')
@@ -142,6 +139,7 @@ class VerificationAuditRelationManager extends RelationManager
                 if ($ticket?->payer_type?->isDwellyAbsorbed()) {
                     return 'Mark Work Completed (Internal Sign-Off)';
                 }
+
                 return 'Mark Work Completed (Client Acceptance)';
             })
             ->icon('heroicon-o-check-circle')
@@ -151,7 +149,9 @@ class VerificationAuditRelationManager extends RelationManager
             ->record(fn (RelationManager $livewire) => $livewire->getOwnerRecord())
             ->visible(function (RelationManager $livewire) {
                 $ticket = $livewire->getOwnerRecord();
-                if (! $ticket) return false;
+                if (! $ticket) {
+                    return false;
+                }
 
                 if ($ticket->isWorkCompleted()) {
                     return false;
@@ -262,10 +262,10 @@ class VerificationAuditRelationManager extends RelationManager
                                     </span>
                                 </div>
                                 <div>
-                                    This maintenance ticket is billed to the <strong>{$payerRole}</strong> (<span style='color: #0f172a; font-weight: 700;'>".e($payerName)."</span>). Please confirm client inspection and upload mandatory documentary proof (signed handover sheet, WhatsApp approval screenshot, or email confirmation).
+                                    This maintenance ticket is billed to the <strong>{$payerRole}</strong> (<span style='color: #0f172a; font-weight: 700;'>".e($payerName).'</span>). Please confirm client inspection and upload mandatory documentary proof (signed handover sheet, WhatsApp approval screenshot, or email confirmation).
                                 </div>
                             </div>
-                        ");
+                        ');
                     }),
 
                 TextInput::make('client_accepted_by_name')
@@ -299,12 +299,14 @@ class VerificationAuditRelationManager extends RelationManager
                         return match ($payerVal) {
                             'owner' => "Billed to Property Owner ({$payerName}). Enter the owner or authorized representative's name who inspected and accepted the repairs.",
                             'tenant' => "Billed to Tenant ({$payerName}). Enter the tenant's name who inspected and accepted the repairs.",
-                            default => "Enter the name of the authorized client / representative confirming satisfactory repair.",
+                            default => 'Enter the name of the authorized client / representative confirming satisfactory repair.',
                         };
                     })
                     ->default(function (RelationManager $livewire): string {
                         $ticket = $livewire->getOwnerRecord();
-                        if (!$ticket) return '';
+                        if (! $ticket) {
+                            return '';
+                        }
                         $ticket->loadMissing(['owner', 'tenant']);
                         if (filled($ticket->client_accepted_by_name)) {
                             return $ticket->client_accepted_by_name;
@@ -317,6 +319,7 @@ class VerificationAuditRelationManager extends RelationManager
                         } elseif ($payerType === 'dwelly') {
                             return 'Dwelly Operations';
                         }
+
                         return '';
                     })
                     ->placeholder('e.g. Rahul Sharma')
@@ -338,6 +341,7 @@ class VerificationAuditRelationManager extends RelationManager
                     ->helperText(function (RelationManager $livewire): string {
                         $ticket = $livewire->getOwnerRecord();
                         $isOptional = (bool) $ticket?->is_direct_vendor || (bool) $ticket?->payer_type?->isDwellyAbsorbed();
+
                         return $isOptional
                             ? 'Optional: Upload confirmation photos, signed notes, or internal documentation if available.'
                             : 'Upload clear photos or PDFs of the signed confirmation, WhatsApp screenshot, or email. (Mandatory for client-billed repairs)';
@@ -362,6 +366,7 @@ class VerificationAuditRelationManager extends RelationManager
                         ->body('There are no defect items recorded on this maintenance ticket.')
                         ->warning()
                         ->send();
+
                     return;
                 }
 
@@ -372,21 +377,25 @@ class VerificationAuditRelationManager extends RelationManager
                     $hasPhotos = $item->hasMedia('repaired_photos');
                     $hasAction = filled($item->repair_action);
 
-                    if (!$hasPhotos || !$hasAction) {
-                        $targetName = 'Item #' . $itemNum;
+                    if (! $hasPhotos || ! $hasAction) {
+                        $targetName = 'Item #'.$itemNum;
                         if ($item->itemable instanceof PropertyRoom) {
                             $targetName = $item->itemable->custom_name ?: ($item->itemable->roomDefinition?->name ?? "Room #{$itemNum}");
                         } elseif ($item->itemable instanceof PropertyInventory) {
                             $targetName = $item->itemable->inventoryType?->name ?? "Inventory #{$itemNum}";
                         }
                         $missing = [];
-                        if (!$hasAction) $missing[] = 'resolution notes';
-                        if (!$hasPhotos) $missing[] = 'after-repair photos';
-                        $incompleteItems[] = "<strong>{$targetName}</strong> (missing " . implode(' & ', $missing) . ")";
+                        if (! $hasAction) {
+                            $missing[] = 'resolution notes';
+                        }
+                        if (! $hasPhotos) {
+                            $missing[] = 'after-repair photos';
+                        }
+                        $incompleteItems[] = "<strong>{$targetName}</strong> (missing ".implode(' & ', $missing).')';
                     }
                 }
 
-                if (!empty($incompleteItems)) {
+                if (! empty($incompleteItems)) {
                     $listHtml = implode('<br>&bull; ', $incompleteItems);
                     Notification::make()
                         ->title('Incomplete Repair Items')
@@ -394,6 +403,7 @@ class VerificationAuditRelationManager extends RelationManager
                         ->danger()
                         ->persistent()
                         ->send();
+
                     return;
                 }
 
@@ -407,15 +417,15 @@ class VerificationAuditRelationManager extends RelationManager
                 ]);
 
                 // Attach any uploaded media files
-                if (!empty($data['client_acceptance_proofs'])) {
+                if (! empty($data['client_acceptance_proofs'])) {
                     foreach ((array) $data['client_acceptance_proofs'] as $file) {
                         if (is_string($file)) {
-                            if (\Illuminate\Support\Facades\Storage::disk('public')->exists($file)) {
+                            if (Storage::disk('public')->exists($file)) {
                                 $ticket->addMediaFromDisk($file, 'public')->toMediaCollection('client_acceptance_proofs');
-                            } elseif (\Illuminate\Support\Facades\Storage::disk('local')->exists($file)) {
+                            } elseif (Storage::disk('local')->exists($file)) {
                                 $ticket->addMediaFromDisk($file, 'local')->toMediaCollection('client_acceptance_proofs');
-                            } elseif (\Illuminate\Support\Facades\Storage::disk('local')->exists('livewire-tmp/' . $file)) {
-                                $ticket->addMediaFromDisk('livewire-tmp/' . $file, 'local')->toMediaCollection('client_acceptance_proofs');
+                            } elseif (Storage::disk('local')->exists('livewire-tmp/'.$file)) {
+                                $ticket->addMediaFromDisk('livewire-tmp/'.$file, 'local')->toMediaCollection('client_acceptance_proofs');
                             } elseif (file_exists($file)) {
                                 $ticket->addMedia($file)->toMediaCollection('client_acceptance_proofs');
                             }
@@ -449,16 +459,20 @@ class VerificationAuditRelationManager extends RelationManager
             ->record(fn (RelationManager $livewire) => $livewire->getOwnerRecord())
             ->visible(function (RelationManager $livewire) {
                 $ticket = $livewire->getOwnerRecord();
-                if (! $ticket || $ticket->is_direct_vendor || (bool) $ticket->payer_type?->isDwellyAbsorbed()) return false;
+                if (! $ticket || $ticket->is_direct_vendor || (bool) $ticket->payer_type?->isDwellyAbsorbed()) {
+                    return false;
+                }
                 $hasInvoice = filled($ticket->owner_invoice_id) || filled($ticket->tenant_invoice_id);
+
                 return ! $hasInvoice && ($ticket->isWorkCompleted() || $ticket->hasClientAcceptance());
             })
-            ->modalHeading(fn (RelationManager $livewire) => 'Generate Client Invoice – Ticket #' . $livewire->getOwnerRecord()?->ticket_number)
+            ->modalHeading(fn (RelationManager $livewire) => 'Generate Client Invoice – Ticket #'.$livewire->getOwnerRecord()?->ticket_number)
             ->modalDescription('Review the receivable invoice summary below and confirm generation for accounting.')
             ->modalSubmitActionLabel('Confirm & Generate Invoice')
             ->modalWidth('3xl')
             ->fillForm(function (RelationManager $livewire): array {
                 $ticket = $livewire->getOwnerRecord();
+
                 return [
                     'issue_date' => now()->toDateString(),
                     'due_date' => now()->addDays(7)->toDateString(),
@@ -506,7 +520,7 @@ class VerificationAuditRelationManager extends RelationManager
                     $ticket->update(['status' => MaintenanceStatus::INVOICED]);
                     Notification::make()
                         ->title('Client Invoice Created (Draft)')
-                        ->body("Draft Invoice #{$invoice->invoice_number} (₹" . number_format((float) $invoice->grand_total, 2) . ") created and sent to Accounting for review & posting.")
+                        ->body("Draft Invoice #{$invoice->invoice_number} (₹".number_format((float) $invoice->grand_total, 2).') created and sent to Accounting for review & posting.')
                         ->success()
                         ->send();
                 } catch (\Throwable $e) {
@@ -533,20 +547,26 @@ class VerificationAuditRelationManager extends RelationManager
             ->record(fn (RelationManager $livewire) => $livewire->getOwnerRecord())
             ->visible(function (RelationManager $livewire) {
                 $ticket = $livewire->getOwnerRecord();
-                if (! $ticket || $ticket->is_direct_vendor) return false;
+                if (! $ticket || $ticket->is_direct_vendor) {
+                    return false;
+                }
 
                 $isCompleted = $ticket->isWorkCompleted() || $ticket->hasClientAcceptance();
-                if (! $isCompleted) return false;
+                if (! $isCompleted) {
+                    return false;
+                }
 
                 $unbilledQuotes = $ticket->vendorQuotes()->whereNull('bill_id')->count();
+
                 return $unbilledQuotes > 0 || (empty($ticket->bill_id) && $ticket->vendor_party_id);
             })
-            ->modalHeading(fn (RelationManager $livewire) => 'Generate Vendor Payable Bills – Ticket #' . $livewire->getOwnerRecord()?->ticket_number)
+            ->modalHeading(fn (RelationManager $livewire) => 'Generate Vendor Payable Bills – Ticket #'.$livewire->getOwnerRecord()?->ticket_number)
             ->modalDescription('Review the payable trade contractor bills summary below and confirm generation for accounting.')
             ->modalSubmitActionLabel('Confirm & Generate Bills')
             ->modalWidth('3xl')
             ->fillForm(function (RelationManager $livewire): array {
                 $ticket = $livewire->getOwnerRecord();
+
                 return [
                     'issue_date' => now()->toDateString(),
                     'due_date' => now()->addDays(14)->toDateString(),
@@ -587,7 +607,7 @@ class VerificationAuditRelationManager extends RelationManager
                     $total = array_sum(array_map(fn ($b) => (float) $b->grand_total, $bills));
                     Notification::make()
                         ->title('Vendor Bills Created (Draft)')
-                        ->body("{$count} Draft Vendor Bill(s) totaling ₹" . number_format($total, 2) . " created and queued for Accounting review & posting.")
+                        ->body("{$count} Draft Vendor Bill(s) totaling ₹".number_format($total, 2).' created and queued for Accounting review & posting.')
                         ->success()
                         ->send();
                 } catch (\Throwable $e) {
@@ -840,6 +860,7 @@ class VerificationAuditRelationManager extends RelationManager
             ->modalWidth('2xl')
             ->fillForm(function (RelationManager $livewire): array {
                 $ticket = $livewire->getOwnerRecord();
+
                 return [
                     'client_accepted_by_name' => $ticket->client_accepted_by_name,
                     'client_accepted_at' => $ticket->client_accepted_at ?: now(),
@@ -878,7 +899,7 @@ class VerificationAuditRelationManager extends RelationManager
                         return match ($payerVal) {
                             'owner' => "Billed to Property Owner ({$payerName}).",
                             'tenant' => "Billed to Tenant ({$payerName}).",
-                            default => "Authorized client or representative name.",
+                            default => 'Authorized client or representative name.',
                         };
                     })
                     ->placeholder('e.g. Rahul Sharma')
@@ -898,6 +919,7 @@ class VerificationAuditRelationManager extends RelationManager
                     ->label('Documentary Proof of Acceptance (Images / PDFs)')
                     ->helperText(function (RelationManager $livewire): string {
                         $ticket = $livewire->getOwnerRecord();
+
                         return (bool) $ticket?->is_direct_vendor
                             ? 'Optional for direct repairs: Upload confirmation photos, signed notes, or chat approval if available.'
                             : 'Upload clear photos or PDFs of the signed confirmation, WhatsApp screenshot, or email. (Mandatory for Dwelly-coordinated)';
@@ -921,15 +943,15 @@ class VerificationAuditRelationManager extends RelationManager
                     'client_acceptance_notes' => $data['client_acceptance_notes'] ?? $ticket->client_acceptance_notes,
                 ]);
 
-                if (!empty($data['client_acceptance_proofs'])) {
+                if (! empty($data['client_acceptance_proofs'])) {
                     foreach ((array) $data['client_acceptance_proofs'] as $file) {
                         if (is_string($file)) {
-                            if (\Illuminate\Support\Facades\Storage::disk('public')->exists($file)) {
+                            if (Storage::disk('public')->exists($file)) {
                                 $ticket->addMediaFromDisk($file, 'public')->toMediaCollection('client_acceptance_proofs');
-                            } elseif (\Illuminate\Support\Facades\Storage::disk('local')->exists($file)) {
+                            } elseif (Storage::disk('local')->exists($file)) {
                                 $ticket->addMediaFromDisk($file, 'local')->toMediaCollection('client_acceptance_proofs');
-                            } elseif (\Illuminate\Support\Facades\Storage::disk('local')->exists('livewire-tmp/' . $file)) {
-                                $ticket->addMediaFromDisk('livewire-tmp/' . $file, 'local')->toMediaCollection('client_acceptance_proofs');
+                            } elseif (Storage::disk('local')->exists('livewire-tmp/'.$file)) {
+                                $ticket->addMediaFromDisk('livewire-tmp/'.$file, 'local')->toMediaCollection('client_acceptance_proofs');
                             } elseif (file_exists($file)) {
                                 $ticket->addMedia($file)->toMediaCollection('client_acceptance_proofs');
                             }
@@ -957,11 +979,13 @@ class VerificationAuditRelationManager extends RelationManager
             ->size('sm')
             ->visible(function (RelationManager $livewire) {
                 $ticket = $livewire->getOwnerRecord();
-                if (!$ticket) return false;
+                if (! $ticket) {
+                    return false;
+                }
 
                 $statusVal = $ticket->status instanceof MaintenanceStatus ? $ticket->status->value : (string) $ticket->status;
 
-                return empty($ticket->triggered_audit_id) && !in_array($statusVal, [
+                return empty($ticket->triggered_audit_id) && ! in_array($statusVal, [
                     'closed',
                     'cancelled',
                 ]);
@@ -980,6 +1004,7 @@ class VerificationAuditRelationManager extends RelationManager
                         ->body('There are no defect items recorded on this maintenance ticket.')
                         ->warning()
                         ->send();
+
                     return;
                 }
 

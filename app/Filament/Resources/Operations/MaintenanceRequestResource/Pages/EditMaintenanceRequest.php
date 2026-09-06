@@ -2,28 +2,31 @@
 
 namespace App\Filament\Resources\Operations\MaintenanceRequestResource\Pages;
 
+use App\Domain\Audit\Enums\AuditStatus;
 use App\Domain\Maintenance\Enums\MaintenanceStatus;
-use App\Domain\Maintenance\Services\MaintenanceAuditTriggerService;
-use App\Domain\Maintenance\Services\MaintenanceBillingService;
+use App\Domain\Maintenance\Models\MaintenanceClientQuote;
+use App\Filament\Resources\Billing\MaintenanceQuotationResource;
+use App\Filament\Resources\Operations\AuditResource;
 use App\Filament\Resources\Operations\MaintenanceRequestResource;
 use Filament\Actions\Action;
-use Filament\Actions\DeleteAction;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\HtmlString;
+use Illuminate\Support\Str;
 
 class EditMaintenanceRequest extends EditRecord
 {
     protected static string $resource = MaintenanceRequestResource::class;
 
-    public function getSubheading(): ?\Illuminate\Contracts\Support\Htmlable
+    public function getSubheading(): ?Htmlable
     {
         $status = $this->record->status ?? MaintenanceStatus::SUBMITTED;
         $statusLabel = e($status->getLabel());
 
         $quoteBadge = '';
-        if (!$this->record->is_direct_vendor) {
+        if (! $this->record->is_direct_vendor) {
             $quote = $this->record->currentClientQuote ?? $this->record->clientQuotes()->where('status', '!=', 'archived')->latest()->first();
             if ($quote) {
                 if ($quote->status === 'approved') {
@@ -46,11 +49,11 @@ class EditMaintenanceRequest extends EditRecord
         }
 
         return new HtmlString(
-            '<div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; color: #6b7280; margin-top: 0.25rem; flex-wrap: wrap;">' .
-            '<span>Status: <strong style="color: inherit; font-weight: 700;">' . $statusLabel . '</strong></span>' .
-            '<span style="color: #cbd5e1;">&bull;</span>' .
-            $quoteBadge .
-            ($lockedBadge ? '<span style="color: #cbd5e1;">&bull;</span>' . $lockedBadge : '') .
+            '<div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; color: #6b7280; margin-top: 0.25rem; flex-wrap: wrap;">'.
+            '<span>Status: <strong style="color: inherit; font-weight: 700;">'.$statusLabel.'</strong></span>'.
+            '<span style="color: #cbd5e1;">&bull;</span>'.
+            $quoteBadge.
+            ($lockedBadge ? '<span style="color: #cbd5e1;">&bull;</span>'.$lockedBadge : '').
             '</div>'
         );
     }
@@ -62,15 +65,19 @@ class EditMaintenanceRequest extends EditRecord
                 ->label('Open Quotations & Settlement')
                 ->icon('heroicon-o-calculator')
                 ->color('indigo')
-                ->visible(fn () => !$this->record->is_direct_vendor && (bool) ($this->record->currentClientQuote ?? $this->record->clientQuotes()->where('status', '!=', 'archived')->first()))
-                ->url(fn () => \App\Filament\Resources\Billing\MaintenanceQuotationResource::getUrl('edit', ['record' => $this->record->currentClientQuote ?? $this->record->clientQuotes()->where('status', '!=', 'archived')->first()]))
+                ->visible(fn () => ! $this->record->is_direct_vendor
+                    && (bool) ($this->record->currentClientQuote ?? $this->record->clientQuotes()->where('status', '!=', 'archived')->first())
+                    && (auth()->user()?->can('viewAny', MaintenanceClientQuote::class) ?? true))
+                ->url(fn () => MaintenanceQuotationResource::getUrl('edit', ['record' => $this->record->currentClientQuote ?? $this->record->clientQuotes()->where('status', '!=', 'archived')->first()]))
                 ->openUrlInNewTab(),
 
             Action::make('createFinancialWorkflow')
                 ->label('Prepare Quotation & Settlement')
                 ->icon('heroicon-o-plus-circle')
                 ->color('primary')
-                ->visible(fn () => !$this->record->is_direct_vendor && !($this->record->currentClientQuote ?? $this->record->clientQuotes()->where('status', '!=', 'archived')->first()))
+                ->visible(fn () => ! $this->record->is_direct_vendor
+                    && ! ($this->record->currentClientQuote ?? $this->record->clientQuotes()->where('status', '!=', 'archived')->first())
+                    && (auth()->user()?->can('create', MaintenanceClientQuote::class) ?? true))
                 ->disabled(fn () => blank($this->record->payer_type))
                 ->tooltip(fn () => blank($this->record->payer_type) ? 'Please select Who Pays? in the form first.' : 'Launch financial quotation job in Billing & Finance')
                 ->requiresConfirmation()
@@ -79,9 +86,9 @@ class EditMaintenanceRequest extends EditRecord
                 ->modalIcon('heroicon-o-calculator')
                 ->modalSubmitActionLabel('Yes, Prepare Quotation')
                 ->action(function () {
-                    $quote = \App\Domain\Maintenance\Models\MaintenanceClientQuote::create([
+                    $quote = MaintenanceClientQuote::create([
                         'maintenance_request_id' => $this->record->id,
-                        'quote_number' => 'QTE-' . date('Y') . '-' . strtoupper(\Illuminate\Support\Str::random(5)),
+                        'quote_number' => 'QTE-'.date('Y').'-'.strtoupper(Str::random(5)),
                         'status' => 'draft',
                         'total_amount' => 0.00,
                         'owner_amount' => 0.00,
@@ -100,7 +107,7 @@ class EditMaintenanceRequest extends EditRecord
                         ->success()
                         ->send();
 
-                    return redirect(\App\Filament\Resources\Billing\MaintenanceQuotationResource::getUrl('edit', ['record' => $quote]));
+                    return redirect(MaintenanceQuotationResource::getUrl('edit', ['record' => $quote]));
                 }),
 
             Action::make('startRepair')
@@ -112,7 +119,7 @@ class EditMaintenanceRequest extends EditRecord
                         MaintenanceStatus::SUBMITTED,
                         MaintenanceStatus::VENDOR_ASSIGNED,
                         MaintenanceStatus::QUOTATION_APPROVED,
-                    ]);
+                    ]) && (auth()->user()?->can('superviseRepair', $this->record) || auth()->user()?->can('update', $this->record) ?? false);
                 })
                 ->disabled(function () {
                     if (blank($this->record->payer_type)) {
@@ -120,7 +127,7 @@ class EditMaintenanceRequest extends EditRecord
                     }
 
                     if ($this->record->is_direct_vendor) {
-                        return !in_array($this->record->status, [
+                        return ! in_array($this->record->status, [
                             MaintenanceStatus::SUBMITTED,
                             MaintenanceStatus::VENDOR_ASSIGNED,
                         ]);
@@ -128,7 +135,7 @@ class EditMaintenanceRequest extends EditRecord
 
                     // Dwelly-coordinated route: disabled if quotation is not officially approved or work order is not issued
                     $quote = $this->record->currentClientQuote ?? $this->record->clientQuotes()->where('status', '!=', 'archived')->latest()->first();
-                    if (!$quote) {
+                    if (! $quote) {
                         return true;
                     }
 
@@ -136,7 +143,7 @@ class EditMaintenanceRequest extends EditRecord
                         return true;
                     }
 
-                    if (!$this->record->payer_type?->isDwellyAbsorbed() && $quote->status !== 'approved') {
+                    if (! $this->record->payer_type?->isDwellyAbsorbed() && $quote->status !== 'approved') {
                         return true;
                     }
 
@@ -147,12 +154,12 @@ class EditMaintenanceRequest extends EditRecord
                         return 'Select financial responsibility (Who Pays?) in the form first.';
                     }
 
-                    if (!$this->record->is_direct_vendor) {
+                    if (! $this->record->is_direct_vendor) {
                         $quote = $this->record->currentClientQuote ?? $this->record->clientQuotes()->where('status', '!=', 'archived')->latest()->first();
-                        if (!$quote) {
+                        if (! $quote) {
                             return 'Quotation required: Prepare quotation and issue work orders before proceeding with repair.';
                         }
-                        if (!$this->record->payer_type?->isDwellyAbsorbed() && $quote->status !== 'approved') {
+                        if (! $this->record->payer_type?->isDwellyAbsorbed() && $quote->status !== 'approved') {
                             return 'Quotation Approval Pending: Client must approve pricing before physical repairs can start.';
                         }
                         if (empty($quote->awarded_vendor_quote_ids)) {
@@ -166,21 +173,23 @@ class EditMaintenanceRequest extends EditRecord
                 ->modalHeading('Authorize & Start On-Site Repairs')
                 ->modalDescription(function () {
                     $ticketNumber = $this->record->ticket_number;
-                    $payer = $this->record->payer_type?->getLabel() ?? ucfirst((string)$this->record->payer_type);
+                    $payer = $this->record->payer_type?->getLabel() ?? ucfirst((string) $this->record->payer_type);
+
                     return "Confirm that technicians are authorized to commence on-site repair work for ticket #{$ticketNumber}. Financial responsibility: {$payer}.";
                 })
                 ->modalIcon('heroicon-o-play')
                 ->modalSubmitActionLabel('Yes, Proceed with Repair')
                 ->action(function () {
-                    if (!$this->record->is_direct_vendor) {
+                    if (! $this->record->is_direct_vendor) {
                         $quote = $this->record->currentClientQuote ?? $this->record->clientQuotes()->where('status', '!=', 'archived')->latest()->first();
-                        if (!$quote || $quote->status !== 'approved' || empty($quote->awarded_vendor_quote_ids)) {
+                        if (! $quote || $quote->status !== 'approved' || empty($quote->awarded_vendor_quote_ids)) {
                             Notification::make()
                                 ->title('Work Order Required')
                                 ->body('Work order must be awarded to at least one vendor quote in the quotation record before proceeding with repairs.')
                                 ->warning()
                                 ->persistent()
                                 ->send();
+
                             return;
                         }
                     }
@@ -199,13 +208,13 @@ class EditMaintenanceRequest extends EditRecord
                 }),
 
             Action::make('viewAudit')
-                ->label(fn () => $this->record->triggeredAudit ? ('View Audit #' . $this->record->triggeredAudit->audit_number) : 'View Verification Audit')
+                ->label(fn () => $this->record->triggeredAudit ? ('View Audit #'.$this->record->triggeredAudit->audit_number) : 'View Verification Audit')
                 ->icon('heroicon-o-clipboard-document-check')
                 ->color('info')
                 ->button()
                 ->size('sm')
-                ->visible(fn () => filled($this->record->triggered_audit_id) && (bool)$this->record->triggeredAudit)
-                ->url(fn () => \App\Filament\Resources\Operations\AuditResource::getUrl('inspect', ['record' => $this->record->triggeredAudit]))
+                ->visible(fn () => filled($this->record->triggered_audit_id) && (bool) $this->record->triggeredAudit)
+                ->url(fn () => AuditResource::getUrl('inspect', ['record' => $this->record->triggeredAudit]))
                 ->openUrlInNewTab(),
 
             Action::make('closeTicket')
@@ -214,11 +223,12 @@ class EditMaintenanceRequest extends EditRecord
                 ->color(fn () => $this->record->isWorkCompleted() ? 'success' : 'gray')
                 ->button()
                 ->size('sm')
-                ->disabled(fn () => !$this->record->isWorkCompleted())
-                ->tooltip(fn () => !$this->record->isWorkCompleted()
+                ->disabled(fn () => ! $this->record->isWorkCompleted())
+                ->tooltip(fn () => ! $this->record->isWorkCompleted()
                     ? 'Work must be marked completed with client acceptance before closing this ticket.'
                     : 'Close this completed maintenance ticket.')
-                ->visible(fn () => !in_array($this->record->status, [MaintenanceStatus::CLOSED, MaintenanceStatus::CANCELLED]))
+                ->visible(fn () => ! in_array($this->record->status, [MaintenanceStatus::CLOSED, MaintenanceStatus::CANCELLED])
+                    && (auth()->user()?->can('signOff', $this->record) || auth()->user()?->can('update', $this->record) ?? false))
                 ->requiresConfirmation()
                 ->modalHeading('Close Maintenance Ticket')
                 ->modalDescription('Confirm that on-site repairs are verified, client acceptance is recorded, and the ticket is ready to be closed.')
@@ -227,20 +237,21 @@ class EditMaintenanceRequest extends EditRecord
                     $audit = $record->triggeredAudit;
 
                     // If an optional audit was initiated, ensure it is approved before closing
-                    if ($audit && (!in_array($audit->status?->value ?? (string)$audit->status, ['approved', 'completed']) && !$audit->is_locked)) {
+                    if ($audit && (! in_array($audit->status?->value ?? (string) $audit->status, ['approved', 'completed']) && ! $audit->is_locked)) {
                         Notification::make()
                             ->title('Audit Verification Incomplete')
                             ->body('The linked post-repair verification audit is currently in progress. Please approve or complete the audit before closing.')
                             ->warning()
                             ->persistent()
                             ->send();
+
                         return;
                     }
 
                     // Permanently lock the audit if present
-                    if ($audit && !$audit->is_locked) {
+                    if ($audit && ! $audit->is_locked) {
                         $audit->update([
-                            'status' => \App\Domain\Audit\Enums\AuditStatus::APPROVED,
+                            'status' => AuditStatus::APPROVED,
                             'is_locked' => true,
                             'locked_at' => now(),
                             'locked_by_id' => auth()->id(),
@@ -253,7 +264,7 @@ class EditMaintenanceRequest extends EditRecord
                         'completed_at' => $record->completed_at ?? now(),
                     ]);
 
-                    $auditMsg = $audit ? " and Verification Audit #{$audit->audit_number} is locked." : ".";
+                    $auditMsg = $audit ? " and Verification Audit #{$audit->audit_number} is locked." : '.';
 
                     Notification::make()
                         ->title('Ticket Closed')
@@ -284,6 +295,7 @@ class EditMaintenanceRequest extends EditRecord
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
         $record->update($data);
+
         return $record;
     }
 

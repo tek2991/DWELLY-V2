@@ -6,17 +6,11 @@ use App\Domain\Agreement\Enums\DeboardingStatus;
 use App\Domain\Agreement\Models\TenancyAgreement;
 use App\Domain\Agreement\Models\TenantDeboarding;
 use App\Domain\Finance\Models\OwnerPayout;
-use App\Domain\Maintenance\Models\MaintenanceRequest;
-use App\Domain\Property\Models\Property;
 use BackedEnum;
-use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
-use Tek2991\Accounting\Enums\AccountType;
-use Tek2991\Accounting\Enums\BillStatus;
 use Tek2991\Accounting\Enums\InvoiceStatus;
-use Tek2991\Accounting\Models\Bill;
 use Tek2991\Accounting\Models\Invoice;
 use Tek2991\Accounting\Services\AccountService;
 use UnitEnum;
@@ -36,6 +30,23 @@ class FinancialDashboard extends Page
     protected static ?string $title = 'Financial & Accounting Intelligence';
 
     public string $activeTab = 'overview';
+
+    public static function canAccess(): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->roles->isEmpty()) {
+            return true;
+        }
+
+        // Allowed: Business Owner, City Manager, Accountant
+        // Forbidden: Operations Manager, Operations Executive, Demand Manager, Supply Manager
+        return $user->can('accounting.reports.view')
+            || $user->hasAnyRole(['Business Owner', 'City Manager', 'Accountant']);
+    }
 
     public function setTab(string $tab): void
     {
@@ -111,7 +122,7 @@ class FinancialDashboard extends Page
         $payoutsThisMonth = OwnerPayout::where('status', 'completed')
             ->where(function ($q) use ($currentMonth, $currentYear) {
                 $q->whereMonth('processed_at', $currentMonth)
-                  ->whereYear('processed_at', $currentYear);
+                    ->whereYear('processed_at', $currentYear);
             });
 
         $disbursedTotal = (float) (clone $payoutsThisMonth)->sum('amount');

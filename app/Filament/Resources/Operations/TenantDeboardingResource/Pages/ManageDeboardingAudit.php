@@ -27,18 +27,38 @@ class ManageDeboardingAudit extends EditRecord
 
     protected static ?string $title = 'Deboarding – Move-Out Verification Audit';
 
+    public static function canAccess(array $parameters = []): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->roles->isEmpty()) {
+            return true;
+        }
+
+        if ($user->hasAnyRole(['Supply Manager', 'Demand Manager', 'Accountant']) && ! $user->hasAnyRole(['Business Owner', 'City Manager', 'Operations Manager'])) {
+            return false;
+        }
+
+        return $user->can('deboarding.audit')
+            || $user->hasAnyRole(['Business Owner', 'City Manager', 'Operations Manager', 'Operations Executive']);
+    }
+
     protected function getHeaderActions(): array
     {
         /** @var TenantDeboarding $record */
         $record = $this->getRecord();
         $isCompleted = $record && $record->status === DeboardingStatus::COMPLETED;
+        $canTrigger = auth()->user()?->hasAnyRole(['Business Owner', 'City Manager', 'Operations Manager']) || auth()->user()?->roles->isEmpty();
 
         return [
             Action::make('triggerAudit')
                 ->label('Re-trigger Move-Out Audit')
                 ->icon('heroicon-o-clipboard-document-list')
                 ->color('info')
-                ->visible(fn () => ! $record->move_out_audit_id && ! $isCompleted)
+                ->visible(fn () => ! $record->move_out_audit_id && ! $isCompleted && $canTrigger)
                 ->action(function () use ($record) {
                     $service = app(TenancyDeboardingService::class);
                     $audit = $service->triggerMoveOutAudit($record->tenancyAgreement, auth()->user());

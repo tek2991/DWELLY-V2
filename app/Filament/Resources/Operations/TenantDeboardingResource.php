@@ -20,6 +20,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 
 class TenantDeboardingResource extends Resource
 {
@@ -34,6 +35,26 @@ class TenantDeboardingResource extends Resource
     protected static ?int $navigationSort = 4;
 
     protected static ?SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
+
+    public static function canViewAny(): bool
+    {
+        return auth()->user()?->can('viewAny', TenantDeboarding::class) ?? false;
+    }
+
+    public static function canCreate(): bool
+    {
+        return auth()->user()?->can('create', TenantDeboarding::class) ?? false;
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return auth()->user()?->can('update', $record) ?? false;
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return auth()->user()?->can('delete', $record) ?? false;
+    }
 
     public static function form(Schema $schema): Schema
     {

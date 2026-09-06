@@ -3,6 +3,7 @@
 namespace App\Filament\Pages\Billing;
 
 use App\Domain\Agreement\Models\TenancyAgreement;
+use App\Domain\Finance\Models\OwnerPayout;
 use App\Domain\Finance\Services\RentBillingService;
 use App\Domain\Finance\Services\SecurityDepositService;
 use App\Domain\Maintenance\Models\MaintenanceRequest;
@@ -14,8 +15,8 @@ use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Enums\Width;
@@ -24,13 +25,12 @@ use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Collection;
 use Tek2991\Accounting\Enums\BillStatus;
 use Tek2991\Accounting\Enums\InvoiceStatus;
+use Tek2991\Accounting\Facades\Accounting;
 use Tek2991\Accounting\Models\Account;
 use Tek2991\Accounting\Models\Bill;
 use Tek2991\Accounting\Models\Invoice;
-use App\Domain\Finance\Models\OwnerPayout;
 use Tek2991\Accounting\Models\Transaction;
 use Tek2991\Accounting\Services\BillService;
-use Tek2991\Accounting\Services\InvoiceService;
 
 class FinancialOperationsHub extends Page
 {
@@ -77,7 +77,8 @@ class FinancialOperationsHub extends Page
                 ->label('Bulk Generate Rent')
                 ->icon('heroicon-o-sparkles')
                 ->color('warning')
-                ->url(fn (): string => \App\Filament\Pages\Billing\BulkGenerateMonthlyRent::getUrl()),
+                ->visible(fn (): bool => auth()->user()?->can('billing.rent.generate') || auth()->user()?->hasAnyRole(['Business Owner', 'Accountant']) || (bool) auth()->user()?->roles->isEmpty())
+                ->url(fn (): string => BulkGenerateMonthlyRent::getUrl()),
 
             ActionGroup::make([
                 $this->recordDepositReceiptAction(),
@@ -86,16 +87,30 @@ class FinancialOperationsHub extends Page
                 $this->recordInvoicePaymentAction(),
                 $this->recordBillPaymentAction(),
             ])
-            ->label('Record / Settle')
-            ->icon('heroicon-m-plus-circle')
-            ->color('primary')
-            ->button(),
+                ->label('Record / Settle')
+                ->icon('heroicon-m-plus-circle')
+                ->color('primary')
+                ->visible(fn (): bool => auth()->user()?->can('billing.receipt.record') || auth()->user()?->can('billing.bill.pay') || auth()->user()?->hasAnyRole(['Business Owner', 'Accountant']) || (bool) auth()->user()?->roles->isEmpty())
+                ->button(),
         ];
     }
 
     public static function canAccess(): bool
     {
-        return true;
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->roles->isEmpty()) {
+            return true;
+        }
+
+        // Allowed: Business Owner, Accountant, City Manager, Operations Manager (read-only receivables)
+        // Forbidden: Operations Executive, Demand Manager, Supply Manager
+        return $user->can('billing.hub.access')
+            || $user->can('billing.viewAny')
+            || $user->hasAnyRole(['Business Owner', 'City Manager', 'Accountant', 'Operations Manager']);
     }
 
     public function setTab(string $tab): void
@@ -112,21 +127,21 @@ class FinancialOperationsHub extends Page
 
         $rawMaintDue = Invoice::where(function ($q) {
             $q->where('reference_type', MaintenanceRequest::class)
-              ->orWhere('notes', 'like', '%Maintenance%');
+                ->orWhere('notes', 'like', '%Maintenance%');
         })
-        ->where('status', '!=', InvoiceStatus::Cancelled)
-        ->where('balance_due', '>', 0)
-        ->sum('balance_due');
+            ->where('status', '!=', InvoiceStatus::Cancelled)
+            ->where('balance_due', '>', 0)
+            ->sum('balance_due');
 
         $activeDeposits = TenancyAgreement::where('status', 'active')
             ->sum('security_deposit');
 
         $pendingMoveOuts = TenancyAgreement::where(function ($q) {
             $q->whereIn('status', ['terminated', 'expired', 'notice_served', 'vacating'])
-              ->orWhere(function ($sub) {
-                  $sub->whereNotNull('vacating_date')
-                      ->whereDate('vacating_date', '<=', now()->toDateString());
-              });
+                ->orWhere(function ($sub) {
+                    $sub->whereNotNull('vacating_date')
+                        ->whereDate('vacating_date', '<=', now()->toDateString());
+                });
         })->count();
 
         $rawVendorPayable = Bill::where('status', '!=', BillStatus::Cancelled)
@@ -148,11 +163,11 @@ class FinancialOperationsHub extends Page
 
         $maintCount = Invoice::where(function ($q) {
             $q->where('reference_type', MaintenanceRequest::class)
-              ->orWhere('notes', 'like', '%Maintenance%');
+                ->orWhere('notes', 'like', '%Maintenance%');
         })
-        ->where('status', '!=', InvoiceStatus::Cancelled)
-        ->where('balance_due', '>', 0)
-        ->count();
+            ->where('status', '!=', InvoiceStatus::Cancelled)
+            ->where('balance_due', '>', 0)
+            ->count();
 
         $rentCount = Invoice::where('reference_type', TenancyAgreement::class)
             ->where('status', '!=', InvoiceStatus::Cancelled)
@@ -182,12 +197,12 @@ class FinancialOperationsHub extends Page
         $query = TenancyAgreement::with(['property.owner', 'roles.party'])
             ->when($this->propertyFilter, fn ($q) => $q->where('property_id', $this->propertyFilter));
 
-        if (!empty($this->search)) {
-            $term = '%' . strtolower($this->search) . '%';
+        if (! empty($this->search)) {
+            $term = '%'.strtolower($this->search).'%';
             $query->where(function ($q) use ($term) {
                 $q->where('code', 'like', $term)
-                  ->orWhereHas('property', fn ($p) => $p->where('building_name', 'like', $term)->orWhere('code', 'like', $term))
-                  ->orWhereHas('roles.party', fn ($party) => $party->where('display_name', 'like', $term));
+                    ->orWhereHas('property', fn ($p) => $p->where('building_name', 'like', $term)->orWhere('code', 'like', $term))
+                    ->orWhereHas('roles.party', fn ($party) => $party->where('display_name', 'like', $term));
             });
         }
 
@@ -212,10 +227,10 @@ class FinancialOperationsHub extends Page
                 ->orWhere('description', 'like', "%Deposit Settlement%{$agr->code}%")
                 ->latest()->first();
 
-            $isVacating = in_array($agr->status, ['terminated', 'expired', 'notice_served', 'vacating']) 
+            $isVacating = in_array($agr->status, ['terminated', 'expired', 'notice_served', 'vacating'])
                 || ($agr->vacating_date && Carbon::parse($agr->vacating_date)->isPast());
 
-            $isReceived = $receiptTxn !== null || !empty($agr->deposit_received_at);
+            $isReceived = $receiptTxn !== null || ! empty($agr->deposit_received_at);
             $isSettled = $settleTxn !== null;
 
             $placementStatus = 'Held in Bank';
@@ -242,9 +257,9 @@ class FinancialOperationsHub extends Page
             ];
         })->when($this->depositSubFilter !== 'all', function ($collection) {
             return match ($this->depositSubFilter) {
-                'pending_collection' => $collection->filter(fn ($i) => !$i['deposit_received']),
-                'in_custody' => $collection->filter(fn ($i) => $i['deposit_received'] && !$i['is_settled']),
-                'pending_settlement' => $collection->filter(fn ($i) => $i['is_vacating'] && !$i['is_settled']),
+                'pending_collection' => $collection->filter(fn ($i) => ! $i['deposit_received']),
+                'in_custody' => $collection->filter(fn ($i) => $i['deposit_received'] && ! $i['is_settled']),
+                'pending_settlement' => $collection->filter(fn ($i) => $i['is_vacating'] && ! $i['is_settled']),
                 default => $collection,
             };
         });
@@ -257,18 +272,18 @@ class FinancialOperationsHub extends Page
     {
         $query = Invoice::where(function ($q) {
             $q->where('reference_type', MaintenanceRequest::class)
-              ->orWhere('notes', 'like', '%Maintenance%');
+                ->orWhere('notes', 'like', '%Maintenance%');
         })
-        ->where('status', '!=', InvoiceStatus::Cancelled)
-        ->where('balance_due', '>', 0)
-        ->with(['contact']);
+            ->where('status', '!=', InvoiceStatus::Cancelled)
+            ->where('balance_due', '>', 0)
+            ->with(['contact']);
 
-        if (!empty($this->search)) {
-            $term = '%' . strtolower($this->search) . '%';
+        if (! empty($this->search)) {
+            $term = '%'.strtolower($this->search).'%';
             $query->where(function ($q) use ($term) {
                 $q->where('invoice_number', 'like', $term)
-                  ->orWhereHas('contact', fn ($c) => $c->where('name', 'like', $term))
-                  ->orWhere('notes', 'like', $term);
+                    ->orWhereHas('contact', fn ($c) => $c->where('name', 'like', $term))
+                    ->orWhere('notes', 'like', $term);
             });
         }
 
@@ -297,21 +312,21 @@ class FinancialOperationsHub extends Page
                 'grand_total' => (float) $inv->grand_total,
                 'amount_paid' => (float) $inv->amount_paid,
                 'balance_due' => (float) $inv->balance_due,
-                'status' => $inv->status instanceof \BackedEnum ? $inv->status->value : (string) $inv->status,
+                'status' => $inv->status instanceof BackedEnum ? $inv->status->value : (string) $inv->status,
                 'is_overdue' => $isOverdue,
                 'overdue_days' => $overdueDays,
                 'notes' => $inv->notes,
             ];
         })
-        ->when($this->propertyFilter, fn ($c) => $c->filter(fn ($i) => (string) $i['property_id'] === (string) $this->propertyFilter))
-        ->when($this->maintenanceSubFilter !== 'all', function ($collection) {
-            return match ($this->maintenanceSubFilter) {
-                'overdue' => $collection->filter(fn ($i) => $i['is_overdue']),
-                'partially_paid' => $collection->filter(fn ($i) => $i['amount_paid'] > 0),
-                'unpaid' => $collection->filter(fn ($i) => $i['amount_paid'] == 0),
-                default => $collection,
-            };
-        });
+            ->when($this->propertyFilter, fn ($c) => $c->filter(fn ($i) => (string) $i['property_id'] === (string) $this->propertyFilter))
+            ->when($this->maintenanceSubFilter !== 'all', function ($collection) {
+                return match ($this->maintenanceSubFilter) {
+                    'overdue' => $collection->filter(fn ($i) => $i['is_overdue']),
+                    'partially_paid' => $collection->filter(fn ($i) => $i['amount_paid'] > 0),
+                    'unpaid' => $collection->filter(fn ($i) => $i['amount_paid'] == 0),
+                    default => $collection,
+                };
+            });
     }
 
     /**
@@ -324,12 +339,12 @@ class FinancialOperationsHub extends Page
             ->where('balance_due', '>', 0)
             ->with(['contact']);
 
-        if (!empty($this->search)) {
-            $term = '%' . strtolower($this->search) . '%';
+        if (! empty($this->search)) {
+            $term = '%'.strtolower($this->search).'%';
             $query->where(function ($q) use ($term) {
                 $q->where('invoice_number', 'like', $term)
-                  ->orWhereHas('contact', fn ($c) => $c->where('name', 'like', $term))
-                  ->orWhere('notes', 'like', $term);
+                    ->orWhereHas('contact', fn ($c) => $c->where('name', 'like', $term))
+                    ->orWhere('notes', 'like', $term);
             });
         }
 
@@ -359,20 +374,20 @@ class FinancialOperationsHub extends Page
                 'grand_total' => (float) $inv->grand_total,
                 'amount_paid' => (float) $inv->amount_paid,
                 'balance_due' => (float) $inv->balance_due,
-                'status' => $inv->status instanceof \BackedEnum ? $inv->status->value : (string) $inv->status,
+                'status' => $inv->status instanceof BackedEnum ? $inv->status->value : (string) $inv->status,
                 'is_overdue' => $isOverdue,
                 'overdue_days' => $overdueDays,
             ];
         })
-        ->when($this->propertyFilter, fn ($c) => $c->filter(fn ($i) => (string) $i['property_id'] === (string) $this->propertyFilter))
-        ->when($this->rentSubFilter !== 'all', function ($collection) {
-            return match ($this->rentSubFilter) {
-                'overdue' => $collection->filter(fn ($i) => $i['is_overdue']),
-                'partially_paid' => $collection->filter(fn ($i) => $i['amount_paid'] > 0),
-                'unpaid' => $collection->filter(fn ($i) => $i['amount_paid'] == 0),
-                default => $collection,
-            };
-        });
+            ->when($this->propertyFilter, fn ($c) => $c->filter(fn ($i) => (string) $i['property_id'] === (string) $this->propertyFilter))
+            ->when($this->rentSubFilter !== 'all', function ($collection) {
+                return match ($this->rentSubFilter) {
+                    'overdue' => $collection->filter(fn ($i) => $i['is_overdue']),
+                    'partially_paid' => $collection->filter(fn ($i) => $i['amount_paid'] > 0),
+                    'unpaid' => $collection->filter(fn ($i) => $i['amount_paid'] == 0),
+                    default => $collection,
+                };
+            });
     }
 
     public function getRentInvoices(): Collection
@@ -389,12 +404,12 @@ class FinancialOperationsHub extends Page
             ->where('balance_due', '>', 0)
             ->with(['contact']);
 
-        if (!empty($this->search)) {
-            $term = '%' . strtolower($this->search) . '%';
+        if (! empty($this->search)) {
+            $term = '%'.strtolower($this->search).'%';
             $query->where(function ($q) use ($term) {
                 $q->where('bill_number', 'like', $term)
-                  ->orWhere('vendor_reference', 'like', $term)
-                  ->orWhereHas('contact', fn ($c) => $c->where('name', 'like', $term));
+                    ->orWhere('vendor_reference', 'like', $term)
+                    ->orWhereHas('contact', fn ($c) => $c->where('name', 'like', $term));
             });
         }
 
@@ -411,7 +426,7 @@ class FinancialOperationsHub extends Page
                 'grand_total' => (float) $bill->grand_total,
                 'amount_paid' => (float) $bill->amount_paid,
                 'balance_due' => (float) $bill->balance_due,
-                'status' => $bill->status instanceof \BackedEnum ? $bill->status->value : (string) $bill->status,
+                'status' => $bill->status instanceof BackedEnum ? $bill->status->value : (string) $bill->status,
                 'is_overdue' => $isOverdue,
             ];
         });
@@ -425,12 +440,12 @@ class FinancialOperationsHub extends Page
         $query = Property::with(['owner'])
             ->when($this->propertyFilter, fn ($q) => $q->where('id', $this->propertyFilter));
 
-        if (!empty($this->search)) {
-            $term = '%' . strtolower($this->search) . '%';
+        if (! empty($this->search)) {
+            $term = '%'.strtolower($this->search).'%';
             $query->where(function ($q) use ($term) {
                 $q->where('building_name', 'like', $term)
-                  ->orWhere('code', 'like', $term)
-                  ->orWhereHas('owner', fn ($o) => $o->where('display_name', 'like', $term));
+                    ->orWhere('code', 'like', $term)
+                    ->orWhereHas('owner', fn ($o) => $o->where('display_name', 'like', $term));
             });
         }
 
@@ -479,14 +494,14 @@ class FinancialOperationsHub extends Page
             ->modalWidth(Width::Large)
             ->modalDescription('Post double-entry transaction (DR Bank Account, CR Tenant Deposit Liability).')
             ->fillForm(fn (array $arguments) => array_merge([
-                'bank_account_id' => \Tek2991\Accounting\Facades\Accounting::getDefaultBankAccountId(),
+                'bank_account_id' => Accounting::getDefaultBankAccountId(),
                 'payment_date' => now()->toDateString(),
             ], $arguments))
             ->form([
                 Select::make('tenancy_agreement_id')
                     ->label('Tenancy Agreement')
                     ->options(fn () => TenancyAgreement::with('property')->get()->mapWithKeys(fn ($agr) => [
-                        $agr->id => "{$agr->code} - {$agr->property?->building_name} (Deposit: ₹" . number_format($agr->security_deposit ?? 0, 2) . ")"
+                        $agr->id => "{$agr->code} - {$agr->property?->building_name} (Deposit: ₹".number_format($agr->security_deposit ?? 0, 2).')',
                     ]))
                     ->searchable()
                     ->required()
@@ -509,7 +524,7 @@ class FinancialOperationsHub extends Page
                 Select::make('bank_account_id')
                     ->label('Receiving Bank / Cash Account')
                     ->options(fn () => Account::bankAndCashOptionsWithDefault())
-                    ->default(fn () => \Tek2991\Accounting\Facades\Accounting::getDefaultBankAccountId())
+                    ->default(fn () => Accounting::getDefaultBankAccountId())
                     ->allowHtml()
                     ->searchable()
                     ->preload()
@@ -538,7 +553,7 @@ class FinancialOperationsHub extends Page
 
                 Notification::make()
                     ->title('Deposit Receipt Recorded')
-                    ->body("Successfully recorded ₹" . number_format($data['amount'], 2) . " deposit receipt for {$agreement->code}")
+                    ->body('Successfully recorded ₹'.number_format($data['amount'], 2)." deposit receipt for {$agreement->code}")
                     ->success()
                     ->send();
             });
@@ -554,14 +569,14 @@ class FinancialOperationsHub extends Page
             ->modalWidth(Width::Large)
             ->modalDescription('Transfer security deposit to Property Owner and/or place into Fixed Deposit Escrow.')
             ->fillForm(fn (array $arguments) => array_merge([
-                'bank_account_id' => \Tek2991\Accounting\Facades\Accounting::getDefaultBankAccountId(),
+                'bank_account_id' => Accounting::getDefaultBankAccountId(),
                 'placement_date' => now()->toDateString(),
             ], $arguments))
             ->form([
                 Select::make('tenancy_agreement_id')
                     ->label('Tenancy Agreement')
                     ->options(fn () => TenancyAgreement::with('property')->get()->mapWithKeys(fn ($agr) => [
-                        $agr->id => "{$agr->code} - {$agr->property?->building_name} (Agreed: ₹" . number_format($agr->security_deposit ?? 0, 2) . ")"
+                        $agr->id => "{$agr->code} - {$agr->property?->building_name} (Agreed: ₹".number_format($agr->security_deposit ?? 0, 2).')',
                     ]))
                     ->searchable()
                     ->required(),
@@ -583,7 +598,7 @@ class FinancialOperationsHub extends Page
                 Select::make('bank_account_id')
                     ->label('Disbursement Bank Account')
                     ->options(fn () => Account::bankAndCashOptionsWithDefault())
-                    ->default(fn () => \Tek2991\Accounting\Facades\Accounting::getDefaultBankAccountId())
+                    ->default(fn () => Accounting::getDefaultBankAccountId())
                     ->allowHtml()
                     ->searchable()
                     ->preload()
@@ -633,7 +648,7 @@ class FinancialOperationsHub extends Page
                 Select::make('tenancy_agreement_id')
                     ->label('Tenancy Agreement')
                     ->options(fn () => TenancyAgreement::with('property')->get()->mapWithKeys(fn ($agr) => [
-                        $agr->id => "{$agr->code} - {$agr->property?->building_name} (Deposit: ₹" . number_format($agr->security_deposit ?? 0, 2) . ")"
+                        $agr->id => "{$agr->code} - {$agr->property?->building_name} (Deposit: ₹".number_format($agr->security_deposit ?? 0, 2).')',
                     ]))
                     ->searchable()
                     ->required(),
@@ -670,7 +685,7 @@ class FinancialOperationsHub extends Page
             ])
             ->action(function (array $data, SecurityDepositService $service) {
                 $agreement = TenancyAgreement::findOrFail($data['tenancy_agreement_id']);
-                $contractor = !empty($data['contractor_party_id']) ? Party::find($data['contractor_party_id']) : null;
+                $contractor = ! empty($data['contractor_party_id']) ? Party::find($data['contractor_party_id']) : null;
 
                 $service->recordDepositSettlement(
                     $agreement,
@@ -723,7 +738,7 @@ class FinancialOperationsHub extends Page
                 Select::make('bank_account_id')
                     ->label('Deposit To (Bank / Cash Account)')
                     ->options(fn () => Account::bankAndCashOptionsWithDefault())
-                    ->default(fn () => \Tek2991\Accounting\Facades\Accounting::getDefaultBankAccountId())
+                    ->default(fn () => Accounting::getDefaultBankAccountId())
                     ->allowHtml()
                     ->searchable()
                     ->preload()
@@ -755,7 +770,7 @@ class FinancialOperationsHub extends Page
 
                 Notification::make()
                     ->title('Payment Recorded')
-                    ->body("Recorded payment of ₹" . number_format($data['amount'], 2) . " for Invoice {$invoice->invoice_number}")
+                    ->body('Recorded payment of ₹'.number_format($data['amount'], 2)." for Invoice {$invoice->invoice_number}")
                     ->success()
                     ->send();
             });
@@ -795,7 +810,7 @@ class FinancialOperationsHub extends Page
                 Select::make('bank_account_id')
                     ->label('Paid From (Bank / Cash Account)')
                     ->options(fn () => Account::bankAndCashOptionsWithDefault())
-                    ->default(fn () => \Tek2991\Accounting\Facades\Accounting::getDefaultBankAccountId())
+                    ->default(fn () => Accounting::getDefaultBankAccountId())
                     ->allowHtml()
                     ->searchable()
                     ->preload()
@@ -822,7 +837,7 @@ class FinancialOperationsHub extends Page
 
                 Notification::make()
                     ->title('Vendor Payment Recorded')
-                    ->body("Recorded payment of ₹" . number_format($data['amount'], 2) . " for Bill {$bill->bill_number}")
+                    ->body('Recorded payment of ₹'.number_format($data['amount'], 2)." for Bill {$bill->bill_number}")
                     ->success()
                     ->send();
             });

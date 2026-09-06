@@ -2,11 +2,14 @@
 
 namespace App\Filament\Resources\Properties\RelationManagers;
 
+use App\Filament\Resources\Properties\RelationManagers\Traits\LocksDuringPropertyOnboarding;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
@@ -15,7 +18,7 @@ use Filament\Tables\Table;
 
 class PricingVersionsRelationManager extends RelationManager
 {
-    use \App\Filament\Resources\Properties\RelationManagers\Traits\LocksDuringPropertyOnboarding;
+    use LocksDuringPropertyOnboarding;
 
     protected static string $relationship = 'pricingVersions';
 
@@ -23,22 +26,22 @@ class PricingVersionsRelationManager extends RelationManager
     {
         return $schema
             ->components([
-                \Filament\Forms\Components\DatePicker::make('effective_from')
+                DatePicker::make('effective_from')
                     ->required(),
-                \Filament\Forms\Components\DatePicker::make('effective_to'),
-                \Filament\Forms\Components\TextInput::make('rent')
+                DatePicker::make('effective_to'),
+                TextInput::make('rent')
                     ->numeric()
                     ->prefix('₹'),
-                \Filament\Forms\Components\TextInput::make('security_deposit')
+                TextInput::make('security_deposit')
                     ->numeric()
                     ->prefix('₹'),
-                \Filament\Forms\Components\TextInput::make('society_fee')
+                TextInput::make('society_fee')
                     ->numeric()
                     ->prefix('₹'),
-                \Filament\Forms\Components\TextInput::make('booking_amount')
+                TextInput::make('booking_amount')
                     ->numeric()
                     ->prefix('₹'),
-                \Filament\Forms\Components\Textarea::make('notes')
+                Textarea::make('notes')
                     ->columnSpanFull(),
             ]);
     }

@@ -2,16 +2,18 @@
 
 namespace App\Filament\Resources\Operations\MaintenanceRequestResource\Tables;
 
+use App\Domain\Audit\Enums\AuditStatus;
+use App\Domain\Audit\Services\AuditReviewService;
 use App\Domain\Maintenance\Enums\MaintenancePriority;
 use App\Domain\Maintenance\Enums\MaintenanceStatus;
 use App\Domain\Maintenance\Enums\PayerType;
-use App\Domain\Maintenance\Services\MaintenanceAuditTriggerService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
-use Illuminate\Support\HtmlString;
 
 class MaintenanceRequestsTable
 {
@@ -32,7 +34,7 @@ class MaintenanceRequestsTable
                     ->formatStateUsing(fn ($state, $record) => $state ?: ($record->property?->building_name ?? '—'))
                     ->tooltip(function ($record) {
                         $property = $record->property;
-                        if (!$property) {
+                        if (! $property) {
                             return null;
                         }
 
@@ -42,7 +44,7 @@ class MaintenanceRequestsTable
                             $property->city,
                         ]);
 
-                        return !empty($parts) ? implode(', ', $parts) : ($property->building_name ?: "Property #{$property->id}");
+                        return ! empty($parts) ? implode(', ', $parts) : ($property->building_name ?: "Property #{$property->id}");
                     }),
 
                 TextColumn::make('title')
@@ -78,6 +80,7 @@ class MaintenanceRequestsTable
                         if ($count > 0) {
                             return "{$count} Trade(s)";
                         }
+
                         return $record->vendor?->display_name ?? 'Unassigned';
                     }),
 
@@ -99,13 +102,13 @@ class MaintenanceRequestsTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                \Filament\Tables\Filters\SelectFilter::make('status')
+                SelectFilter::make('status')
                     ->options(MaintenanceStatus::class),
-                \Filament\Tables\Filters\SelectFilter::make('priority')
+                SelectFilter::make('priority')
                     ->options(MaintenancePriority::class),
-                \Filament\Tables\Filters\SelectFilter::make('payer_type')
+                SelectFilter::make('payer_type')
                     ->options(PayerType::class),
-                \Filament\Tables\Filters\TernaryFilter::make('is_direct_vendor')
+                TernaryFilter::make('is_direct_vendor')
                     ->label('Execution Route')
                     ->trueLabel('Direct Repair')
                     ->falseLabel('Dwelly Coordinated'),
@@ -115,25 +118,26 @@ class MaintenanceRequestsTable
                     ->label('Close Ticket')
                     ->icon('heroicon-o-lock-closed')
                     ->color(fn ($record) => $record->isWorkCompleted() ? 'success' : 'gray')
-                    ->disabled(fn ($record) => !$record->isWorkCompleted())
-                    ->tooltip(fn ($record) => !$record->isWorkCompleted()
+                    ->disabled(fn ($record) => ! $record->isWorkCompleted())
+                    ->tooltip(fn ($record) => ! $record->isWorkCompleted()
                         ? 'Work must be marked completed with client acceptance before closing this ticket.'
                         : 'Close this completed maintenance ticket.')
                     ->requiresConfirmation()
                     ->modalHeading('Close Maintenance Request')
                     ->modalDescription('Are you sure you want to close this maintenance ticket?')
-                    ->visible(fn ($record) => !in_array($record->status, [MaintenanceStatus::CLOSED, MaintenanceStatus::CANCELLED]))
+                    ->visible(fn ($record) => ! in_array($record->status, [MaintenanceStatus::CLOSED, MaintenanceStatus::CANCELLED]))
                     ->action(function ($record) {
                         if ($record->triggered_audit_id && $record->triggeredAudit) {
                             $auditStatus = $record->triggeredAudit->status;
-                            $statusVal = $auditStatus instanceof \App\Domain\Audit\Enums\AuditStatus ? $auditStatus->value : (string) $auditStatus;
-                            if (!in_array($statusVal, ['approved', 'completed']) && !$record->triggeredAudit->is_locked) {
+                            $statusVal = $auditStatus instanceof AuditStatus ? $auditStatus->value : (string) $auditStatus;
+                            if (! in_array($statusVal, ['approved', 'completed']) && ! $record->triggeredAudit->is_locked) {
                                 Notification::make()
                                     ->title('Cannot Close Maintenance Request')
                                     ->body('The linked post-repair verification audit is currently in progress. Please approve or complete the audit first.')
                                     ->warning()
                                     ->persistent()
                                     ->send();
+
                                 return;
                             }
                         }
@@ -144,8 +148,8 @@ class MaintenanceRequestsTable
                             'completed_at' => $record->completed_at ?? now(),
                         ]);
 
-                        if ($record->triggered_audit_id && $record->triggeredAudit && !$record->triggeredAudit->is_locked) {
-                            app(\App\Domain\Audit\Services\AuditReviewService::class)->lockAudit($record->triggeredAudit, auth()->user());
+                        if ($record->triggered_audit_id && $record->triggeredAudit && ! $record->triggeredAudit->is_locked) {
+                            app(AuditReviewService::class)->lockAudit($record->triggeredAudit, auth()->user());
                         }
 
                         Notification::make()

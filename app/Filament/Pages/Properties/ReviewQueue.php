@@ -5,15 +5,18 @@ namespace App\Filament\Pages\Properties;
 use App\Domain\Property\Enums\OnboardingStatus;
 use App\Domain\Property\Models\Property;
 use App\Domain\Property\Services\PropertyOnboardingValidator;
+use App\Filament\Clusters\PropertiesCluster;
 use App\Filament\Resources\Properties\PropertyResource;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Pages\Page;
+use Filament\Resources\Components\Tab;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 
 class ReviewQueue extends Page implements HasTable
@@ -22,7 +25,7 @@ class ReviewQueue extends Page implements HasTable
 
     protected string $view = 'filament.pages.properties.review-queue';
 
-    protected static ?string $cluster = \App\Filament\Clusters\PropertiesCluster::class;
+    protected static ?string $cluster = PropertiesCluster::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedShieldCheck;
 
@@ -30,9 +33,9 @@ class ReviewQueue extends Page implements HasTable
 
     protected static ?int $navigationSort = 3;
 
-    public function getTitle(): string|\Illuminate\Contracts\Support\Htmlable
+    public function getTitle(): string|Htmlable
     {
-        return 'Review Queue';
+        return 'Onboarding Review Queue';
     }
 
     public static function canAccess(): bool
@@ -42,11 +45,8 @@ class ReviewQueue extends Page implements HasTable
             return false;
         }
 
-        if ($user->roles->isEmpty()) {
-            return true;
-        }
-
-        return $user->hasAnyRole(['Business Owner', 'Operations Manager', 'Admin', 'Super Admin']);
+        return $user->can('property.review')
+            || $user->hasAnyRole(['Business Owner', 'City Manager', 'Operations Manager', 'Admin', 'Super Admin']);
     }
 
     public function table(Table $table): Table
@@ -93,7 +93,7 @@ class ReviewQueue extends Page implements HasTable
                         $validator = app(PropertyOnboardingValidator::class);
                         $data = $validator->validate($record);
 
-                        return $data['progress'] . '%';
+                        return $data['progress'].'%';
                     })
                     ->badge()
                     ->color(fn (string $state): string => (int) $state === 100 ? 'success' : 'warning'),
@@ -156,18 +156,18 @@ class ReviewQueue extends Page implements HasTable
     public function getTabs(): array
     {
         return [
-            'pending_review' => \Filament\Resources\Components\Tab::make('Pending Review')
+            'pending_review' => Tab::make('Pending Review')
                 ->badge(fn () => Property::whereHas('onboardingProject', fn ($q) => $q->where('status', 'Pending Review'))->count())
                 ->badgeColor('warning')
                 ->modifyQueryUsing(fn (Builder $query) => $query->whereHas('onboardingProject', fn ($q) => $q->where('status', 'Pending Review'))),
 
-            'changes_requested' => \Filament\Resources\Components\Tab::make('Changes Requested')
+            'changes_requested' => Tab::make('Changes Requested')
                 ->modifyQueryUsing(fn (Builder $query) => $query->whereHas('onboardingProject', fn ($q) => $q->where('status', 'Changes Requested'))),
 
-            'assigned_to_me' => \Filament\Resources\Components\Tab::make('Assigned To Me')
+            'assigned_to_me' => Tab::make('Assigned To Me')
                 ->modifyQueryUsing(fn (Builder $query) => $query->whereHas('onboardingProject', fn ($q) => $q->where('reviewer_id', auth()->id()))),
 
-            'all' => \Filament\Resources\Components\Tab::make('All Pending'),
+            'all' => Tab::make('All Pending'),
         ];
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Properties\RelationManagers\Traits;
 
+use App\Domain\Property\Models\Property;
 use App\Filament\Resources\Properties\Pages\OnboardingDashboard;
 
 trait LocksDuringPropertyOnboarding
@@ -13,8 +14,8 @@ trait LocksDuringPropertyOnboarding
         }
 
         $property = $this->getOwnerRecord();
-        
-        if ($property instanceof \App\Domain\Property\Models\Property && $property->isLockedDuringOnboarding()) {
+
+        if ($property instanceof Property && $property->isLockedDuringOnboarding()) {
             return true;
         }
 
@@ -51,4 +52,3 @@ trait LocksDuringPropertyOnboarding
         $this->dispatch('refresh-onboarding-progress');
     }
 }
-

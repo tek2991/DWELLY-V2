@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Parties\Tables;
 
+use App\Domain\Auth\Enums\RoleName;
 use App\Domain\Party\Enums\BusinessRole;
 use App\Domain\Party\Enums\VendorOnboardingStatus;
 use App\Domain\Party\Services\VendorOnboardingService;
@@ -67,7 +68,7 @@ class PartiesTable
                     ->label('Vendor Onboarding Status')
                     ->options(VendorOnboardingStatus::class)
                     ->query(function ($query, array $data) {
-                        if (!empty($data['value'])) {
+                        if (! empty($data['value'])) {
                             $query->whereHas('vendorProfile', fn ($q) => $q->where('onboarding_status', $data['value']));
                         }
                     }),
@@ -77,7 +78,9 @@ class PartiesTable
                     ->label('Verify')
                     ->icon('heroicon-o-check-badge')
                     ->color('success')
-                    ->visible(fn ($record) => $record->hasRole(BusinessRole::VENDOR) && $record->vendorProfile?->onboarding_status !== VendorOnboardingStatus::VERIFIED)
+                    ->visible(fn ($record) => $record->hasRole(BusinessRole::VENDOR)
+                        && $record->vendorProfile?->onboarding_status !== VendorOnboardingStatus::VERIFIED
+                        && (auth()->user()?->hasAnyRole([RoleName::BUSINESS_OWNER, RoleName::CITY_MANAGER, RoleName::OPERATIONS_MANAGER]) || (auth()->user()?->can('party.verify') ?? false)))
                     ->requiresConfirmation()
                     ->modalHeading('Verify & Approve Vendor')
                     ->modalDescription(fn ($record) => "Approve {$record->display_name} as an active, verified vendor for maintenance assignments.")
@@ -89,7 +92,9 @@ class PartiesTable
                     ])
                     ->action(function ($record, array $data) {
                         $profile = $record->vendorProfile;
-                        if (!$profile) return;
+                        if (! $profile) {
+                            return;
+                        }
 
                         app(VendorOnboardingService::class)->verifyVendor(
                             profile: $profile,

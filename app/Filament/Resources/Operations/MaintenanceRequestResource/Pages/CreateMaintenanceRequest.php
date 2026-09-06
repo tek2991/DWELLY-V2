@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Operations\MaintenanceRequestResource\Pages;
 
+use App\Domain\Maintenance\Enums\MaintenanceStatus;
 use App\Filament\Resources\Operations\MaintenanceRequestResource;
 use Filament\Resources\Pages\CreateRecord;
 
@@ -12,11 +13,11 @@ class CreateMaintenanceRequest extends CreateRecord
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         $data['created_by_id'] = auth()->id();
-        $data['status'] = !empty($data['vendor_party_id'])
-            ? \App\Domain\Maintenance\Enums\MaintenanceStatus::VENDOR_ASSIGNED
-            : \App\Domain\Maintenance\Enums\MaintenanceStatus::SUBMITTED;
+        $data['status'] = ! empty($data['vendor_party_id'])
+            ? MaintenanceStatus::VENDOR_ASSIGNED
+            : MaintenanceStatus::SUBMITTED;
 
-        if (!empty($data['vendor_party_id'])) {
+        if (! empty($data['vendor_party_id'])) {
             $data['assigned_at'] = now();
         }
 

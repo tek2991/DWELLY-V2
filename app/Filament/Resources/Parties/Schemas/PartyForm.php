@@ -2,17 +2,22 @@
 
 namespace App\Filament\Resources\Parties\Schemas;
 
-use Filament\Schemas\Schema;
-use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Toggle;
-use Filament\Forms\Components\Textarea;
+use App\Domain\Party\Enums\VendorOnboardingStatus;
+use App\Domain\Party\Models\VendorTrade;
+use App\Domain\Property\Models\Property;
+use App\Filament\Resources\Properties\PropertyResource;
+use Filament\Actions\Action;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
-use Filament\Actions\Action;
+use Filament\Schemas\Schema;
 use Illuminate\Support\HtmlString;
 use Tek2991\Accounting\Enums\GstRegistrationType;
 use Tek2991\Accounting\Models\State;
@@ -44,7 +49,7 @@ class PartyForm
                             ->maxLength(255),
                         Select::make('state_id')
                             ->label('State (Accounting)')
-                            ->options(fn() => \Tek2991\Accounting\Models\State::pluck('name', 'id'))
+                            ->options(fn () => State::pluck('name', 'id'))
                             ->searchable(),
 
                         Toggle::make('is_tax_registered')
@@ -69,13 +74,15 @@ class PartyForm
                             ->maxLength(15)
                             ->live(debounce: 500)
                             ->afterStateUpdated(function (?string $state, $set, $get) {
-                                if (empty($state)) return;
-                                
-                                $validator = new GstinValidator();
+                                if (empty($state)) {
+                                    return;
+                                }
+
+                                $validator = new GstinValidator;
                                 $stateCode = $validator->extractStateCode($state);
-                                
+
                                 if ($stateCode && empty($get('../../state_id'))) {
-                                    $matchedState = \Tek2991\Accounting\Models\State::where('gst_state_code', $stateCode)->first();
+                                    $matchedState = State::where('gst_state_code', $stateCode)->first();
                                     if ($matchedState) {
                                         $set('../../state_id', $matchedState->id);
                                     }
@@ -83,13 +90,13 @@ class PartyForm
                             })
                             ->rules([
                                 fn ($get): \Closure => function (string $attribute, $value, \Closure $fail) use ($get) {
-                                    $validator = new GstinValidator();
-                                    $selectedState = \Tek2991\Accounting\Models\State::find($get('../../state_id'));
+                                    $validator = new GstinValidator;
+                                    $selectedState = State::find($get('../../state_id'));
                                     $result = $validator->validate($value, $selectedState);
-                                    
-                                    if (!$result->isValidFormat) {
+
+                                    if (! $result->isValidFormat) {
                                         $fail('The GSTIN format is invalid.');
-                                    } elseif (!$result->isValidStateCode) {
+                                    } elseif (! $result->isValidStateCode) {
                                         $fail("The GSTIN prefix does not match the selected state's code.");
                                     }
                                 },
@@ -108,13 +115,15 @@ class PartyForm
                             ->maxLength(15)
                             ->live(debounce: 500)
                             ->afterStateUpdated(function (?string $state, $set, $get) {
-                                if (empty($state)) return;
-                                
-                                $validator = new GstinValidator();
+                                if (empty($state)) {
+                                    return;
+                                }
+
+                                $validator = new GstinValidator;
                                 $stateCode = $validator->extractStateCode($state);
-                                
+
                                 if ($stateCode && empty($get('../../state_id'))) {
-                                    $matchedState = \Tek2991\Accounting\Models\State::where('gst_state_code', $stateCode)->first();
+                                    $matchedState = State::where('gst_state_code', $stateCode)->first();
                                     if ($matchedState) {
                                         $set('../../state_id', $matchedState->id);
                                     }
@@ -122,13 +131,13 @@ class PartyForm
                             })
                             ->rules([
                                 fn ($get): \Closure => function (string $attribute, $value, \Closure $fail) use ($get) {
-                                    $validator = new GstinValidator();
-                                    $selectedState = \Tek2991\Accounting\Models\State::find($get('../../state_id'));
+                                    $validator = new GstinValidator;
+                                    $selectedState = State::find($get('../../state_id'));
                                     $result = $validator->validate($value, $selectedState);
-                                    
-                                    if (!$result->isValidFormat) {
+
+                                    if (! $result->isValidFormat) {
                                         $fail('The GSTIN format is invalid.');
-                                    } elseif (!$result->isValidStateCode) {
+                                    } elseif (! $result->isValidStateCode) {
                                         $fail("The GSTIN prefix does not match the selected state's code.");
                                     }
                                 },
@@ -150,11 +159,11 @@ class PartyForm
                             ->modalHeading('Update Bank Details Warning')
                             ->modalDescription('Bank details should ideally be updated via the official MOU update workflow on the Property\'s Financial Terms & MOU page.')
                             ->modalContent(function ($record) {
-                                if (!$record) {
+                                if (! $record) {
                                     return new HtmlString('<p class="text-sm text-gray-600 dark:text-gray-400">Save the party profile before linking to properties.</p>');
                                 }
-                                
-                                $properties = \App\Domain\Property\Models\Property::where('owner_party_id', $record->id)
+
+                                $properties = Property::where('owner_party_id', $record->id)
                                     ->orWhereHas('mous', fn ($q) => $q->where('party_id', $record->id))
                                     ->distinct()
                                     ->get();
@@ -164,8 +173,9 @@ class PartyForm
                                 }
 
                                 $links = $properties->map(function ($property) {
-                                    $url = \App\Filament\Resources\Properties\PropertyResource::getUrl('financials', ['record' => $property]);
-                                    $code = e($property->code ?? $property->building_name ?? 'Property #' . $property->id);
+                                    $url = PropertyResource::getUrl('financials', ['record' => $property]);
+                                    $code = e($property->code ?? $property->building_name ?? 'Property #'.$property->id);
+
                                     return "<li class=\"py-1\"><a href=\"{$url}\" target=\"_blank\" class=\"text-primary-600 hover:underline font-semibold inline-flex items-center gap-1\"><svg class=\"w-4 h-4 inline\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2\" d=\"M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14\"/></svg> {$code} &mdash; Financial Terms & MOU</a></li>";
                                 })->implode('');
 
@@ -182,15 +192,15 @@ class PartyForm
                             ->modalSubmitActionLabel('Unlock Manual Editing')
                             ->action(function (Set $set) {
                                 $set('is_bank_editing_unlocked', true);
-                                \Filament\Notifications\Notification::make()
+                                Notification::make()
                                     ->title('Manual Editing Unlocked')
                                     ->body('You can now edit bank details directly. Remember to save changes.')
                                     ->warning()
                                     ->send();
                             })
-                            ->visible(fn (Get $get) => !$get('is_bank_editing_unlocked')),
+                            ->visible(fn (Get $get) => ! $get('is_bank_editing_unlocked')),
                     ])
-                    ->disabled(fn (Get $get) => !$get('is_bank_editing_unlocked'))
+                    ->disabled(fn (Get $get) => ! $get('is_bank_editing_unlocked'))
                     ->columns(2)
                     ->schema([
                         Hidden::make('is_bank_editing_unlocked')
@@ -249,11 +259,11 @@ class PartyForm
                     ->schema([
                         Select::make('vendor_data.vendor_trade_id')
                             ->label('Vendor Trade / Specialty')
-                            ->options(fn () => \App\Domain\Party\Models\VendorTrade::pluck('name', 'id'))
+                            ->options(fn () => VendorTrade::pluck('name', 'id'))
                             ->searchable(),
                         Select::make('vendor_data.onboarding_status')
                             ->label('Vendor Onboarding Status')
-                            ->options(\App\Domain\Party\Enums\VendorOnboardingStatus::class)
+                            ->options(VendorOnboardingStatus::class)
                             ->default('draft'),
                         Toggle::make('vendor_data.is_preferred')
                             ->label('Preferred Vendor')

@@ -2,39 +2,48 @@
 
 namespace App\Filament\Resources\Properties\Pages;
 
-use App\Filament\Resources\Properties\PropertyResource;
-use App\Domain\Opportunity\Models\FinancialModel;
 use App\Domain\Mou\Enums\MouType;
-use App\Domain\Opportunity\Enums\MouStatus;
 use App\Domain\Mou\Models\Mou;
-use App\Domain\Mou\Services\PropertyUpdateMouService;
 use App\Domain\Mou\Services\MouWorkflowService;
-use Filament\Resources\Pages\Page;
-use Filament\Resources\Pages\Concerns\InteractsWithRecord;
-use Filament\Schemas\Schema;
-use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\Toggle;
+use App\Domain\Mou\Services\PropertyUpdateMouService;
+use App\Domain\Opportunity\Enums\MouStatus;
+use App\Domain\Opportunity\Models\FinancialModel;
+use App\Domain\Party\Models\OwnerProfile;
+use App\Domain\Party\Models\Party;
+use App\Domain\Party\Models\PartyBankAccount;
+use App\Filament\Resources\Properties\PropertyResource;
+use App\Filament\Resources\Properties\RelationManagers\AdditionalDocumentsRelationManager;
+use App\Filament\Resources\Properties\RelationManagers\MappedDocumentsRelationManager;
+use App\Filament\Resources\Properties\RelationManagers\TenancyAgreementsRelationManager;
+use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Placeholder;
-use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\Grid;
-use Filament\Schemas\Components\Group;
-use Filament\Schemas\Components\Tabs;
-use Filament\Schemas\Components\Actions;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
-use Filament\Actions\Action;
 use Filament\Notifications\Notification;
+use Filament\Resources\Pages\Concerns\InteractsWithRecord;
+use Filament\Resources\Pages\Page;
+use Filament\Schemas\Components\Actions;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Group;
+use Filament\Schemas\Components\Livewire;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Tabs;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Schema;
 use Filament\Support\Enums\Alignment;
 use Illuminate\Support\HtmlString;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 class PropertyFinancials extends Page implements HasForms
 {
-    use InteractsWithRecord;
     use InteractsWithForms;
+    use InteractsWithRecord;
 
     protected static string $resource = PropertyResource::class;
 
@@ -51,38 +60,45 @@ class PropertyFinancials extends Page implements HasForms
             return false;
         }
 
-        return $user->can('finance.access') || $user->hasAnyRole(['Business Owner', 'Operations Manager', 'Accountant']);
+        // Demand Managers and Operations Executives are strictly forbidden from viewing financials
+        if ($user->hasAnyRole(['Demand Manager', 'Operations Executive']) && ! $user->hasAnyRole(['Business Owner', 'City Manager', 'Accountant', 'Operations Manager', 'Supply Manager', 'Admin', 'Super Admin'])) {
+            return false;
+        }
+
+        return $user->can('property.financials.view')
+            || $user->can('finance.access')
+            || $user->hasAnyRole(['Business Owner', 'City Manager', 'Accountant', 'Operations Manager', 'Supply Manager', 'Admin', 'Super Admin']);
     }
 
     public ?array $data = [];
 
-    public function mount(int | string $record): void
+    public function mount(int|string $record): void
     {
         $this->record = $this->resolveRecord($record);
         $this->loadFormData();
     }
 
-    public function getSubheading(): string | HtmlString | null
+    public function getSubheading(): string|HtmlString|null
     {
-        if (!$this->record) {
+        if (! $this->record) {
             return null;
         }
 
         $code = $this->record->code;
-        $name = $this->record->building_name ?? $this->record->address_line_1 ?? 'Property #' . $this->record->id;
+        $name = $this->record->building_name ?? $this->record->address_line_1 ?? 'Property #'.$this->record->id;
         $propertyUrl = PropertyResource::getUrl('edit', ['record' => $this->record]);
 
         $codeBadge = $code
-            ? '<span class="inline-flex items-center gap-1 font-mono text-xs font-semibold px-2 py-0.5 rounded bg-primary-50 text-primary-700 dark:bg-primary-950/50 dark:text-primary-300 ring-1 ring-inset ring-primary-600/20">' . e($code) . '</span>'
+            ? '<span class="inline-flex items-center gap-1 font-mono text-xs font-semibold px-2 py-0.5 rounded bg-primary-50 text-primary-700 dark:bg-primary-950/50 dark:text-primary-300 ring-1 ring-inset ring-primary-600/20">'.e($code).'</span>'
             : '';
 
         return new HtmlString(
-            '<div class="flex items-center gap-2 text-sm font-medium mt-1">' .
-                $codeBadge .
-                '<span class="text-gray-900 dark:text-white font-semibold text-base">' . e($name) . '</span>' .
-                '<a href="' . $propertyUrl . '" class="inline-flex items-center justify-center p-1 rounded bg-primary-100 hover:bg-primary-200 text-primary-700 dark:bg-primary-900/60 dark:hover:bg-primary-900 dark:text-primary-300 transition-colors" title="View Property Profile" aria-label="View Property Profile">' .
-                    '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>' .
-                '</a>' .
+            '<div class="flex items-center gap-2 text-sm font-medium mt-1">'.
+                $codeBadge.
+                '<span class="text-gray-900 dark:text-white font-semibold text-base">'.e($name).'</span>'.
+                '<a href="'.$propertyUrl.'" class="inline-flex items-center justify-center p-1 rounded bg-primary-100 hover:bg-primary-200 text-primary-700 dark:bg-primary-900/60 dark:hover:bg-primary-900 dark:text-primary-300 transition-colors" title="View Property Profile" aria-label="View Property Profile">'.
+                    '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>'.
+                '</a>'.
             '</div>'
         );
     }
@@ -95,11 +111,11 @@ class PropertyFinancials extends Page implements HasForms
         $activeSignatoryMou = $this->activeSignatoryMou;
 
         // Bank Details: check linked owner party first, then active bank MOU
-        $ownerParty = $this->record->owner_party_id 
-            ? \App\Domain\Party\Models\Party::find($this->record->owner_party_id) 
+        $ownerParty = $this->record->owner_party_id
+            ? Party::find($this->record->owner_party_id)
             : $this->record->mous()->whereNotNull('party_id')->latest()->first()?->party;
         $primaryBankAccount = $ownerParty?->bankAccounts()->where('is_primary', true)->first();
-        
+
         $bankDetails = [];
         if ($primaryBankAccount) {
             $bankDetails = [
@@ -116,6 +132,15 @@ class PropertyFinancials extends Page implements HasForms
             }
         }
 
+        // Apply Bank Masking for roles without unmasked bank permissions
+        $user = auth()->user();
+        $canViewUnmasked = $user && ($user->can('property.bank.view_unmasked') || $user->hasAnyRole(['Business Owner', 'City Manager', 'Accountant', 'Admin', 'Super Admin']));
+        if (! $canViewUnmasked && ! empty($bankDetails['account_number'])) {
+            $rawAcc = (string) $bankDetails['account_number'];
+            $last4 = substr($rawAcc, -4);
+            $bankDetails['account_number'] = str_repeat('•', max(0, strlen($rawAcc) - 4)).$last4;
+        }
+
         // Pricing details
         $financialModelName = $latestPricing?->pricing_model
             ?? $activePricingMou?->legal_terms['financial_model_name']
@@ -127,7 +152,7 @@ class PropertyFinancials extends Page implements HasForms
             ?? $activePricingMou?->legal_terms['fee_percentage']
             ?? null;
 
-        $startDate = $latestPricing?->effective_from?->format('Y-m-d') 
+        $startDate = $latestPricing?->effective_from?->format('Y-m-d')
             ?? $activePricingMou?->start_date?->format('Y-m-d');
 
         $isSignatoryDiff = $activeSignatoryMou ? (bool) $activeSignatoryMou->is_signatory_different : false;
@@ -169,6 +194,7 @@ class PropertyFinancials extends Page implements HasForms
         if ($latestPricing?->mou && in_array($latestPricing->mou->status, [MouStatus::VERIFIED, MouStatus::CONVERTED])) {
             return $latestPricing->mou;
         }
+
         return $this->record->mous()
             ->whereIn('type', [MouType::PRICING_UPDATE, MouType::ONBOARDING])
             ->whereIn('status', [MouStatus::VERIFIED, MouStatus::CONVERTED])
@@ -208,14 +234,15 @@ class PropertyFinancials extends Page implements HasForms
                                         if ($mou) {
                                             $media = $mou->getFirstMedia('signed_pdf') ?? $mou->getFirstMedia('draft_pdf');
                                             if ($media) {
-                                                $sourceHtml = 'Source MOU: <a href="#" wire:click.prevent="mountAction(\'viewHistoryPdf\', { mediaId: ' . $media->id . ', title: \'' . addslashes($mou->number . ' - Active Pricing MOU') . '\' })" class="text-primary-600 hover:text-primary-500 font-bold underline inline-flex items-center gap-1"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg> ' . e($mou->number) . '</a>';
+                                                $sourceHtml = 'Source MOU: <a href="#" wire:click.prevent="mountAction(\'viewHistoryPdf\', { mediaId: '.$media->id.', title: \''.addslashes($mou->number.' - Active Pricing MOU').'\' })" class="text-primary-600 hover:text-primary-500 font-bold underline inline-flex items-center gap-1"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg> '.e($mou->number).'</a>';
                                             } else {
-                                                $sourceHtml = 'Source MOU: <strong>' . e($mou->number) . '</strong>';
+                                                $sourceHtml = 'Source MOU: <strong>'.e($mou->number).'</strong>';
                                             }
                                         } else {
                                             $sourceHtml = 'Source MOU: <span class="text-gray-500 font-normal italic">None (Pending Onboarding / Verification)</span>';
                                         }
-                                        return new HtmlString('Current active pricing terms for this property. ' . $sourceHtml);
+
+                                        return new HtmlString('Current active pricing terms for this property. '.$sourceHtml);
                                     })
                                     ->headerActions([
                                         Action::make('initiatePricingUpdate')
@@ -296,7 +323,7 @@ class PropertyFinancials extends Page implements HasForms
                                             ->label('Verify & Apply')
                                             ->icon('heroicon-o-check-badge')
                                             ->color('success')
-                                            ->visible(fn () => $this->pendingPricingMou?->status === MouStatus::SIGNED_COPY_UPLOADED)
+                                            ->visible(fn () => $this->pendingPricingMou?->status === MouStatus::SIGNED_COPY_UPLOADED && (auth()->user()?->hasAnyRole(['Business Owner', 'City Manager', 'Accountant', 'Admin', 'Super Admin']) || auth()->user()?->can('property.financials.manage')))
                                             ->requiresConfirmation()
                                             ->action(function () {
                                                 $mou = $this->pendingPricingMou;
@@ -310,18 +337,21 @@ class PropertyFinancials extends Page implements HasForms
                                             ->label('Pending Update Status')
                                             ->content(function () {
                                                 $mou = $this->pendingPricingMou;
-                                                if (!$mou) return '';
+                                                if (! $mou) {
+                                                    return '';
+                                                }
                                                 $statusLabel = $mou->status?->getLabel() ?? 'Pending';
                                                 $media = $mou->getFirstMedia('signed_pdf') ?? $mou->getFirstMedia('draft_pdf');
                                                 $docHtml = '';
                                                 if ($media) {
                                                     $typeLabel = $media->collection_name === 'signed_pdf' ? 'Signed Copy' : 'Draft PDF';
-                                                    $docHtml = ' &nbsp;&bull;&nbsp; <a href="#" wire:click.prevent="mountAction(\'viewHistoryPdf\', { mediaId: ' . $media->id . ', title: \'' . addslashes($mou->number . ' - ' . $typeLabel) . '\' })" class="text-primary-600 hover:text-primary-500 font-medium underline inline-flex items-center gap-1"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg> View ' . $typeLabel . '</a>';
+                                                    $docHtml = ' &nbsp;&bull;&nbsp; <a href="#" wire:click.prevent="mountAction(\'viewHistoryPdf\', { mediaId: '.$media->id.', title: \''.addslashes($mou->number.' - '.$typeLabel).'\' })" class="text-primary-600 hover:text-primary-500 font-medium underline inline-flex items-center gap-1"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg> View '.$typeLabel.'</a>';
                                                 }
+
                                                 return new HtmlString(
-                                                    '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">' . 
-                                                    e($statusLabel) . 
-                                                    '</span> &nbsp; MOU #: <strong>' . e($mou->number) . '</strong>' . $docHtml
+                                                    '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">'.
+                                                    e($statusLabel).
+                                                    '</span> &nbsp; MOU #: <strong>'.e($mou->number).'</strong>'.$docHtml
                                                 );
                                             }),
                                         Grid::make(3)->schema([
@@ -330,7 +360,7 @@ class PropertyFinancials extends Page implements HasForms
                                                 ->content(fn () => $this->pendingPricingMou?->legal_terms['financial_model_name'] ?? 'N/A'),
                                             Placeholder::make('proposed_fee_percentage')
                                                 ->label('Proposed Fee Percentage')
-                                                ->content(fn () => ($this->pendingPricingMou?->legal_terms['fee_percentage'] ?? '12') . '%'),
+                                                ->content(fn () => ($this->pendingPricingMou?->legal_terms['fee_percentage'] ?? '12').'%'),
                                             Placeholder::make('proposed_start_date')
                                                 ->label('Proposed Effective Date')
                                                 ->content(fn () => $this->pendingPricingMou?->start_date?->format('j F Y') ?? 'N/A'),
@@ -388,14 +418,15 @@ class PropertyFinancials extends Page implements HasForms
                                         if ($mou) {
                                             $media = $mou->getFirstMedia('signed_pdf') ?? $mou->getFirstMedia('draft_pdf');
                                             if ($media) {
-                                                $sourceHtml = 'Source MOU: <a href="#" wire:click.prevent="mountAction(\'viewHistoryPdf\', { mediaId: ' . $media->id . ', title: \'' . addslashes($mou->number . ' - Active Bank MOU') . '\' })" class="text-primary-600 hover:text-primary-500 font-bold underline inline-flex items-center gap-1"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg> ' . e($mou->number) . '</a>';
+                                                $sourceHtml = 'Source MOU: <a href="#" wire:click.prevent="mountAction(\'viewHistoryPdf\', { mediaId: '.$media->id.', title: \''.addslashes($mou->number.' - Active Bank MOU').'\' })" class="text-primary-600 hover:text-primary-500 font-bold underline inline-flex items-center gap-1"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg> '.e($mou->number).'</a>';
                                             } else {
-                                                $sourceHtml = 'Source MOU: <strong>' . e($mou->number) . '</strong>';
+                                                $sourceHtml = 'Source MOU: <strong>'.e($mou->number).'</strong>';
                                             }
                                         } else {
                                             $sourceHtml = 'Source MOU: <span class="text-gray-500 font-normal italic">None (Pending Onboarding / Verification)</span>';
                                         }
-                                        return new HtmlString('Current active bank account for remittances. ' . $sourceHtml);
+
+                                        return new HtmlString('Current active bank account for remittances. '.$sourceHtml);
                                     })
                                     ->headerActions([
                                         Action::make('pushBankDetailsToParty')
@@ -405,30 +436,38 @@ class PropertyFinancials extends Page implements HasForms
                                             ->requiresConfirmation()
                                             ->modalHeading('Push Bank Details to Owner Party Profile')
                                             ->modalDescription(function () {
-                                                $party = $this->record->owner_party_id ? \App\Domain\Party\Models\Party::find($this->record->owner_party_id) : $this->record->mous()->whereNotNull('party_id')->latest()->first()?->party;
+                                                $party = $this->record->owner_party_id ? Party::find($this->record->owner_party_id) : $this->record->mous()->whereNotNull('party_id')->latest()->first()?->party;
                                                 $partyName = $party ? $party->display_name : 'Owner Party';
+
                                                 return "Are you sure you want to push these bank details directly to {$partyName}'s party profile? This will set these bank details as their primary bank account.";
                                             })
                                             ->visible(function () {
+                                                $user = auth()->user();
+                                                if (! $user || (! $user->can('property.bank.push') && ! $user->hasAnyRole(['Business Owner', 'City Manager', 'Accountant', 'Admin', 'Super Admin']))) {
+                                                    return false;
+                                                }
                                                 $details = $this->data['bank_details'] ?? [];
-                                                return !empty($details['account_number']);
+
+                                                return ! empty($details['account_number']);
                                             })
                                             ->action(function () {
-                                                $party = $this->record->owner_party_id ? \App\Domain\Party\Models\Party::find($this->record->owner_party_id) : $this->record->mous()->whereNotNull('party_id')->latest()->first()?->party;
-                                                if (!$party) {
+                                                $party = $this->record->owner_party_id ? Party::find($this->record->owner_party_id) : $this->record->mous()->whereNotNull('party_id')->latest()->first()?->party;
+                                                if (! $party) {
                                                     Notification::make()->title('No Owner Party Linked')->danger()->send();
+
                                                     return;
                                                 }
 
                                                 $details = $this->data['bank_details'] ?? [];
                                                 if (empty($details['account_number'])) {
                                                     Notification::make()->title('No Bank Details to Push')->danger()->send();
+
                                                     return;
                                                 }
 
-                                                \App\Domain\Party\Models\PartyBankAccount::where('party_id', $party->id)->update(['is_primary' => false]);
+                                                PartyBankAccount::where('party_id', $party->id)->update(['is_primary' => false]);
 
-                                                $bankAccount = \App\Domain\Party\Models\PartyBankAccount::updateOrCreate(
+                                                $bankAccount = PartyBankAccount::updateOrCreate(
                                                     [
                                                         'party_id' => $party->id,
                                                         'account_number' => $details['account_number'],
@@ -442,7 +481,7 @@ class PropertyFinancials extends Page implements HasForms
                                                     ]
                                                 );
 
-                                                $profile = \App\Domain\Party\Models\OwnerProfile::where('party_id', $party->id)->first();
+                                                $profile = OwnerProfile::where('party_id', $party->id)->first();
                                                 if ($profile) {
                                                     $profile->update(['default_bank_account_id' => $bankAccount->id]);
                                                 }
@@ -524,7 +563,7 @@ class PropertyFinancials extends Page implements HasForms
                                             ->label('Verify & Apply')
                                             ->icon('heroicon-o-check-badge')
                                             ->color('success')
-                                            ->visible(fn () => $this->pendingBankMou?->status === MouStatus::SIGNED_COPY_UPLOADED)
+                                            ->visible(fn () => $this->pendingBankMou?->status === MouStatus::SIGNED_COPY_UPLOADED && (auth()->user()?->hasAnyRole(['Business Owner', 'City Manager', 'Accountant', 'Admin', 'Super Admin']) || auth()->user()?->can('property.financials.manage')))
                                             ->requiresConfirmation()
                                             ->action(function () {
                                                 $mou = $this->pendingBankMou;
@@ -538,18 +577,21 @@ class PropertyFinancials extends Page implements HasForms
                                             ->label('Pending Update Status')
                                             ->content(function () {
                                                 $mou = $this->pendingBankMou;
-                                                if (!$mou) return '';
+                                                if (! $mou) {
+                                                    return '';
+                                                }
                                                 $statusLabel = $mou->status?->getLabel() ?? 'Pending';
                                                 $media = $mou->getFirstMedia('signed_pdf') ?? $mou->getFirstMedia('draft_pdf');
                                                 $docHtml = '';
                                                 if ($media) {
                                                     $typeLabel = $media->collection_name === 'signed_pdf' ? 'Signed Copy' : 'Draft PDF';
-                                                    $docHtml = ' &nbsp;&bull;&nbsp; <a href="#" wire:click.prevent="mountAction(\'viewHistoryPdf\', { mediaId: ' . $media->id . ', title: \'' . addslashes($mou->number . ' - ' . $typeLabel) . '\' })" class="text-primary-600 hover:text-primary-500 font-medium underline inline-flex items-center gap-1"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg> View ' . $typeLabel . '</a>';
+                                                    $docHtml = ' &nbsp;&bull;&nbsp; <a href="#" wire:click.prevent="mountAction(\'viewHistoryPdf\', { mediaId: '.$media->id.', title: \''.addslashes($mou->number.' - '.$typeLabel).'\' })" class="text-primary-600 hover:text-primary-500 font-medium underline inline-flex items-center gap-1"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg> View '.$typeLabel.'</a>';
                                                 }
+
                                                 return new HtmlString(
-                                                    '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">' . 
-                                                    e($statusLabel) . 
-                                                    '</span> &nbsp; MOU #: <strong>' . e($mou->number) . '</strong>' . $docHtml
+                                                    '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">'.
+                                                    e($statusLabel).
+                                                    '</span> &nbsp; MOU #: <strong>'.e($mou->number).'</strong>'.$docHtml
                                                 );
                                             }),
                                         Grid::make(2)->schema([
@@ -561,7 +603,21 @@ class PropertyFinancials extends Page implements HasForms
                                                 ->content(fn () => $this->pendingBankMou?->bank_details['bank_name'] ?? 'N/A'),
                                             Placeholder::make('proposed_account_number')
                                                 ->label('Proposed Account No.')
-                                                ->content(fn () => $this->pendingBankMou?->bank_details['account_number'] ?? 'N/A'),
+                                                ->content(function () {
+                                                    $raw = $this->pendingBankMou?->bank_details['account_number'] ?? null;
+                                                    if (! $raw) {
+                                                        return 'N/A';
+                                                    }
+                                                    $user = auth()->user();
+                                                    $canViewUnmasked = $user && ($user->can('property.bank.view_unmasked') || $user->hasAnyRole(['Business Owner', 'City Manager', 'Accountant', 'Admin', 'Super Admin']));
+                                                    if (! $canViewUnmasked) {
+                                                        $last4 = substr((string) $raw, -4);
+
+                                                        return str_repeat('•', max(0, strlen((string) $raw) - 4)).$last4;
+                                                    }
+
+                                                    return $raw;
+                                                }),
                                             Placeholder::make('proposed_ifsc_code')
                                                 ->label('Proposed IFSC Code')
                                                 ->content(fn () => $this->pendingBankMou?->bank_details['ifsc_code'] ?? 'N/A'),
@@ -614,14 +670,15 @@ class PropertyFinancials extends Page implements HasForms
                                         if ($mou) {
                                             $media = $mou->getFirstMedia('signed_pdf') ?? $mou->getFirstMedia('draft_pdf');
                                             if ($media) {
-                                                $sourceHtml = 'Source MOU: <a href="#" wire:click.prevent="mountAction(\'viewHistoryPdf\', { mediaId: ' . $media->id . ', title: \'' . addslashes($mou->number . ' - Active Signatory MOU') . '\' })" class="text-primary-600 hover:text-primary-500 font-bold underline inline-flex items-center gap-1"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg> ' . e($mou->number) . '</a>';
+                                                $sourceHtml = 'Source MOU: <a href="#" wire:click.prevent="mountAction(\'viewHistoryPdf\', { mediaId: '.$media->id.', title: \''.addslashes($mou->number.' - Active Signatory MOU').'\' })" class="text-primary-600 hover:text-primary-500 font-bold underline inline-flex items-center gap-1"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg> '.e($mou->number).'</a>';
                                             } else {
-                                                $sourceHtml = 'Source MOU: <strong>' . e($mou->number) . '</strong>';
+                                                $sourceHtml = 'Source MOU: <strong>'.e($mou->number).'</strong>';
                                             }
                                         } else {
                                             $sourceHtml = 'Source MOU: <span class="text-gray-500 font-normal italic">None (Pending Onboarding / Verification)</span>';
                                         }
-                                        return new HtmlString('Current active signatory authority for this property. ' . $sourceHtml);
+
+                                        return new HtmlString('Current active signatory authority for this property. '.$sourceHtml);
                                     })
                                     ->headerActions([
                                         Action::make('initiateSignatoryUpdate')
@@ -673,30 +730,33 @@ class PropertyFinancials extends Page implements HasForms
                                                 TextInput::make('signatory_pan_number')->label('PAN Number'),
                                             ])
                                             ->disabled()
-                                            ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => $get('is_signatory_different')),
+                                            ->visible(fn (Get $get) => $get('is_signatory_different')),
 
                                         Grid::make(3)
                                             ->schema([
                                                 Placeholder::make('owner_name')
                                                     ->label('Owner Name')
                                                     ->content(function () {
-                                                        $party = $this->record->owner_party_id ? \App\Domain\Party\Models\Party::find($this->record->owner_party_id) : $this->record->mous()->whereNotNull('party_id')->latest()->first()?->party;
+                                                        $party = $this->record->owner_party_id ? Party::find($this->record->owner_party_id) : $this->record->mous()->whereNotNull('party_id')->latest()->first()?->party;
+
                                                         return $party?->display_name ?? $this->record->mous()->latest()->first()?->owner_details['name'] ?? 'N/A';
                                                     }),
                                                 Placeholder::make('owner_email')
                                                     ->label('Owner Email')
                                                     ->content(function () {
-                                                        $party = $this->record->owner_party_id ? \App\Domain\Party\Models\Party::find($this->record->owner_party_id) : $this->record->mous()->whereNotNull('party_id')->latest()->first()?->party;
+                                                        $party = $this->record->owner_party_id ? Party::find($this->record->owner_party_id) : $this->record->mous()->whereNotNull('party_id')->latest()->first()?->party;
+
                                                         return $party?->email ?? $this->record->mous()->latest()->first()?->owner_details['email'] ?? 'N/A';
                                                     }),
                                                 Placeholder::make('owner_phone')
                                                     ->label('Owner Phone')
                                                     ->content(function () {
-                                                        $party = $this->record->owner_party_id ? \App\Domain\Party\Models\Party::find($this->record->owner_party_id) : $this->record->mous()->whereNotNull('party_id')->latest()->first()?->party;
+                                                        $party = $this->record->owner_party_id ? Party::find($this->record->owner_party_id) : $this->record->mous()->whereNotNull('party_id')->latest()->first()?->party;
+
                                                         return $party?->phone ?? $this->record->mous()->latest()->first()?->owner_details['phone'] ?? 'N/A';
                                                     }),
                                             ])
-                                            ->visible(fn (\Filament\Schemas\Components\Utilities\Get $get) => !$get('is_signatory_different')),
+                                            ->visible(fn (Get $get) => ! $get('is_signatory_different')),
                                     ]),
 
                                 Section::make('Pending Signatory Update Workflow')
@@ -751,18 +811,21 @@ class PropertyFinancials extends Page implements HasForms
                                             ->label('Pending Update Status')
                                             ->content(function () {
                                                 $mou = $this->pendingSignatoryMou;
-                                                if (!$mou) return '';
+                                                if (! $mou) {
+                                                    return '';
+                                                }
                                                 $statusLabel = $mou->status?->getLabel() ?? 'Pending';
                                                 $media = $mou->getFirstMedia('signed_pdf') ?? $mou->getFirstMedia('draft_pdf');
                                                 $docHtml = '';
                                                 if ($media) {
                                                     $typeLabel = $media->collection_name === 'signed_pdf' ? 'Signed Copy' : 'Draft PDF';
-                                                    $docHtml = ' &nbsp;&bull;&nbsp; <a href="#" wire:click.prevent="mountAction(\'viewHistoryPdf\', { mediaId: ' . $media->id . ', title: \'' . addslashes($mou->number . ' - ' . $typeLabel) . '\' })" class="text-primary-600 hover:text-primary-500 font-medium underline inline-flex items-center gap-1"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg> View ' . $typeLabel . '</a>';
+                                                    $docHtml = ' &nbsp;&bull;&nbsp; <a href="#" wire:click.prevent="mountAction(\'viewHistoryPdf\', { mediaId: '.$media->id.', title: \''.addslashes($mou->number.' - '.$typeLabel).'\' })" class="text-primary-600 hover:text-primary-500 font-medium underline inline-flex items-center gap-1"><svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg> View '.$typeLabel.'</a>';
                                                 }
+
                                                 return new HtmlString(
-                                                    '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">' . 
-                                                    e($statusLabel) . 
-                                                    '</span> &nbsp; MOU #: <strong>' . e($mou->number) . '</strong>' . $docHtml
+                                                    '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">'.
+                                                    e($statusLabel).
+                                                    '</span> &nbsp; MOU #: <strong>'.e($mou->number).'</strong>'.$docHtml
                                                 );
                                             }),
                                         Grid::make(2)->schema([
@@ -834,8 +897,8 @@ class PropertyFinancials extends Page implements HasForms
                         Tabs\Tab::make('KYC & Supporting Documents')
                             ->icon('heroicon-o-identification')
                             ->schema([
-                                \Filament\Schemas\Components\Livewire::make(
-                                    \App\Filament\Resources\Properties\RelationManagers\AdditionalDocumentsRelationManager::class,
+                                Livewire::make(
+                                    AdditionalDocumentsRelationManager::class,
                                     ['ownerRecord' => $this->record]
                                 )->key('additional-documents-relation-manager'),
                             ]),
@@ -843,8 +906,8 @@ class PropertyFinancials extends Page implements HasForms
                         Tabs\Tab::make('MOU Agreements & History')
                             ->icon('heroicon-o-document-duplicate')
                             ->schema([
-                                \Filament\Schemas\Components\Livewire::make(
-                                    \App\Filament\Resources\Properties\RelationManagers\MappedDocumentsRelationManager::class,
+                                Livewire::make(
+                                    MappedDocumentsRelationManager::class,
                                     ['ownerRecord' => $this->record, 'pageClass' => static::class]
                                 )->key('mapped-documents-relation-manager'),
                             ]),
@@ -852,8 +915,8 @@ class PropertyFinancials extends Page implements HasForms
                         Tabs\Tab::make('Tenancy Agreements')
                             ->icon('heroicon-o-document-text')
                             ->schema([
-                                \Filament\Schemas\Components\Livewire::make(
-                                    \App\Filament\Resources\Properties\RelationManagers\TenancyAgreementsRelationManager::class,
+                                Livewire::make(
+                                    TenancyAgreementsRelationManager::class,
                                     ['ownerRecord' => $this->record, 'pageClass' => static::class]
                                 )->key('tenancy-agreements-relation-manager'),
                             ]),
@@ -873,22 +936,30 @@ class PropertyFinancials extends Page implements HasForms
                 ->modalCancelActionLabel('Close')
                 ->modalContent(function (?array $arguments = null) {
                     $mediaId = $arguments['mediaId'] ?? null;
-                    if (!$mediaId) return null;
-                    
-                    $media = \Spatie\MediaLibrary\MediaCollections\Models\Media::find($mediaId);
-                    if (!$media) return null;
-                    
+                    if (! $mediaId) {
+                        return null;
+                    }
+
+                    $media = Media::find($mediaId);
+                    if (! $media) {
+                        return null;
+                    }
+
                     return view('components.pdf-viewer-raw', [
-                        'path' => $media->getPath()
+                        'path' => $media->getPath(),
                     ]);
                 })
                 ->action(function (?array $arguments = null) {
                     $mediaId = $arguments['mediaId'] ?? null;
-                    if (!$mediaId) return;
-                    
-                    $media = \Spatie\MediaLibrary\MediaCollections\Models\Media::find($mediaId);
-                    if (!$media) return;
-                    
+                    if (! $mediaId) {
+                        return;
+                    }
+
+                    $media = Media::find($mediaId);
+                    if (! $media) {
+                        return;
+                    }
+
                     return response()->download($media->getPath(), $media->file_name);
                 }),
         ];

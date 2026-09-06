@@ -6,7 +6,6 @@ use App\Domain\Opportunity\Enums\OpportunityStatus;
 use App\Domain\Opportunity\Models\Opportunity;
 use App\Filament\Resources\Operations\MOUResource;
 use App\Filament\Resources\Properties\PropertyResource;
-use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
@@ -15,7 +14,6 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Support\HtmlString;
 
@@ -219,16 +217,16 @@ class OpportunityForm
 
                                             if ($record->status === OpportunityStatus::READY_FOR_MOU && ! $record->mou) {
                                                 return new HtmlString(
-                                                    '<div style="background-color: rgba(16, 185, 129, 0.08); border-left: 4px solid #10b981; padding: 10px 14px; border-radius: 6px; font-size: 13px; color: #065f46;">' .
-                                                    '<strong>✅ Ready for MOU:</strong> Commercials & contacts are verified. Click <strong>Create MOU</strong> in header actions to generate the onboarding agreement.' .
+                                                    '<div style="background-color: rgba(16, 185, 129, 0.08); border-left: 4px solid #10b981; padding: 10px 14px; border-radius: 6px; font-size: 13px; color: #065f46;">'.
+                                                    '<strong>✅ Ready for MOU:</strong> Commercials & contacts are verified. Click <strong>Create MOU</strong> in header actions to generate the onboarding agreement.'.
                                                     '</div>'
                                                 );
                                             }
 
                                             if ($record->status === OpportunityStatus::CLOSED_LOST) {
                                                 return new HtmlString(
-                                                    '<div style="background-color: rgba(239, 68, 68, 0.08); border-left: 4px solid #ef4444; padding: 10px 14px; border-radius: 6px; font-size: 13px; color: #991b1b;">' .
-                                                    '<strong>❌ Closed / Lost:</strong> This opportunity has been marked as lost.' .
+                                                    '<div style="background-color: rgba(239, 68, 68, 0.08); border-left: 4px solid #ef4444; padding: 10px 14px; border-radius: 6px; font-size: 13px; color: #991b1b;">'.
+                                                    '<strong>❌ Closed / Lost:</strong> This opportunity has been marked as lost.'.
                                                     '</div>'
                                                 );
                                             }
@@ -253,12 +251,12 @@ class OpportunityForm
                                             $mouNumber = e($mou->number);
 
                                             return new HtmlString(
-                                                '<div style="background-color: rgba(37, 99, 235, 0.04); border: 1px solid rgba(37, 99, 235, 0.2); border-radius: 8px; padding: 14px; font-size: 13px;">' .
-                                                '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">' .
-                                                '<div><strong style="font-size: 14px;">📄 MOU #' . $mouNumber . '</strong></div>' .
-                                                '<span style="padding: 2px 8px; font-size: 11px; border-radius: 4px; background: #2563eb; color: #fff; font-weight: 600;">' . $mouStatus . '</span>' .
-                                                '</div>' .
-                                                '<a href="' . e($mouUrl) . '" style="display: inline-flex; align-items: center; gap: 4px; padding: 5px 12px; background-color: #2563eb; color: #fff; font-weight: 600; font-size: 12px; border-radius: 6px; text-decoration: none; margin-top: 4px;">Open MOU Workspace &rarr;</a>' .
+                                                '<div style="background-color: rgba(37, 99, 235, 0.04); border: 1px solid rgba(37, 99, 235, 0.2); border-radius: 8px; padding: 14px; font-size: 13px;">'.
+                                                '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">'.
+                                                '<div><strong style="font-size: 14px;">📄 MOU #'.$mouNumber.'</strong></div>'.
+                                                '<span style="padding: 2px 8px; font-size: 11px; border-radius: 4px; background: #2563eb; color: #fff; font-weight: 600;">'.$mouStatus.'</span>'.
+                                                '</div>'.
+                                                '<a href="'.e($mouUrl).'" style="display: inline-flex; align-items: center; gap: 4px; padding: 5px 12px; background-color: #2563eb; color: #fff; font-weight: 600; font-size: 12px; border-radius: 6px; text-decoration: none; margin-top: 4px;">Open MOU Workspace &rarr;</a>'.
                                                 '</div>'
                                             );
                                         }),
@@ -279,12 +277,12 @@ class OpportunityForm
                                             $building = e($property->building_name ?: 'Building');
 
                                             return new HtmlString(
-                                                '<div style="background-color: rgba(16, 185, 129, 0.04); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px; padding: 14px; font-size: 13px;">' .
-                                                '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">' .
-                                                '<div><strong style="font-size: 14px;">🏢 ' . $propCode . '</strong><br><span style="color: gray; font-size: 12px;">' . $building . '</span></div>' .
-                                                '<span style="padding: 2px 8px; font-size: 11px; border-radius: 4px; background: #10b981; color: #fff; font-weight: 600;">ONBOARDED</span>' .
-                                                '</div>' .
-                                                '<a href="' . e($propUrl) . '" style="display: inline-flex; align-items: center; gap: 4px; padding: 5px 12px; background-color: #10b981; color: #fff; font-weight: 600; font-size: 12px; border-radius: 6px; text-decoration: none; margin-top: 4px;">View Property Profile &rarr;</a>' .
+                                                '<div style="background-color: rgba(16, 185, 129, 0.04); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px; padding: 14px; font-size: 13px;">'.
+                                                '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">'.
+                                                '<div><strong style="font-size: 14px;">🏢 '.$propCode.'</strong><br><span style="color: gray; font-size: 12px;">'.$building.'</span></div>'.
+                                                '<span style="padding: 2px 8px; font-size: 11px; border-radius: 4px; background: #10b981; color: #fff; font-weight: 600;">ONBOARDED</span>'.
+                                                '</div>'.
+                                                '<a href="'.e($propUrl).'" style="display: inline-flex; align-items: center; gap: 4px; padding: 5px 12px; background-color: #10b981; color: #fff; font-weight: 600; font-size: 12px; border-radius: 6px; text-decoration: none; margin-top: 4px;">View Property Profile &rarr;</a>'.
                                                 '</div>'
                                             );
                                         }),

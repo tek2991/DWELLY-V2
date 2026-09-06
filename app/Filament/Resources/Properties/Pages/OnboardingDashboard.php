@@ -4,11 +4,11 @@ namespace App\Filament\Resources\Properties\Pages;
 
 use App\Domain\Property\Models\OnboardingProject;
 use App\Domain\Property\Models\Property;
-use App\Domain\Property\Services\PropertyOnboardingValidator;
 use App\Filament\Resources\Properties\PropertyResource;
-use Filament\Actions\Action;
+use App\Filament\Resources\Properties\Widgets\OnboardingProgressWidget;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
+use Illuminate\Support\HtmlString;
 
 class OnboardingDashboard extends EditRecord
 {
@@ -19,7 +19,7 @@ class OnboardingDashboard extends EditRecord
     protected function getHeaderWidgets(): array
     {
         return [
-            \App\Filament\Resources\Properties\Widgets\OnboardingProgressWidget::class,
+            OnboardingProgressWidget::class,
         ];
     }
 
@@ -38,12 +38,12 @@ class OnboardingDashboard extends EditRecord
         return 'heroicon-o-information-circle';
     }
 
-    public function mount(int | string $record): void
+    public function mount(int|string $record): void
     {
         parent::mount($record);
 
         // Ensure OnboardingProject exists when this page is loaded
-        if (!$this->record->onboardingProject) {
+        if (! $this->record->onboardingProject) {
             OnboardingProject::create([
                 'property_id' => $this->record->id,
                 'status' => 'Draft',
@@ -57,7 +57,7 @@ class OnboardingDashboard extends EditRecord
                 ->title('Property already activated')
                 ->body('This property has already completed onboarding.')
                 ->send();
-                
+
             $this->redirect($this->getResource()::getUrl('edit', ['record' => $this->record]));
         }
     }
@@ -67,7 +67,7 @@ class OnboardingDashboard extends EditRecord
         $this->dispatch('refresh-onboarding-progress');
     }
 
-    public function getSubheading(): string | \Illuminate\Support\HtmlString | null
+    public function getSubheading(): string|HtmlString|null
     {
         /** @var Property $record */
         $record = $this->getRecord();
@@ -76,7 +76,7 @@ class OnboardingDashboard extends EditRecord
         }
 
         $code = $record->code;
-        $name = $record->building_name ?? $record->address_line_1 ?? 'Property #' . $record->id;
+        $name = $record->building_name ?? $record->address_line_1 ?? 'Property #'.$record->id;
         $propertyUrl = PropertyResource::getUrl('edit', ['record' => $record]);
         $stage = $record->onboardingProject?->status ?? 'Draft';
 
@@ -88,24 +88,24 @@ class OnboardingDashboard extends EditRecord
         };
 
         $codeBadge = $code
-            ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-mono font-bold bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200 border border-gray-300 dark:border-gray-700">#' . e($code) . '</span>'
+            ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-mono font-bold bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200 border border-gray-300 dark:border-gray-700">#'.e($code).'</span>'
             : '';
 
         $owner = $record->mous()->latest()->first()?->party;
         $ownerBadge = $owner
-            ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200">👤 ' . e($owner->display_name) . '</span>'
+            ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200">👤 '.e($owner->display_name).'</span>'
             : '';
 
-        return new \Illuminate\Support\HtmlString(
-            '<div class="flex items-center gap-2 text-sm font-medium mt-1 flex-wrap">' .
-                '<span>Stage: <strong class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs ' . $stageColor . '">' . e($stage) . '</strong></span>' .
-                ($codeBadge ? '<span class="text-gray-300 dark:text-gray-700">&bull;</span>' . $codeBadge : '') .
-                '<span class="text-gray-300 dark:text-gray-700">&bull;</span>' .
-                '<span class="text-gray-900 dark:text-white font-semibold text-sm">' . e($name) . '</span>' .
-                ($ownerBadge ? '<span class="text-gray-300 dark:text-gray-700">&bull;</span>' . $ownerBadge : '') .
-                '<a href="' . $propertyUrl . '" class="inline-flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700 hover:underline dark:text-primary-400 ml-1" title="View Property Profile">' .
-                    '<span>Property Profile &rarr;</span>' .
-                '</a>' .
+        return new HtmlString(
+            '<div class="flex items-center gap-2 text-sm font-medium mt-1 flex-wrap">'.
+                '<span>Stage: <strong class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs '.$stageColor.'">'.e($stage).'</strong></span>'.
+                ($codeBadge ? '<span class="text-gray-300 dark:text-gray-700">&bull;</span>'.$codeBadge : '').
+                '<span class="text-gray-300 dark:text-gray-700">&bull;</span>'.
+                '<span class="text-gray-900 dark:text-white font-semibold text-sm">'.e($name).'</span>'.
+                ($ownerBadge ? '<span class="text-gray-300 dark:text-gray-700">&bull;</span>'.$ownerBadge : '').
+                '<a href="'.$propertyUrl.'" class="inline-flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700 hover:underline dark:text-primary-400 ml-1" title="View Property Profile">'.
+                    '<span>Property Profile &rarr;</span>'.
+                '</a>'.
             '</div>'
         );
     }

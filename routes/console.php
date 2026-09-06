@@ -9,5 +9,7 @@ Artisan::command('inspire', function () {
 
 use Illuminate\Support\Facades\Schedule;
 use App\Console\Commands\GenerateMonthlyRent;
+use App\Console\Commands\CheckAgreementRenewals;
 
 Schedule::command(GenerateMonthlyRent::class)->monthlyOn(1, '00:00');
+Schedule::command(CheckAgreementRenewals::class)->dailyAt('08:00');

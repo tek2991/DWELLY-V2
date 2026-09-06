@@ -2,23 +2,73 @@
 
 namespace App\Filament\Resources\Settings\Branches;
 
+use App\Filament\Clusters\AdministrationCluster;
 use App\Filament\Resources\Settings\Branches\Pages\CreateBranch;
 use App\Filament\Resources\Settings\Branches\Pages\EditBranch;
 use App\Filament\Resources\Settings\Branches\Pages\ListBranches;
 use App\Models\Branch;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
 use Filament\Forms;
-use Filament\Schemas\Schema;
 use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 
 class BranchResource extends Resource
 {
     protected static ?string $model = Branch::class;
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-building-storefront';
-    protected static ?string $cluster = \App\Filament\Clusters\AdministrationCluster::class;
+
+    protected static ?string $cluster = AdministrationCluster::class;
+
     protected static ?int $navigationSort = 2;
+
+    public static function canViewAny(): bool
+    {
+        return auth()->user()?->can('viewAny', Branch::class) ?? false;
+    }
+
+    public static function canCreate(): bool
+    {
+        return auth()->user()?->can('create', Branch::class) ?? false;
+    }
+
+    public static function canEdit(?Model $record = null): bool
+    {
+        if (! $record) {
+            return auth()->user()?->can('create', Branch::class) ?? false;
+        }
+
+        return auth()->user()?->can('update', $record) ?? false;
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return auth()->user()?->can('delete', $record) ?? false;
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+        $user = auth()->user();
+
+        if (! $user || $user->hasRole('Business Owner') || $user->roles->isEmpty()) {
+            return $query;
+        }
+
+        if ($user->hasRole('City Manager')) {
+            $branchIds = $user->branches->pluck('id')->toArray();
+
+            return $query->whereIn('id', $branchIds);
+        }
+
+        return $query;
+    }
 
     public static function form(Schema $schema): Schema
     {
@@ -56,11 +106,11 @@ class BranchResource extends Resource
                 Tables\Columns\IconColumn::make('is_active')->boolean(),
             ])
             ->actions([
-                \Filament\Actions\EditAction::make(),
+                EditAction::make(),
             ])
             ->bulkActions([
-                \Filament\Actions\BulkActionGroup::make([
-                    \Filament\Actions\DeleteBulkAction::make(),
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ]);
     }

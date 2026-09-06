@@ -5,10 +5,14 @@ namespace App\Filament\Resources\Operations\TenantDeboardingResource\Schemas;
 use App\Domain\Agreement\Enums\DeboardingStatus;
 use App\Domain\Agreement\Models\TenancyAgreement;
 use App\Domain\Agreement\Models\TenantDeboarding;
+use App\Domain\Agreement\Services\TenancyDeboardingService;
 use App\Domain\Audit\Enums\AuditStatus;
 use App\Domain\Maintenance\Enums\MaintenancePriority;
+use App\Domain\Maintenance\Enums\MaintenanceStatus;
 use App\Filament\Resources\Operations\AuditResource;
 use App\Filament\Resources\Operations\MaintenanceRequestResource;
+use App\Models\User;
+use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Placeholder;
@@ -17,6 +21,7 @@ use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
@@ -58,6 +63,7 @@ class TenantDeboardingForm
                                     ->mapWithKeys(function (TenancyAgreement $t) {
                                         $tenantName = $t->primaryTenant?->party?->display_name ?? 'Tenant';
                                         $propCode = $t->property?->code ?? $t->property?->building_name ?? 'Property';
+
                                         return [$t->id => "{$t->code} — {$propCode} ({$tenantName})"];
                                     });
                             })
@@ -179,8 +185,8 @@ class TenantDeboardingForm
                                 $audit = $record->moveOutAudit;
                                 if (! $audit) {
                                     return new HtmlString(
-                                        '<div style="padding: 14px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; color: #1e40af; font-size: 13px;">' .
-                                            'ℹ️ No Move-Out audit is linked yet. Use the header action to trigger or re-assign the exit inspection.' .
+                                        '<div style="padding: 14px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; color: #1e40af; font-size: 13px;">'.
+                                            'ℹ️ No Move-Out audit is linked yet. Use the header action to trigger or re-assign the exit inspection.'.
                                         '</div>'
                                     );
                                 }
@@ -195,30 +201,30 @@ class TenantDeboardingForm
                                 $statusBadgeColor = $isApproved ? 'background: #dcfce7; color: #15803d; border-color: #bbf7d0;' : 'background: #fef3c7; color: #b45309; border-color: #fde68a;';
 
                                 return new HtmlString(
-                                    '<div style="display: flex; flex-direction: column; gap: 12px; padding: 18px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;">' .
-                                        '<div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">' .
-                                            '<div>' .
-                                                '<div style="display: flex; align-items: center; gap: 8px;">' .
-                                                    '<span style="font-weight: 700; font-size: 15px; color: #0f172a;">Move-Out Audit #' . e($audit->audit_number) . '</span>' .
-                                                    '<span style="display: inline-flex; padding: 2px 8px; font-size: 11px; font-weight: 700; border-radius: 6px; border: 1px solid; ' . $statusBadgeColor . '">' . e($statusLabel) . '</span>' .
-                                                '</div>' .
-                                                '<div style="font-size: 13px; color: #64748b; margin-top: 4px;">' .
-                                                    'Inspector: <strong>' . e($audit->inspector?->name ?? 'Unassigned') . '</strong> | Scheduled: ' . e($audit->scheduled_at?->format('d M Y') ?? 'Not Scheduled') .
-                                                    ($record->tenancyAgreement?->audit ? ' | Referenced Baseline: #' . e($record->tenancyAgreement->audit->audit_number) : '') .
-                                                '</div>' .
-                                            '</div>' .
-                                            '<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">' .
-                                                '<a href="' . e($inspectUrl) . '" target="_blank" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; background: #3b82f6; color: #ffffff; border-radius: 6px; font-size: 12px; font-weight: 600; text-decoration: none;">' .
-                                                    '🔍 Perform Inspection →' .
-                                                '</a>' .
-                                                '<a href="' . e($reviewUrl) . '" target="_blank" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; background: #6366f1; color: #ffffff; border-radius: 6px; font-size: 12px; font-weight: 600; text-decoration: none;">' .
-                                                    '📋 Review & Approve →' .
-                                                '</a>' .
-                                                '<a href="' . e($editUrl) . '" target="_blank" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; background: #e2e8f0; color: #334155; border-radius: 6px; font-size: 12px; font-weight: 600; text-decoration: none;">' .
-                                                    '⚙️ Audit Settings' .
-                                                '</a>' .
-                                            '</div>' .
-                                        '</div>' .
+                                    '<div style="display: flex; flex-direction: column; gap: 12px; padding: 18px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;">'.
+                                        '<div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">'.
+                                            '<div>'.
+                                                '<div style="display: flex; align-items: center; gap: 8px;">'.
+                                                    '<span style="font-weight: 700; font-size: 15px; color: #0f172a;">Move-Out Audit #'.e($audit->audit_number).'</span>'.
+                                                    '<span style="display: inline-flex; padding: 2px 8px; font-size: 11px; font-weight: 700; border-radius: 6px; border: 1px solid; '.$statusBadgeColor.'">'.e($statusLabel).'</span>'.
+                                                '</div>'.
+                                                '<div style="font-size: 13px; color: #64748b; margin-top: 4px;">'.
+                                                    'Inspector: <strong>'.e($audit->inspector?->name ?? 'Unassigned').'</strong> | Scheduled: '.e($audit->scheduled_at?->format('d M Y') ?? 'Not Scheduled').
+                                                    ($record->tenancyAgreement?->audit ? ' | Referenced Baseline: #'.e($record->tenancyAgreement->audit->audit_number) : '').
+                                                '</div>'.
+                                            '</div>'.
+                                            '<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">'.
+                                                '<a href="'.e($inspectUrl).'" target="_blank" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; background: #3b82f6; color: #ffffff; border-radius: 6px; font-size: 12px; font-weight: 600; text-decoration: none;">'.
+                                                    '🔍 Perform Inspection →'.
+                                                '</a>'.
+                                                '<a href="'.e($reviewUrl).'" target="_blank" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; background: #6366f1; color: #ffffff; border-radius: 6px; font-size: 12px; font-weight: 600; text-decoration: none;">'.
+                                                    '📋 Review & Approve →'.
+                                                '</a>'.
+                                                '<a href="'.e($editUrl).'" target="_blank" style="display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; background: #e2e8f0; color: #334155; border-radius: 6px; font-size: 12px; font-weight: 600; text-decoration: none;">'.
+                                                    '⚙️ Audit Settings'.
+                                                '</a>'.
+                                            '</div>'.
+                                        '</div>'.
                                     '</div>'
                                 );
                             })
@@ -251,10 +257,11 @@ class TenantDeboardingForm
                     ->description('Manage maintenance tickets and cost allocations for damages identified during exit inspection.')
                     ->columnSpanFull()
                     ->headerActions([
-                        \Filament\Actions\Action::make('createMaintenanceTicket')
+                        Action::make('createMaintenanceTicket')
                             ->label('Raise Maintenance Request')
                             ->icon('heroicon-o-wrench-screwdriver')
                             ->color('warning')
+                            ->visible(fn () => auth()->user()?->hasAnyRole(['Business Owner', 'City Manager', 'Operations Manager']) || (auth()->user() && auth()->user()->roles->isEmpty()))
                             ->disabled(fn (?TenantDeboarding $record) => (bool) ($record && $record->status === DeboardingStatus::COMPLETED))
                             ->modalHeading('Raise Maintenance Request for Exit Damages')
                             ->modalDescription('Create a new maintenance request directly linked to this deboarding process.')
@@ -292,7 +299,7 @@ class TenantDeboardingForm
 
                                         Select::make('assigned_inspector_id')
                                             ->label('Assigned Inspector / Staff')
-                                            ->options(fn () => \App\Models\User::pluck('name', 'id'))
+                                            ->options(fn () => User::pluck('name', 'id'))
                                             ->default(fn () => auth()->id())
                                             ->required(),
                                     ]),
@@ -330,10 +337,10 @@ class TenantDeboardingForm
                                 if (! $record) {
                                     return;
                                 }
-                                $service = app(\App\Domain\Agreement\Services\TenancyDeboardingService::class);
+                                $service = app(TenancyDeboardingService::class);
                                 $maint = $service->createMaintenanceForDeboarding($record, $data, auth()->user());
 
-                                \Filament\Notifications\Notification::make()
+                                Notification::make()
                                     ->title('Maintenance Request Created')
                                     ->body("Maintenance ticket #{$maint->ticket_number} created and tenant liability updated.")
                                     ->success()
@@ -356,10 +363,10 @@ class TenantDeboardingForm
 
                                 if ($requests->isEmpty()) {
                                     return new HtmlString(
-                                        '<div style="display: flex; align-items: center; justify-content: space-between; padding: 18px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px;">' .
-                                            '<div style="font-size: 13px; color: #64748b;">' .
-                                                'No maintenance requests linked yet. If the exit inspection revealed repairs or painting needed, click <strong>Raise Maintenance Request</strong> in the top header.' .
-                                            '</div>' .
+                                        '<div style="display: flex; align-items: center; justify-content: space-between; padding: 18px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px;">'.
+                                            '<div style="font-size: 13px; color: #64748b;">'.
+                                                'No maintenance requests linked yet. If the exit inspection revealed repairs or painting needed, click <strong>Raise Maintenance Request</strong> in the top header.'.
+                                            '</div>'.
                                         '</div>'
                                     );
                                 }
@@ -368,37 +375,37 @@ class TenantDeboardingForm
                                 foreach ($requests as $m) {
                                     $mUrl = MaintenanceRequestResource::getUrl('edit', ['record' => $m->id]);
                                     $pLabel = $m->priority instanceof MaintenancePriority ? $m->priority->getLabel() : (string) $m->priority;
-                                    $sLabel = $m->status instanceof \App\Domain\Maintenance\Enums\MaintenanceStatus ? $m->status->getLabel() : (string) $m->status;
+                                    $sLabel = $m->status instanceof MaintenanceStatus ? $m->status->getLabel() : (string) $m->status;
 
-                                    $rows .= '<tr style="border-bottom: 1px solid #f1f5f9;">' .
-                                        '<td style="padding: 10px 12px; font-weight: 600;"><a href="' . e($mUrl) . '" target="_blank" style="color: #2563eb; text-decoration: none;">' . e($m->ticket_number) . '</a></td>' .
-                                        '<td style="padding: 10px 12px;">' . e($m->title) . '</td>' .
-                                        '<td style="padding: 10px 12px;"><span style="display: inline-flex; padding: 2px 6px; font-size: 11px; font-weight: 600; border-radius: 4px; background: #f1f5f9; color: #475569;">' . e($pLabel) . '</span></td>' .
-                                        '<td style="padding: 10px 12px;"><span style="display: inline-flex; padding: 2px 6px; font-size: 11px; font-weight: 600; border-radius: 4px; background: #eff6ff; color: #1e40af;">' . e($sLabel) . '</span></td>' .
-                                        '<td style="padding: 10px 12px; font-weight: 600; text-align: right;">₹' . number_format((float) $m->total_cost, 2) . '</td>' .
-                                        '<td style="padding: 10px 12px; font-weight: 700; color: #b91c1c; text-align: right;">₹' . number_format((float) $m->tenant_amount, 2) . '</td>' .
-                                        '<td style="padding: 10px 12px; text-align: center;"><a href="' . e($mUrl) . '" target="_blank" style="font-size: 12px; color: #4f46e5; font-weight: 500;">View →</a></td>' .
+                                    $rows .= '<tr style="border-bottom: 1px solid #f1f5f9;">'.
+                                        '<td style="padding: 10px 12px; font-weight: 600;"><a href="'.e($mUrl).'" target="_blank" style="color: #2563eb; text-decoration: none;">'.e($m->ticket_number).'</a></td>'.
+                                        '<td style="padding: 10px 12px;">'.e($m->title).'</td>'.
+                                        '<td style="padding: 10px 12px;"><span style="display: inline-flex; padding: 2px 6px; font-size: 11px; font-weight: 600; border-radius: 4px; background: #f1f5f9; color: #475569;">'.e($pLabel).'</span></td>'.
+                                        '<td style="padding: 10px 12px;"><span style="display: inline-flex; padding: 2px 6px; font-size: 11px; font-weight: 600; border-radius: 4px; background: #eff6ff; color: #1e40af;">'.e($sLabel).'</span></td>'.
+                                        '<td style="padding: 10px 12px; font-weight: 600; text-align: right;">₹'.number_format((float) $m->total_cost, 2).'</td>'.
+                                        '<td style="padding: 10px 12px; font-weight: 700; color: #b91c1c; text-align: right;">₹'.number_format((float) $m->tenant_amount, 2).'</td>'.
+                                        '<td style="padding: 10px 12px; text-align: center;"><a href="'.e($mUrl).'" target="_blank" style="font-size: 12px; color: #4f46e5; font-weight: 500;">View →</a></td>'.
                                     '</tr>';
                                 }
 
                                 return new HtmlString(
-                                    '<div style="border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 12px;">' .
-                                        '<table style="width: 100%; border-collapse: collapse; font-size: 13px;">' .
-                                            '<thead>' .
-                                                '<tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0; text-align: left; color: #64748b; font-weight: 600;">' .
-                                                    '<th style="padding: 8px 12px;">Ticket #</th>' .
-                                                    '<th style="padding: 8px 12px;">Title</th>' .
-                                                    '<th style="padding: 8px 12px;">Priority</th>' .
-                                                    '<th style="padding: 8px 12px;">Status</th>' .
-                                                    '<th style="padding: 8px 12px; text-align: right;">Total Cost</th>' .
-                                                    '<th style="padding: 8px 12px; text-align: right;">Tenant Share</th>' .
-                                                    '<th style="padding: 8px 12px; text-align: center;">Action</th>' .
-                                                '</tr>' .
-                                            '</thead>' .
-                                            '<tbody>' .
-                                                $rows .
-                                            '</tbody>' .
-                                        '</table>' .
+                                    '<div style="border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 12px;">'.
+                                        '<table style="width: 100%; border-collapse: collapse; font-size: 13px;">'.
+                                            '<thead>'.
+                                                '<tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0; text-align: left; color: #64748b; font-weight: 600;">'.
+                                                    '<th style="padding: 8px 12px;">Ticket #</th>'.
+                                                    '<th style="padding: 8px 12px;">Title</th>'.
+                                                    '<th style="padding: 8px 12px;">Priority</th>'.
+                                                    '<th style="padding: 8px 12px;">Status</th>'.
+                                                    '<th style="padding: 8px 12px; text-align: right;">Total Cost</th>'.
+                                                    '<th style="padding: 8px 12px; text-align: right;">Tenant Share</th>'.
+                                                    '<th style="padding: 8px 12px; text-align: center;">Action</th>'.
+                                                '</tr>'.
+                                            '</thead>'.
+                                            '<tbody>'.
+                                                $rows.
+                                            '</tbody>'.
+                                        '</table>'.
                                     '</div>'
                                 );
                             })
@@ -557,23 +564,23 @@ class TenantDeboardingForm
 
                                 if ($excess > 0) {
                                     return new HtmlString(
-                                        '<div style="padding: 16px; background: #fee2e2; border: 1px solid #fca5a5; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">' .
-                                            '<div>' .
-                                                '<div style="font-weight: 700; color: #991b1b; font-size: 15px;">⚠️ Total Deductions Exceed Held Deposit</div>' .
-                                                '<div style="font-size: 13px; color: #7f1d1d; margin-top: 2px;">Tenant owes balance dues. An invoice will be raised for the excess amount.</div>' .
-                                            '</div>' .
-                                            '<div style="font-size: 1.35rem; font-weight: 800; color: #991b1b;">Excess Due: ₹' . number_format($excess, 2) . '</div>' .
+                                        '<div style="padding: 16px; background: #fee2e2; border: 1px solid #fca5a5; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">'.
+                                            '<div>'.
+                                                '<div style="font-weight: 700; color: #991b1b; font-size: 15px;">⚠️ Total Deductions Exceed Held Deposit</div>'.
+                                                '<div style="font-size: 13px; color: #7f1d1d; margin-top: 2px;">Tenant owes balance dues. An invoice will be raised for the excess amount.</div>'.
+                                            '</div>'.
+                                            '<div style="font-size: 1.35rem; font-weight: 800; color: #991b1b;">Excess Due: ₹'.number_format($excess, 2).'</div>'.
                                         '</div>'
                                     );
                                 }
 
                                 return new HtmlString(
-                                    '<div style="padding: 16px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">' .
-                                        '<div>' .
-                                                    '<div style="font-weight: 700; color: #065f46; font-size: 15px;">✅ Net Refundable to Tenant</div>' .
-                                                    '<div style="font-size: 13px; color: #047857; margin-top: 2px;">Deposit Held (₹' . number_format($deposit, 2) . ') − Total Deductions (₹' . number_format($totalDed, 2) . ')</div>' .
-                                                '</div>' .
-                                                '<div style="font-size: 1.35rem; font-weight: 800; color: #065f46;">Net Refund: ₹' . number_format($netRefund, 2) . '</div>' .
+                                    '<div style="padding: 16px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">'.
+                                        '<div>'.
+                                                    '<div style="font-weight: 700; color: #065f46; font-size: 15px;">✅ Net Refundable to Tenant</div>'.
+                                                    '<div style="font-size: 13px; color: #047857; margin-top: 2px;">Deposit Held (₹'.number_format($deposit, 2).') − Total Deductions (₹'.number_format($totalDed, 2).')</div>'.
+                                                '</div>'.
+                                                '<div style="font-size: 1.35rem; font-weight: 800; color: #065f46;">Net Refund: ₹'.number_format($netRefund, 2).'</div>'.
                                             '</div>'
                                 );
                             })
@@ -613,14 +620,17 @@ class TenantDeboardingForm
                                         'Cheque' => 'Cheque',
                                         'Cash' => 'Cash',
                                         'Adjusted against Outstanding' => 'Adjusted against Outstanding',
-                                    ]),
+                                    ])
+                                    ->disabled(fn () => ! (auth()->user()?->can('deboarding.refund.disburse') || auth()->user()?->hasAnyRole(['Business Owner', 'Accountant']) || (auth()->user() && auth()->user()->roles->isEmpty()))),
 
                                 TextInput::make('refund_transaction_reference')
                                     ->label('Transaction Reference / UTR No.')
-                                    ->placeholder('e.g. UTR123456789 / Cheque No.'),
+                                    ->placeholder('e.g. UTR123456789 / Cheque No.')
+                                    ->disabled(fn () => ! (auth()->user()?->can('deboarding.refund.disburse') || auth()->user()?->hasAnyRole(['Business Owner', 'Accountant']) || (auth()->user() && auth()->user()->roles->isEmpty()))),
 
                                 DateTimePicker::make('refunded_at')
-                                    ->label('Refund Disbursed At'),
+                                    ->label('Refund Disbursed At')
+                                    ->disabled(fn () => ! (auth()->user()?->can('deboarding.refund.disburse') || auth()->user()?->hasAnyRole(['Business Owner', 'Accountant']) || (auth()->user() && auth()->user()->roles->isEmpty()))),
                             ]),
 
                         SpatieMediaLibraryFileUpload::make('refund_payment_proofs')
@@ -629,6 +639,7 @@ class TenantDeboardingForm
                             ->multiple()
                             ->downloadable()
                             ->openable()
+                            ->disabled(fn () => ! (auth()->user()?->can('deboarding.refund.disburse') || auth()->user()?->hasAnyRole(['Business Owner', 'Accountant']) || (auth()->user() && auth()->user()->roles->isEmpty())))
                             ->columnSpanFull(),
                     ]),
             ]);

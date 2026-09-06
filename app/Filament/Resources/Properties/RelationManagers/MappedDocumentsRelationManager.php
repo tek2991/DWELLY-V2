@@ -2,18 +2,21 @@
 
 namespace App\Filament\Resources\Properties\RelationManagers;
 
-use Livewire\Component;
-use Filament\Schemas\Components\Tabs\Tab;
-use Illuminate\Database\Eloquent\Model;
-use Filament\Actions\Contracts\HasActions;
-use Filament\Actions\Concerns\InteractsWithActions;
-use Filament\Forms\Contracts\HasForms;
-use Filament\Forms\Concerns\InteractsWithForms;
-use Filament\Tables\Contracts\HasTable;
-use Filament\Tables\Concerns\InteractsWithTable;
-use Filament\Tables\Table;
-use Filament\Tables\Columns\TextColumn;
+use App\Domain\Mou\Enums\MouType;
+use App\Domain\Mou\Models\Mou;
+use App\Domain\Shared\Enums\DocumentType;
 use Filament\Actions\Action;
+use Filament\Actions\Concerns\InteractsWithActions;
+use Filament\Actions\Contracts\HasActions;
+use Filament\Forms\Concerns\InteractsWithForms;
+use Filament\Forms\Contracts\HasForms;
+use Filament\Schemas\Components\Tabs\Tab;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Concerns\InteractsWithTable;
+use Filament\Tables\Contracts\HasTable;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
+use Livewire\Component;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 class MappedDocumentsRelationManager extends Component implements HasActions, HasForms, HasTable
@@ -45,12 +48,12 @@ class MappedDocumentsRelationManager extends Component implements HasActions, Ha
         return $table
             ->query(function () {
                 $mouIds = $this->ownerRecord->mous()->pluck('id')->toArray();
-                
+
                 return Media::query()
                     ->where(function ($query) use ($mouIds) {
-                        if (!empty($mouIds)) {
+                        if (! empty($mouIds)) {
                             $query->where(function ($sub) use ($mouIds) {
-                                $sub->where('model_type', \App\Domain\Mou\Models\Mou::class)
+                                $sub->where('model_type', Mou::class)
                                     ->whereIn('model_id', $mouIds);
                             });
                         }
@@ -64,10 +67,12 @@ class MappedDocumentsRelationManager extends Component implements HasActions, Ha
                 TextColumn::make('source')
                     ->label('Source')
                     ->getStateUsing(function (Media $record) {
-                        if ($record->model instanceof \App\Domain\Mou\Models\Mou) {
+                        if ($record->model instanceof Mou) {
                             $type = $record->model->type;
-                            return ($type instanceof \App\Domain\Mou\Enums\MouType ? $type->label() : str($type)->headline()) . ' (#' . $record->model->number . ')';
+
+                            return ($type instanceof MouType ? $type->label() : str($type)->headline()).' (#'.$record->model->number.')';
                         }
+
                         return 'Property Profile';
                     })
                     ->badge(),
@@ -76,10 +81,13 @@ class MappedDocumentsRelationManager extends Component implements HasActions, Ha
                     ->formatStateUsing(function (string $state, Media $record) {
                         $docTypeVal = $record->getCustomProperty('document_type');
                         if ($docTypeVal) {
-                            $enumLabel = \App\Domain\Shared\Enums\DocumentType::tryFrom($docTypeVal)?->getLabel();
-                            if ($enumLabel) return $enumLabel;
+                            $enumLabel = DocumentType::tryFrom($docTypeVal)?->getLabel();
+                            if ($enumLabel) {
+                                return $enumLabel;
+                            }
                         }
-                        return match($state) {
+
+                        return match ($state) {
                             'signed_pdf' => 'Signed MOU',
                             'draft_pdf' => 'Draft MOU',
                             'archived_signed_pdf' => 'Archived MOU',
@@ -96,7 +104,7 @@ class MappedDocumentsRelationManager extends Component implements HasActions, Ha
                         };
                     })
                     ->badge()
-                    ->color(fn (string $state) => match($state) {
+                    ->color(fn (string $state) => match ($state) {
                         'signed_pdf', 'owner_aadhaar', 'owner_pan' => 'success',
                         'draft_pdf', 'signatory_aadhaar', 'signatory_pan', 'signatory_poa' => 'warning',
                         'cancelled_cheque', 'electricity_bill' => 'info',
@@ -128,7 +136,7 @@ class MappedDocumentsRelationManager extends Component implements HasActions, Ha
                     ->action(function (Media $record) {
                         return response()->download($record->getPath(), $record->file_name);
                     }),
-                    
+
                 Action::make('download')
                     ->label('Download')
                     ->icon('heroicon-o-arrow-down-tray')

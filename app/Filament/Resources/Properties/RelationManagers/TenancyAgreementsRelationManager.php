@@ -77,7 +77,7 @@ class TenancyAgreementsRelationManager extends RelationManager
                     ->icon('heroicon-o-plus')
                     ->color('primary')
                     ->button()
-                    ->visible(fn () => strtolower((string)$this->getOwnerRecord()->status) === 'vacant')
+                    ->visible(fn () => strtolower((string) $this->getOwnerRecord()->status) === 'vacant' && (auth()->user()?->can('create', TenancyAgreement::class) ?? false))
                     ->url(fn () => TenancyAgreementResource::getUrl('create', ['property_id' => $this->getOwnerRecord()->id])),
             ])
             ->actions([
@@ -91,7 +91,7 @@ class TenancyAgreementsRelationManager extends RelationManager
                     ->label('Renew')
                     ->icon('heroicon-o-arrow-path')
                     ->color('purple')
-                    ->visible(fn (TenancyAgreement $record) => $record->status === 'active')
+                    ->visible(fn (TenancyAgreement $record) => $record->status === 'active' && (auth()->user()?->can('renew', $record) ?? false))
                     ->modalHeading('Renew Tenancy Agreement & Draft 11-Month Lease')
                     ->modalDescription('Carries forward tenant KYC, inventory audit references, and security deposit, establishing a renewed 11-month lease term with updated commercial terms.')
                     ->modalSubmitActionLabel('Draft Renewal Agreement')
@@ -111,4 +111,3 @@ class TenancyAgreementsRelationManager extends RelationManager
             ]);
     }
 }
-

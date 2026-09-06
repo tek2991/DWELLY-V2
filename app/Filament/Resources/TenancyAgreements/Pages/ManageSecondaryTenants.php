@@ -29,7 +29,14 @@ class ManageSecondaryTenants extends EditRecord
 
     protected function getFormActions(): array
     {
-        if (in_array($this->getRecord()?->status, ['active', 'vacated'])) {
+        $record = $this->getRecord();
+        $user = auth()->user();
+
+        if (in_array($record?->status, ['active', 'vacated', 'terminated', 'deboarded'])) {
+            return [];
+        }
+
+        if ($user && ! $user->can('update', $record)) {
             return [];
         }
 

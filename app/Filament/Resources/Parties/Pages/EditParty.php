@@ -2,8 +2,10 @@
 
 namespace App\Filament\Resources\Parties\Pages;
 
+use App\Domain\Auth\Enums\RoleName;
 use App\Domain\Party\Enums\BusinessRole;
 use App\Domain\Party\Enums\VendorOnboardingStatus;
+use App\Domain\Party\Services\PartyService;
 use App\Domain\Party\Services\VendorOnboardingService;
 use App\Filament\Resources\Parties\PartyResource;
 use Filament\Actions\Action;
@@ -24,7 +26,9 @@ class EditParty extends EditRecord
                 ->label('Verify & Approve Vendor')
                 ->icon('heroicon-o-check-badge')
                 ->color('success')
-                ->visible(fn () => $this->record->hasRole(BusinessRole::VENDOR) && $this->record->vendorProfile?->onboarding_status !== VendorOnboardingStatus::VERIFIED)
+                ->visible(fn () => $this->record->hasRole(BusinessRole::VENDOR)
+                    && $this->record->vendorProfile?->onboarding_status !== VendorOnboardingStatus::VERIFIED
+                    && (auth()->user()?->hasAnyRole([RoleName::BUSINESS_OWNER, RoleName::CITY_MANAGER, RoleName::OPERATIONS_MANAGER]) || (auth()->user()?->can('party.verify') ?? false)))
                 ->requiresConfirmation()
                 ->modalHeading('Verify & Approve Vendor')
                 ->modalDescription(fn () => "Approve {$this->record->display_name} as an active, verified vendor for maintenance assignments.")
@@ -36,7 +40,9 @@ class EditParty extends EditRecord
                 ])
                 ->action(function (array $data) {
                     $profile = $this->record->vendorProfile;
-                    if (!$profile) return;
+                    if (! $profile) {
+                        return;
+                    }
 
                     app(VendorOnboardingService::class)->verifyVendor(
                         profile: $profile,
@@ -57,7 +63,9 @@ class EditParty extends EditRecord
                 ->label('Suspend Vendor')
                 ->icon('heroicon-o-no-symbol')
                 ->color('danger')
-                ->visible(fn () => $this->record->hasRole(BusinessRole::VENDOR) && $this->record->vendorProfile?->onboarding_status === VendorOnboardingStatus::VERIFIED)
+                ->visible(fn () => $this->record->hasRole(BusinessRole::VENDOR)
+                    && $this->record->vendorProfile?->onboarding_status === VendorOnboardingStatus::VERIFIED
+                    && (auth()->user()?->hasAnyRole([RoleName::BUSINESS_OWNER, RoleName::CITY_MANAGER, RoleName::OPERATIONS_MANAGER]) || (auth()->user()?->can('party.verify') ?? false)))
                 ->requiresConfirmation()
                 ->modalHeading('Suspend Vendor')
                 ->modalDescription(fn () => "Are you sure you want to suspend {$this->record->display_name}? They will not appear in maintenance assignment dropdowns.")
@@ -69,7 +77,9 @@ class EditParty extends EditRecord
                 ])
                 ->action(function (array $data) {
                     $profile = $this->record->vendorProfile;
-                    if (!$profile) return;
+                    if (! $profile) {
+                        return;
+                    }
 
                     app(VendorOnboardingService::class)->suspendVendor(
                         profile: $profile,
@@ -98,7 +108,7 @@ class EditParty extends EditRecord
         } elseif ($this->record->party_type === 'organization' && $this->record->organization) {
             $data['organization_data'] = $this->record->organization->toArray();
         }
-        
+
         $roles = [];
         if ($this->record->ownerProfile()->exists()) {
             $roles[] = 'owner';
@@ -145,7 +155,7 @@ class EditParty extends EditRecord
 
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
-        return app(\App\Domain\Party\Services\PartyService::class)->updateParty($record, $data);
+        return app(PartyService::class)->updateParty($record, $data);
     }
 
     protected function getRedirectUrl(): string

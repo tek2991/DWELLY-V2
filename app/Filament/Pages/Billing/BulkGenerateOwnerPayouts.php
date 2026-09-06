@@ -4,6 +4,7 @@ namespace App\Filament\Pages\Billing;
 
 use App\Domain\Finance\Services\OwnerPayoutService;
 use App\Domain\Property\Models\Property;
+use App\Filament\Resources\OwnerPayouts\OwnerPayoutResource;
 use BackedEnum;
 use Carbon\Carbon;
 use Filament\Actions\Action;
@@ -14,6 +15,9 @@ use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Livewire\WithPagination;
+use Tek2991\Accounting\Enums\AccountType;
+use Tek2991\Accounting\Enums\SystemRole;
+use Tek2991\Accounting\Facades\Accounting;
 use Tek2991\Accounting\Models\Account;
 
 class BulkGenerateOwnerPayouts extends Page
@@ -60,7 +64,7 @@ class BulkGenerateOwnerPayouts extends Page
         $this->month = (int) date('n');
         $this->year = (int) date('Y');
         $this->payoutDate = now()->toDateString();
-        $this->bankAccountId = \Tek2991\Accounting\Facades\Accounting::getDefaultBankAccountId();
+        $this->bankAccountId = Accounting::getDefaultBankAccountId();
         $this->refreshSelectedProperties();
     }
 
@@ -76,7 +80,19 @@ class BulkGenerateOwnerPayouts extends Page
 
     public static function canAccess(): bool
     {
-        return true;
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->roles->isEmpty()) {
+            return true;
+        }
+
+        // Allowed: Business Owner, Accountant, City Manager (preview summary)
+        // Forbidden: Operations Executive, Operations Manager, Demand Manager, Supply Manager
+        return $user->can('payout.bulk.generate')
+            || $user->hasAnyRole(['Business Owner', 'Accountant', 'City Manager']);
     }
 
     protected function getHeaderActions(): array
@@ -86,13 +102,13 @@ class BulkGenerateOwnerPayouts extends Page
                 ->label('Owner Payouts Register')
                 ->icon('heroicon-o-banknotes')
                 ->color('gray')
-                ->url(fn (): string => \App\Filament\Resources\OwnerPayouts\OwnerPayoutResource::getUrl('index')),
+                ->url(fn (): string => OwnerPayoutResource::getUrl('index')),
 
             Action::make('bulk_generate_rent')
                 ->label('Bulk Generate Rent')
                 ->icon('heroicon-o-document-text')
                 ->color('gray')
-                ->url(fn (): string => \App\Filament\Pages\Billing\BulkGenerateMonthlyRent::getUrl()),
+                ->url(fn (): string => BulkGenerateMonthlyRent::getUrl()),
         ];
     }
 
@@ -189,6 +205,7 @@ class BulkGenerateOwnerPayouts extends Page
     public function getPreviewData(): array
     {
         $service = app(OwnerPayoutService::class);
+
         return $service->getBulkPayoutPreview($this->month, $this->year);
     }
 
@@ -201,7 +218,7 @@ class BulkGenerateOwnerPayouts extends Page
             $items = array_filter($items, fn ($i) => $i['status'] === $this->statusFilter);
         }
 
-        if (!empty(trim($this->search))) {
+        if (! empty(trim($this->search))) {
             $term = strtolower(trim($this->search));
             $items = array_filter($items, function ($i) use ($term) {
                 return str_contains(strtolower($i['property_name'] ?? ''), $term)
@@ -258,17 +275,17 @@ class BulkGenerateOwnerPayouts extends Page
 
     public function getBankAccountsProperty(): Collection
     {
-        return Account::where('type', \Tek2991\Accounting\Enums\AccountType::Asset)
+        return Account::where('type', AccountType::Asset)
             ->where(function ($q) {
                 $q->whereIn('system_role', [
-                    \Tek2991\Accounting\Enums\SystemRole::Bank,
-                    \Tek2991\Accounting\Enums\SystemRole::Cash,
+                    SystemRole::Bank,
+                    SystemRole::Cash,
                 ])
-                ->orWhere('code', 'like', '11%')
-                ->orWhere('name', 'like', '%Current Account%')
-                ->orWhere('name', 'like', '%Savings Account%')
-                ->orWhere('name', 'like', '%Bank%')
-                ->orWhere('name', 'like', '%Cash%');
+                    ->orWhere('code', 'like', '11%')
+                    ->orWhere('name', 'like', '%Current Account%')
+                    ->orWhere('name', 'like', '%Savings Account%')
+                    ->orWhere('name', 'like', '%Bank%')
+                    ->orWhere('name', 'like', '%Cash%');
             })
             ->where('is_control_account', false)
             ->get();
@@ -279,6 +296,8 @@ class BulkGenerateOwnerPayouts extends Page
      */
     public function disburseSelected(): void
     {
+        abort_unless(auth()->user()?->can('payout.disburse') || auth()->user()?->hasAnyRole(['Business Owner', 'Accountant']) || (bool) auth()->user()?->roles->isEmpty(), 403, 'Unauthorized to disburse owner payouts.');
+
         $selectedSummary = $this->getSelectedSummary();
         if ($selectedSummary['count'] === 0) {
             Notification::make()
@@ -286,6 +305,7 @@ class BulkGenerateOwnerPayouts extends Page
                 ->body('Please select at least one ready property to disburse owner payouts.')
                 ->warning()
                 ->send();
+
             return;
         }
 
@@ -312,7 +332,7 @@ class BulkGenerateOwnerPayouts extends Page
             if ($summary['count'] > 0) {
                 Notification::make()
                     ->title('Bulk Owner Payouts Disbursed')
-                    ->body("Successfully disbursed {$summary['count']} owner payouts totaling ₹" . number_format($summary['total_amount'], 2) . " for {$monthName}.")
+                    ->body("Successfully disbursed {$summary['count']} owner payouts totaling ₹".number_format($summary['total_amount'], 2)." for {$monthName}.")
                     ->success()
                     ->send();
             } else {
@@ -336,6 +356,8 @@ class BulkGenerateOwnerPayouts extends Page
      */
     public function disburseSingleProperty(string $propertyId): void
     {
+        abort_unless(auth()->user()?->can('payout.disburse') || auth()->user()?->hasAnyRole(['Business Owner', 'Accountant']) || (bool) auth()->user()?->roles->isEmpty(), 403, 'Unauthorized to disburse owner payouts.');
+
         $service = app(OwnerPayoutService::class);
         $options = [
             'bank_account_id' => $this->bankAccountId,
@@ -359,7 +381,7 @@ class BulkGenerateOwnerPayouts extends Page
             if ($summary['count'] > 0) {
                 Notification::make()
                     ->title('Owner Payout Disbursed')
-                    ->body("Successfully disbursed payout of ₹" . number_format($summary['total_amount'], 2) . " for {$monthName}.")
+                    ->body('Successfully disbursed payout of ₹'.number_format($summary['total_amount'], 2)." for {$monthName}.")
                     ->success()
                     ->send();
             } else {
@@ -388,9 +410,12 @@ class BulkGenerateOwnerPayouts extends Page
      */
     public function savePayoutAdjustment(string $propertyId, array $data): void
     {
+        abort_unless(auth()->user()?->can('payout.bulk.generate') || auth()->user()?->hasAnyRole(['Business Owner', 'Accountant', 'City Manager']) || (bool) auth()->user()?->roles->isEmpty(), 403, 'Unauthorized to adjust owner payouts.');
+
         $property = Property::find($propertyId);
         if (! $property) {
             Notification::make()->title('Property Not Found')->danger()->send();
+
             return;
         }
 
@@ -425,9 +450,12 @@ class BulkGenerateOwnerPayouts extends Page
      */
     public function resetPayoutAdjustment(string $propertyId): void
     {
+        abort_unless(auth()->user()?->can('payout.bulk.generate') || auth()->user()?->hasAnyRole(['Business Owner', 'Accountant', 'City Manager']) || (bool) auth()->user()?->roles->isEmpty(), 403, 'Unauthorized to adjust owner payouts.');
+
         $property = Property::find($propertyId);
         if (! $property) {
             Notification::make()->title('Property Not Found')->danger()->send();
+
             return;
         }
 

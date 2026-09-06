@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\Operations\TenantDeboardingResource\Pages;
 
 use App\Domain\Agreement\Enums\DeboardingStatus;
-use App\Domain\Agreement\Models\TenantDeboarding;
 use App\Filament\Resources\Operations\TenantDeboardingResource;
 use App\Filament\Resources\Operations\TenantDeboardingResource\Pages\Concerns\HasDeboardingWorkflowHeader;
 use App\Filament\Resources\Operations\TenantDeboardingResource\Schemas\TenantDeboardingForm;
@@ -23,6 +22,26 @@ class EditTenantDeboarding extends EditRecord
     protected static ?string $navigationLabel = '1. Notice & Overview';
 
     protected static ?string $title = 'Deboarding – Notice & Commencement';
+
+    public static function canAccess(array $parameters = []): bool
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->roles->isEmpty()) {
+            return true;
+        }
+
+        if ($user->hasRole('Supply Manager') && ! $user->hasRole('Business Owner')) {
+            return false;
+        }
+
+        return $user->can('deboarding.viewAny')
+            || $user->can('deboarding.access')
+            || $user->hasAnyRole(['Business Owner', 'City Manager', 'Demand Manager', 'Operations Manager', 'Operations Executive', 'Accountant']);
+    }
 
     public function form(Schema $schema): Schema
     {

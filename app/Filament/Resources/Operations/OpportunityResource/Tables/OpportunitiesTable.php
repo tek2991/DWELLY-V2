@@ -116,7 +116,7 @@ class OpportunitiesTable
                         ->modalHeading('Mark as Ready for MOU')
                         ->modalDescription('Are you sure you want to mark this opportunity as Ready for MOU? This will verify prerequisite commercial and contact details.')
                         ->modalSubmitActionLabel('Confirm & Mark Ready')
-                        ->visible(fn (Opportunity $record) => $record->status === OpportunityStatus::NEW)
+                        ->visible(fn (Opportunity $record) => $record->status === OpportunityStatus::NEW && (auth()->user()?->can('update', $record) ?? false))
                         ->action(function (Opportunity $record) {
                             $readiness = app(OpportunityReadinessService::class)->canCreateMOU($record);
                             if (! $readiness['is_ready']) {
@@ -136,7 +136,17 @@ class OpportunitiesTable
                         ->label(fn (Opportunity $record) => Mou::where('opportunity_id', $record->id)->exists() ? 'Open MOU' : 'Create MOU')
                         ->icon('heroicon-o-document-text')
                         ->color('primary')
-                        ->visible(fn (Opportunity $record) => in_array($record->status, [OpportunityStatus::READY_FOR_MOU, OpportunityStatus::CONVERTED]))
+                        ->visible(function (Opportunity $record) {
+                            if (! in_array($record->status, [OpportunityStatus::READY_FOR_MOU, OpportunityStatus::CONVERTED])) {
+                                return false;
+                            }
+                            $mou = Mou::where('opportunity_id', $record->id)->first();
+                            if ($mou) {
+                                return auth()->user()?->can('view', $mou) ?? false;
+                            }
+
+                            return auth()->user()?->can('create', Mou::class) ?? false;
+                        })
                         ->requiresConfirmation(fn (Opportunity $record) => ! Mou::where('opportunity_id', $record->id)->exists())
                         ->modalHeading('Create MOU')
                         ->modalDescription('Are you sure you want to create an onboarding MOU agreement for this opportunity?')
@@ -154,7 +164,7 @@ class OpportunitiesTable
                         ->label('Close Lost')
                         ->icon('heroicon-o-x-circle')
                         ->color('danger')
-                        ->visible(fn (Opportunity $record) => ! in_array($record->status, [OpportunityStatus::CONVERTED, OpportunityStatus::CLOSED_LOST, OpportunityStatus::CANCELLED, OpportunityStatus::MOU_SIGNED]))
+                        ->visible(fn (Opportunity $record) => ! in_array($record->status, [OpportunityStatus::CONVERTED, OpportunityStatus::CLOSED_LOST, OpportunityStatus::CANCELLED, OpportunityStatus::MOU_SIGNED]) && (auth()->user()?->can('update', $record) ?? false))
                         ->form([
                             Textarea::make('notes')->label('Reason for losing')->placeholder('Enter details regarding why this lead was lost...')->required(),
                         ])
