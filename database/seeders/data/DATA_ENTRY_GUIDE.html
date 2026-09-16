@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dwelly Property Onboarding — Data Entry Guide</title>
+    <style>
+        @page {
+            size: A4 portrait;
+            margin: 10mm 12mm 10mm 12mm;
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-size: 8.5pt;
+            line-height: 1.35;
+            color: #1e293b;
+            background: #ffffff;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Header / Brand Banner */
+        .header-card {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #0284c7 100%);
+            color: #ffffff;
+            border-radius: 6px;
+            padding: 10px 16px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header-title-group h1 {
+            margin: 0;
+            font-size: 14pt;
+            font-weight: 800;
+            letter-spacing: -0.3px;
+            color: #ffffff;
+        }
+
+        .header-title-group p {
+            margin: 2px 0 0 0;
+            font-size: 8.5pt;
+            color: #93c5fd;
+            font-weight: 500;
+        }
+
+        .header-badge {
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 7.5pt;
+            font-weight: 600;
+            color: #ffffff;
+            text-align: right;
+            line-height: 1.25;
+        }
+
+        /* Section Headings */
+        h2 {
+            font-size: 10.8pt;
+            font-weight: 750;
+            color: #0f172a;
+            border-bottom: 1.5px solid #cbd5e1;
+            padding-bottom: 2px;
+            margin-top: 10px;
+            margin-bottom: 6px;
+            page-break-after: avoid;
+        }
+
+        h3 {
+            font-size: 9.2pt;
+            font-weight: 700;
+            color: #0369a1;
+            margin-top: 8px;
+            margin-bottom: 3px;
+            page-break-after: avoid;
+        }
+
+        /* Callout Boxes */
+        .callout {
+            border-radius: 4px;
+            padding: 6px 10px;
+            margin: 6px 0;
+            font-size: 8pt;
+            page-break-inside: avoid;
+        }
+
+        .callout-info {
+            background-color: #f0f9ff;
+            border-left: 3.5px solid #0284c7;
+            color: #0369a1;
+        }
+
+        .callout-warning {
+            background-color: #fffbeb;
+            border-left: 3.5px solid #f59e0b;
+            color: #92400e;
+        }
+
+        /* Grid / Workflow Cards */
+        .workflow-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+            margin: 6px 0 8px 0;
+            page-break-inside: avoid;
+        }
+
+        .workflow-step {
+            border: 1px solid #cbd5e1;
+            background: #f8fafc;
+            border-radius: 4px;
+            padding: 6px 8px;
+        }
+
+        .workflow-step-num {
+            display: inline-block;
+            background: #0284c7;
+            color: #ffffff;
+            font-size: 7pt;
+            font-weight: 700;
+            border-radius: 3px;
+            padding: 1px 4px;
+            margin-bottom: 3px;
+        }
+
+        .workflow-step h4 {
+            margin: 0 0 2px 0;
+            font-size: 8.5pt;
+            color: #0f172a;
+        }
+
+        .workflow-step p {
+            margin: 0;
+            font-size: 7.6pt;
+            color: #475569;
+            line-height: 1.25;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 7.6pt;
+            margin: 2px 0 6px 0;
+            page-break-inside: auto;
+        }
+
+        tr {
+            page-break-inside: avoid;
+            page-break-after: auto;
+        }
+
+        th {
+            background-color: #f1f5f9;
+            color: #1e293b;
+            font-weight: 700;
+            text-align: left;
+            padding: 3px 5px;
+            border: 1px solid #cbd5e1;
+            font-size: 7.6pt;
+        }
+
+        td {
+            padding: 2.8px 5px;
+            border: 1px solid #e2e8f0;
+            color: #334155;
+            vertical-align: middle;
+        }
+
+        tr:nth-child(even) td {
+            background-color: #f8fafc;
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-size: 6.8pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.2px;
+        }
+
+        .badge-yes {
+            background-color: #dcfce7;
+            color: #15803d;
+            border: 1px solid #86efac;
+        }
+
+        .badge-no {
+            background-color: #f1f5f9;
+            color: #64748b;
+            border: 1px solid #cbd5e1;
+        }
+
+        .badge-rec {
+            background-color: #e0f2fe;
+            color: #0369a1;
+            border: 1px solid #bae6fd;
+        }
+
+        .code-pill {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 7.2pt;
+            background: #f1f5f9;
+            color: #0f172a;
+            border: 1px solid #cbd5e1;
+            padding: 0.5px 3.5px;
+            border-radius: 3px;
+            font-weight: 600;
+        }
+
+        /* Code block / File Tree */
+        pre {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 7.6pt;
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 6px 10px;
+            border-radius: 4px;
+            overflow-x: hidden;
+            line-height: 1.3;
+            margin: 4px 0 8px 0;
+            page-break-inside: avoid;
+        }
+
+        pre .comment {
+            color: #94a3b8;
+        }
+
+        pre .highlight {
+            color: #38bdf8;
+            font-weight: bold;
+        }
+
+        .page-break {
+            page-break-before: always;
+        }
+
+        .faq-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            margin-top: 4px;
+        }
+
+        .faq-item {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            padding: 5px 8px;
+            page-break-inside: avoid;
+        }
+
+        .faq-q {
+            font-weight: 700;
+            color: #0f172a;
+            font-size: 8pt;
+            margin-bottom: 2px;
+        }
+
+        .faq-a {
+            color: #475569;
+            font-size: 7.5pt;
+            line-height: 1.3;
+        }
+
+        .footer-note {
+            text-align: center;
+            font-size: 7pt;
+            color: #94a3b8;
+            margin-top: 8px;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 4px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ==================== PAGE 1 ==================== -->
+    <div class="header-card">
+        <div class="header-title-group">
+            <h1>📋 Dwelly Property Onboarding</h1>
+            <p>Standard Operating Procedure & Data Entry Guide</p>
+        </div>
+        <div class="header-badge">
+            Dwelly Operations Team<br>
+            Excel / CSV Reference
+        </div>
+    </div>
+
+    <p style="margin-top: 0; margin-bottom: 6px; font-size: 8.3pt; color: #334155;">
+        This guide explains step-by-step how to enter existing properties, owners, tenants, agreements, and photos into the Dwelly system using Microsoft Excel or Google Sheets.
+    </p>
+
+    <div class="callout callout-info" style="margin: 4px 0 6px 0;">
+        <strong>🔑 The Golden Key:</strong> Every property is identified by a unique <strong>Property Code</strong> (e.g. <code>GAU-0091</code> or <code>BLR-0015</code>). This single code connects the properties spreadsheet, the specifications checklist, and the photo folder together.
+    </div>
+
+    <div class="workflow-grid">
+        <div class="workflow-step">
+            <span class="workflow-step-num">Part 1</span>
+            <h4>Properties CSV</h4>
+            <p><strong>existing_properties_template.csv</strong><br>Owner info, rent, deposit, building details, and tenant info (if occupied).</p>
+        </div>
+        <div class="workflow-step">
+            <span class="workflow-step-num">Part 2</span>
+            <h4>Checklist CSV</h4>
+            <p><strong>property_specifications_template.csv</strong><br>Granular room counts, amenities (yes/no), and appliance/inventory counts.</p>
+        </div>
+        <div class="workflow-step">
+            <span class="workflow-step-num">Part 3</span>
+            <h4>Assets Folder</h4>
+            <p><strong>Folder: {property_code}/</strong><br>Drop <code>mou.pdf</code>, <code>tenancy.pdf</code>, and property photos inside <code>photos/</code>.</p>
+        </div>
+    </div>
+
+    <!-- Quick Start Steps -->
+    <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; padding: 5px 10px; margin-bottom: 8px;">
+        <strong style="color: #0f172a; font-size: 8.2pt;">⚡ Quick Start 4-Step Checklist:</strong>
+        <ol style="margin: 2px 0 0 14px; padding: 0; font-size: 7.8pt; color: #334155; line-height: 1.3;">
+            <li><strong>Open CSVs:</strong> Open <code>existing_properties_template.csv</code> and <code>property_specifications_template.csv</code>. Keep Row 1 header unchanged.</li>
+            <li><strong>Fill in Rows:</strong> Fill in one row per property in File 1, then enter the matching row in File 2 using the exact same <code>property_code</code>.</li>
+            <li><strong>Organize Photos & Scans:</strong> Create a folder named after the <code>property_code</code> with <code>mou.pdf</code>, <code>tenancy.pdf</code>, and images in <code>photos/</code>.</li>
+            <li><strong>Save as CSV UTF-8:</strong> In Excel, select <strong>File ➔ Save As ➔ CSV UTF-8 (Comma delimited) (*.csv)</strong>.</li>
+        </ol>
+    </div>
+
+    <!-- File 1: Location & Specs -->
+    <h2>📑 File 1: Main Properties Spreadsheet (<code>existing_properties_template.csv</code>)</h2>
+
+    <h3>Section A: Property Location & Identification</h3>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 22%;">Column Header</th>
+                <th style="width: 14%;">Required?</th>
+                <th style="width: 18%;">Example</th>
+                <th>Notes & Allowed Values</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><span class="code-pill">property_code</span></td>
+                <td><span class="badge badge-rec">Recommended</span></td>
+                <td><code>GAU-0091</code></td>
+                <td>Unique code. Use city prefixes like <code>GAU-</code> (Guwahati) or <code>BLR-</code> (Bangalore).</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">building_name</span></td>
+                <td><span class="badge badge-yes">Required</span></td>
+                <td><code>Greenwood Enclave</code></td>
+                <td>Name of apartment society, building, or villa project.</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">address_line_1</span></td>
+                <td><span class="badge badge-yes">Required</span></td>
+                <td><code>Flat 4B, Tower 2</code></td>
+                <td>Flat / door number, street address.</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">address_line_2</span></td>
+                <td><span class="badge badge-no">Optional</span></td>
+                <td><code>Opposite State Zoo</code></td>
+                <td>Landmark or secondary address line.</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">locality</span></td>
+                <td><span class="badge badge-yes">Required</span></td>
+                <td><code>Zoo Road</code></td>
+                <td>Neighborhood or area name (e.g. <code>Whitefield</code>, <code>Christian Basti</code>).</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">city</span></td>
+                <td><span class="badge badge-yes">Required</span></td>
+                <td><code>Guwahati</code></td>
+                <td>Must be either <strong>Guwahati</strong> or <strong>Bangalore</strong>.</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">state</span></td>
+                <td><span class="badge badge-no">Optional</span></td>
+                <td><code>Assam</code></td>
+                <td><code>Assam</code> or <code>Karnataka</code> (auto-inferred from City if left empty).</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">pincode</span></td>
+                <td><span class="badge badge-yes">Required</span></td>
+                <td><code>781024</code></td>
+                <td>6-digit numeric postal code.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>Section B: Property Specifications & Status</h3>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 22%;">Column Header</th>
+                <th style="width: 14%;">Required?</th>
+                <th style="width: 18%;">Example</th>
+                <th>Allowed Values (Must Match Exactly)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><span class="code-pill">bhk_type</span></td>
+                <td><span class="badge badge-yes">Required</span></td>
+                <td><code>2 BHK</code></td>
+                <td><code>1 BHK</code>, <code>2 BHK</code>, <code>3 BHK</code>, <code>4 BHK</code>, <code>5+ BHK</code>, or <code>1 RK</code></td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">property_type</span></td>
+                <td><span class="badge badge-yes">Required</span></td>
+                <td><code>Apartment</code></td>
+                <td><code>Apartment</code>, <code>Independent House</code>, <code>Villa</code>, <code>Builder Floor</code>, or <code>Studio</code></td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">furnishing_type</span></td>
+                <td><span class="badge badge-yes">Required</span></td>
+                <td><code>Semi-Furnished</code></td>
+                <td><code>Fully Furnished</code>, <code>Semi-Furnished</code>, or <code>Unfurnished</code></td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">floor</span></td>
+                <td><span class="badge badge-no">Optional</span></td>
+                <td><code>4</code></td>
+                <td>Floor number of this unit (<code>0</code> for ground floor).</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">total_floors</span></td>
+                <td><span class="badge badge-no">Optional</span></td>
+                <td><code>8</code></td>
+                <td>Total number of floors in the building.</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">floor_space_sqft</span></td>
+                <td><span class="badge badge-no">Optional</span></td>
+                <td><code>1150</code></td>
+                <td>Super built-up or carpet area in sqft (numbers only).</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">property_status</span></td>
+                <td><span class="badge badge-yes">Required</span></td>
+                <td><code>Occupied</code></td>
+                <td><strong>Occupied</strong> or <strong>Vacant</strong> (or <code>Under Maintenance</code>).</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">is_listed</span></td>
+                <td><span class="badge badge-no">Optional</span></td>
+                <td><code>true</code></td>
+                <td><code>true</code> to display on public website, <code>false</code> to keep unlisted.</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">available_from</span></td>
+                <td><span class="badge badge-no">Optional</span></td>
+                <td><code>2026-04-01</code></td>
+                <td>Date format: <code>YYYY-MM-DD</code>.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <!-- ==================== PAGE 2 ==================== -->
+    <div class="page-break"></div>
+
+    <h2>📑 File 1 Continued: Commercials, Owner & Tenant Data</h2>
+
+    <h3>Section C: Owner & Commercial Terms</h3>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 22%;">Column Header</th>
+                <th style="width: 14%;">Required?</th>
+                <th style="width: 18%;">Example</th>
+                <th>Notes & Validation Rules</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><span class="code-pill">owner_name</span></td>
+                <td><span class="badge badge-yes">Required</span></td>
+                <td><code>Dr. Himanta Barua</code></td>
+                <td>Full legal name of the property owner.</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">owner_phone</span></td>
+                <td><span class="badge badge-yes">Required</span></td>
+                <td><code>9876543210</code></td>
+                <td>10-digit mobile number. <strong>No +91, no spaces, no dashes</strong>.</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">owner_email</span></td>
+                <td><span class="badge badge-yes">Required</span></td>
+                <td><code>himanta.barua@gmail.com</code></td>
+                <td>Valid email address for owner portal access.</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">owner_pan</span></td>
+                <td><span class="badge badge-no">Optional</span></td>
+                <td><code>ABCDE1234F</code></td>
+                <td>10-character PAN number.</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">owner_aadhaar</span></td>
+                <td><span class="badge badge-no">Optional</span></td>
+                <td><code>987654321012</code></td>
+                <td>12-digit Aadhaar number.</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">owner_bank_name</span></td>
+                <td><span class="badge badge-no">Optional</span></td>
+                <td><code>HDFC Bank</code></td>
+                <td>Bank name for owner payout disbursement.</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">owner_bank_account</span></td>
+                <td><span class="badge badge-no">Optional</span></td>
+                <td><code>50100456789012</code></td>
+                <td>Bank account number.</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">owner_bank_ifsc</span></td>
+                <td><span class="badge badge-no">Optional</span></td>
+                <td><code>HDFC0000084</code></td>
+                <td>11-character IFSC code.</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">mou_number</span></td>
+                <td><span class="badge badge-no">Optional</span></td>
+                <td><code>MOU-2026-00091</code></td>
+                <td>MOU agreement number (auto-generated if empty).</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">mou_start_date</span></td>
+                <td><span class="badge badge-no">Optional</span></td>
+                <td><code>2025-10-01</code></td>
+                <td>Date signed with owner (<code>YYYY-MM-DD</code>).</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">mou_status</span></td>
+                <td><span class="badge badge-no">Optional</span></td>
+                <td><code>converted</code></td>
+                <td>Usually <code>converted</code> for active managed properties.</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">mou_fee_percentage</span></td>
+                <td><span class="badge badge-no">Optional</span></td>
+                <td><code>8.0</code></td>
+                <td>Dwelly management fee % (defaults to 8.0%).</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">rent_amount</span></td>
+                <td><span class="badge badge-yes">Required</span></td>
+                <td><code>24000</code></td>
+                <td>Monthly rent in Rupees (<strong>plain number, no commas or ₹</strong>).</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">security_deposit</span></td>
+                <td><span class="badge badge-yes">Required</span></td>
+                <td><code>48000</code></td>
+                <td>Security deposit in Rupees (<strong>plain number, no commas</strong>).</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">society_fee</span></td>
+                <td><span class="badge badge-no">Optional</span></td>
+                <td><code>2000</code></td>
+                <td>Monthly society/maintenance fee in Rupees.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>Section D: Tenant & Tenancy Agreement (ONLY IF PROPERTY IS OCCUPIED)</h3>
+    <div class="callout callout-warning" style="margin: 3px 0 5px 0;">
+        <strong>⚠️ Critical Rule on Occupied vs Vacant Properties:</strong>
+        <div style="margin-top: 1px;">
+            • If <strong>Occupied</strong>: You <strong>MUST</strong> provide <code>tenant_name</code>, <code>tenant_phone</code>, <code>tenant_email</code>, <code>agreement_start_date</code>, and <code>agreement_end_date</code>.<br>
+            • If <strong>Vacant</strong>: <strong>Leave all tenant columns completely blank</strong>.
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 22%;">Column Header</th>
+                <th style="width: 14%;">Required if Occupied?</th>
+                <th style="width: 18%;">Example</th>
+                <th>Notes</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><span class="code-pill">tenant_name</span></td>
+                <td><span class="badge badge-yes">Required</span></td>
+                <td><code>Abhishek Sen</code></td>
+                <td>Primary tenant's full legal name.</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">tenant_phone</span></td>
+                <td><span class="badge badge-yes">Required</span></td>
+                <td><code>9876500001</code></td>
+                <td>10-digit mobile number (no +91, no spaces).</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">tenant_email</span></td>
+                <td><span class="badge badge-yes">Required</span></td>
+                <td><code>abhishek.sen@gmail.com</code></td>
+                <td>Valid tenant email address.</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">tenant_pan</span></td>
+                <td><span class="badge badge-no">Optional</span></td>
+                <td><code>XYZPE5678K</code></td>
+                <td>Tenant PAN card number.</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">tenant_aadhaar</span></td>
+                <td><span class="badge badge-no">Optional</span></td>
+                <td><code>123456789012</code></td>
+                <td>12-digit Aadhaar number.</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">agreement_code</span></td>
+                <td><span class="badge badge-no">Optional</span></td>
+                <td><code>TNC-2026-00091</code></td>
+                <td>Agreement code (auto-generated if empty).</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">agreement_start_date</span></td>
+                <td><span class="badge badge-yes">Required</span></td>
+                <td><code>2026-01-01</code></td>
+                <td>Tenancy start date (<code>YYYY-MM-DD</code>).</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">agreement_end_date</span></td>
+                <td><span class="badge badge-yes">Required</span></td>
+                <td><code>2026-12-31</code></td>
+                <td>Tenancy expiry date (<code>YYYY-MM-DD</code>).</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">lock_in_months</span></td>
+                <td><span class="badge badge-no">Optional</span></td>
+                <td><code>6</code></td>
+                <td>Lock-in duration in months (defaults to 6).</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">notice_period_days</span></td>
+                <td><span class="badge badge-no">Optional</span></td>
+                <td><code>30</code></td>
+                <td>Notice period in days (defaults to 30).</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <!-- ==================== PAGE 3 ==================== -->
+    <div class="page-break"></div>
+
+    <h2>🛏️ File 2: Specifications Checklist Spreadsheet (<code>property_specifications_template.csv</code>)</h2>
+    <p style="margin-top: 1px; margin-bottom: 5px; font-size: 8.2pt; color: #475569;">
+        This separate spreadsheet tracks rooms, amenities, and inventory counts. <strong>Always link using <code>property_code</code> in the first column</strong>.
+    </p>
+
+    <div style="display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 8px; margin-bottom: 5px;">
+        <!-- Rooms Table -->
+        <div>
+            <h3 style="margin-top: 0;">1. Rooms (Count or Yes/No)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Column Name</th>
+                        <th>Room Type</th>
+                        <th style="width: 22%;">Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>room_living_room</code></td><td>Living Hall</td><td><code>1</code></td></tr>
+                    <tr><td><code>room_kitchen</code></td><td>Modular Kitchen</td><td><code>1</code></td></tr>
+                    <tr><td><code>room_master_bedroom</code></td><td>Master Bed</td><td><code>1</code></td></tr>
+                    <tr><td><code>room_second_bedroom</code></td><td>2nd Bed</td><td><code>1</code> or <code>0</code></td></tr>
+                    <tr><td><code>room_third_bedroom</code></td><td>3rd Bed</td><td><code>1</code> or <code>0</code></td></tr>
+                    <tr><td><code>room_guest_bedroom</code></td><td>Guest Bed</td><td><code>1</code> or <code>0</code></td></tr>
+                    <tr><td><code>room_attached_bathroom</code></td><td>Attached Bath</td><td><code>1</code>, <code>2</code>, <code>3</code></td></tr>
+                    <tr><td><code>room_common_bathroom</code></td><td>Common Bath</td><td><code>1</code> or <code>2</code></td></tr>
+                    <tr><td><code>room_balcony</code></td><td>Balconies</td><td><code>1</code>, <code>2</code>, <code>3</code></td></tr>
+                    <tr><td><code>room_pooja_room</code></td><td>Pooja Room</td><td><code>yes</code>/<code>no</code></td></tr>
+                    <tr><td><code>room_servant_room</code></td><td>Servant Room</td><td><code>yes</code>/<code>no</code></td></tr>
+                    <tr><td><code>room_study_room</code></td><td>Office/Study</td><td><code>yes</code>/<code>no</code></td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Amenities Table -->
+        <div>
+            <h3 style="margin-top: 0;">2. Amenities (Type yes or no)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Column Name</th>
+                        <th>Amenity</th>
+                        <th style="width: 25%;">Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>amenity_lift</code></td><td>Elevator / Lift</td><td><code>yes</code> / <code>no</code></td></tr>
+                    <tr><td><code>amenity_power_backup</code></td><td>Power Backup</td><td><code>yes</code> / <code>no</code></td></tr>
+                    <tr><td><code>amenity_security</code></td><td>24/7 Security</td><td><code>yes</code> / <code>no</code></td></tr>
+                    <tr><td><code>amenity_parking</code></td><td>Car Parking</td><td><code>yes</code> / <code>no</code></td></tr>
+                    <tr><td><code>amenity_gym</code></td><td>Fitness Gym</td><td><code>yes</code> / <code>no</code></td></tr>
+                    <tr><td><code>amenity_swimming_pool</code></td><td>Swimming Pool</td><td><code>yes</code> / <code>no</code></td></tr>
+                    <tr><td><code>amenity_clubhouse</code></td><td>Clubhouse</td><td><code>yes</code> / <code>no</code></td></tr>
+                </tbody>
+            </table>
+
+            <h3 style="margin-top: 4px;">3. Key / Access</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Column Name</th>
+                        <th>Description</th>
+                        <th style="width: 25%;">Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>inv_keys</code></td><td>Keys Count</td><td><code>3</code> or <code>4</code></td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <h3>4. Inventory Checklist (Enter Quantity Count)</h3>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 25%;">Column Name</th>
+                <th style="width: 25%;">Item Description</th>
+                <th style="width: 25%;">Column Name</th>
+                <th style="width: 25%;">Item Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>inv_fan</code></td><td>Ceiling Fans (e.g. <code>4</code>)</td>
+                <td><code>inv_geyser</code></td><td>Geysers / Water Heaters (e.g. <code>2</code>)</td>
+            </tr>
+            <tr>
+                <td><code>inv_light</code></td><td>Tube / LED Lights (e.g. <code>8</code>)</td>
+                <td><code>inv_fridge</code></td><td>Refrigerator (e.g. <code>1</code>)</td>
+            </tr>
+            <tr>
+                <td><code>inv_ac</code></td><td>Air Conditioners (e.g. <code>2</code>)</td>
+                <td><code>inv_tv</code></td><td>Television (e.g. <code>1</code>)</td>
+            </tr>
+            <tr>
+                <td><code>inv_bed</code></td><td>Beds & Mattresses (e.g. <code>2</code>)</td>
+                <td><code>inv_washing_machine</code></td><td>Washing Machine (e.g. <code>1</code>)</td>
+            </tr>
+            <tr>
+                <td><code>inv_wardrobe</code></td><td>Wardrobes / Closets (e.g. <code>3</code>)</td>
+                <td><code>inv_microwave</code></td><td>Microwave Oven (e.g. <code>1</code>)</td>
+            </tr>
+            <tr>
+                <td><code>inv_sofa</code></td><td>Sofa Sets (e.g. <code>1</code>)</td>
+                <td><code>inv_water_purifier</code></td><td>RO Water Purifier (e.g. <code>1</code>)</td>
+            </tr>
+            <tr>
+                <td><code>inv_dining_set</code></td><td>Dining Table & Chairs (e.g. <code>1</code>)</td>
+                <td><code>inv_chimney</code></td><td>Kitchen Chimney (e.g. <code>1</code>)</td>
+            </tr>
+        </tbody>
+    </table>
+    <p style="font-size: 7.6pt; color: #64748b; margin-top: 1px; margin-bottom: 6px;">💡 <em>If an item is not present in the property, type <code>0</code> or leave it blank.</em></p>
+
+    <!-- File 3: Folders & Photos -->
+    <h2>📁 Part 3: Documents & Photos Folder Organization</h2>
+    <p style="margin-top: 1px; margin-bottom: 3px; font-size: 8.2pt; color: #475569;">
+        Create a folder named after the <code>property_code</code> inside <code>storage/app/seed_assets/properties/</code>.
+    </p>
+
+    <pre>
+storage/app/seed_assets/properties/
+│
+├── <span class="highlight">GAU-0091/</span>                     <span class="comment">&lt;--- Folder named exactly as property_code</span>
+│   ├── mou.pdf                  <span class="comment">&lt;--- Signed Owner MOU scan (.pdf)</span>
+│   ├── tenancy.pdf              <span class="comment">&lt;--- Signed Tenancy Agreement scan (.pdf, if occupied)</span>
+│   └── photos/                  <span class="comment">&lt;--- Subfolder for all photos</span>
+│       ├── <span class="highlight">01_elevation.jpg</span>     <span class="comment">&lt;--- "01_" automatically becomes the main cover photo!</span>
+│       ├── 02_living_room.jpg
+│       ├── 03_kitchen.jpg
+│       ├── 04_master_bed.jpg
+│       └── 05_bathroom.jpg
+│
+└── <span class="highlight">BLR-0091/</span>
+    ├── mou.pdf
+    └── photos/
+        ├── 01_front.jpg
+        └── 02_hall.jpg
+    </pre>
+
+    <!-- ==================== PAGE 4 ==================== -->
+    <div class="page-break"></div>
+
+    <h2>🚫 Top 8 Common Mistakes to Avoid</h2>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 5%;">#</th>
+                <th style="width: 45%;">❌ What NOT to do</th>
+                <th style="width: 50%;">✅ What to do instead</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>1</td>
+                <td><strong>Do not write currency symbols or commas</strong><br><span style="color: #ef4444;">❌ ₹25,000 or 25,000</span></td>
+                <td>Type plain numeric digits only:<br><span style="color: #16a34a; font-weight: bold;">✅ 25000</span></td>
+            </tr>
+            <tr>
+                <td>2</td>
+                <td><strong>Do not add country codes or spaces in phone numbers</strong><br><span style="color: #ef4444;">❌ +91-98765-43210 or 98765 43210</span></td>
+                <td>Type 10 continuous numeric digits:<br><span style="color: #16a34a; font-weight: bold;">✅ 9876543210</span></td>
+            </tr>
+            <tr>
+                <td>3</td>
+                <td><strong>Do not use DD/MM/YYYY for dates</strong><br><span style="color: #ef4444;">❌ 15/01/2026 or 15-Jan-2026</span></td>
+                <td>Always use Year-Month-Day format:<br><span style="color: #16a34a; font-weight: bold;">✅ 2026-01-15</span></td>
+            </tr>
+            <tr>
+                <td>4</td>
+                <td><strong>Do not put tenant info for Vacant properties</strong><br><span style="color: #ef4444;">❌ Typing "N/A" or entering past tenant details</span></td>
+                <td>Leave all tenant columns completely blank if status is Vacant.<br><span style="color: #16a34a; font-weight: bold;">✅ Empty cells</span></td>
+            </tr>
+            <tr>
+                <td>5</td>
+                <td><strong>Do not invent custom city names</strong><br><span style="color: #ef4444;">❌ "Guwahati City" or "Bengaluru"</span></td>
+                <td>Use standard registered branch cities:<br><span style="color: #16a34a; font-weight: bold;">✅ "Guwahati" or "Bangalore"</span></td>
+            </tr>
+            <tr>
+                <td>6</td>
+                <td><strong>Do not delete or rename CSV column headers</strong><br><span style="color: #ef4444;">❌ Renaming "rent_amount" to "Monthly Rent"</span></td>
+                <td>Keep Row 1 exactly as provided in the template.<br><span style="color: #16a34a; font-weight: bold;">✅ Unchanged header row</span></td>
+            </tr>
+            <tr>
+                <td>7</td>
+                <td><strong>Do not mismatch Property Code and folder names</strong><br><span style="color: #ef4444;">❌ Naming folder "Greenwood" and CSV "GAU-0091"</span></td>
+                <td>The folder name must match the exact <code>property_code</code>.<br><span style="color: #16a34a; font-weight: bold;">✅ Folder named "GAU-0091"</span></td>
+            </tr>
+            <tr>
+                <td>8</td>
+                <td><strong>Do not save as .xlsx (Excel Workbook)</strong><br><span style="color: #ef4444;">❌ "properties.xlsx"</span></td>
+                <td>Save as <strong>CSV UTF-8 (Comma delimited) (*.csv)</strong>.<br><span style="color: #16a34a; font-weight: bold;">✅ "properties.csv"</span></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <!-- FAQ -->
+    <h2>❓ Frequently Asked Questions (FAQ)</h2>
+    <div class="faq-grid">
+        <div class="faq-item">
+            <div class="faq-q">Q: What if I don't have the signed MOU or tenancy agreement PDF right now?</div>
+            <div class="faq-a">A: That is completely fine! Submit the spreadsheet. The system will automatically generate a clean placeholder document. When you receive the real scan later, you can upload it directly through the Dwelly admin web portal.</div>
+        </div>
+        <div class="faq-item">
+            <div class="faq-q">Q: How do I choose which photo appears first on the website?</div>
+            <div class="faq-a">A: Prefix the image filenames with numbers in the <code>photos/</code> folder: <code>01_elevation.jpg</code> will automatically become the featured cover photo.</div>
+        </div>
+        <div class="faq-item">
+            <div class="faq-q">Q: Can I use 1 and 0 instead of yes and no for amenities?</div>
+            <div class="faq-a">A: Yes! Both <code>yes</code>/<code>no</code> and <code>1</code>/<code>0</code> work interchangeably.</div>
+        </div>
+        <div class="faq-item">
+            <div class="faq-q">Q: What should I enter for society_fee if maintenance is already included in rent?</div>
+            <div class="faq-a">A: Enter <code>0</code>.</div>
+        </div>
+        <div class="faq-item">
+            <div class="faq-q">Q: What if an owner has no PAN or Aadhaar card yet?</div>
+            <div class="faq-a">A: Leave those cells blank. Only Owner Name, Phone, and Email are mandatory.</div>
+        </div>
+        <div class="faq-item">
+            <div class="faq-q">Q: Who do I contact if the system reports an error during import?</div>
+            <div class="faq-a">A: Ask the tech team to run the dry-run check. The system will pinpoint the exact row number and column name needing correction.</div>
+        </div>
+    </div>
+
+    <div class="footer-note">
+        Dwelly Realtech Private Limited • Property Onboarding SOP & Data Entry Documentation • Internal Use Only
+    </div>
+
+</body>
+</html>

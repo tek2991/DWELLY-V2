@@ -1,0 +1,6 @@
+property_code,room_living_room,room_kitchen,room_master_bedroom,room_second_bedroom,room_third_bedroom,room_guest_bedroom,room_attached_bathroom,room_common_bathroom,room_balcony,room_pooja_room,room_servant_room,room_study_room,amenity_lift,amenity_power_backup,amenity_security,amenity_parking,amenity_gym,amenity_swimming_pool,amenity_clubhouse,inv_fan,inv_light,inv_ac,inv_bed,inv_wardrobe,inv_sofa,inv_dining_set,inv_geyser,inv_fridge,inv_tv,inv_washing_machine,inv_microwave,inv_water_purifier,inv_chimney,inv_keys
+GAU-0091,1,1,1,1,0,0,1,1,1,0,0,0,yes,yes,yes,yes,yes,no,no,3,6,0,0,1,0,0,1,0,0,0,0,0,1,3
+GAU-0092,1,1,1,1,1,0,2,1,2,yes,no,yes,no,yes,yes,yes,no,no,no,5,10,3,3,3,1,1,3,1,1,1,1,1,1,4
+GAU-0093,1,1,1,0,0,0,1,0,1,0,0,0,yes,yes,yes,no,no,no,no,2,4,0,0,0,0,0,0,0,0,0,0,0,0,2
+BLR-0091,1,1,1,1,1,0,2,1,2,yes,no,0,yes,yes,yes,yes,yes,yes,yes,4,8,2,2,3,1,1,2,1,1,1,0,1,1,3
+BLR-0092,1,1,1,1,1,1,3,1,3,yes,yes,yes,no,yes,yes,yes,yes,yes,yes,6,12,2,0,2,0,0,3,0,0,0,0,1,1,4
