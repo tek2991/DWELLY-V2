@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\Billing\Tables;
 
+use App\Domain\Agreement\Models\TenancyAgreement;
+use App\Domain\Finance\Services\BillingPropertyResolver;
 use App\Domain\Maintenance\Models\MaintenanceRequest;
 use Carbon\Carbon;
 use Filament\Actions\Action;
@@ -10,17 +12,18 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Tek2991\Accounting\Enums\InvoiceStatus;
 use Tek2991\Accounting\Models\Account;
 use Tek2991\Accounting\Models\Invoice;
 use Tek2991\Accounting\Services\InvoiceService;
 
-class MaintenanceBillingTable
+class InvoicesTable
 {
     public static function configure(Table $table): Table
     {
@@ -32,6 +35,26 @@ class MaintenanceBillingTable
                     ->sortable()
                     ->weight('bold'),
 
+                TextColumn::make('category')
+                    ->label('Category')
+                    ->badge()
+                    ->state(fn (Invoice $record): string => BillingPropertyResolver::categorizeInvoice($record)['label'])
+                    ->color(fn (Invoice $record): string => BillingPropertyResolver::categorizeInvoice($record)['color'])
+                    ->sortable(false),
+
+                TextColumn::make('property')
+                    ->label('Property / Unit')
+                    ->state(fn (Invoice $record): string => BillingPropertyResolver::resolvePropertyLabel($record))
+                    ->url(fn (Invoice $record): ?string => BillingPropertyResolver::resolvePropertyUrl($record))
+                    ->openUrlInNewTab()
+                    ->color('primary')
+                    ->weight('medium')
+                    ->searchable(query: function ($query, string $search) {
+                        $query->whereHas('contact', function ($q) use ($search) {
+                            $q->where('name', 'like', "%{$search}%");
+                        })->orWhere('notes', 'like', "%{$search}%");
+                    }),
+
                 TextColumn::make('contact.name')
                     ->label('Billed Contact')
                     ->searchable()
@@ -41,65 +64,31 @@ class MaintenanceBillingTable
                             $maint = MaintenanceRequest::find($record->reference_id);
                             return $maint ? "Ticket #{$maint->ticket_number}" : "Ticket #{$record->reference_id}";
                         }
+                        if ($record->reference_type === TenancyAgreement::class && $record->reference_id) {
+                            $agr = TenancyAgreement::find($record->reference_id);
+                            return $agr ? "Agreement #{$agr->agreement_number}" : null;
+                        }
                         return null;
                     }),
-
-                TextColumn::make('reference_id')
-                    ->label('Ticket #')
-                    ->formatStateUsing(function ($state, Invoice $record) {
-                        if ($record->reference_type === MaintenanceRequest::class && $state) {
-                            $maint = MaintenanceRequest::find($state);
-                            return $maint ? "Ticket #{$maint->ticket_number}" : "Ticket #{$state}";
-                        }
-                        return '—';
-                    })
-                    ->url(function ($state, Invoice $record) {
-                        if ($record->reference_type === MaintenanceRequest::class && $state) {
-                            try {
-                                return \App\Filament\Resources\Operations\MaintenanceRequestResource::getUrl('edit', ['record' => $state]);
-                            } catch (\Throwable $e) {
-                                return null;
-                            }
-                        }
-                        return null;
-                    })
-                    ->openUrlInNewTab()
-                    ->color('primary')
-                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('issue_date')
                     ->label('Date')
                     ->date('d M Y')
                     ->description(fn (Invoice $record) => $record->due_date ? 'Due ' . Carbon::parse($record->due_date)->format('d M Y') : null)
-                    ->sortable()
-                    ->toggleable(),
-
-                TextColumn::make('due_date')
-                    ->label('Due Date')
-                    ->date('d M Y')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->sortable(),
 
                 TextColumn::make('grand_total')
                     ->label('Total Amount')
                     ->money('INR')
                     ->weight('bold')
-                    ->sortable()
-                    ->toggleable(),
+                    ->sortable(),
 
                 TextColumn::make('balance_due')
                     ->label('Balance Due')
                     ->money('INR')
                     ->color(fn ($state) => $state > 0 ? 'danger' : 'success')
                     ->description(fn (Invoice $record) => $record->amount_paid > 0 ? 'Paid: ₹' . number_format($record->amount_paid, 2) : null)
-                    ->sortable()
-                    ->toggleable(),
-
-                TextColumn::make('amount_paid')
-                    ->label('Paid Amount')
-                    ->money('INR')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->sortable(),
 
                 TextColumn::make('status')
                     ->badge()
@@ -108,10 +97,19 @@ class MaintenanceBillingTable
                         'sent', 'partially_paid' => 'warning',
                         'cancelled' => 'gray',
                         default => 'info',
-                    })
-                    ->toggleable(),
+                    }),
             ])
             ->defaultSort('issue_date', 'desc')
+            ->filters([
+                SelectFilter::make('status')
+                    ->options([
+                        'draft' => 'Draft',
+                        'sent' => 'Sent / Pending',
+                        'partially_paid' => 'Partially Paid',
+                        'paid' => 'Paid',
+                        'cancelled' => 'Cancelled',
+                    ]),
+            ])
             ->recordActions([
                 ActionGroup::make([
                     Action::make('view_ticket')
@@ -128,6 +126,20 @@ class MaintenanceBillingTable
                         })
                         ->openUrlInNewTab(),
 
+                    Action::make('view_agreement')
+                        ->label('View Agreement')
+                        ->icon('heroicon-o-document-text')
+                        ->color('gray')
+                        ->visible(fn (Invoice $record) => $record->reference_type === TenancyAgreement::class && $record->reference_id)
+                        ->url(function (Invoice $record) {
+                            try {
+                                return \App\Filament\Resources\TenancyAgreements\TenancyAgreementResource::getUrl('view', ['record' => $record->reference_id]);
+                            } catch (\Throwable $e) {
+                                return null;
+                            }
+                        })
+                        ->openUrlInNewTab(),
+
                     Action::make('post_invoice')
                         ->label('Approve & Post')
                         ->icon('heroicon-o-paper-airplane')
@@ -135,7 +147,7 @@ class MaintenanceBillingTable
                         ->requiresConfirmation()
                         ->modalHeading(fn (Invoice $record) => "Post Invoice {$record->invoice_number}")
                         ->modalDescription('Are you sure you want to approve and post this draft client invoice into the General Ledger?')
-                        ->visible(fn (Invoice $record) => $record->status === InvoiceStatus::Draft)
+                        ->visible(fn (Invoice $record) => $record->status === InvoiceStatus::Draft && (auth()->user()?->can('billing.invoice.post') || auth()->user()?->hasAnyRole(['Business Owner', 'Accountant']) || (bool) auth()->user()?->roles->isEmpty()))
                         ->action(function (Invoice $record) {
                             try {
                                 app(InvoiceService::class)->post($record);
@@ -157,7 +169,7 @@ class MaintenanceBillingTable
                         ->label('Record Payment')
                         ->icon('heroicon-o-banknotes')
                         ->color('success')
-                        ->visible(fn (Invoice $record) => $record->balance_due > 0 && $record->status !== InvoiceStatus::Draft)
+                        ->visible(fn (Invoice $record) => $record->balance_due > 0 && $record->status !== InvoiceStatus::Draft && (auth()->user()?->can('billing.receipt.record') || auth()->user()?->hasAnyRole(['Business Owner', 'Accountant']) || (bool) auth()->user()?->roles->isEmpty()))
                         ->fillForm(function (Invoice $record): array {
                             return [
                                 'amount' => $record->balance_due,
@@ -224,7 +236,7 @@ class MaintenanceBillingTable
                         ->label('Settle from Reserve')
                         ->icon('heroicon-o-shield-check')
                         ->color('warning')
-                        ->visible(fn (Invoice $record) => $record->status !== \Tek2991\Accounting\Enums\InvoiceStatus::Paid && $record->contact?->party_id !== null)
+                        ->visible(fn (Invoice $record) => $record->status !== InvoiceStatus::Paid && $record->contact?->party_id !== null && (auth()->user()?->can('billing.receipt.record') || auth()->user()?->hasAnyRole(['Business Owner', 'Accountant']) || (bool) auth()->user()?->roles->isEmpty()))
                         ->requiresConfirmation()
                         ->modalHeading(fn (Invoice $record) => "Settle {$record->invoice_number} from Owner Reserve")
                         ->modalDescription(function (Invoice $record) {
@@ -236,13 +248,13 @@ class MaintenanceBillingTable
                         ->action(function (Invoice $record) {
                             try {
                                 app(\App\Domain\Maintenance\Actions\SettleMaintenanceInvoiceViaReserveAction::class)->execute($record, auth()->user());
-                                \Filament\Notifications\Notification::make()
+                                Notification::make()
                                     ->title('Invoice Settled via Reserve')
                                     ->body("Invoice {$record->invoice_number} has been settled from the owner's maintenance reserve float.")
                                     ->success()
                                     ->send();
                             } catch (\Exception $e) {
-                                \Filament\Notifications\Notification::make()
+                                Notification::make()
                                     ->title('Settlement Failed')
                                     ->body($e->getMessage())
                                     ->danger()

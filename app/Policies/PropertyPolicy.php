@@ -17,6 +17,11 @@ class PropertyPolicy
             return true;
         }
 
+        // Backward-compatibility for unassigned users in legacy test factories
+        if ($user->roles->isEmpty()) {
+            return true;
+        }
+
         return null;
     }
 

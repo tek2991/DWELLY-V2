@@ -3,32 +3,30 @@
 namespace App\Filament\Resources\Billing\Schemas;
 
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Tek2991\Accounting\Models\Contact;
-use Tek2991\Accounting\Models\Account;
 
-class MaintenanceBillingForm
+class InvoiceForm
 {
     public static function configure(Schema $schema): Schema
     {
         return $schema
             ->components([
-                Section::make('Maintenance Billing Information')
+                Section::make('Invoice Information')
                     ->columns(3)
                     ->components([
                         TextInput::make('invoice_number')
-                            ->label('Invoice / Bill #')
+                            ->label('Invoice #')
                             ->disabled()
                             ->dehydrated()
                             ->placeholder('Auto-generated'),
 
                         Select::make('contact_id')
-                            ->label('Billed Contact (Tenant / Owner / Vendor)')
+                            ->label('Billed Contact (Tenant / Owner)')
                             ->options(fn () => Contact::pluck('name', 'id'))
                             ->searchable()
                             ->required(),
@@ -59,41 +57,31 @@ class MaintenanceBillingForm
                             ->disabled(),
                     ]),
 
-                Section::make('Work & Service Line Items')
+                Section::make('Financial Details')
+                    ->columns(3)
                     ->components([
-                        Repeater::make('items')
-                            ->relationship()
-                            ->columns(12)
-                            ->schema([
-                                TextInput::make('description')
-                                    ->required()
-                                    ->columnSpan(5),
+                        TextInput::make('grand_total')
+                            ->label('Total Amount (₹)')
+                            ->numeric()
+                            ->prefix('₹')
+                            ->disabled(),
 
-                                TextInput::make('quantity')
-                                    ->numeric()
-                                    ->default(1)
-                                    ->required()
-                                    ->columnSpan(2),
+                        TextInput::make('amount_paid')
+                            ->label('Amount Paid (₹)')
+                            ->numeric()
+                            ->prefix('₹')
+                            ->disabled(),
 
-                                TextInput::make('unit_price')
-                                    ->numeric()
-                                    ->prefix('₹')
-                                    ->required()
-                                    ->columnSpan(3),
+                        TextInput::make('balance_due')
+                            ->label('Balance Due (₹)')
+                            ->numeric()
+                            ->prefix('₹')
+                            ->disabled(),
 
-                                Select::make('income_account_id')
-                                    ->label('Account')
-                                    ->options(fn () => Account::pluck('name', 'id'))
-                                    ->columnSpan(2),
-                            ])
-                            ->defaultItems(1),
-                    ]),
-
-                Section::make('Notes')
-                    ->components([
                         Textarea::make('notes')
-                            ->label('Maintenance Ticket & Work Remarks')
-                            ->columnSpanFull(),
+                            ->label('Billing Remarks / Notes')
+                            ->columnSpanFull()
+                            ->rows(3),
                     ]),
             ]);
     }

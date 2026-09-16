@@ -79,11 +79,11 @@
                 </span>
             @endif
 
-            <a href="{{ \App\Filament\Resources\Billing\MaintenanceBillingResource::getUrl('index') }}"
+            <a href="{{ \App\Filament\Resources\Billing\InvoicesResource::getUrl('index', ['tab' => 'maintenance']) }}"
                target="_blank"
                style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.6875rem; font-weight: 600; color: #2563eb; text-decoration: none; padding: 0.25rem 0.5rem; border-radius: 0.25rem; background: rgba(37, 99, 235, 0.08);"
-               title="View all invoices & bills in accounting module">
-                <span>Invoices &amp; Bills</span>
+               title="View maintenance invoices in billing module">
+                <span>Invoices &amp; Receivables</span>
                 <svg style="width: 0.75rem; height: 0.75rem;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
             </a>
         </div>

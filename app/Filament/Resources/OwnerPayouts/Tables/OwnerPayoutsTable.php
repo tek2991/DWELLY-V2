@@ -45,7 +45,7 @@ class OwnerPayoutsTable
 
                 TextColumn::make('period')
                     ->label('Billing Period')
-                    ->state(fn ($record) => $record->period_formatted ?? ($record->period_start ? $record->period_start->format('M Y') : '—'))
+                    ->state(fn($record) => $record->period_formatted ?? ($record->period_start ? $record->period_start->format('M Y') : '—'))
                     ->color('primary')
                     ->weight('medium')
                     ->sortable(['period_start']),
@@ -83,7 +83,7 @@ class OwnerPayoutsTable
 
                 TextColumn::make('status')
                     ->badge()
-                    ->color(fn (string $state): string => match ($state) {
+                    ->color(fn(string $state): string => match ($state) {
                         'completed' => 'success',
                         'pending' => 'warning',
                         'failed' => 'danger',
@@ -96,222 +96,222 @@ class OwnerPayoutsTable
                     ->sortable(),
             ])
             ->defaultSort('created_at', 'desc')
-            ->headerActions([
-                Action::make('generate_payout')
-                    ->label('Generate Owner Payout')
-                    ->icon('heroicon-o-banknotes')
-                    ->color('primary')
-                    ->visible(fn (): bool => auth()->user()?->can('payout.disburse') || auth()->user()?->hasAnyRole(['Business Owner', 'Accountant']) || (bool) auth()->user()?->roles->isEmpty())
-                    ->modalHeading('Generate Single Owner Payout')
-                    ->modalWidth(Width::FourExtraLarge)
-                    ->modalDescription('Review the billing period, gross rent, management fee, and advance deductions before disbursing.')
-                    ->modalSubmitActionLabel('Confirm & Disburse Payout')
-                    ->form([
-                        Select::make('property_id')
-                            ->label('Property')
-                            ->options(fn () => Property::pluck('building_name', 'id'))
-                            ->searchable()
-                            ->required()
-                            ->live()
-                            ->afterStateUpdated(function (Set $set, Get $get, $state, OwnerPayoutService $service) {
-                                if ($state) {
-                                    $prop = Property::find($state);
-                                    if ($prop) {
-                                        $month = (int) ($get('month') ?: date('n'));
-                                        $year = (int) ($get('year') ?: date('Y'));
-                                        $calc = $service->calculatePayoutDetails($prop, $month, $year);
-                                        $set('period_start', $calc['billing_period_start']);
-                                        $set('period_end', $calc['billing_period_end']);
-                                        $set('rent_collected', $calc['gross_rent']);
-                                        $set('management_fee_percent', $calc['management_fee_percent']);
-                                        $set('advance_offset', $calc['advance_offset']);
-                                    }
-                                }
-                            }),
+            // ->headerActions([
+            //     Action::make('generate_payout')
+            //         ->label('Generate Owner Payout')
+            //         ->icon('heroicon-o-banknotes')
+            //         ->color('primary')
+            //         ->visible(fn (): bool => auth()->user()?->can('payout.disburse') || auth()->user()?->hasAnyRole(['Business Owner', 'Accountant']) || (bool) auth()->user()?->roles->isEmpty())
+            //         ->modalHeading('Generate Single Owner Payout')
+            //         ->modalWidth(Width::FourExtraLarge)
+            //         ->modalDescription('Review the billing period, gross rent, management fee, and advance deductions before disbursing.')
+            //         ->modalSubmitActionLabel('Confirm & Disburse Payout')
+            //         ->form([
+            //             Select::make('property_id')
+            //                 ->label('Property')
+            //                 ->options(fn () => Property::pluck('building_name', 'id'))
+            //                 ->searchable()
+            //                 ->required()
+            //                 ->live()
+            //                 ->afterStateUpdated(function (Set $set, Get $get, $state, OwnerPayoutService $service) {
+            //                     if ($state) {
+            //                         $prop = Property::find($state);
+            //                         if ($prop) {
+            //                             $month = (int) ($get('month') ?: date('n'));
+            //                             $year = (int) ($get('year') ?: date('Y'));
+            //                             $calc = $service->calculatePayoutDetails($prop, $month, $year);
+            //                             $set('period_start', $calc['billing_period_start']);
+            //                             $set('period_end', $calc['billing_period_end']);
+            //                             $set('rent_collected', $calc['gross_rent']);
+            //                             $set('management_fee_percent', $calc['management_fee_percent']);
+            //                             $set('advance_offset', $calc['advance_offset']);
+            //                         }
+            //                     }
+            //                 }),
 
-                        Select::make('month')
-                            ->label('Payout Month')
-                            ->options([
-                                1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April',
-                                5 => 'May', 6 => 'June', 7 => 'July', 8 => 'August',
-                                9 => 'September', 10 => 'October', 11 => 'November', 12 => 'December',
-                            ])
-                            ->default((int) date('n'))
-                            ->required()
-                            ->live()
-                            ->afterStateUpdated(function (Set $set, Get $get, $state, OwnerPayoutService $service) {
-                                $propId = $get('property_id');
-                                if ($propId) {
-                                    $prop = Property::find($propId);
-                                    if ($prop) {
-                                        $month = (int) $state;
-                                        $year = (int) ($get('year') ?: date('Y'));
-                                        $calc = $service->calculatePayoutDetails($prop, $month, $year);
-                                        $set('period_start', $calc['billing_period_start']);
-                                        $set('period_end', $calc['billing_period_end']);
-                                        $set('rent_collected', $calc['gross_rent']);
-                                        $set('management_fee_percent', $calc['management_fee_percent']);
-                                        $set('advance_offset', $calc['advance_offset']);
-                                    }
-                                }
-                            }),
+            //             Select::make('month')
+            //                 ->label('Payout Month')
+            //                 ->options([
+            //                     1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April',
+            //                     5 => 'May', 6 => 'June', 7 => 'July', 8 => 'August',
+            //                     9 => 'September', 10 => 'October', 11 => 'November', 12 => 'December',
+            //                 ])
+            //                 ->default((int) date('n'))
+            //                 ->required()
+            //                 ->live()
+            //                 ->afterStateUpdated(function (Set $set, Get $get, $state, OwnerPayoutService $service) {
+            //                     $propId = $get('property_id');
+            //                     if ($propId) {
+            //                         $prop = Property::find($propId);
+            //                         if ($prop) {
+            //                             $month = (int) $state;
+            //                             $year = (int) ($get('year') ?: date('Y'));
+            //                             $calc = $service->calculatePayoutDetails($prop, $month, $year);
+            //                             $set('period_start', $calc['billing_period_start']);
+            //                             $set('period_end', $calc['billing_period_end']);
+            //                             $set('rent_collected', $calc['gross_rent']);
+            //                             $set('management_fee_percent', $calc['management_fee_percent']);
+            //                             $set('advance_offset', $calc['advance_offset']);
+            //                         }
+            //                     }
+            //                 }),
 
-                        TextInput::make('year')
-                            ->label('Payout Year')
-                            ->numeric()
-                            ->default((int) date('Y'))
-                            ->required()
-                            ->live()
-                            ->afterStateUpdated(function (Set $set, Get $get, $state, OwnerPayoutService $service) {
-                                $propId = $get('property_id');
-                                if ($propId) {
-                                    $prop = Property::find($propId);
-                                    if ($prop) {
-                                        $month = (int) ($get('month') ?: date('n'));
-                                        $year = (int) $state;
-                                        $calc = $service->calculatePayoutDetails($prop, $month, $year);
-                                        $set('period_start', $calc['billing_period_start']);
-                                        $set('period_end', $calc['billing_period_end']);
-                                        $set('rent_collected', $calc['gross_rent']);
-                                        $set('management_fee_percent', $calc['management_fee_percent']);
-                                        $set('advance_offset', $calc['advance_offset']);
-                                    }
-                                }
-                            }),
+            //             TextInput::make('year')
+            //                 ->label('Payout Year')
+            //                 ->numeric()
+            //                 ->default((int) date('Y'))
+            //                 ->required()
+            //                 ->live()
+            //                 ->afterStateUpdated(function (Set $set, Get $get, $state, OwnerPayoutService $service) {
+            //                     $propId = $get('property_id');
+            //                     if ($propId) {
+            //                         $prop = Property::find($propId);
+            //                         if ($prop) {
+            //                             $month = (int) ($get('month') ?: date('n'));
+            //                             $year = (int) $state;
+            //                             $calc = $service->calculatePayoutDetails($prop, $month, $year);
+            //                             $set('period_start', $calc['billing_period_start']);
+            //                             $set('period_end', $calc['billing_period_end']);
+            //                             $set('rent_collected', $calc['gross_rent']);
+            //                             $set('management_fee_percent', $calc['management_fee_percent']);
+            //                             $set('advance_offset', $calc['advance_offset']);
+            //                         }
+            //                     }
+            //                 }),
 
-                        View::make('filament.billing.single-owner-payout-preview-modal')
-                            ->columnSpanFull(),
+            //             View::make('filament.billing.single-owner-payout-preview-modal')
+            //                 ->columnSpanFull(),
 
-                        DatePicker::make('period_start')
-                            ->label('Billing Period Start')
-                            ->required(),
+            //             DatePicker::make('period_start')
+            //                 ->label('Billing Period Start')
+            //                 ->required(),
 
-                        DatePicker::make('period_end')
-                            ->label('Billing Period End')
-                            ->required(),
+            //             DatePicker::make('period_end')
+            //                 ->label('Billing Period End')
+            //                 ->required(),
 
-                        TextInput::make('rent_collected')
-                            ->label('Gross Rent Collected (₹)')
-                            ->numeric()
-                            ->prefix('₹')
-                            ->required(),
+            //             TextInput::make('rent_collected')
+            //                 ->label('Gross Rent Collected (₹)')
+            //                 ->numeric()
+            //                 ->prefix('₹')
+            //                 ->required(),
 
-                        TextInput::make('management_fee_percent')
-                            ->label('Management Fee (%)')
-                            ->numeric()
-                            ->default(10)
-                            ->suffix('%')
-                            ->required(),
+            //             TextInput::make('management_fee_percent')
+            //                 ->label('Management Fee (%)')
+            //                 ->numeric()
+            //                 ->default(10)
+            //                 ->suffix('%')
+            //                 ->required(),
 
-                        CheckboxList::make('maintenance_invoice_ids')
-                            ->label('Select Pending Maintenance Invoices / Tickets to Deduct')
-                            ->options(fn (Get $get, OwnerPayoutService $service) => ($pId = $get('property_id')) && ($prop = Property::find($pId)) ? $service->getPendingMaintenanceOptions($prop) : [])
-                            ->default(fn (Get $get, OwnerPayoutService $service) => ($pId = $get('property_id')) && ($prop = Property::find($pId)) ? array_keys($service->getPendingMaintenanceOptions($prop)) : [])
-                            ->visible(fn (Get $get, OwnerPayoutService $service) => ($pId = $get('property_id')) && ($prop = Property::find($pId)) && ! empty($service->getPendingMaintenanceOptions($prop)))
-                            ->live()
-                            ->afterStateUpdated(function (Set $set, Get $get, $state, OwnerPayoutService $service) {
-                                $pId = $get('property_id');
-                                if ($pId) {
-                                    $prop = Property::find($pId);
-                                    if ($prop) {
-                                        $month = (int) ($get('month') ?: date('n'));
-                                        $year = (int) ($get('year') ?: date('Y'));
-                                        $calc = $service->calculatePayoutDetails($prop, $month, $year, [
-                                            'selected_maintenance_invoice_ids' => $state ?: [],
-                                        ]);
-                                        $set('advance_offset', $calc['advance_offset']);
-                                    }
-                                }
-                            })
-                            ->columnSpanFull(),
+            //             CheckboxList::make('maintenance_invoice_ids')
+            //                 ->label('Select Pending Maintenance Invoices / Tickets to Deduct')
+            //                 ->options(fn (Get $get, OwnerPayoutService $service) => ($pId = $get('property_id')) && ($prop = Property::find($pId)) ? $service->getPendingMaintenanceOptions($prop) : [])
+            //                 ->default(fn (Get $get, OwnerPayoutService $service) => ($pId = $get('property_id')) && ($prop = Property::find($pId)) ? array_keys($service->getPendingMaintenanceOptions($prop)) : [])
+            //                 ->visible(fn (Get $get, OwnerPayoutService $service) => ($pId = $get('property_id')) && ($prop = Property::find($pId)) && ! empty($service->getPendingMaintenanceOptions($prop)))
+            //                 ->live()
+            //                 ->afterStateUpdated(function (Set $set, Get $get, $state, OwnerPayoutService $service) {
+            //                     $pId = $get('property_id');
+            //                     if ($pId) {
+            //                         $prop = Property::find($pId);
+            //                         if ($prop) {
+            //                             $month = (int) ($get('month') ?: date('n'));
+            //                             $year = (int) ($get('year') ?: date('Y'));
+            //                             $calc = $service->calculatePayoutDetails($prop, $month, $year, [
+            //                                 'selected_maintenance_invoice_ids' => $state ?: [],
+            //                             ]);
+            //                             $set('advance_offset', $calc['advance_offset']);
+            //                         }
+            //                     }
+            //                 })
+            //                 ->columnSpanFull(),
 
-                        TextInput::make('advance_offset')
-                            ->label('Total Advance / Maintenance Offset (₹)')
-                            ->numeric()
-                            ->prefix('₹')
-                            ->default(0)
-                            ->helperText('Total amount deducted towards selected maintenance invoices and prior owner advances.'),
+            //             TextInput::make('advance_offset')
+            //                 ->label('Total Advance / Maintenance Offset (₹)')
+            //                 ->numeric()
+            //                 ->prefix('₹')
+            //                 ->default(0)
+            //                 ->helperText('Total amount deducted towards selected maintenance invoices and prior owner advances.'),
 
-                        TextInput::make('reserve_deduction')
-                            ->label('Reserve Deduction (₹)')
-                            ->numeric()
-                            ->prefix('₹')
-                            ->default(0),
+            //             TextInput::make('reserve_deduction')
+            //                 ->label('Reserve Deduction (₹)')
+            //                 ->numeric()
+            //                 ->prefix('₹')
+            //                 ->default(0),
 
-                        Select::make('bank_account_id')
-                            ->label('Disbursement Bank Account')
-                            ->options(function () {
-                                $defaultId = Accounting::getDefaultBankAccountId();
+            //             Select::make('bank_account_id')
+            //                 ->label('Disbursement Bank Account')
+            //                 ->options(function () {
+            //                     $defaultId = Accounting::getDefaultBankAccountId();
 
-                                return Account::where('type', AccountType::Asset)
-                                    ->where(function ($q) {
-                                        $q->whereIn('system_role', [
-                                            SystemRole::Bank,
-                                            SystemRole::Cash,
-                                        ])
-                                            ->orWhere('code', 'like', '11%')
-                                            ->orWhere('name', 'like', '%Current Account%')
-                                            ->orWhere('name', 'like', '%Savings Account%')
-                                            ->orWhere('name', 'like', '%Bank%')
-                                            ->orWhere('name', 'like', '%Cash%');
-                                    })
-                                    ->where('is_control_account', false)
-                                    ->get()
-                                    ->mapWithKeys(function (Account $acc) use ($defaultId) {
-                                        if ($acc->id === $defaultId) {
-                                            return [$acc->id => "<div style='display: flex; align-items: center; justify-content: space-between; width: 100%;'><span>{$acc->name}</span><span style='font-size: 10px; font-weight: 700; background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 9999px; text-transform: uppercase;'>Default</span></div>"];
-                                        }
+            //                     return Account::where('type', AccountType::Asset)
+            //                         ->where(function ($q) {
+            //                             $q->whereIn('system_role', [
+            //                                 SystemRole::Bank,
+            //                                 SystemRole::Cash,
+            //                             ])
+            //                                 ->orWhere('code', 'like', '11%')
+            //                                 ->orWhere('name', 'like', '%Current Account%')
+            //                                 ->orWhere('name', 'like', '%Savings Account%')
+            //                                 ->orWhere('name', 'like', '%Bank%')
+            //                                 ->orWhere('name', 'like', '%Cash%');
+            //                         })
+            //                         ->where('is_control_account', false)
+            //                         ->get()
+            //                         ->mapWithKeys(function (Account $acc) use ($defaultId) {
+            //                             if ($acc->id === $defaultId) {
+            //                                 return [$acc->id => "<div style='display: flex; align-items: center; justify-content: space-between; width: 100%;'><span>{$acc->name}</span><span style='font-size: 10px; font-weight: 700; background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 9999px; text-transform: uppercase;'>Default</span></div>"];
+            //                             }
 
-                                        return [$acc->id => "<div>{$acc->name}</div>"];
-                                    });
-                            })
-                            ->default(fn () => Accounting::getDefaultBankAccountId())
-                            ->allowHtml()
-                            ->searchable()
-                            ->preload()
-                            ->required(),
+            //                             return [$acc->id => "<div>{$acc->name}</div>"];
+            //                         });
+            //                 })
+            //                 ->default(fn () => Accounting::getDefaultBankAccountId())
+            //                 ->allowHtml()
+            //                 ->searchable()
+            //                 ->preload()
+            //                 ->required(),
 
-                        Textarea::make('notes')
-                            ->label('Payout Remarks')
-                            ->columnSpanFull(),
-                    ])
-                    ->action(function (array $data) {
-                        abort_unless(auth()->user()?->can('payout.disburse') || auth()->user()?->hasAnyRole(['Business Owner', 'Accountant']) || (bool) auth()->user()?->roles->isEmpty(), 403, 'Unauthorized to disburse owner payouts.');
+            //             Textarea::make('notes')
+            //                 ->label('Payout Remarks')
+            //                 ->columnSpanFull(),
+            //         ])
+            //         ->action(function (array $data) {
+            //             abort_unless(auth()->user()?->can('payout.disburse') || auth()->user()?->hasAnyRole(['Business Owner', 'Accountant']) || (bool) auth()->user()?->roles->isEmpty(), 403, 'Unauthorized to disburse owner payouts.');
 
-                        $property = Property::findOrFail($data['property_id']);
-                        $payout = app(ProcessOwnerPayoutAction::class)->execute(
-                            $property,
-                            $data['period_start'],
-                            $data['period_end'],
-                            auth()->user(),
-                            [
-                                'rent_collected' => $data['rent_collected'] ?? null,
-                                'management_fee_percent' => $data['management_fee_percent'] ?? 10.0,
-                                'advance_offset' => $data['advance_offset'] ?? 0.0,
-                                'reserve_deduction' => $data['reserve_deduction'] ?? 0.0,
-                                'bank_account_id' => $data['bank_account_id'] ?? null,
-                                'maintenance_invoice_ids' => $data['maintenance_invoice_ids'] ?? [],
-                                'notes' => $data['notes'] ?? null,
-                            ]
-                        );
+            //             $property = Property::findOrFail($data['property_id']);
+            //             $payout = app(ProcessOwnerPayoutAction::class)->execute(
+            //                 $property,
+            //                 $data['period_start'],
+            //                 $data['period_end'],
+            //                 auth()->user(),
+            //                 [
+            //                     'rent_collected' => $data['rent_collected'] ?? null,
+            //                     'management_fee_percent' => $data['management_fee_percent'] ?? 10.0,
+            //                     'advance_offset' => $data['advance_offset'] ?? 0.0,
+            //                     'reserve_deduction' => $data['reserve_deduction'] ?? 0.0,
+            //                     'bank_account_id' => $data['bank_account_id'] ?? null,
+            //                     'maintenance_invoice_ids' => $data['maintenance_invoice_ids'] ?? [],
+            //                     'notes' => $data['notes'] ?? null,
+            //                 ]
+            //             );
 
-                        Notification::make()
-                            ->title('Owner Payout Processed')
-                            ->body('Disbursed net amount of ₹'.number_format($payout->amount, 2)." for {$property->building_name}")
-                            ->success()
-                            ->send();
-                    }),
-            ])
+            //             Notification::make()
+            //                 ->title('Owner Payout Processed')
+            //                 ->body('Disbursed net amount of ₹'.number_format($payout->amount, 2)." for {$property->building_name}")
+            //                 ->success()
+            //                 ->send();
+            //         }),
+            // ])
             ->recordActions([
                 ActionGroup::make([
                     Action::make('download_payout_statement')
                         ->label('Owner Monthly Report (PDF)')
                         ->icon('heroicon-o-document-chart-bar')
                         ->color('success')
-                        ->visible(fn (): bool => auth()->user()?->can('payout.statement.generate') || auth()->user()?->hasAnyRole(['Business Owner', 'City Manager', 'Supply Manager', 'Accountant']) || (bool) auth()->user()?->roles->isEmpty())
-                        ->modalHeading(fn (OwnerPayout $record) => "Owner Monthly Performance & Payout Report - {$record->property?->building_name}")
+                        ->visible(fn(): bool => auth()->user()?->can('payout.statement.generate') || auth()->user()?->hasAnyRole(['Business Owner', 'City Manager', 'Supply Manager', 'Accountant']) || (bool) auth()->user()?->roles->isEmpty())
+                        ->modalHeading(fn(OwnerPayout $record) => "Owner Monthly Performance & Payout Report - {$record->property?->building_name}")
                         ->modalWidth(Width::SevenExtraLarge)
-                        ->modalContent(fn (OwnerPayout $record) => view('components.payout-pdf-modal', ['payout' => $record]))
+                        ->modalContent(fn(OwnerPayout $record) => view('components.payout-pdf-modal', ['payout' => $record]))
                         ->modalSubmitAction(false)
                         ->modalCancelActionLabel('Close'),
 
@@ -319,10 +319,10 @@ class OwnerPayoutsTable
                         ->label('Owner Charges Invoice (PDF)')
                         ->icon('heroicon-o-document-text')
                         ->color('primary')
-                        ->visible(fn (OwnerPayout $record) => ! empty($record->commission_invoice_id))
-                        ->modalHeading(fn (OwnerPayout $record) => "Owner Charges Tax Invoice #{$record->commissionInvoice?->invoice_number}")
+                        ->visible(fn(OwnerPayout $record) => ! empty($record->commission_invoice_id))
+                        ->modalHeading(fn(OwnerPayout $record) => "Owner Charges Tax Invoice #{$record->commissionInvoice?->invoice_number}")
                         ->modalWidth(Width::SevenExtraLarge)
-                        ->modalContent(fn (OwnerPayout $record) => view('components.invoice-pdf-modal', ['invoice' => $record->commissionInvoice]))
+                        ->modalContent(fn(OwnerPayout $record) => view('components.invoice-pdf-modal', ['invoice' => $record->commissionInvoice]))
                         ->modalSubmitAction(false)
                         ->modalCancelActionLabel('Close'),
 

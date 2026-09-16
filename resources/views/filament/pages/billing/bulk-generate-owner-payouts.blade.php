@@ -378,9 +378,9 @@
                                         @endif
                                     </div>
                                     <div style="font-size: 0.75rem; color: #475569; margin-top: 0.125rem;">
-                                        👤 <strong>{{ $item['owner_name'] }}</strong>
+                                        👤 <strong>{{ $item['owner_name'] ?? 'Unknown Owner' }}</strong>
                                         <span style="color: #94a3b8; margin: 0 0.25rem;">•</span>
-                                        <span style="color: #64748b;">{{ $item['agreement_code'] }}</span>
+                                        <span style="color: #64748b;">{{ $item['agreement_code'] ?? 'N/A' }}</span>
                                     </div>
                                     <div style="font-size: 0.6875rem; color: #64748b; margin-top: 0.125rem;">
                                         🏦 {{ $item['bank_details_formatted'] }}

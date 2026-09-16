@@ -162,4 +162,99 @@ class Property extends DomainModel
         return $this->mous()->where('type', \App\Domain\Mou\Enums\MouType::ONBOARDING)->exists() 
             && $this->onboardingProject?->status !== 'Activated';
     }
+
+    public function getInvoicesQuery(): \Illuminate\Database\Eloquent\Builder
+    {
+        $propertyId = $this->id;
+        $propertyCode = $this->code;
+        $agrmntIds = $this->agreements()->pluck('id')->toArray();
+        $maintIds = $this->maintenanceRequests()->pluck('id')->toArray();
+        $deboardIds = ! empty($agrmntIds)
+            ? \App\Domain\Agreement\Models\TenantDeboarding::whereIn('tenancy_agreement_id', $agrmntIds)->pluck('id')->toArray()
+            : [];
+
+        return \Tek2991\Accounting\Models\Invoice::query()->where(function ($query) use ($propertyId, $propertyCode, $agrmntIds, $maintIds, $deboardIds) {
+            $query->where(function ($sub) use ($propertyId) {
+                $sub->where('reference_type', static::class)
+                    ->where('reference_id', $propertyId);
+            });
+
+            if (! empty($agrmntIds)) {
+                $query->orWhere(function ($sub) use ($agrmntIds) {
+                    $sub->where('reference_type', \App\Domain\Agreement\Models\TenancyAgreement::class)
+                        ->whereIn('reference_id', $agrmntIds);
+                });
+            }
+
+            if (! empty($maintIds)) {
+                $query->orWhere(function ($sub) use ($maintIds) {
+                    $sub->where('reference_type', \App\Domain\Maintenance\Models\MaintenanceRequest::class)
+                        ->whereIn('reference_id', $maintIds);
+                });
+            }
+
+            if (! empty($deboardIds)) {
+                $query->orWhere(function ($sub) use ($deboardIds) {
+                    $sub->where('reference_type', \App\Domain\Agreement\Models\TenantDeboarding::class)
+                        ->whereIn('reference_id', $deboardIds);
+                });
+            }
+
+            if (! empty($propertyCode)) {
+                $query->orWhere('notes', 'like', "%{$propertyCode}%");
+            }
+        });
+    }
+
+    public function getBillsQuery(): \Illuminate\Database\Eloquent\Builder
+    {
+        $propertyId = $this->id;
+        $propertyCode = $this->code;
+        $maintIds = $this->maintenanceRequests()->pluck('id')->toArray();
+
+        return \Tek2991\Accounting\Models\Bill::query()->where(function ($query) use ($propertyId, $propertyCode, $maintIds) {
+            $query->where(function ($sub) use ($propertyId) {
+                $sub->where('reference_type', static::class)
+                    ->where('reference_id', $propertyId);
+            });
+
+            if (! empty($maintIds)) {
+                $query->orWhere(function ($sub) use ($maintIds) {
+                    $sub->where('reference_type', \App\Domain\Maintenance\Models\MaintenanceRequest::class)
+                        ->whereIn('reference_id', $maintIds);
+                });
+            }
+
+            if (! empty($propertyCode)) {
+                $query->orWhere('notes', 'like', "%{$propertyCode}%")
+                    ->orWhere('vendor_reference', 'like', "%{$propertyCode}%");
+            }
+        });
+    }
+
+    public function getFinancialSummary(): array
+    {
+        $invoicesQuery = $this->getInvoicesQuery();
+        $totalInvoiced = (float) ((clone $invoicesQuery)->sum('grand_total') / 100);
+        $totalPaidInvoices = (float) ((clone $invoicesQuery)->sum('amount_paid') / 100);
+        $balanceDueInvoices = (float) ((clone $invoicesQuery)->sum('balance_due') / 100);
+        $invoicesCount = (clone $invoicesQuery)->count();
+
+        $billsQuery = $this->getBillsQuery();
+        $totalBills = (float) ((clone $billsQuery)->sum('grand_total') / 100);
+        $totalPaidBills = (float) ((clone $billsQuery)->sum('amount_paid') / 100);
+        $balanceDueBills = (float) ((clone $billsQuery)->sum('balance_due') / 100);
+        $billsCount = (clone $billsQuery)->count();
+
+        return [
+            'total_invoiced' => $totalInvoiced,
+            'total_collected' => $totalPaidInvoices,
+            'receivables_due' => $balanceDueInvoices,
+            'invoices_count' => $invoicesCount,
+            'total_bills' => $totalBills,
+            'bills_paid' => $totalPaidBills,
+            'payables_due' => $balanceDueBills,
+            'bills_count' => $billsCount,
+        ];
+    }
 }

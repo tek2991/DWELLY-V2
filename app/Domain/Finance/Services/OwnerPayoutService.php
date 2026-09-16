@@ -101,17 +101,17 @@ class OwnerPayoutService
             }
         }
         if (! $owner) {
-            $owner = Party::whereHas('roles', fn ($q) => $q->where('name', 'owner'))
-                ->orWhereHas('ownerProfile')
-                ->first();
-        }
+            $agreement = $property->agreements()->where('status', 'active')->first();
 
-        if (! $owner) {
             return [
                 'eligible' => false,
                 'reason' => 'No owner party linked to property.',
                 'property_id' => $property->id,
                 'property_name' => $property->building_name ?? $property->name ?? 'Property',
+                'property_url' => \App\Filament\Resources\Properties\PropertyResource::getUrl('edit', ['record' => $property->id]),
+                'agreement_id' => $agreement?->id,
+                'agreement_code' => $agreement?->code ?? 'N/A',
+                'agreement_url' => $agreement ? \App\Filament\Resources\TenancyAgreements\TenancyAgreementResource::getUrl('edit', ['record' => $agreement->id]) : null,
                 'owner_id' => null,
                 'owner_name' => 'Unknown Owner',
                 'billing_period_start' => null,
@@ -128,9 +128,13 @@ class OwnerPayoutService
                 'advance_offset' => 0.0,
                 'reserve_deduction' => 0.0,
                 'net_payout' => 0.0,
+                'maintenance_offset' => 0.0,
+                'maintenance_invoices' => [],
+                'maintenance_invoice_ids' => [],
+                'selected_maintenance_invoice_ids' => [],
+                'total_advance_required' => 0.0,
                 'is_adjusted' => false,
                 'draft_payout_id' => null,
-                'selected_maintenance_invoice_ids' => [],
                 'notes' => null,
                 'bank_details_formatted' => 'No Bank Details',
             ];
@@ -144,6 +148,10 @@ class OwnerPayoutService
                 'reason' => 'No active tenancy agreement found.',
                 'property_id' => $property->id,
                 'property_name' => $property->building_name ?? $property->name ?? 'Property',
+                'property_url' => \App\Filament\Resources\Properties\PropertyResource::getUrl('edit', ['record' => $property->id]),
+                'agreement_id' => null,
+                'agreement_code' => 'No Active Agreement',
+                'agreement_url' => null,
                 'owner_id' => $owner->id,
                 'owner_name' => $owner->display_name,
                 'billing_period_start' => null,
@@ -160,9 +168,13 @@ class OwnerPayoutService
                 'advance_offset' => 0.0,
                 'reserve_deduction' => 0.0,
                 'net_payout' => 0.0,
+                'maintenance_offset' => 0.0,
+                'maintenance_invoices' => [],
+                'maintenance_invoice_ids' => [],
+                'selected_maintenance_invoice_ids' => [],
+                'total_advance_required' => 0.0,
                 'is_adjusted' => false,
                 'draft_payout_id' => null,
-                'selected_maintenance_invoice_ids' => [],
                 'notes' => null,
                 'bank_details_formatted' => $this->formatOwnerBankDetails($owner),
             ];
@@ -177,11 +189,15 @@ class OwnerPayoutService
                 'reason' => $rentCalc['reason'],
                 'property_id' => $property->id,
                 'property_name' => $property->building_name ?? $property->name ?? 'Property',
+                'property_url' => \App\Filament\Resources\Properties\PropertyResource::getUrl('edit', ['record' => $property->id]),
+                'agreement_id' => $agreement->id,
+                'agreement_code' => $agreement->code,
+                'agreement_url' => \App\Filament\Resources\TenancyAgreements\TenancyAgreementResource::getUrl('edit', ['record' => $agreement->id]),
                 'owner_id' => $owner->id,
                 'owner_name' => $owner->display_name,
                 'billing_period_start' => null,
                 'billing_period_end' => null,
-                'formatted_period' => $rentCalc['formatted_period'],
+                'formatted_period' => $rentCalc['formatted_period'] ?? 'N/A',
                 'is_first_month' => false,
                 'is_prorated' => false,
                 'days_active' => 0,
@@ -193,9 +209,13 @@ class OwnerPayoutService
                 'advance_offset' => 0.0,
                 'reserve_deduction' => 0.0,
                 'net_payout' => 0.0,
+                'maintenance_offset' => 0.0,
+                'maintenance_invoices' => [],
+                'maintenance_invoice_ids' => [],
+                'selected_maintenance_invoice_ids' => [],
+                'total_advance_required' => 0.0,
                 'is_adjusted' => false,
                 'draft_payout_id' => null,
-                'selected_maintenance_invoice_ids' => [],
                 'notes' => null,
                 'bank_details_formatted' => $this->formatOwnerBankDetails($owner),
             ];

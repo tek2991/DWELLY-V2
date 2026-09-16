@@ -30,6 +30,7 @@ class DatabaseSeeder extends Seeder
             \Tek2991\Accounting\Database\Seeders\DemoDataSeeder::class,
             EstablishmentSeeder::class,
             TaskTemplateSeeder::class,
+            TenantSeeder::class,
             PropertySeeder::class,
         ]);
 

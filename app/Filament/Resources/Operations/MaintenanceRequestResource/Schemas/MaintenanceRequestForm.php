@@ -461,7 +461,7 @@ class MaintenanceRequestForm
                                             $pendingAlert = '';
                                             if ($quote->status !== 'approved') {
                                                 $pendingAlert = '<div style="background-color: rgba(217, 119, 6, 0.08); border-left: 4px solid #d97706; padding: 10px 14px; border-radius: 4px; margin-bottom: 12px; font-size: 13px; color: #b45309;">'.
-                                                    '<strong>⏳ Quotation Approval Pending:</strong> Physical repairs are locked until client approval proof is recorded in the Billing & Finance module.'.
+                                                    '<strong>⏳ Quotation Approval Pending:</strong> Physical repairs are locked until client approval proof is recorded in the Maintenance & Field Ops module.'.
                                                     '</div>';
                                             }
 

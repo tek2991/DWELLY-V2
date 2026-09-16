@@ -36,8 +36,8 @@ class RolePermissionsRevampTest extends TestCase
         $categories = PermissionCatalog::getCategories();
         $grouped = PermissionCatalog::getGroupedPermissions();
 
-        // Must have all 125 defined permissions
-        $this->assertCount(125, $permissions);
+        // Must have all 131 defined permissions
+        $this->assertCount(131, $permissions);
 
         // All permissions must have required fields
         foreach ($permissions as $code => $meta) {
@@ -56,7 +56,7 @@ class RolePermissionsRevampTest extends TestCase
         foreach ($grouped as $catGroup) {
             $totalGroupedCount += count($catGroup['permissions']);
         }
-        $this->assertSame(125, $totalGroupedCount);
+        $this->assertSame(131, $totalGroupedCount);
     }
 
     public function test_permission_catalog_provides_valid_defaults_for_all_seven_system_roles(): void
@@ -75,9 +75,9 @@ class RolePermissionsRevampTest extends TestCase
             }
         }
 
-        // Business owner must have all 125 permissions
+        // Business owner must have all 131 permissions
         $ownerDefaults = PermissionCatalog::getDefaultsForRole(RoleName::BUSINESS_OWNER);
-        $this->assertCount(125, $ownerDefaults);
+        $this->assertCount(131, $ownerDefaults);
 
         // City manager must NOT have fiduciary disbursement or system security administration
         $cityManagerDefaults = PermissionCatalog::getDefaultsForRole(RoleName::CITY_MANAGER);

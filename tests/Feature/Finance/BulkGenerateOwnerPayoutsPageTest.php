@@ -247,4 +247,39 @@ class BulkGenerateOwnerPayoutsPageTest extends TestCase
         $this->assertEquals(3000.00, (float) $payout->management_fee);
         $this->assertEquals(27000.00, (float) $payout->amount);
     }
+
+    /**
+     * Test 6: Property without linked owner is gracefully marked ineligible and does not crash.
+     */
+    public function test_property_without_owner_is_ineligible_and_does_not_throw_exception()
+    {
+        $unownedProperty = Property::create([
+            'building_name' => 'Orphan Heights 101',
+            'code' => 'PROP-ORPHAN-101',
+            'status' => 'occupied',
+        ]);
+
+        TenancyAgreement::create([
+            'property_id' => $unownedProperty->id,
+            'code' => 'AGR-2026-ORPHAN',
+            'rent_amount' => 25000.00,
+            'security_deposit' => 50000.00,
+            'status' => 'active',
+            'start_date' => '2026-08-01',
+            'keys_handed_over' => true,
+            'keys_handed_over_at' => '2026-08-01',
+        ]);
+
+        $service = app(OwnerPayoutService::class);
+        $details = $service->calculatePayoutDetails($unownedProperty, 8, 2026);
+
+        $this->assertFalse($details['eligible']);
+        $this->assertEquals('No owner party linked to property.', $details['reason']);
+
+        // Test Livewire page loads properly with this unowned property
+        Livewire::test(BulkGenerateOwnerPayouts::class)
+            ->set('month', 8)
+            ->set('year', 2026)
+            ->assertSuccessful();
+    }
 }

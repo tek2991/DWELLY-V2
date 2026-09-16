@@ -1,7 +1,8 @@
 <?php
 
-namespace App\Filament\Resources\Billing\Widgets;
+namespace App\Filament\Resources\Billing\Tables;
 
+use App\Domain\Finance\Services\BillingPropertyResolver;
 use App\Domain\Maintenance\Models\MaintenanceRequest;
 use Carbon\Carbon;
 use Filament\Actions\Action;
@@ -10,40 +11,22 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Textarea;
+use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
-use Filament\Widgets\TableWidget;
-use Illuminate\Database\Eloquent\Builder;
 use Tek2991\Accounting\Enums\BillStatus;
 use Tek2991\Accounting\Models\Account;
 use Tek2991\Accounting\Models\Bill;
 use Tek2991\Accounting\Services\BillService;
-use Tek2991\Accounting\Services\BranchContext;
 
-class MaintenanceBillsTableWidget extends TableWidget
+class BillsTable
 {
-    public function table(Table $table): Table
+    public static function configure(Table $table): Table
     {
-        $query = Bill::query()
-            ->where(function ($q) {
-                $q->where('reference_type', MaintenanceRequest::class)
-                    ->orWhere('notes', 'like', '%Maintenance%')
-                    ->orWhere('notes', 'like', '%Ticket%')
-                    ->orWhere('notes', 'like', '%Work Order%');
-            })
-            ->with(['contact']);
-
-        app(BranchContext::class)->applyQueryScope($query);
-
         return $table
-            ->queryStringIdentifier('bills')
-            ->query($query)
-            ->heading('Contractor Bills (Payable)')
-            ->description('Purchase bills issued by contractors and trade vendors for maintenance work orders.')
             ->columns([
                 TextColumn::make('bill_number')
                     ->label('Bill #')
@@ -51,8 +34,28 @@ class MaintenanceBillsTableWidget extends TableWidget
                     ->sortable()
                     ->weight('bold'),
 
+                TextColumn::make('category')
+                    ->label('Category')
+                    ->badge()
+                    ->state(fn (Bill $record): string => BillingPropertyResolver::categorizeBill($record)['label'])
+                    ->color(fn (Bill $record): string => BillingPropertyResolver::categorizeBill($record)['color'])
+                    ->sortable(false),
+
+                TextColumn::make('property')
+                    ->label('Property / Unit')
+                    ->state(fn (Bill $record): string => BillingPropertyResolver::resolvePropertyLabel($record))
+                    ->url(fn (Bill $record): ?string => BillingPropertyResolver::resolvePropertyUrl($record))
+                    ->openUrlInNewTab()
+                    ->color('primary')
+                    ->weight('medium')
+                    ->searchable(query: function ($query, string $search) {
+                        $query->whereHas('contact', function ($q) use ($search) {
+                            $q->where('name', 'like', "%{$search}%");
+                        })->orWhere('notes', 'like', "%{$search}%");
+                    }),
+
                 TextColumn::make('contact.name')
-                    ->label('Contractor / Vendor')
+                    ->label('Vendor / Contractor')
                     ->searchable()
                     ->sortable()
                     ->description(function (Bill $record) {
@@ -64,65 +67,27 @@ class MaintenanceBillsTableWidget extends TableWidget
                             $m = MaintenanceRequest::find($record->reference_id);
                             $parts[] = $m ? "Ticket #{$m->ticket_number}" : "Ticket #{$record->reference_id}";
                         }
-                        return !empty($parts) ? implode(' • ', $parts) : null;
+                        return ! empty($parts) ? implode(' • ', $parts) : null;
                     }),
-
-                TextColumn::make('reference_id')
-                    ->label('Ticket #')
-                    ->formatStateUsing(function ($state, Bill $record) {
-                        if ($record->reference_type === MaintenanceRequest::class && $state) {
-                            $maint = MaintenanceRequest::find($state);
-                            return $maint ? "Ticket #{$maint->ticket_number}" : "Ticket #{$state}";
-                        }
-                        return $record->notes ?: '—';
-                    })
-                    ->url(function ($state, Bill $record) {
-                        if ($record->reference_type === MaintenanceRequest::class && $state) {
-                            try {
-                                return \App\Filament\Resources\Operations\MaintenanceRequestResource::getUrl('edit', ['record' => $state]);
-                            } catch (\Throwable $e) {
-                                return null;
-                            }
-                        }
-                        return null;
-                    })
-                    ->openUrlInNewTab()
-                    ->color('primary')
-                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('issue_date')
                     ->label('Date')
                     ->date('d M Y')
                     ->description(fn (Bill $record) => $record->due_date ? 'Due ' . Carbon::parse($record->due_date)->format('d M Y') : null)
-                    ->sortable()
-                    ->toggleable(),
-
-                TextColumn::make('due_date')
-                    ->label('Due Date')
-                    ->date('d M Y')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->sortable(),
 
                 TextColumn::make('grand_total')
                     ->label('Total Amount')
                     ->money('INR')
                     ->weight('bold')
-                    ->sortable()
-                    ->toggleable(),
+                    ->sortable(),
 
                 TextColumn::make('balance_due')
                     ->label('Balance Due')
                     ->money('INR')
                     ->color(fn ($state) => $state > 0 ? 'danger' : 'success')
                     ->description(fn (Bill $record) => $record->amount_paid > 0 ? 'Paid: ₹' . number_format($record->amount_paid, 2) : null)
-                    ->sortable()
-                    ->toggleable(),
-
-                TextColumn::make('amount_paid')
-                    ->label('Paid Amount')
-                    ->money('INR')
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->sortable(),
 
                 TextColumn::make('status')
                     ->badge()
@@ -132,17 +97,19 @@ class MaintenanceBillsTableWidget extends TableWidget
                         'draft' => 'gray',
                         'cancelled' => 'danger',
                         default => 'info',
-                    })
-                    ->toggleable(),
+                    }),
             ])
             ->defaultSort('issue_date', 'desc')
             ->filters([
                 SelectFilter::make('status')
-                    ->options(BillStatus::class),
-
-                Filter::make('unpaid')
-                    ->label('Unpaid / Outstanding')
-                    ->query(fn (Builder $q) => $q->where('balance_due', '>', 0)),
+                    ->options([
+                        'draft' => 'Draft',
+                        'received' => 'Received',
+                        'approved' => 'Approved',
+                        'partially_paid' => 'Partially Paid',
+                        'paid' => 'Paid',
+                        'cancelled' => 'Cancelled',
+                    ]),
             ])
             ->recordActions([
                 ActionGroup::make([
@@ -167,17 +134,17 @@ class MaintenanceBillsTableWidget extends TableWidget
                         ->requiresConfirmation()
                         ->modalHeading(fn (Bill $record) => "Post Bill {$record->bill_number}")
                         ->modalDescription('Are you sure you want to approve and post this draft bill into the General Ledger?')
-                        ->visible(fn (Bill $record) => $record->status === BillStatus::Draft)
+                        ->visible(fn (Bill $record) => $record->status === BillStatus::Draft && (auth()->user()?->can('billing.bill.approve') || auth()->user()?->hasAnyRole(['Business Owner', 'Accountant']) || (bool) auth()->user()?->roles->isEmpty()))
                         ->action(function (Bill $record) {
                             try {
                                 app(BillService::class)->post($record);
-                                \Filament\Notifications\Notification::make()
+                                Notification::make()
                                     ->title('Bill Posted')
                                     ->body("Bill {$record->bill_number} has been approved and posted.")
                                     ->success()
                                     ->send();
                             } catch (\Exception $e) {
-                                \Filament\Notifications\Notification::make()
+                                Notification::make()
                                     ->title('Failed to Post Bill')
                                     ->body($e->getMessage())
                                     ->danger()
@@ -189,7 +156,7 @@ class MaintenanceBillsTableWidget extends TableWidget
                         ->label('Record Payment')
                         ->icon('heroicon-o-banknotes')
                         ->color('success')
-                        ->visible(fn (Bill $record) => $record->balance_due > 0 && $record->status !== BillStatus::Draft)
+                        ->visible(fn (Bill $record) => $record->balance_due > 0 && $record->status !== BillStatus::Draft && (auth()->user()?->can('billing.bill.pay') || auth()->user()?->hasAnyRole(['Business Owner', 'Accountant']) || (bool) auth()->user()?->roles->isEmpty()))
                         ->fillForm(function (Bill $record): array {
                             return [
                                 'amount' => $record->balance_due,
@@ -238,13 +205,13 @@ class MaintenanceBillsTableWidget extends TableWidget
                                     'notes' => $data['notes'] ?? null,
                                 ]);
 
-                                \Filament\Notifications\Notification::make()
+                                Notification::make()
                                     ->title('Payment Recorded')
                                     ->body("Recorded payment of ₹" . number_format($data['amount'], 2) . " for Bill #{$record->bill_number}")
                                     ->success()
                                     ->send();
                             } catch (\Exception $e) {
-                                \Filament\Notifications\Notification::make()
+                                Notification::make()
                                     ->title('Payment Failed')
                                     ->body($e->getMessage())
                                     ->danger()
@@ -256,6 +223,7 @@ class MaintenanceBillsTableWidget extends TableWidget
                         ->label('Bill PDF')
                         ->icon('heroicon-o-document-arrow-down')
                         ->color('primary')
+                        ->visible(fn (Bill $record) => \Illuminate\Support\Facades\Route::has('billing.bill.pdf'))
                         ->url(fn (Bill $record) => route('billing.bill.pdf', ['bill' => $record]))
                         ->openUrlInNewTab(),
                 ])

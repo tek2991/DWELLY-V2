@@ -69,7 +69,7 @@ class FinancialDashboard extends Page
                 ->url(url('/operations/bulk-generate-owner-payouts')),
 
             Action::make('operations_hub')
-                ->label('Financial Operations Hub')
+                ->label('Collections & Deposits Desk')
                 ->icon('heroicon-m-scale')
                 ->color('gray')
                 ->url(url('/operations/financial-operations-hub')),

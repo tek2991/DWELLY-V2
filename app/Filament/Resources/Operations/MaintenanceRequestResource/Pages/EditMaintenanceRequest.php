@@ -79,7 +79,7 @@ class EditMaintenanceRequest extends EditRecord
                     && ! ($this->record->currentClientQuote ?? $this->record->clientQuotes()->where('status', '!=', 'archived')->first())
                     && (auth()->user()?->can('create', MaintenanceClientQuote::class) ?? true))
                 ->disabled(fn () => blank($this->record->payer_type))
-                ->tooltip(fn () => blank($this->record->payer_type) ? 'Please select Who Pays? in the form first.' : 'Launch financial quotation job in Billing & Finance')
+                ->tooltip(fn () => blank($this->record->payer_type) ? 'Please select Who Pays? in the form first.' : 'Launch quotation job in Maintenance & Field Ops')
                 ->requiresConfirmation()
                 ->modalHeading('Initialize Financial Quotation & Settlement')
                 ->modalDescription('This will create a formal quotation & multi-vendor settlement job for this ticket and open the quotation workspace.')

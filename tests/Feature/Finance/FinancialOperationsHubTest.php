@@ -115,7 +115,7 @@ class FinancialOperationsHubTest extends TestCase
     {
         Livewire::test(FinancialOperationsHub::class)
             ->assertSuccessful()
-            ->assertSee('Financial Operations & Collections Hub')
+            ->assertSee('Collections & Deposits Desk')
             ->assertSee('Security Deposits')
             ->assertSee('Maintenance Invoices')
             ->assertSee('Overdue Rent')

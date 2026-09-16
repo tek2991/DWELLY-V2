@@ -18,6 +18,8 @@ use App\Policies\AccountingAccountPolicy;
 use App\Policies\AccountingBankAccountPolicy;
 use App\Policies\AccountingTransactionPolicy;
 use App\Policies\AuditPolicy;
+use App\Policies\BillPolicy;
+use App\Policies\InvoicePolicy;
 use App\Policies\MaintenanceQuotationPolicy;
 use App\Policies\MaintenanceRequestPolicy;
 use App\Policies\MouPolicy;
@@ -32,6 +34,8 @@ use Illuminate\Support\ServiceProvider;
 use Tek2991\Accounting\Contracts\CompanyAccessor;
 use Tek2991\Accounting\Models\Account;
 use Tek2991\Accounting\Models\BankAccount;
+use Tek2991\Accounting\Models\Bill;
+use Tek2991\Accounting\Models\Invoice;
 use Tek2991\Accounting\Models\Transaction;
 
 class AppServiceProvider extends ServiceProvider
@@ -77,6 +81,8 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Account::class, AccountingAccountPolicy::class);
         Gate::policy(BankAccount::class, AccountingBankAccountPolicy::class);
         Gate::policy(Transaction::class, AccountingTransactionPolicy::class);
+        Gate::policy(Invoice::class, InvoicePolicy::class);
+        Gate::policy(Bill::class, BillPolicy::class);
         Gate::policy(\App\Models\User::class, \App\Policies\UserPolicy::class);
         Gate::policy(\App\Models\Role::class, \App\Policies\RolePolicy::class);
         Gate::policy(\Spatie\Permission\Models\Role::class, \App\Policies\RolePolicy::class);

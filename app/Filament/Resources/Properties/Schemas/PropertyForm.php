@@ -60,14 +60,14 @@ class PropertyForm
                                         Select::make('property_type_id')
                                             ->label('Property Type')
                                             ->required()
-                                            ->options(fn () => DB::table('property_types')->pluck('name', 'id'))
+                                            ->options(fn() => DB::table('property_types')->pluck('name', 'id'))
                                             ->searchable()
                                             ->preload(),
 
                                         Select::make('bhk_type_id')
                                             ->label('BHK Configuration')
                                             ->required()
-                                            ->options(fn () => DB::table('bhk_types')->pluck('name', 'id'))
+                                            ->options(fn() => DB::table('bhk_types')->pluck('name', 'id'))
                                             ->searchable()
                                             ->preload(),
 
@@ -81,7 +81,7 @@ class PropertyForm
                                         Select::make('flooring_type_id')
                                             ->label('Flooring Type')
                                             ->required()
-                                            ->options(fn () => DB::table('flooring_types')->pluck('name', 'id'))
+                                            ->options(fn() => DB::table('flooring_types')->pluck('name', 'id'))
                                             ->searchable()
                                             ->preload(),
 
@@ -100,7 +100,7 @@ class PropertyForm
                                         Select::make('furnishing_type_id')
                                             ->label('Furnishing Status')
                                             ->required()
-                                            ->options(fn () => DB::table('furnishing_types')->pluck('name', 'id'))
+                                            ->options(fn() => DB::table('furnishing_types')->pluck('name', 'id'))
                                             ->searchable()
                                             ->preload()
                                             ->columnSpanFull(),
@@ -146,7 +146,7 @@ class PropertyForm
                                         Select::make('state_id')
                                             ->required()
                                             ->label('State')
-                                            ->options(fn () => State::pluck('name', 'id'))
+                                            ->options(fn() => State::pluck('name', 'id'))
                                             ->live()
                                             ->afterStateHydrated(function ($component, $state, ?Model $record) {
                                                 if ($record && $record->locality_id) {
@@ -248,9 +248,9 @@ class PropertyForm
 
                                                 if (! $party) {
                                                     return new HtmlString(
-                                                        '<div style="background-color: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 14px 16px; font-size: 13px; color: #64748b;">'.
-                                                        'No owner entity profile linked yet.'.
-                                                        '</div>'
+                                                        '<div style="background-color: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 14px 16px; font-size: 13px; color: #64748b;">' .
+                                                            'No owner entity profile linked yet.' .
+                                                            '</div>'
                                                     );
                                                 }
 
@@ -262,32 +262,32 @@ class PropertyForm
                                                 $mouUrl = $mou ? MOUResource::getUrl('view', ['record' => $mou]) : null;
 
                                                 return new HtmlString(
-                                                    '<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">'.
-                                                        '<div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid #e2e8f0; margin-bottom: 12px;">'.
-                                                            '<div style="display: flex; align-items: center; gap: 8px;">'.
-                                                                '<span style="font-size: 14px; font-weight: 700; color: #0f172a;">👤 '.$partyName.'</span>'.
-                                                                '<span style="font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; background-color: #dbeafe; color: #1d4ed8;">'.$partyType.'</span>'.
-                                                            '</div>'.
-                                                            '<div style="display: flex; align-items: center; gap: 10px;">'.
-                                                                '<a href="'.$partyUrl.'" target="_blank" style="font-size: 12px; font-weight: 600; color: #2563eb; text-decoration: underline;">View Owner Profile &rarr;</a>'.
-                                                                ($mouUrl ? '<span style="color: #cbd5e1;">|</span><a href="'.$mouUrl.'" style="font-size: 12px; font-weight: 600; color: #2563eb; text-decoration: underline;">Open MOU #'.e($mou->number).' &rarr;</a>' : '').
-                                                            '</div>'.
-                                                        '</div>'.
-                                                        '<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; font-size: 12px;">'.
-                                                            '<div>'.
-                                                                '<span style="display: block; font-size: 11px; font-weight: 500; color: #64748b; margin-bottom: 2px;">Phone Number</span>'.
-                                                                '<span style="font-family: monospace; font-weight: 600; color: #0f172a;">'.$phone.'</span>'.
-                                                            '</div>'.
-                                                            '<div>'.
-                                                                '<span style="display: block; font-size: 11px; font-weight: 500; color: #64748b; margin-bottom: 2px;">Email Address</span>'.
-                                                                '<span style="font-weight: 600; color: #0f172a;">'.$email.'</span>'.
-                                                            '</div>'.
-                                                        '</div>'.
-                                                    '</div>'
+                                                    '<div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">' .
+                                                        '<div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid #e2e8f0; margin-bottom: 12px;">' .
+                                                        '<div style="display: flex; align-items: center; gap: 8px;">' .
+                                                        '<span style="font-size: 14px; font-weight: 700; color: #0f172a;">👤 ' . $partyName . '</span>' .
+                                                        '<span style="font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; background-color: #dbeafe; color: #1d4ed8;">' . $partyType . '</span>' .
+                                                        '</div>' .
+                                                        '<div style="display: flex; align-items: center; gap: 10px;">' .
+                                                        '<a href="' . $partyUrl . '" target="_blank" style="font-size: 12px; font-weight: 600; color: #2563eb; text-decoration: underline;">View Owner Profile &rarr;</a>' .
+                                                        ($mouUrl ? '<span style="color: #cbd5e1;">|</span><a href="' . $mouUrl . '" style="font-size: 12px; font-weight: 600; color: #2563eb; text-decoration: underline;">Open MOU #' . e($mou->number) . ' &rarr;</a>' : '') .
+                                                        '</div>' .
+                                                        '</div>' .
+                                                        '<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; font-size: 12px;">' .
+                                                        '<div>' .
+                                                        '<span style="display: block; font-size: 11px; font-weight: 500; color: #64748b; margin-bottom: 2px;">Phone Number</span>' .
+                                                        '<span style="font-family: monospace; font-weight: 600; color: #0f172a;">' . $phone . '</span>' .
+                                                        '</div>' .
+                                                        '<div>' .
+                                                        '<span style="display: block; font-size: 11px; font-weight: 500; color: #64748b; margin-bottom: 2px;">Email Address</span>' .
+                                                        '<span style="font-weight: 600; color: #0f172a;">' . $email . '</span>' .
+                                                        '</div>' .
+                                                        '</div>' .
+                                                        '</div>'
                                                 );
                                             }),
                                     ])->columns(1)
-                                    ->hidden(fn (?Model $record) => ! ($record && $record->mous()->exists())),
+                                    ->hidden(fn(?Model $record) => ! ($record && $record->mous()->exists())),
 
                                 // 💰 Section 4: Current Pricing & Commercials
                                 Section::make('💰 Active Commercial & Pricing Terms')
@@ -299,7 +299,7 @@ class PropertyForm
                                                 $pricing = $record?->pricingVersions()->latest('effective_from')->first();
 
                                                 return $pricing && $pricing->rent
-                                                    ? new HtmlString('<strong style="color: #059669; font-size: 14px;">₹ '.number_format((float) $pricing->rent).'</strong> /mo')
+                                                    ? new HtmlString('<strong style="color: #059669; font-size: 14px;">₹ ' . number_format((float) $pricing->rent) . '</strong> /mo')
                                                     : 'N/A';
                                             }),
 
@@ -309,7 +309,7 @@ class PropertyForm
                                                 $pricing = $record?->pricingVersions()->latest('effective_from')->first();
 
                                                 return $pricing && $pricing->security_deposit
-                                                    ? new HtmlString('<strong style="color: #0284c7; font-size: 14px;">₹ '.number_format((float) $pricing->security_deposit).'</strong>')
+                                                    ? new HtmlString('<strong style="color: #0284c7; font-size: 14px;">₹ ' . number_format((float) $pricing->security_deposit) . '</strong>')
                                                     : 'N/A';
                                             }),
 
@@ -319,11 +319,11 @@ class PropertyForm
                                                 $financialTerm = $record?->financialTerms()->latest('effective_from')->first();
 
                                                 return $financialTerm && $financialTerm->pricing_model
-                                                    ? new HtmlString('<span style="display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 4px; background: #e0e7ff; color: #3730a3; font-weight: 600; font-size: 12px;">'.e($financialTerm->pricing_model).'</span>')
+                                                    ? new HtmlString('<span style="display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 4px; background: #e0e7ff; color: #3730a3; font-weight: 600; font-size: 12px;">' . e($financialTerm->pricing_model) . '</span>')
                                                     : 'Standard Model';
                                             }),
                                     ])->columns(3)
-                                    ->hidden(fn (?Model $record) => ! $record || $record->pricingVersions()->count() === 0),
+                                    ->hidden(fn(?Model $record) => ! $record || $record->pricingVersions()->count() === 0),
 
                                 // 📢 Section 5: Marketing & Availability
                                 Section::make('📢 Marketing & Listing Configuration')
@@ -395,36 +395,36 @@ class PropertyForm
                                                     $onboardingUrl = PropertyResource::getUrl('onboarding', ['record' => $record]);
 
                                                     return new HtmlString(
-                                                        '<div style="background-color: #fffbeb; border-left: 4px solid #d97706; padding: 12px 14px; border-radius: 6px; font-size: 13px; color: #92400e; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">'.
-                                                            '<div style="font-weight: 700; display: flex; align-items: center; justify-content: space-between;">'.
-                                                                '<span>⚠️ In Onboarding Pipeline</span>'.
-                                                                '<span style="font-size: 12px; font-weight: 800; color: #b45309;">'.$progress.'%</span>'.
-                                                            '</div>'.
-                                                            '<div style="font-size: 12px; margin-top: 4px; color: #b45309;">'.
-                                                                'Checklist must be completed and approved before changes can be made.'.
-                                                            '</div>'.
-                                                            '<div style="margin-top: 10px;">'.
-                                                                '<a href="'.$onboardingUrl.'" style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; background-color: #d97706; color: #ffffff; font-size: 12px; font-weight: 600; text-decoration: none;">'.
-                                                                    '📋 Open Onboarding Dashboard &rarr;'.
-                                                                '</a>'.
-                                                            '</div>'.
-                                                        '</div>'
+                                                        '<div style="background-color: #fffbeb; border-left: 4px solid #d97706; padding: 12px 14px; border-radius: 6px; font-size: 13px; color: #92400e; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">' .
+                                                            '<div style="font-weight: 700; display: flex; align-items: center; justify-content: space-between;">' .
+                                                            '<span>⚠️ In Onboarding Pipeline</span>' .
+                                                            '<span style="font-size: 12px; font-weight: 800; color: #b45309;">' . $progress . '%</span>' .
+                                                            '</div>' .
+                                                            '<div style="font-size: 12px; margin-top: 4px; color: #b45309;">' .
+                                                            'Checklist must be completed and approved before changes can be made.' .
+                                                            '</div>' .
+                                                            '<div style="margin-top: 10px;">' .
+                                                            '<a href="' . $onboardingUrl . '" style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; background-color: #d97706; color: #ffffff; font-size: 12px; font-weight: 600; text-decoration: none;">' .
+                                                            '📋 Open Onboarding Dashboard &rarr;' .
+                                                            '</a>' .
+                                                            '</div>' .
+                                                            '</div>'
                                                     );
                                                 }
 
                                                 if ($record->status === 'Vacant' || $record->status === 'vacant') {
                                                     return new HtmlString(
-                                                        '<div style="background-color: #f0fdf4; border-left: 4px solid #16a34a; padding: 10px 14px; border-radius: 6px; font-size: 13px; color: #166534;">'.
-                                                            '🟢 <strong>Vacant & Available for Lease:</strong> Property is active and ready to be linked with tenant agreements.'.
-                                                        '</div>'
+                                                        '<div style="background-color: #f0fdf4; border-left: 4px solid #16a34a; padding: 10px 14px; border-radius: 6px; font-size: 13px; color: #166534;">' .
+                                                            '🟢 <strong>Vacant & Available for Lease:</strong> Property is active and ready to be linked with tenant agreements.' .
+                                                            '</div>'
                                                     );
                                                 }
 
                                                 if ($record->status === 'Occupied' || $record->status === 'occupied') {
                                                     return new HtmlString(
-                                                        '<div style="background-color: #eff6ff; border-left: 4px solid #2563eb; padding: 10px 14px; border-radius: 6px; font-size: 13px; color: #1e40af;">'.
-                                                            '👤 <strong>Occupied:</strong> Currently tenanted under an active tenancy agreement.'.
-                                                        '</div>'
+                                                        '<div style="background-color: #eff6ff; border-left: 4px solid #2563eb; padding: 10px 14px; border-radius: 6px; font-size: 13px; color: #1e40af;">' .
+                                                            '👤 <strong>Occupied:</strong> Currently tenanted under an active tenancy agreement.' .
+                                                            '</div>'
                                                     );
                                                 }
 
@@ -435,7 +435,7 @@ class PropertyForm
                                         Placeholder::make('navigation_bridges_card')
                                             ->label('Related Workspaces')
                                             ->columnSpanFull()
-                                            ->visible(fn (?Property $record) => (bool) $record && $record->exists)
+                                            ->visible(fn(?Property $record) => (bool) $record && $record->exists)
                                             ->content(function (?Property $record) {
                                                 if (! $record || ! $record->exists) {
                                                     return '';
@@ -447,24 +447,24 @@ class PropertyForm
                                                 $mouUrl = $mou ? MOUResource::getUrl('view', ['record' => $mou]) : null;
 
                                                 $links = [
-                                                    '<a href="'.$financialsUrl.'" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: 6px; background-color: #f8fafc; border: 1px solid #e2e8f0; color: #0f172a; text-decoration: none; font-size: 12px; font-weight: 600;">'.
-                                                        '<span>💳 Financial Terms & MOU</span><span style="color: #2563eb;">&rarr;</span>'.
-                                                    '</a>',
-                                                    '<a href="'.$onboardingUrl.'" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: 6px; background-color: #f8fafc; border: 1px solid #e2e8f0; color: #0f172a; text-decoration: none; font-size: 12px; font-weight: 600;">'.
-                                                        '<span>📋 Onboarding Dashboard</span><span style="color: #2563eb;">&rarr;</span>'.
-                                                    '</a>',
+                                                    '<a href="' . $financialsUrl . '" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: 6px; background-color: #f8fafc; border: 1px solid #e2e8f0; color: #0f172a; text-decoration: none; font-size: 12px; font-weight: 600;">' .
+                                                        '<span>💳 Financial Terms & MOU</span><span style="color: #2563eb;">&rarr;</span>' .
+                                                        '</a>',
+                                                    '<a href="' . $onboardingUrl . '" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: 6px; background-color: #f8fafc; border: 1px solid #e2e8f0; color: #0f172a; text-decoration: none; font-size: 12px; font-weight: 600;">' .
+                                                        '<span>📋 Onboarding Dashboard</span><span style="color: #2563eb;">&rarr;</span>' .
+                                                        '</a>',
                                                 ];
 
                                                 if ($mouUrl) {
-                                                    $links[] = '<a href="'.$mouUrl.'" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: 6px; background-color: #f8fafc; border: 1px solid #e2e8f0; color: #0f172a; text-decoration: none; font-size: 12px; font-weight: 600;">'.
-                                                        '<span>📄 Onboarding MOU #'.e($mou->number).'</span><span style="color: #2563eb;">&rarr;</span>'.
-                                                    '</a>';
+                                                    $links[] = '<a href="' . $mouUrl . '" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: 6px; background-color: #f8fafc; border: 1px solid #e2e8f0; color: #0f172a; text-decoration: none; font-size: 12px; font-weight: 600;">' .
+                                                        '<span>📄 Onboarding MOU #' . e($mou->number) . '</span><span style="color: #2563eb;">&rarr;</span>' .
+                                                        '</a>';
                                                 }
 
                                                 return new HtmlString(
-                                                    '<div style="display: flex; flex-direction: column; gap: 8px; margin-top: 4px;">'.
-                                                        implode('', $links).
-                                                    '</div>'
+                                                    '<div style="display: flex; flex-direction: column; gap: 8px; margin-top: 4px;">' .
+                                                        implode('', $links) .
+                                                        '</div>'
                                                 );
                                             }),
                                     ]),

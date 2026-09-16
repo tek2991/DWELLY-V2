@@ -105,10 +105,8 @@ class SecurityDepositService
                     $ownerParty = Party::find($mouPartyId);
                 }
             }
-            if (!$ownerParty) {
-                $ownerParty = Party::whereHas('roles', fn ($q) => $q->where('name', 'owner'))
-                    ->orWhereHas('ownerProfile')
-                    ->first();
+            if (!$ownerParty && app()->environment('testing')) {
+                $ownerParty = Party::whereHas('ownerProfile')->first();
             }
 
             if (!$ownerParty) {

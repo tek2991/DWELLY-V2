@@ -40,9 +40,9 @@ class FinancialOperationsHub extends Page
 
     protected static \UnitEnum|string|null $navigationGroup = 'Billing & Finance';
 
-    protected static ?string $navigationLabel = 'Financial Operations Hub';
+    protected static ?string $navigationLabel = 'Collections & Deposits Desk';
 
-    protected static ?int $navigationSort = 6;
+    protected static ?int $navigationSort = 5;
 
     public string $activeTab = 'security_deposits';
 
@@ -62,12 +62,12 @@ class FinancialOperationsHub extends Page
 
     public function getTitle(): string|Htmlable
     {
-        return 'Financial Operations & Collections Hub';
+        return 'Collections & Deposits Desk';
     }
 
     public function getSubheading(): ?string
     {
-        return 'Track security deposits, maintenance receivables, overdue rent demands, contractor payables, and owner advances in real-time.';
+        return 'Real-time clearing desk for security deposits, arrears aging, contractor payables, and settlement clearing.';
     }
 
     protected function getHeaderActions(): array

@@ -13,7 +13,8 @@ use App\Filament\Pages\Billing\FinancialDashboard;
 use App\Filament\Pages\Billing\FinancialOperationsHub;
 use App\Filament\Pages\Dashboard;
 use App\Filament\Pages\Operations\OperationsDashboard;
-use App\Filament\Resources\Billing\MaintenanceBillingResource;
+use App\Filament\Resources\Billing\BillsResource;
+use App\Filament\Resources\Billing\InvoicesResource;
 use App\Filament\Resources\Billing\MaintenanceQuotationResource;
 use App\Filament\Resources\Billing\Pages\ListRentDemands;
 use App\Filament\Resources\Billing\RentDemandsResource;
@@ -72,12 +73,15 @@ class NavigationHierarchyTest extends TestCase
         $this->assertEquals('Maintenance & Field Ops', MaintenanceRequestResource::getNavigationGroup());
         $this->assertEquals(1, MaintenanceRequestResource::getNavigationSort());
 
+        $this->assertEquals('Maintenance & Field Ops', MaintenanceQuotationResource::getNavigationGroup());
+        $this->assertEquals(2, MaintenanceQuotationResource::getNavigationSort());
+
         $this->assertEquals('Maintenance & Field Ops', TaskResource::getNavigationGroup());
-        $this->assertEquals(2, TaskResource::getNavigationSort());
+        $this->assertEquals(3, TaskResource::getNavigationSort());
 
         $this->assertEquals('Maintenance & Field Ops', AuditsCluster::getNavigationGroup());
         $this->assertEquals('Audits & Inspections', AuditsCluster::getNavigationLabel());
-        $this->assertEquals(3, AuditsCluster::getNavigationSort());
+        $this->assertEquals(4, AuditsCluster::getNavigationSort());
     }
 
     public function test_billing_and_finance_group_items(): void
@@ -85,22 +89,21 @@ class NavigationHierarchyTest extends TestCase
         $this->assertEquals('Billing & Finance', FinancialDashboard::getNavigationGroup());
         $this->assertEquals(1, FinancialDashboard::getNavigationSort());
 
-        $this->assertEquals('Billing & Finance', RentDemandsResource::getNavigationGroup());
-        $this->assertEquals(2, RentDemandsResource::getNavigationSort());
+        $this->assertEquals('Billing & Finance', InvoicesResource::getNavigationGroup());
+        $this->assertEquals(2, InvoicesResource::getNavigationSort());
+
+        $this->assertEquals('Billing & Finance', BillsResource::getNavigationGroup());
+        $this->assertEquals(3, BillsResource::getNavigationSort());
 
         $this->assertEquals('Billing & Finance', OwnerPayoutResource::getNavigationGroup());
-        $this->assertEquals(3, OwnerPayoutResource::getNavigationSort());
-
-        $this->assertEquals('Billing & Finance', MaintenanceBillingResource::getNavigationGroup());
-        $this->assertEquals(4, MaintenanceBillingResource::getNavigationSort());
-
-        $this->assertEquals('Billing & Finance', MaintenanceQuotationResource::getNavigationGroup());
-        $this->assertEquals(5, MaintenanceQuotationResource::getNavigationSort());
+        $this->assertEquals(4, OwnerPayoutResource::getNavigationSort());
 
         $this->assertEquals('Billing & Finance', FinancialOperationsHub::getNavigationGroup());
-        $this->assertEquals(6, FinancialOperationsHub::getNavigationSort());
+        $this->assertEquals('Collections & Deposits Desk', FinancialOperationsHub::getNavigationLabel());
+        $this->assertEquals(5, FinancialOperationsHub::getNavigationSort());
 
-        // Bulk generators should NOT register in sidebar
+        // RentDemands and Bulk generators should NOT register in sidebar
+        $this->assertFalse(RentDemandsResource::shouldRegisterNavigation());
         $this->assertFalse(BulkGenerateMonthlyRent::shouldRegisterNavigation());
         $this->assertFalse(BulkGenerateOwnerPayouts::shouldRegisterNavigation());
     }

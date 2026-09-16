@@ -109,7 +109,7 @@ class PermissionCatalog
     }
 
     /**
-     * Complete list of all 97 permissions with descriptive metadata.
+     * Complete list of all 131 permissions with descriptive metadata.
      *
      * @return array<string, array{code: string, label: string, description: string, category: string, risk: 'read'|'action'|'sensitive'|'fiduciary'|'destructive'}>
      */
@@ -690,6 +690,48 @@ class PermissionCatalog
                 'category' => 'billing',
                 'risk' => 'fiduciary',
             ],
+            'billing.invoice.create' => [
+                'code' => 'billing.invoice.create',
+                'label' => 'Create Client Invoices',
+                'description' => 'Allows raising manual client invoices, documentation charges, and tenant recovery demands.',
+                'category' => 'billing',
+                'risk' => 'action',
+            ],
+            'billing.invoice.post' => [
+                'code' => 'billing.invoice.post',
+                'label' => 'Approve & Post Invoices',
+                'description' => 'Allows approving draft client invoices and posting them to the General Ledger.',
+                'category' => 'billing',
+                'risk' => 'fiduciary',
+            ],
+            'billing.bill.viewAny' => [
+                'code' => 'billing.bill.viewAny',
+                'label' => 'View Vendor Bills & Payables',
+                'description' => 'Allows browsing vendor bills, contractor repair invoices, and utility payables.',
+                'category' => 'billing',
+                'risk' => 'read',
+            ],
+            'billing.bill.view' => [
+                'code' => 'billing.bill.view',
+                'label' => 'View Detailed Bill & Attachments',
+                'description' => 'Allows inspecting vendor bill line items, taxes, and uploaded contractor invoices.',
+                'category' => 'billing',
+                'risk' => 'read',
+            ],
+            'billing.bill.create' => [
+                'code' => 'billing.bill.create',
+                'label' => 'Record Inbound Vendor Bills',
+                'description' => 'Allows recording incoming contractor work order bills, society dues, and utility invoices.',
+                'category' => 'billing',
+                'risk' => 'action',
+            ],
+            'billing.bill.approve' => [
+                'code' => 'billing.bill.approve',
+                'label' => 'Approve Vendor Bills for Settlement',
+                'description' => 'Authorizes signing off vendor bills for accounts payable release or owner payout deduction.',
+                'category' => 'billing',
+                'risk' => 'fiduciary',
+            ],
 
             // ==========================================
             // 10. Owner Payout Engine
@@ -1120,6 +1162,7 @@ class PermissionCatalog
                     'billing.deposit.record',
                     'billing.bill.pay',
                     'billing.advance.record',
+                    'billing.invoice.post',
                     'payout.delete',
                     'accounting.coa.manage',
                     'accounting.journal.post',
@@ -1174,6 +1217,8 @@ class PermissionCatalog
                 'deboarding.audit', 'deboarding.damage.assess', 'deboarding.keys.return',
                 'deboarding.settlement.draft', 'deboarding.settlement.approve', 'deboarding.complete',
                 'billing.viewAny', 'billing.view', 'billing.hub.access',
+                'billing.invoice.create',
+                'billing.bill.viewAny', 'billing.bill.view', 'billing.bill.create', 'billing.bill.approve',
                 'payout.viewAny', 'payout.view', 'payout.hold.manage', 'payout.reserve.manage',
             ],
 
@@ -1202,6 +1247,8 @@ class PermissionCatalog
                 'billing.viewAny', 'billing.view', 'billing.hub.access', 'billing.rent.generate',
                 'billing.rent.prorate', 'billing.receipt.record', 'billing.deposit.record',
                 'billing.bill.pay', 'billing.advance.record',
+                'billing.invoice.create', 'billing.invoice.post',
+                'billing.bill.viewAny', 'billing.bill.view', 'billing.bill.create', 'billing.bill.approve',
                 'payout.viewAny', 'payout.view', 'payout.bulk.generate', 'payout.hold.manage',
                 'payout.commission.validate', 'payout.reserve.manage', 'payout.disburse',
                 'payout.statement.generate', 'payout.delete',

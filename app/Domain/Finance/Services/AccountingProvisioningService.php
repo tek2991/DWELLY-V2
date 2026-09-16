@@ -210,11 +210,8 @@ class AccountingProvisioningService
         $contact = Contact::where('party_id', $party->id)->first();
 
         if (!$contact) {
-            $branchId = app(\Tek2991\Accounting\Services\BranchContext::class)->getCurrentId() ?? \App\Models\Branch::first()?->id;
-
             $contact = Contact::create([
                 'party_id' => $party->id,
-                'branch_id' => $branchId,
                 'name' => $party->display_name,
                 'email' => $party->email,
                 'phone' => $party->phone,

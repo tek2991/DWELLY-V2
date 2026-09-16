@@ -484,51 +484,7 @@ class PropertySeeder extends Seeder
 
     protected function seedTenants(): array
     {
-        $tenantData = [
-            ['name' => 'Abhishek Sen', 'phone' => '9864998877', 'email' => 'abhishek.sen@tcs.com', 'pan' => 'ASDPN1122K'],
-            ['name' => 'Rohit Deshmukh', 'phone' => '9845998877', 'email' => 'rohit.deshmukh@amazon.com', 'pan' => 'BSDPN2233L'],
-            ['name' => 'Priya Sundaram', 'phone' => '9900998877', 'email' => 'priya.sundaram@google.com', 'pan' => 'CSDPN3344M'],
-            ['name' => 'Amit Patel', 'phone' => '9880998877', 'email' => 'amit.patel@microsoft.com', 'pan' => 'DSDPN4455N'],
-            ['name' => 'Neha Joshi', 'phone' => '9864887766', 'email' => 'neha.joshi@airtel.in', 'pan' => 'ESDPN5566P'],
-            ['name' => 'Varun Chawla', 'phone' => '9845887766', 'email' => 'varun.chawla@flipkart.com', 'pan' => 'FSDPN6677Q'],
-            ['name' => 'Tanvi Gupta', 'phone' => '9900887766', 'email' => 'tanvi.gupta@swiggy.in', 'pan' => 'GSDPN7788R'],
-            ['name' => 'Arjun Menon', 'phone' => '9880887766', 'email' => 'arjun.menon@cisco.com', 'pan' => 'HSDPN8899S'],
-            ['name' => 'Divya Nair', 'phone' => '9864776655', 'email' => 'divya.nair@hdfcbank.com', 'pan' => 'ISDPN9900T'],
-            ['name' => 'Karthik Rajan', 'phone' => '9845776655', 'email' => 'karthik.rajan@oracle.com', 'pan' => 'JSDPN0011U'],
-            ['name' => 'Sandeep Hazarika', 'phone' => '9900776655', 'email' => 'sandeep.hazarika@oilindia.in', 'pan' => 'KSDPN1122V'],
-            ['name' => 'Manash Phukan', 'phone' => '9880776655', 'email' => 'manash.phukan@ioc.in', 'pan' => 'LSDPN2233W'],
-            ['name' => 'Ritu Bora', 'phone' => '9864665544', 'email' => 'ritu.bora@sbi.co.in', 'pan' => 'MSDPN3344X'],
-            ['name' => 'Gaurav Singhania', 'phone' => '9845665544', 'email' => 'gaurav.singhania@deloitte.com', 'pan' => 'NSDPN4455Y'],
-            ['name' => 'Pooja Hegde', 'phone' => '9900665544', 'email' => 'pooja.hegde@kpmg.com', 'pan' => 'OSDPN5566Z'],
-        ];
-
-        $tenants = [];
-        foreach ($tenantData as $data) {
-            $party = Party::firstOrCreate(
-                ['email' => $data['email']],
-                [
-                    'party_type' => 'individual',
-                    'display_name' => $data['name'],
-                    'phone' => $data['phone'],
-                ]
-            );
-
-            if (!$party->tenantProfile()->exists()) {
-                $party->tenantProfile()->create([]);
-            }
-
-            if (!$party->individual()->exists()) {
-                $party->individual()->create([
-                    'name' => $data['name'],
-                    'pan_number' => $data['pan'],
-                    'aadhaar_number' => '88' . rand(1000000000, 9999999999),
-                ]);
-            }
-
-            $tenants[] = $party;
-        }
-
-        return $tenants;
+        return (new TenantSeeder())->seedTenants();
     }
 
     protected function seedVendors(): array

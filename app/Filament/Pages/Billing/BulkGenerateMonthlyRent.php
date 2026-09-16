@@ -5,6 +5,7 @@ namespace App\Filament\Pages\Billing;
 use App\Domain\Agreement\Models\TenancyAgreement;
 use App\Domain\Finance\Services\RentBillingService;
 use App\Domain\Property\Models\Property;
+use App\Filament\Resources\Billing\InvoicesResource;
 use App\Filament\Resources\Billing\RentDemandsResource;
 use BackedEnum;
 use Carbon\Carbon;
@@ -98,13 +99,13 @@ class BulkGenerateMonthlyRent extends Page
     {
         return [
             Action::make('view_rent_invoices')
-                ->label('Rent Demands & Collections')
+                ->label('Invoices & Receivables')
                 ->icon('heroicon-o-banknotes')
                 ->color('gray')
-                ->url(fn (): string => RentDemandsResource::getUrl('index')),
+                ->url(fn (): string => InvoicesResource::getUrl('index', ['activeTab' => 'rent'])),
 
             Action::make('operations_hub')
-                ->label('Financial Operations Hub')
+                ->label('Collections & Deposits Desk')
                 ->icon('heroicon-o-scale')
                 ->color('gray')
                 ->url(fn (): string => FinancialOperationsHub::getUrl()),

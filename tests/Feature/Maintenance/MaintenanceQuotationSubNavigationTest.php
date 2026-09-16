@@ -514,6 +514,8 @@ class MaintenanceQuotationSubNavigationTest extends TestCase
         Livewire::actingAs($user)
             ->test(ManageQuotationApproval::class, ['record' => $tenantQuote->getRouteKey()])
             ->assertSuccessful()
+            ->assertSee('Approval Date')
+            ->assertDontSee('Approval Date & Time')
             ->assertSchemaStateSet([
                 'approved_by_type' => 'tenant',
             ]);
@@ -1466,6 +1468,166 @@ class MaintenanceQuotationSubNavigationTest extends TestCase
             ->assertSee('₹8,500.00')
             ->assertSee('-₹8,500.00')
             ->assertSee('₹0.00');
+    }
+
+    public function test_vendor_quotes_repeater_defaults_to_one_item(): void
+    {
+        $user = User::factory()->create();
+
+        $property = Property::create([
+            'building_name' => 'Rosewood Villa 101',
+            'status' => 'active',
+        ]);
+
+        $request = MaintenanceRequest::create([
+            'property_id' => $property->id,
+            'title' => 'Default Vendor Item Test',
+            'status' => MaintenanceStatus::SUBMITTED,
+        ]);
+
+        $quote = MaintenanceClientQuote::create([
+            'quote_number' => 'QT-2026-TEST-DEF1',
+            'maintenance_request_id' => $request->id,
+            'status' => 'draft',
+        ]);
+
+        $testEdit = Livewire::actingAs($user)
+            ->test(EditMaintenanceQuotation::class, [
+                'record' => $quote->getRouteKey(),
+            ])
+            ->assertSuccessful();
+
+        $schema = $testEdit->instance()->getSchema('form');
+        $section = collect($schema->getComponents())->first(fn ($c) => $c instanceof \Filament\Schemas\Components\Section && str_contains($c->getHeading(), 'Multi-Vendor Bids'));
+        $repeater = collect($section->getChildComponents())->first(fn ($c) => $c instanceof \Filament\Forms\Components\Repeater && $c->getName() === 'vendorQuotes');
+
+        $this->assertNotNull($repeater);
+
+        $vendorQuotesState = data_get($testEdit->get('data'), 'vendorQuotes');
+        $this->assertIsArray($vendorQuotesState);
+        $this->assertCount(1, $vendorQuotesState);
+    }
+
+    public function test_vendor_quotes_repeater_preserves_existing_quotes_without_extra_item(): void
+    {
+        $user = User::factory()->create();
+
+        $property = Property::create([
+            'building_name' => 'Rosewood Villa 102',
+            'status' => 'active',
+        ]);
+
+        $request = MaintenanceRequest::create([
+            'property_id' => $property->id,
+            'title' => 'Existing Vendor Item Test',
+            'status' => MaintenanceStatus::SUBMITTED,
+        ]);
+
+        $vendorParty = \App\Domain\Party\Models\Party::create([
+            'display_name' => 'Pro Repairs',
+            'party_type' => 'organization',
+        ]);
+
+        \App\Domain\Maintenance\Models\MaintenanceVendorQuote::create([
+            'maintenance_request_id' => $request->id,
+            'vendor_party_id' => $vendorParty->id,
+            'trade_title' => 'Quote 1',
+            'quoted_cost' => 1200.00,
+            'vendor_quote_date' => now(),
+        ]);
+
+        \App\Domain\Maintenance\Models\MaintenanceVendorQuote::create([
+            'maintenance_request_id' => $request->id,
+            'vendor_party_id' => $vendorParty->id,
+            'trade_title' => 'Quote 2',
+            'quoted_cost' => 1500.00,
+            'vendor_quote_date' => now(),
+        ]);
+
+        $quote = MaintenanceClientQuote::create([
+            'quote_number' => 'QT-2026-TEST-EXISTING',
+            'maintenance_request_id' => $request->id,
+            'status' => 'draft',
+        ]);
+
+        $testEdit = Livewire::actingAs($user)
+            ->test(EditMaintenanceQuotation::class, [
+                'record' => $quote->getRouteKey(),
+            ])
+            ->assertSuccessful();
+
+        $vendorQuotesState = data_get($testEdit->get('data'), 'vendorQuotes');
+        $this->assertIsArray($vendorQuotesState);
+        $this->assertCount(2, $vendorQuotesState);
+    }
+
+    public function test_can_save_default_vendor_quote(): void
+    {
+        $user = User::factory()->create();
+
+        $property = Property::create([
+            'building_name' => 'Rosewood Villa 103',
+            'status' => 'active',
+        ]);
+
+        $request = MaintenanceRequest::create([
+            'property_id' => $property->id,
+            'title' => 'Save Default Vendor Item Test',
+            'status' => MaintenanceStatus::SUBMITTED,
+        ]);
+
+        $item = MaintenanceRequestItem::create([
+            'maintenance_request_id' => $request->id,
+            'issue_description' => 'Leaky pipe in kitchen',
+            'repair_action' => 'Plumbing Repair',
+        ]);
+
+        $vendorParty = \App\Domain\Party\Models\Party::create([
+            'display_name' => 'Apex Plumbing',
+            'party_type' => 'individual',
+        ]);
+
+        $trade = \App\Domain\Party\Models\VendorTrade::create([
+            'name' => 'Plumbing',
+            'slug' => 'plumbing',
+            'is_active' => true,
+        ]);
+
+        \App\Domain\Party\Models\VendorProfile::create([
+            'party_id' => $vendorParty->id,
+            'vendor_trade_id' => $trade->id,
+            'onboarding_status' => \App\Domain\Party\Enums\VendorOnboardingStatus::VERIFIED,
+        ]);
+
+        $quote = MaintenanceClientQuote::create([
+            'quote_number' => 'QT-2026-TEST-SAVE-DEF',
+            'maintenance_request_id' => $request->id,
+            'status' => 'draft',
+        ]);
+
+        $testEdit = Livewire::actingAs($user)
+            ->test(EditMaintenanceQuotation::class, [
+                'record' => $quote->getRouteKey(),
+            ]);
+
+        $repeaterKeys = array_keys(data_get($testEdit->get('data'), 'vendorQuotes'));
+        $key = $repeaterKeys[0];
+
+        $testEdit
+            ->set("data.vendorQuotes.{$key}.maintenance_request_item_ids", [$item->id])
+            ->set("data.vendorQuotes.{$key}.trade_title", 'Plumbing Repair')
+            ->set("data.vendorQuotes.{$key}.vendor_party_id", $vendorParty->id)
+            ->set("data.vendorQuotes.{$key}.vendor_quote_date", now()->toDateString())
+            ->set("data.vendorQuotes.{$key}.quoted_cost", 2500.00)
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertDatabaseHas('maintenance_vendor_quotes', [
+            'maintenance_request_id' => $request->id,
+            'vendor_party_id' => $vendorParty->id,
+            'trade_title' => 'Plumbing Repair',
+            'quoted_cost' => 2500.00,
+        ]);
     }
 }
 

@@ -32,6 +32,11 @@ class RentDemandsResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Rent Demands & Receipts';
 
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
+
     public static function form(Schema $schema): Schema
     {
         return RentDemandForm::configure($schema);

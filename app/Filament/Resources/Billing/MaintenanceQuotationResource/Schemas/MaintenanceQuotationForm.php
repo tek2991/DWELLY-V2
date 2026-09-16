@@ -83,8 +83,22 @@ class MaintenanceQuotationForm
                     Repeater::make('vendorQuotes')
                         ->relationship('vendorQuotes')
                         ->columns(3)
-                        ->defaultItems(0)
+                        ->defaultItems(1)
                         ->disabled(fn ($record) => in_array($record?->status, ['approved', 'archived']))
+                        ->loadStateFromRelationshipsUsing(static function (Repeater $component): void {
+                            $component->clearCachedExistingRecords();
+                            $component->fillFromRelationship();
+
+                            if (empty($component->getState())) {
+                                $record = $component->getRecord();
+                                if (! in_array($record?->status, ['approved', 'archived'])) {
+                                    $uuid = $component->generateUuid();
+                                    $items = [$uuid ?? 0 => []];
+                                    $component->rawState($items);
+                                    $component->getChildSchema($uuid ?? 0)->fill();
+                                }
+                            }
+                        })
                         ->addable(false)
                         ->deletable(fn ($record) => ! in_array($record?->status, ['approved', 'archived']))
                         ->reorderable(fn ($record) => ! in_array($record?->status, ['approved', 'archived']))
@@ -1239,11 +1253,11 @@ class MaintenanceQuotationForm
                         ->disabled(fn ($record) => in_array($record?->status, ['approved', 'archived']))
                         ->columnSpanFull(),
 
-                    // Last Line: Approval Date & Time + Client Approval Proof
+                    // Last Line: Approval Date + Client Approval Proof
                     Grid::make(3)
                         ->schema([
                             DatePicker::make('approved_at')
-                                ->label('Approval Date & Time')
+                                ->label('Approval Date')
                                 ->required()
                                 ->default(now())
                                 ->disabled(fn ($record) => in_array($record?->status, ['approved', 'archived']))
@@ -1862,7 +1876,7 @@ class MaintenanceQuotationForm
                 if (blank($notes) || blank($approvedAt) || blank($channel) || ! $hasProofMedia) {
                     Notification::make()
                         ->title('All Approval Details Required')
-                        ->body('Please fill in all mandatory fields (Approval Method, Confirmation Remarks, Approval Date & Time, and Approval Proof document) before confirming approval.')
+                        ->body('Please fill in all mandatory fields (Approval Method, Confirmation Remarks, Approval Date, and Approval Proof document) before confirming approval.')
                         ->warning()
                         ->persistent()
                         ->send();

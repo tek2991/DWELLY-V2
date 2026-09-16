@@ -27,11 +27,11 @@ class MaintenanceQuotationResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCalculator;
 
-    protected static \UnitEnum|string|null $navigationGroup = 'Billing & Finance';
+    protected static \UnitEnum|string|null $navigationGroup = 'Maintenance & Field Ops';
 
     protected static ?string $navigationLabel = 'Maintenance Quotes';
 
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 2;
 
     protected static ?string $modelLabel = 'Maintenance Quotation';
 

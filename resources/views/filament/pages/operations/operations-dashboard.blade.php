@@ -113,7 +113,7 @@
                     <x-slot name="heading">
                         <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
                             <span style="font-weight: 700; font-size: 0.9375rem;">Onboarding Properties Pending Activation</span>
-                            <a href="{{ url('/operations/properties') }}" style="font-size: 0.75rem; color: #0284c7; text-decoration: none; font-weight: 600;">View All &rarr;</a>
+                            <a href="{{ \App\Filament\Pages\Properties\OnboardingQueue::getUrl() }}" style="font-size: 0.75rem; color: #0284c7; text-decoration: none; font-weight: 600;">View All &rarr;</a>
                         </div>
                     </x-slot>
 
@@ -137,7 +137,7 @@
                                         </td>
                                         <td style="padding: 0.625rem 0.5rem; color: #475569;">{{ $prop->owner?->display_name ?? 'Pending' }}</td>
                                         <td style="padding: 0.625rem 0.5rem; text-align: right;">
-                                            <a href="{{ url('/operations/properties/' . $prop->id . '/edit') }}" style="font-weight: 600; color: #0284c7; text-decoration: none;">Manage</a>
+                                            <a href="{{ \App\Filament\Resources\Properties\PropertyResource::getUrl('onboarding', ['record' => $prop]) }}" style="font-weight: 600; color: #0284c7; text-decoration: none;">Manage</a>
                                         </td>
                                     </tr>
                                 @empty
@@ -181,7 +181,7 @@
                                             ₹{{ number_format($prop->financialTerms->first()?->target_rent ?? 0) }}
                                         </td>
                                         <td style="padding: 0.625rem 0.5rem; text-align: right;">
-                                            <a href="{{ url('/operations/properties/' . $prop->id) }}" style="font-weight: 600; color: #0284c7; text-decoration: none;">View</a>
+                                            <a href="{{ \App\Filament\Resources\Properties\PropertyResource::getUrl('edit', ['record' => $prop]) }}" style="font-weight: 600; color: #0284c7; text-decoration: none;">View</a>
                                         </td>
                                     </tr>
                                 @empty
@@ -234,7 +234,7 @@
                 <x-slot name="heading">
                     <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
                         <span style="font-weight: 700; font-size: 0.9375rem;">Active Maintenance Requests & Work Orders</span>
-                        <a href="{{ url('/operations/maintenance-requests') }}" style="font-size: 0.75rem; color: #0284c7; text-decoration: none; font-weight: 600;">View All Tickets &rarr;</a>
+                        <a href="{{ \App\Filament\Resources\Operations\MaintenanceRequestResource::getUrl('index') }}" style="font-size: 0.75rem; color: #0284c7; text-decoration: none; font-weight: 600;">View All Tickets &rarr;</a>
                     </div>
                 </x-slot>
 
@@ -267,7 +267,7 @@
                                         </span>
                                     </td>
                                     <td style="padding: 0.625rem 0.5rem; text-align: right;">
-                                        <a href="{{ url('/operations/maintenance-requests/' . $ticket->id . '/edit') }}" style="font-weight: 600; color: #0284c7; text-decoration: none;">Manage</a>
+                                        <a href="{{ \App\Filament\Resources\Operations\MaintenanceRequestResource::getUrl('edit', ['record' => $ticket]) }}" style="font-weight: 600; color: #0284c7; text-decoration: none;">Manage</a>
                                     </td>
                                 </tr>
                             @empty
@@ -311,7 +311,7 @@
                 <x-slot name="heading">
                     <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
                         <span style="font-weight: 700; font-size: 0.9375rem;">Audits Requiring Manager Review</span>
-                        <a href="{{ url('/operations/inspection-queue') }}" style="font-size: 0.75rem; color: #0284c7; text-decoration: none; font-weight: 600;">Inspection Queue &rarr;</a>
+                        <a href="{{ \App\Filament\Pages\Operations\InspectionQueue::getUrl() }}" style="font-size: 0.75rem; color: #0284c7; text-decoration: none; font-weight: 600;">Inspection Queue &rarr;</a>
                     </div>
                 </x-slot>
 
@@ -344,7 +344,7 @@
                                         </span>
                                     </td>
                                     <td style="padding: 0.625rem 0.5rem; text-align: right;">
-                                        <a href="{{ url('/operations/audits/' . $audit->id . '/review') }}" style="font-weight: 700; color: #7e22ce; text-decoration: none;">Review & Approve</a>
+                                        <a href="{{ \App\Filament\Resources\Operations\AuditResource::getUrl('review', ['record' => $audit]) }}" style="font-weight: 700; color: #7e22ce; text-decoration: none;">Review & Approve</a>
                                     </td>
                                 </tr>
                             @empty
@@ -395,7 +395,7 @@
                                         </td>
                                         <td style="padding: 0.625rem 0.5rem; color: #475569;">₹{{ number_format($ag->security_deposit ?? 0) }}</td>
                                         <td style="padding: 0.625rem 0.5rem; text-align: right;">
-                                            <a href="{{ url('/operations/tenancy-agreements/' . $ag->id) }}" style="font-weight: 600; color: #0284c7; text-decoration: none;">View</a>
+                                            <a href="{{ \App\Filament\Resources\TenancyAgreements\TenancyAgreementResource::getUrl('edit', ['record' => $ag]) }}" style="font-weight: 600; color: #0284c7; text-decoration: none;">View</a>
                                         </td>
                                     </tr>
                                 @empty
@@ -413,7 +413,7 @@
                     <x-slot name="heading">
                         <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
                             <span style="font-weight: 700; font-size: 0.9375rem;">Active Deboardings / Move-Outs</span>
-                            <a href="{{ url('/operations/tenant-deboardings') }}" style="font-size: 0.75rem; color: #e11d48; text-decoration: none; font-weight: 600;">View All &rarr;</a>
+                            <a href="{{ \App\Filament\Resources\Operations\TenantDeboardingResource::getUrl('index') }}" style="font-size: 0.75rem; color: #e11d48; text-decoration: none; font-weight: 600;">View All &rarr;</a>
                         </div>
                     </x-slot>
 
@@ -442,7 +442,7 @@
                                             </span>
                                         </td>
                                         <td style="padding: 0.625rem 0.5rem; text-align: right;">
-                                            <a href="{{ url('/operations/tenant-deboardings/' . $deb->id) }}" style="font-weight: 600; color: #e11d48; text-decoration: none;">Track</a>
+                                            <a href="{{ \App\Filament\Resources\Operations\TenantDeboardingResource::getUrl('edit', ['record' => $deb]) }}" style="font-weight: 600; color: #e11d48; text-decoration: none;">Track</a>
                                         </td>
                                     </tr>
                                 @empty
@@ -538,7 +538,7 @@
                                     {{ $renewals['total_expiring'] }} Active Leases
                                 </span>
                             </div>
-                            <a href="{{ url('/operations/tenancy-agreements') }}" style="font-size: 0.75rem; color: #7c3aed; text-decoration: none; font-weight: 600;">View All Leases &rarr;</a>
+                            <a href="{{ \App\Filament\Resources\TenancyAgreements\TenancyAgreementResource::getUrl('index') }}" style="font-size: 0.75rem; color: #7c3aed; text-decoration: none; font-weight: 600;">View All Leases &rarr;</a>
                         </div>
                     </x-slot>
 
@@ -610,12 +610,12 @@
                                         </td>
                                         <td style="padding: 0.625rem 0.5rem; text-align: right;">
                                             <div style="display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem;">
-                                                <a href="{{ url('/operations/tenancy-agreements/' . $agr->id . '/edit') }}" 
+                                                <a href="{{ \App\Filament\Resources\TenancyAgreements\TenancyAgreementResource::getUrl('edit', ['record' => $agr]) }}" 
                                                    style="font-size: 0.75rem; font-weight: 600; color: #2563eb; text-decoration: none; padding: 0.25rem 0.5rem; background: #eff6ff; border-radius: 0.375rem;">
                                                     View Lease
                                                 </a>
                                                 @if (! $agr->deboarding)
-                                                    <a href="{{ url('/operations/tenancy-agreements/' . $agr->id . '/deboard') }}" 
+                                                    <a href="{{ \App\Filament\Resources\TenancyAgreements\TenancyAgreementResource::getUrl('deboard', ['record' => $agr]) }}" 
                                                        style="font-size: 0.75rem; font-weight: 600; color: #e11d48; text-decoration: none; padding: 0.25rem 0.5rem; background: #fff1f2; border-radius: 0.375rem;">
                                                         Deboard
                                                     </a>

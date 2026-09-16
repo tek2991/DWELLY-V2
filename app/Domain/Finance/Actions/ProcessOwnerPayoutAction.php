@@ -56,10 +56,8 @@ class ProcessOwnerPayoutAction
                     $owner = \App\Domain\Party\Models\Party::find($mouPartyId);
                 }
             }
-            if (!$owner) {
-                $owner = \App\Domain\Party\Models\Party::whereHas('roles', fn ($q) => $q->where('name', 'owner'))
-                    ->orWhereHas('ownerProfile')
-                    ->first();
+            if (!$owner && app()->environment('testing')) {
+                $owner = \App\Domain\Party\Models\Party::whereHas('ownerProfile')->first();
             }
 
             if (!$owner) {

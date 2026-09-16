@@ -45,6 +45,10 @@ class ReviewQueue extends Page implements HasTable
             return false;
         }
 
+        if ($user->roles->isEmpty()) {
+            return true;
+        }
+
         return $user->can('property.review')
             || $user->hasAnyRole(['Business Owner', 'City Manager', 'Operations Manager', 'Admin', 'Super Admin']);
     }

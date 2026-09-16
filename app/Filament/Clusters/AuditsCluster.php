@@ -12,7 +12,7 @@ class AuditsCluster extends Cluster
 
     protected static \UnitEnum|string|null $navigationGroup = 'Maintenance & Field Ops';
 
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 4;
 
     protected static ?string $slug = 'audits';
 }
