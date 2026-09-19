@@ -68,8 +68,11 @@ class RenewTenancyAgreementAction
                 $code = NumberingService::generate('tenancy');
             } catch (\Throwable $e) {
                 $year = date('Y');
-                $latestCount = TenancyAgreement::where('code', 'like', "TNC-{$year}-%")->count();
-                $code = 'TNC-' . $year . '-' . str_pad($latestCount + 1, 5, '0', STR_PAD_LEFT);
+                $seq = TenancyAgreement::where('code', 'like', "TNC-{$year}-%")->count() + 1;
+                do {
+                    $code = 'TNC-' . $year . '-' . str_pad($seq, 5, '0', STR_PAD_LEFT);
+                    $seq++;
+                } while (TenancyAgreement::where('code', $code)->exists());
             }
 
             // 3. Create the renewal agreement carrying forward essential metadata

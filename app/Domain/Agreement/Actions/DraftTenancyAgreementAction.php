@@ -27,13 +27,17 @@ class DraftTenancyAgreementAction
         return DB::transaction(function () use ($property, $agreementData, $tenantRoles, $initiator) {
             
             // 1. Generate code using NumberingService
-            if (empty($agreementData['code'])) {
+            if (empty($agreementData['code']) || TenancyAgreement::where('code', $agreementData['code'])->exists()) {
                 try {
                     $agreementData['code'] = NumberingService::generate('tenancy');
                 } catch (\Throwable $e) {
                     $year = date('Y');
-                    $latestCount = TenancyAgreement::where('code', 'like', "TNC-{$year}-%")->count();
-                    $agreementData['code'] = 'TNC-' . $year . '-' . str_pad($latestCount + 1, 5, '0', STR_PAD_LEFT);
+                    $seq = TenancyAgreement::where('code', 'like', "TNC-{$year}-%")->count() + 1;
+                    do {
+                        $code = 'TNC-' . $year . '-' . str_pad($seq, 5, '0', STR_PAD_LEFT);
+                        $seq++;
+                    } while (TenancyAgreement::where('code', $code)->exists());
+                    $agreementData['code'] = $code;
                 }
             }
             
