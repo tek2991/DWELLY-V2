@@ -1,0 +1,7 @@
+property_code,is_primary_tenant,name,relationship,phone,email,address,pan,aadhaar,parent_name,voter_id,agreement_start_date,agreement_end_date,rent_amount,security_deposit,lock_in_months,notice_period_days,agreement_pdf_file
+GAU-0091,true,Abhishek Sen,Self,9864998877,abhishek.sen@tcs.com,"Flat 3B, Greenwood Enclave, Zoo Road, Guwahati, Assam 781024",ASDPN1122K,123456789012,Late Dhiren Sen,VTR7810012,2026-01-01,2026-12-31,24000,48000,6,30,
+GAU-0091,false,Priya Sen,Spouse,9864998878,priya.sen@tcs.com,"Flat 3B, Greenwood Enclave, Zoo Road, Guwahati, Assam 781024",BSDPN1122M,123456789013,Alok Sharma,VTR7810013,,,,,,
+GAU-0092,true,Jiten Bordoloi,Self,9854998877,jiten.bordoloi@wipro.com,"House #14, Brahmaputra Heights, G.S. Road, Christian Basti, Guwahati, Assam 781005",JTEPB5544R,234567890123,Mohan Bordoloi,VTR7810025,2026-01-15,2026-12-31,35000,70000,6,30,
+GAU-0092,false,Bikash Baruah,Co-Tenant,9854998879,bikash.b@wipro.com,"House #14, Brahmaputra Heights, G.S. Road, Christian Basti, Guwahati, Assam 781005",BBKPB6655S,234567890124,Hemanta Baruah,VTR7810026,,,,,,
+BLR-0091,true,Rohit Deshmukh,Self,9845998877,rohit.deshmukh@amazon.com,"Flat 402, Tower B, Sobha Daisy, Green Glen Layout, Bellandur, Bangalore, Karnataka 560103",BSDPN2233L,345678901234,Prakash Deshmukh,VTR5600018,2026-01-01,2026-12-31,52000,150000,6,30,
+BLR-0091,false,Neha Deshmukh,Spouse,9845998878,neha.deshmukh@gmail.com,"Flat 402, Tower B, Sobha Daisy, Green Glen Layout, Bellandur, Bangalore, Karnataka 560103",CSDPN2233M,345678901235,Anil Kulkarni,VTR5600019,,,,,,

@@ -15,6 +15,7 @@ class SeedPropertiesFromCsv extends Command
     protected $signature = 'dwelly:seed-properties-csv
                             {--file=database/seeders/data/existing_properties_template.csv : Path to the CSV file}
                             {--specs-file= : Path to the property specifications CSV (rooms, amenities, inventory)}
+                            {--tenants-file= : Path to the tenants CSV (primary & secondary tenants)}
                             {--dry-run : Perform validation checks only without committing records}
                             {--force : Run without confirmation prompt in production}';
 
@@ -32,14 +33,18 @@ class SeedPropertiesFromCsv extends Command
     {
         $filePath = $this->option('file');
         $specsFilePath = $this->option('specs-file');
+        $tenantsFilePath = $this->option('tenants-file');
         $dryRun = (bool) $this->option('dry-run');
 
         $this->info("=================================================");
         $this->info(" Dwelly Existing Properties CSV Importer / Seeder");
         $this->info("=================================================");
-        $this->line("Target File: <comment>{$filePath}</comment>");
+        $this->line("Target File:  <comment>{$filePath}</comment>");
+        if ($tenantsFilePath) {
+            $this->line("Tenants File: <comment>{$tenantsFilePath}</comment>");
+        }
         if ($specsFilePath) {
-            $this->line("Specs File:  <comment>{$specsFilePath}</comment>");
+            $this->line("Specs File:   <comment>{$specsFilePath}</comment>");
         }
         $this->line("Execution Mode: " . ($dryRun ? "<fg=yellow;options=bold>DRY RUN (Validation Only)</>" : "<fg=green;options=bold>LIVE IMPORT</>"));
         $this->newLine();
@@ -52,7 +57,7 @@ class SeedPropertiesFromCsv extends Command
         }
 
         $this->info('Parsing CSV file and validating structure...');
-        $result = $importService->import($filePath, $dryRun, $specsFilePath);
+        $result = $importService->import($filePath, $dryRun, $specsFilePath, $tenantsFilePath);
 
         if (!empty($result['warnings'])) {
             $this->newLine();

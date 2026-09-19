@@ -34,6 +34,7 @@ use App\Domain\Property\Models\PropertyType;
 use App\Domain\Property\Models\PropertyUtility;
 use App\Domain\Property\Models\RoomDefinition;
 use App\Domain\Property\Models\UtilityType;
+use App\Domain\Shared\Services\NumberingService;
 use App\Models\Branch;
 use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -146,7 +147,7 @@ class PropertySeeder extends Seeder
                 );
 
                 // 3. Create MOU linking Property to Owner Party
-                $mouNumber = sprintf('MOU-2026-%05d', $index + 2);
+                $mouNumber = NumberingService::generate('mou');
                 $mou = Mou::firstOrNew(['number' => $mouNumber]);
                 $mou->fill([
                     'branch_id' => $branchId,
@@ -275,7 +276,7 @@ class PropertySeeder extends Seeder
                     $tenant = $tenants[$def['tenant_index'] % count($tenants)];
                     $pricingVersion = $property->pricingVersions()->latest()->first();
 
-                    $agreementCode = sprintf('TNC-2026-%05d', $index + 2);
+                    $agreementCode = NumberingService::generate('tenancy');
                     $agreement = TenancyAgreement::firstOrCreate(
                         ['property_id' => $property->id],
                         [

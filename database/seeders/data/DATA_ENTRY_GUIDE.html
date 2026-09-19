@@ -109,7 +109,7 @@
         /* Grid / Workflow Cards */
         .workflow-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             gap: 6px;
             margin: 6px 0 8px 0;
             page-break-inside: avoid;
@@ -135,13 +135,13 @@
 
         .workflow-step h4 {
             margin: 0 0 2px 0;
-            font-size: 8.5pt;
+            font-size: 8.2pt;
             color: #0f172a;
         }
 
         .workflow-step p {
             margin: 0;
-            font-size: 7.6pt;
+            font-size: 7.4pt;
             color: #475569;
             line-height: 1.25;
         }
@@ -301,28 +301,33 @@
     </div>
 
     <p style="margin-top: 0; margin-bottom: 6px; font-size: 8.3pt; color: #334155;">
-        This guide explains step-by-step how to enter existing properties, owners, tenants, agreements, and photos into the Dwelly system using Microsoft Excel or Google Sheets.
+        This guide explains step-by-step how to enter existing properties, owners, signing authorities, tenants, agreements, and photos into the Dwelly system using Microsoft Excel or Google Sheets.
     </p>
 
     <div class="callout callout-info" style="margin: 4px 0 6px 0;">
-        <strong>🔑 The Golden Key:</strong> Every property is identified by a unique <strong>Property Code</strong> (e.g. <code>GAU-0091</code> or <code>BLR-0015</code>). This single code connects the properties spreadsheet, the specifications checklist, and the photo folder together.
+        <strong>🔑 The Golden Key:</strong> Every property is identified by a unique <strong>Property Code</strong> (e.g. <code>GAU-0091</code> or <code>BLR-0015</code>). This single code connects the properties spreadsheet, the tenants spreadsheet, the specifications checklist, and the photo folder together.
     </div>
 
     <div class="workflow-grid">
         <div class="workflow-step">
-            <span class="workflow-step-num">Part 1</span>
+            <span class="workflow-step-num">File 1</span>
             <h4>Properties CSV</h4>
-            <p><strong>existing_properties_template.csv</strong><br>Owner info, rent, deposit, building details, and tenant info (if occupied).</p>
+            <p><strong>existing_properties_template.csv</strong><br>Owner info, commercials, rent-share flag, and signing authority.</p>
         </div>
         <div class="workflow-step">
-            <span class="workflow-step-num">Part 2</span>
+            <span class="workflow-step-num">File 2</span>
+            <h4>Tenants CSV</h4>
+            <p><strong>existing_tenants_template.csv</strong><br>Primary & secondary co-tenants, Aadhaar, PAN, and tenancy terms.</p>
+        </div>
+        <div class="workflow-step">
+            <span class="workflow-step-num">File 3</span>
             <h4>Checklist CSV</h4>
-            <p><strong>property_specifications_template.csv</strong><br>Granular room counts, amenities (yes/no), and appliance/inventory counts.</p>
+            <p><strong>property_specifications_template.csv</strong><br>Granular room counts, amenities (yes/no), and appliance counts.</p>
         </div>
         <div class="workflow-step">
-            <span class="workflow-step-num">Part 3</span>
+            <span class="workflow-step-num">Part 4</span>
             <h4>Assets Folder</h4>
-            <p><strong>Folder: {property_code}/</strong><br>Drop <code>mou.pdf</code>, <code>tenancy.pdf</code>, and property photos inside <code>photos/</code>.</p>
+            <p><strong>Folder: {property_code}/</strong><br>Drop <code>mou.pdf</code>, <code>poa.pdf</code>, <code>tenancy.pdf</code>, and images in <code>photos/</code>.</p>
         </div>
     </div>
 
@@ -330,10 +335,10 @@
     <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; padding: 5px 10px; margin-bottom: 8px;">
         <strong style="color: #0f172a; font-size: 8.2pt;">⚡ Quick Start 4-Step Checklist:</strong>
         <ol style="margin: 2px 0 0 14px; padding: 0; font-size: 7.8pt; color: #334155; line-height: 1.3;">
-            <li><strong>Open CSVs:</strong> Open <code>existing_properties_template.csv</code> and <code>property_specifications_template.csv</code>. Keep Row 1 header unchanged.</li>
-            <li><strong>Fill in Rows:</strong> Fill in one row per property in File 1, then enter the matching row in File 2 using the exact same <code>property_code</code>.</li>
-            <li><strong>Organize Photos & Scans:</strong> Create a folder named after the <code>property_code</code> with <code>mou.pdf</code>, <code>tenancy.pdf</code>, and images in <code>photos/</code>.</li>
-            <li><strong>Save as CSV UTF-8:</strong> In Excel, select <strong>File ➔ Save As ➔ CSV UTF-8 (Comma delimited) (*.csv)</strong>.</li>
+            <li><strong>Open CSVs:</strong> Open <code>existing_properties_template.csv</code>, <code>existing_tenants_template.csv</code>, and <code>property_specifications_template.csv</code>. Keep headers unchanged.</li>
+            <li><strong>Fill Property & Owner:</strong> Fill in one row per property in File 1. Mark <code>is_rent_sharing</code> (true/false) and <code>is_signatory_different</code> (true/false).</li>
+            <li><strong>Add Occupants in File 2:</strong> For occupied properties, enter primary and co-tenants linked by the matching <code>property_code</code>.</li>
+            <li><strong>Organize Photos & Save:</strong> Place scans in <code>storage/app/seed_assets/properties/{property_code}/</code> and save all files as <strong>CSV UTF-8 (*.csv)</strong>.</li>
         </ol>
     </div>
 
@@ -379,7 +384,7 @@
                 <td><span class="code-pill">locality</span></td>
                 <td><span class="badge badge-yes">Required</span></td>
                 <td><code>Zoo Road</code></td>
-                <td>Neighborhood or area name (e.g. <code>Whitefield</code>, <code>Christian Basti</code>).</td>
+                <td>Neighborhood or area name (e.g. <code>Whitefield</code>, <code>Christian Basti</code>, <code>Bellandur</code>).</td>
             </tr>
             <tr>
                 <td><span class="code-pill">city</span></td>
@@ -473,7 +478,7 @@
     <!-- ==================== PAGE 2 ==================== -->
     <div class="page-break"></div>
 
-    <h2>📑 File 1 Continued: Commercials, Owner & Tenant Data</h2>
+    <h2>📑 File 1 Continued: Commercials & Signing Authority</h2>
 
     <h3>Section C: Owner & Commercial Terms</h3>
     <table>
@@ -535,16 +540,10 @@
                 <td>11-character IFSC code.</td>
             </tr>
             <tr>
-                <td><span class="code-pill">mou_number</span></td>
-                <td><span class="badge badge-no">Optional</span></td>
-                <td><code>MOU-2026-00091</code></td>
-                <td>MOU agreement number (auto-generated if empty).</td>
-            </tr>
-            <tr>
                 <td><span class="code-pill">mou_start_date</span></td>
                 <td><span class="badge badge-no">Optional</span></td>
                 <td><code>2025-10-01</code></td>
-                <td>Date signed with owner (<code>YYYY-MM-DD</code>).</td>
+                <td>Date signed with owner (<code>YYYY-MM-DD</code>). Defaults to current date.</td>
             </tr>
             <tr>
                 <td><span class="code-pill">mou_status</span></td>
@@ -553,10 +552,16 @@
                 <td>Usually <code>converted</code> for active managed properties.</td>
             </tr>
             <tr>
+                <td><span class="code-pill">is_rent_sharing</span></td>
+                <td><span class="badge badge-yes">Required</span></td>
+                <td><code>true</code></td>
+                <td><strong>true</strong> for Rent share (% fee). <strong>false</strong> for Annual subscription (0% fee).</td>
+            </tr>
+            <tr>
                 <td><span class="code-pill">mou_fee_percentage</span></td>
                 <td><span class="badge badge-no">Optional</span></td>
                 <td><code>8.0</code></td>
-                <td>Dwelly management fee % (defaults to 8.0%).</td>
+                <td>Dwelly management fee % (defaults to 8.0% if rent sharing; 0.0 if false).</td>
             </tr>
             <tr>
                 <td><span class="code-pill">rent_amount</span></td>
@@ -574,75 +579,172 @@
                 <td><span class="code-pill">society_fee</span></td>
                 <td><span class="badge badge-no">Optional</span></td>
                 <td><code>2000</code></td>
-                <td>Monthly society/maintenance fee in Rupees.</td>
+                <td>Monthly society/maintenance fee in Rupees (enter 0 if included).</td>
             </tr>
         </tbody>
     </table>
 
-    <h3>Section D: Tenant & Tenancy Agreement (ONLY IF PROPERTY IS OCCUPIED)</h3>
-    <div class="callout callout-warning" style="margin: 3px 0 5px 0;">
-        <strong>⚠️ Critical Rule on Occupied vs Vacant Properties:</strong>
-        <div style="margin-top: 1px;">
-            • If <strong>Occupied</strong>: You <strong>MUST</strong> provide <code>tenant_name</code>, <code>tenant_phone</code>, <code>tenant_email</code>, <code>agreement_start_date</code>, and <code>agreement_end_date</code>.<br>
-            • If <strong>Vacant</strong>: <strong>Leave all tenant columns completely blank</strong>.
-        </div>
+    <div class="callout callout-info" style="margin: 3px 0 5px 0;">
+        ⚙️ <strong>System Generated Numbers:</strong> MOU numbers (e.g. <code>MOU-2026-00001</code>) and Tenancy codes (e.g. <code>TNC-2026-00001</code>) are <strong>automatically generated</strong> by Dwelly. Do not enter manual agreement numbers.
     </div>
+
+    <h3>Section D: Signing Authority & Representative Details</h3>
+    <p style="margin-top: 1px; margin-bottom: 4px; font-size: 7.8pt; color: #475569;">
+        Indicate whether the owner signs directly or authorizes a Power of Attorney (POA) / family representative.
+    </p>
 
     <table>
         <thead>
             <tr>
                 <th style="width: 22%;">Column Header</th>
-                <th style="width: 14%;">Required if Occupied?</th>
+                <th style="width: 14%;">Required?</th>
                 <th style="width: 18%;">Example</th>
                 <th>Notes</th>
             </tr>
         </thead>
         <tbody>
             <tr>
-                <td><span class="code-pill">tenant_name</span></td>
+                <td><span class="code-pill">is_signatory_different</span></td>
                 <td><span class="badge badge-yes">Required</span></td>
-                <td><code>Abhishek Sen</code></td>
-                <td>Primary tenant's full legal name.</td>
+                <td><code>false</code></td>
+                <td><strong>false</strong> if owner signs directly (Self). <strong>true</strong> if signed by authorized POA.</td>
             </tr>
             <tr>
-                <td><span class="code-pill">tenant_phone</span></td>
+                <td><span class="code-pill">signatory_name</span></td>
+                <td><span class="badge badge-rec">If Different</span></td>
+                <td><code>Anupam Saikia</code></td>
+                <td>Full legal name of the authorized representative.</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">signatory_relation</span></td>
+                <td><span class="badge badge-rec">If Different</span></td>
+                <td><code>POA Holder / Son</code></td>
+                <td>Relationship to owner (e.g. <code>POA Holder / Son</code>, <code>Spouse</code>, <code>Representative</code>).</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">signatory_phone</span></td>
+                <td><span class="badge badge-rec">If Different</span></td>
+                <td><code>9435099999</code></td>
+                <td>10-digit mobile number of representative.</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">signatory_email</span></td>
+                <td><span class="badge badge-rec">If Different</span></td>
+                <td><code>anupam.saikia@yahoo.com</code></td>
+                <td>Representative's valid email address.</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">signatory_pan</span></td>
+                <td><span class="badge badge-no">Optional</span></td>
+                <td><code>DAEPS3456P</code></td>
+                <td>10-character PAN number of representative.</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">signatory_aadhaar</span></td>
+                <td><span class="badge badge-no">Optional</span></td>
+                <td><code>887654321098</code></td>
+                <td>12-digit Aadhaar number of representative.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="callout callout-warning" style="margin: 3px 0 5px 0;">
+        📄 <strong>POA Document Scan:</strong> If <code>is_signatory_different = true</code>, place the Power of Attorney document inside the property folder as <code>poa.pdf</code> (or <code>poa_deed.pdf</code>).
+    </div>
+
+    <!-- ==================== PAGE 3 ==================== -->
+    <div class="page-break"></div>
+
+    <h2>👥 File 2: Dedicated Tenants Spreadsheet (<code>existing_tenants_template.csv</code>)</h2>
+    <p style="margin-top: 1px; margin-bottom: 4px; font-size: 8.2pt; color: #475569;">
+        Supports <strong>multiple occupants per property</strong> (primary leaseholder + spouse, co-tenant, or family members). All occupants are linked using <code>property_code</code>.
+    </p>
+
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 22%;">Column Header</th>
+                <th style="width: 14%;">Required?</th>
+                <th style="width: 18%;">Example</th>
+                <th>Notes & Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><span class="code-pill">property_code</span></td>
                 <td><span class="badge badge-yes">Required</span></td>
+                <td><code>GAU-0091</code></td>
+                <td><strong>Must match the exact property_code</strong> from File 1.</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">is_primary_tenant</span></td>
+                <td><span class="badge badge-yes">Required</span></td>
+                <td><code>true</code></td>
+                <td><strong>true</strong> for main leaseholder/billing contact; <strong>false</strong> for co-occupant.</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">name</span></td>
+                <td><span class="badge badge-yes">Required</span></td>
+                <td><code>Abhishek Sen</code></td>
+                <td>Tenant's full legal name.</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">relationship</span></td>
+                <td><span class="badge badge-no">Optional</span></td>
+                <td><code>Self</code> or <code>Spouse</code></td>
+                <td>Relationship to primary tenant (e.g. <code>Self</code>, <code>Spouse</code>, <code>Son</code>, <code>Roommate</code>).</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">phone</span></td>
+                <td><span class="badge badge-yes">If Primary</span></td>
                 <td><code>9876500001</code></td>
                 <td>10-digit mobile number (no +91, no spaces).</td>
             </tr>
             <tr>
-                <td><span class="code-pill">tenant_email</span></td>
-                <td><span class="badge badge-yes">Required</span></td>
+                <td><span class="code-pill">email</span></td>
+                <td><span class="badge badge-yes">If Primary</span></td>
                 <td><code>abhishek.sen@gmail.com</code></td>
                 <td>Valid tenant email address.</td>
             </tr>
             <tr>
-                <td><span class="code-pill">tenant_pan</span></td>
+                <td><span class="code-pill">address</span></td>
                 <td><span class="badge badge-no">Optional</span></td>
-                <td><code>XYZPE5678K</code></td>
-                <td>Tenant PAN card number.</td>
+                <td><code>Flat 3B, Zoo Road, GHY</code></td>
+                <td>Permanent or previous residential address.</td>
             </tr>
             <tr>
-                <td><span class="code-pill">tenant_aadhaar</span></td>
+                <td><span class="code-pill">pan</span></td>
+                <td><span class="badge badge-no">Optional</span></td>
+                <td><code>XYZPE5678K</code></td>
+                <td>Tenant PAN card number (accepts header <code>pad</code> or <code>pan_number</code>).</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">aadhaar</span></td>
                 <td><span class="badge badge-no">Optional</span></td>
                 <td><code>123456789012</code></td>
                 <td>12-digit Aadhaar number.</td>
             </tr>
             <tr>
-                <td><span class="code-pill">agreement_code</span></td>
+                <td><span class="code-pill">parent_name</span></td>
                 <td><span class="badge badge-no">Optional</span></td>
-                <td><code>TNC-2026-00091</code></td>
-                <td>Agreement code (auto-generated if empty).</td>
+                <td><code>Arun Sen</code></td>
+                <td>Father's / Guardian's name.</td>
+            </tr>
+            <tr>
+                <td><span class="code-pill">voter_id</span></td>
+                <td><span class="badge badge-no">Optional</span></td>
+                <td><code>ABC1234567</code></td>
+                <td>Voter ID card number.</td>
             </tr>
             <tr>
                 <td><span class="code-pill">agreement_start_date</span></td>
-                <td><span class="badge badge-yes">Required</span></td>
+                <td><span class="badge badge-yes">If Primary</span></td>
                 <td><code>2026-01-01</code></td>
                 <td>Tenancy start date (<code>YYYY-MM-DD</code>).</td>
             </tr>
             <tr>
                 <td><span class="code-pill">agreement_end_date</span></td>
-                <td><span class="badge badge-yes">Required</span></td>
+                <td><span class="badge badge-yes">If Primary</span></td>
                 <td><code>2026-12-31</code></td>
                 <td>Tenancy expiry date (<code>YYYY-MM-DD</code>).</td>
             </tr>
@@ -661,10 +763,7 @@
         </tbody>
     </table>
 
-    <!-- ==================== PAGE 3 ==================== -->
-    <div class="page-break"></div>
-
-    <h2>🛏️ File 2: Specifications Checklist Spreadsheet (<code>property_specifications_template.csv</code>)</h2>
+    <h2>🛏️ File 3: Specifications Checklist Spreadsheet (<code>property_specifications_template.csv</code>)</h2>
     <p style="margin-top: 1px; margin-bottom: 5px; font-size: 8.2pt; color: #475569;">
         This separate spreadsheet tracks rooms, amenities, and inventory counts. <strong>Always link using <code>property_code</code> in the first column</strong>.
     </p>
@@ -675,112 +774,48 @@
             <h3 style="margin-top: 0;">1. Rooms (Count or Yes/No)</h3>
             <table>
                 <thead>
-                    <tr>
-                        <th>Column Name</th>
-                        <th>Room Type</th>
-                        <th style="width: 22%;">Value</th>
-                    </tr>
+                    <tr><th>Column</th><th>Room Description</th><th>Value</th></tr>
                 </thead>
                 <tbody>
                     <tr><td><code>room_living_room</code></td><td>Living Hall</td><td><code>1</code></td></tr>
-                    <tr><td><code>room_kitchen</code></td><td>Modular Kitchen</td><td><code>1</code></td></tr>
-                    <tr><td><code>room_master_bedroom</code></td><td>Master Bed</td><td><code>1</code></td></tr>
-                    <tr><td><code>room_second_bedroom</code></td><td>2nd Bed</td><td><code>1</code> or <code>0</code></td></tr>
-                    <tr><td><code>room_third_bedroom</code></td><td>3rd Bed</td><td><code>1</code> or <code>0</code></td></tr>
-                    <tr><td><code>room_guest_bedroom</code></td><td>Guest Bed</td><td><code>1</code> or <code>0</code></td></tr>
-                    <tr><td><code>room_attached_bathroom</code></td><td>Attached Bath</td><td><code>1</code>, <code>2</code>, <code>3</code></td></tr>
-                    <tr><td><code>room_common_bathroom</code></td><td>Common Bath</td><td><code>1</code> or <code>2</code></td></tr>
-                    <tr><td><code>room_balcony</code></td><td>Balconies</td><td><code>1</code>, <code>2</code>, <code>3</code></td></tr>
-                    <tr><td><code>room_pooja_room</code></td><td>Pooja Room</td><td><code>yes</code>/<code>no</code></td></tr>
-                    <tr><td><code>room_servant_room</code></td><td>Servant Room</td><td><code>yes</code>/<code>no</code></td></tr>
-                    <tr><td><code>room_study_room</code></td><td>Office/Study</td><td><code>yes</code>/<code>no</code></td></tr>
+                    <tr><td><code>room_kitchen</code></td><td>Kitchen</td><td><code>1</code></td></tr>
+                    <tr><td><code>room_master_bedroom</code></td><td>Master Bedroom</td><td><code>1</code></td></tr>
+                    <tr><td><code>room_second_bedroom</code></td><td>2nd Bedroom</td><td><code>1</code> / <code>0</code></td></tr>
+                    <tr><td><code>room_third_bedroom</code></td><td>3rd Bedroom</td><td><code>1</code> / <code>0</code></td></tr>
+                    <tr><td><code>room_attached_bathroom</code></td><td>Attached Bathrooms</td><td><code>1</code>, <code>2</code>...</td></tr>
+                    <tr><td><code>room_common_bathroom</code></td><td>Common Bathroom</td><td><code>1</code> / <code>2</code></td></tr>
+                    <tr><td><code>room_balcony</code></td><td>Balconies</td><td><code>1</code>, <code>2</code>...</td></tr>
+                    <tr><td><code>room_pooja_room</code></td><td>Pooja Room</td><td><code>yes</code> / <code>no</code></td></tr>
+                    <tr><td><code>room_servant_room</code></td><td>Servant Room</td><td><code>yes</code> / <code>no</code></td></tr>
+                    <tr><td><code>room_study_room</code></td><td>Study Room</td><td><code>yes</code> / <code>no</code></td></tr>
                 </tbody>
             </table>
         </div>
 
         <!-- Amenities Table -->
         <div>
-            <h3 style="margin-top: 0;">2. Amenities (Type yes or no)</h3>
+            <h3 style="margin-top: 0;">2. Society Amenities (Yes/No)</h3>
             <table>
                 <thead>
-                    <tr>
-                        <th>Column Name</th>
-                        <th>Amenity</th>
-                        <th style="width: 25%;">Value</th>
-                    </tr>
+                    <tr><th>Column</th><th>Amenity</th><th>Value</th></tr>
                 </thead>
                 <tbody>
-                    <tr><td><code>amenity_lift</code></td><td>Elevator / Lift</td><td><code>yes</code> / <code>no</code></td></tr>
-                    <tr><td><code>amenity_power_backup</code></td><td>Power Backup</td><td><code>yes</code> / <code>no</code></td></tr>
-                    <tr><td><code>amenity_security</code></td><td>24/7 Security</td><td><code>yes</code> / <code>no</code></td></tr>
+                    <tr><td><code>amenity_lift</code></td><td>Lift / Elevator</td><td><code>yes</code> / <code>no</code></td></tr>
+                    <tr><td><code>amenity_power_backup</code></td><td>DG Power Backup</td><td><code>yes</code> / <code>no</code></td></tr>
+                    <tr><td><code>amenity_security</code></td><td>24/7 Security/CCTV</td><td><code>yes</code> / <code>no</code></td></tr>
                     <tr><td><code>amenity_parking</code></td><td>Car Parking</td><td><code>yes</code> / <code>no</code></td></tr>
-                    <tr><td><code>amenity_gym</code></td><td>Fitness Gym</td><td><code>yes</code> / <code>no</code></td></tr>
+                    <tr><td><code>amenity_gym</code></td><td>Society Gym</td><td><code>yes</code> / <code>no</code></td></tr>
                     <tr><td><code>amenity_swimming_pool</code></td><td>Swimming Pool</td><td><code>yes</code> / <code>no</code></td></tr>
                     <tr><td><code>amenity_clubhouse</code></td><td>Clubhouse</td><td><code>yes</code> / <code>no</code></td></tr>
-                </tbody>
-            </table>
-
-            <h3 style="margin-top: 4px;">3. Key / Access</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Column Name</th>
-                        <th>Description</th>
-                        <th style="width: 25%;">Value</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr><td><code>inv_keys</code></td><td>Keys Count</td><td><code>3</code> or <code>4</code></td></tr>
                 </tbody>
             </table>
         </div>
     </div>
 
-    <h3>4. Inventory Checklist (Enter Quantity Count)</h3>
-    <table>
-        <thead>
-            <tr>
-                <th style="width: 25%;">Column Name</th>
-                <th style="width: 25%;">Item Description</th>
-                <th style="width: 25%;">Column Name</th>
-                <th style="width: 25%;">Item Description</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td><code>inv_fan</code></td><td>Ceiling Fans (e.g. <code>4</code>)</td>
-                <td><code>inv_geyser</code></td><td>Geysers / Water Heaters (e.g. <code>2</code>)</td>
-            </tr>
-            <tr>
-                <td><code>inv_light</code></td><td>Tube / LED Lights (e.g. <code>8</code>)</td>
-                <td><code>inv_fridge</code></td><td>Refrigerator (e.g. <code>1</code>)</td>
-            </tr>
-            <tr>
-                <td><code>inv_ac</code></td><td>Air Conditioners (e.g. <code>2</code>)</td>
-                <td><code>inv_tv</code></td><td>Television (e.g. <code>1</code>)</td>
-            </tr>
-            <tr>
-                <td><code>inv_bed</code></td><td>Beds & Mattresses (e.g. <code>2</code>)</td>
-                <td><code>inv_washing_machine</code></td><td>Washing Machine (e.g. <code>1</code>)</td>
-            </tr>
-            <tr>
-                <td><code>inv_wardrobe</code></td><td>Wardrobes / Closets (e.g. <code>3</code>)</td>
-                <td><code>inv_microwave</code></td><td>Microwave Oven (e.g. <code>1</code>)</td>
-            </tr>
-            <tr>
-                <td><code>inv_sofa</code></td><td>Sofa Sets (e.g. <code>1</code>)</td>
-                <td><code>inv_water_purifier</code></td><td>RO Water Purifier (e.g. <code>1</code>)</td>
-            </tr>
-            <tr>
-                <td><code>inv_dining_set</code></td><td>Dining Table & Chairs (e.g. <code>1</code>)</td>
-                <td><code>inv_chimney</code></td><td>Kitchen Chimney (e.g. <code>1</code>)</td>
-            </tr>
-        </tbody>
-    </table>
-    <p style="font-size: 7.6pt; color: #64748b; margin-top: 1px; margin-bottom: 6px;">💡 <em>If an item is not present in the property, type <code>0</code> or leave it blank.</em></p>
+    <!-- ==================== PAGE 4 ==================== -->
+    <div class="page-break"></div>
 
-    <!-- File 3: Folders & Photos -->
-    <h2>📁 Part 3: Documents & Photos Folder Organization</h2>
+    <h2>📁 Part 4: Documents & Photos Folder Organization</h2>
     <p style="margin-top: 1px; margin-bottom: 3px; font-size: 8.2pt; color: #475569;">
         Create a folder named after the <code>property_code</code> inside <code>storage/app/seed_assets/properties/</code>.
     </p>
@@ -790,6 +825,7 @@ storage/app/seed_assets/properties/
 │
 ├── <span class="highlight">GAU-0091/</span>                     <span class="comment">&lt;--- Folder named exactly as property_code</span>
 │   ├── mou.pdf                  <span class="comment">&lt;--- Signed Owner MOU scan (.pdf)</span>
+│   ├── poa.pdf                  <span class="comment">&lt;--- Power of Attorney scan (.pdf, if signatory is different)</span>
 │   ├── tenancy.pdf              <span class="comment">&lt;--- Signed Tenancy Agreement scan (.pdf, if occupied)</span>
 │   └── photos/                  <span class="comment">&lt;--- Subfolder for all photos</span>
 │       ├── <span class="highlight">01_elevation.jpg</span>     <span class="comment">&lt;--- "01_" automatically becomes the main cover photo!</span>
@@ -800,13 +836,11 @@ storage/app/seed_assets/properties/
 │
 └── <span class="highlight">BLR-0091/</span>
     ├── mou.pdf
+    ├── tenancy.pdf
     └── photos/
         ├── 01_front.jpg
         └── 02_hall.jpg
     </pre>
-
-    <!-- ==================== PAGE 4 ==================== -->
-    <div class="page-break"></div>
 
     <h2>🚫 Top 8 Common Mistakes to Avoid</h2>
     <table>
@@ -835,8 +869,8 @@ storage/app/seed_assets/properties/
             </tr>
             <tr>
                 <td>4</td>
-                <td><strong>Do not put tenant info for Vacant properties</strong><br><span style="color: #ef4444;">❌ Typing "N/A" or entering past tenant details</span></td>
-                <td>Leave all tenant columns completely blank if status is Vacant.<br><span style="color: #16a34a; font-weight: bold;">✅ Empty cells</span></td>
+                <td><strong>Do not add rows in Tenants CSV for Vacant properties</strong><br><span style="color: #ef4444;">❌ Adding "N/A" or past tenants</span></td>
+                <td>Leave vacant properties out of the tenants CSV completely.<br><span style="color: #16a34a; font-weight: bold;">✅ No tenant rows for vacant properties</span></td>
             </tr>
             <tr>
                 <td>5</td>
@@ -850,8 +884,8 @@ storage/app/seed_assets/properties/
             </tr>
             <tr>
                 <td>7</td>
-                <td><strong>Do not mismatch Property Code and folder names</strong><br><span style="color: #ef4444;">❌ Naming folder "Greenwood" and CSV "GAU-0091"</span></td>
-                <td>The folder name must match the exact <code>property_code</code>.<br><span style="color: #16a34a; font-weight: bold;">✅ Folder named "GAU-0091"</span></td>
+                <td><strong>Do not hardcode agreement or MOU numbers</strong><br><span style="color: #ef4444;">❌ Trying to enter custom MOU codes</span></td>
+                <td>Dwelly automatically generates sequential <code>MOU-*</code> and <code>TNC-*</code> numbers.<br><span style="color: #16a34a; font-weight: bold;">✅ System generated codes</span></td>
             </tr>
             <tr>
                 <td>8</td>
@@ -865,8 +899,16 @@ storage/app/seed_assets/properties/
     <h2>❓ Frequently Asked Questions (FAQ)</h2>
     <div class="faq-grid">
         <div class="faq-item">
-            <div class="faq-q">Q: What if I don't have the signed MOU or tenancy agreement PDF right now?</div>
-            <div class="faq-a">A: That is completely fine! Submit the spreadsheet. The system will automatically generate a clean placeholder document. When you receive the real scan later, you can upload it directly through the Dwelly admin web portal.</div>
+            <div class="faq-q">Q: What is the difference between is_rent_sharing = true and false?</div>
+            <div class="faq-a">A: <strong>true</strong> activates the <em>Rent share</em> model where Dwelly deducts a monthly management fee % (e.g. 8%). <strong>false</strong> activates the <em>Annual subscription</em> model with 0% fee on rent.</div>
+        </div>
+        <div class="faq-item">
+            <div class="faq-q">Q: How do secondary / co-tenants work?</div>
+            <div class="faq-a">A: In <code>existing_tenants_template.csv</code>, add another row with the same <code>property_code</code>, setting <code>is_primary_tenant = false</code> and specifying their relationship (e.g. Spouse, Son).</div>
+        </div>
+        <div class="faq-item">
+            <div class="faq-q">Q: What if I don't have the signed MOU, POA, or tenancy agreement PDF right now?</div>
+            <div class="faq-a">A: That is completely fine! The system automatically generates a clean digital placeholder so previews work immediately. Real scans can be uploaded later through the Dwelly admin dashboard.</div>
         </div>
         <div class="faq-item">
             <div class="faq-q">Q: How do I choose which photo appears first on the website?</div>
@@ -877,21 +919,13 @@ storage/app/seed_assets/properties/
             <div class="faq-a">A: Yes! Both <code>yes</code>/<code>no</code> and <code>1</code>/<code>0</code> work interchangeably.</div>
         </div>
         <div class="faq-item">
-            <div class="faq-q">Q: What should I enter for society_fee if maintenance is already included in rent?</div>
-            <div class="faq-a">A: Enter <code>0</code>.</div>
-        </div>
-        <div class="faq-item">
-            <div class="faq-q">Q: What if an owner has no PAN or Aadhaar card yet?</div>
-            <div class="faq-a">A: Leave those cells blank. Only Owner Name, Phone, and Email are mandatory.</div>
-        </div>
-        <div class="faq-item">
             <div class="faq-q">Q: Who do I contact if the system reports an error during import?</div>
-            <div class="faq-a">A: Ask the tech team to run the dry-run check. The system will pinpoint the exact row number and column name needing correction.</div>
+            <div class="faq-a">A: Ask the tech team to run the dry-run check (<code>--dry-run</code>). The system will pinpoint the exact row number and column name needing correction.</div>
         </div>
     </div>
 
     <div class="footer-note">
-        Dwelly Realtech Private Limited • Property Onboarding SOP & Data Entry Documentation • Internal Use Only
+        Dwelly Realtech Private Limited • Property Onboarding SOP • Confidential & Proprietary
     </div>
 
 </body>

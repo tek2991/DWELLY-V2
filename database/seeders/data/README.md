@@ -1,23 +1,38 @@
 # Dwelly Existing Properties CSV Onboarding Guide
 
-This directory contains the master CSV templates and data definitions for bulk-onboarding existing properties, along with their Owners, MOUs, Tenancy Agreements, Tenants, and Photos into Dwelly-V2.
+This directory contains the master CSV templates and data definitions for bulk-onboarding existing properties, along with their Owners, Authorized Signatories, MOUs, Multi-Tenant Occupants, Tenancy Agreements, Specifications, and Photos into Dwelly-V2.
 
 > 👤 **Looking for the Data Entry Guide?**
 > If you are a Data Entry Operator or Operations team member entering property details in Excel / Google Sheets, please refer to the dedicated **[DATA_ENTRY_GUIDE.md](file:///home/tek2991/Desktop/Works/Dwelly-V2/database/seeders/data/DATA_ENTRY_GUIDE.md)** which contains zero developer jargon, field-by-field guidance, allowed values, and common mistakes to avoid.
 
 ---
 
-## 📁 Fast Folder-Based Asset Structure (Recommended)
+## 🧭 File Structure
 
-Instead of manually typing long file paths for every property in the CSV, simply organize your files into folders named after the **`property_code`** (e.g. `GAU-0091`, `BLR-0091`):
+The onboarding system uses 3 synchronized CSV files and 1 asset folder per property:
+
+```text
+database/seeders/data/
+├── existing_properties_template.csv      # File 1: Properties, Owners, Commercials, Signing Authority
+├── existing_tenants_template.csv         # File 2: Primary & Secondary Tenants, Agreement Dates
+├── property_specifications_template.csv  # File 3: Rooms, Amenities, Inventory Checklist
+└── properties/                           # Photos, Signed MOUs, POA scans, and Tenancy Agreements
+```
+
+---
+
+## 📁 Folder-Based Asset Structure
+
+Organize all physical or digital documents and photos into folders named after the **`property_code`** (e.g. `GAU-0091`, `BLR-0091`):
 
 ```text
 storage/app/seed_assets/properties/
 └── GAU-0091/
-    ├── mou.pdf             # Signed MOU document (or mou_signed.pdf, etc.)
-    ├── tenancy.pdf         # Signed Tenancy Agreement (or agreement.pdf, etc.)
+    ├── mou.pdf             # Signed MOU document
+    ├── poa.pdf             # Power of Attorney deed (if signatory is different from owner)
+    ├── tenancy.pdf         # Signed Tenancy Agreement (if occupied)
     └── photos/             # All property photos
-        ├── 01_elevation.jpg # First photo will automatically be set as featured!
+        ├── 01_elevation.jpg # First photo will automatically be set as featured cover photo!
         ├── 02_living.jpg
         └── 03_bedroom.jpg
 ```
@@ -26,10 +41,11 @@ storage/app/seed_assets/properties/
 > `database/seeders/data/properties/{property_code}/`
 
 ### How It Works:
-1. **MOU File**: Looks for `mou.pdf` (or any `*mou*.pdf`) inside `{property_code}/`. Attaches to Spatie Media collection `signed_pdf`.
-2. **Tenancy File**: Looks for `tenancy.pdf` or `agreement.pdf` (or `*tenan*.pdf` / `*agree*.pdf`) inside `{property_code}/`. Attaches to Spatie Media collection `signed_agreement`.
-3. **Photos**: Looks inside `{property_code}/photos/` (or directly inside `{property_code}/`). Ingests all images (`.jpg`, `.jpeg`, `.png`, `.webp`, `.svg`), sorts them, copies to public storage, and assigns `is_featured = true` to the first photo.
-4. **Graceful Fallbacks**: If any document or photo is omitted or not yet placed in the folder, the importer automatically generates an authentic digital PDF (via DomPDF) or an elevation image so that Filament previews and document viewers work without errors.
+1. **MOU File**: Looks for `mou.pdf` inside `{property_code}/`. Attaches to Spatie Media collection `signed_pdf`.
+2. **POA File**: Looks for `poa.pdf` or `poa_deed.pdf` inside `{property_code}/`. Attaches to Spatie Media collection `signatory_poa`.
+3. **Tenancy File**: Looks for `tenancy.pdf` or `agreement.pdf` inside `{property_code}/`. Attaches to Spatie Media collection `signed_agreement`.
+4. **Photos**: Looks inside `{property_code}/photos/` (or directly inside `{property_code}/`). Ingests all images, sorts them, copies to public storage, and assigns `is_featured = true` to the first photo.
+5. **Graceful Fallbacks**: If any document or photo is omitted or not yet placed in the folder, the importer automatically generates an authentic digital PDF (via DomPDF) or an elevation image so that Filament previews and document viewers work without errors.
 
 ---
 
@@ -40,26 +56,27 @@ storage/app/seed_assets/properties/
 php artisan dwelly:seed-properties-csv --dry-run
 ```
 
-### 2. Execute Live Import from default template:
+### 2. Execute Live Import (Auto-discovers tenant and spec CSVs):
 ```bash
 php artisan dwelly:seed-properties-csv
 ```
 
-### 3. Execute Import from a custom CSV file:
+### 3. Execute Import with custom files:
 ```bash
-php artisan dwelly:seed-properties-csv --file=/path/to/your_properties.csv
+php artisan dwelly:seed-properties-csv \
+  --file=/path/to/properties.csv \
+  --tenants-file=/path/to/tenants.csv \
+  --specs-file=/path/to/specs.csv
 ```
 
-### 4. Or use standard Laravel Seeder:
+### 4. Or run via standard Laravel Seeder:
 ```bash
 php artisan db:seed --class=CsvPropertySeeder
 ```
 
 ---
 
-## 📋 CSV Column Dictionary
-
-The CSV is now simplified with no file path columns required:
+## 📋 File 1: Properties CSV Column Dictionary (`existing_properties_template.csv`)
 
 | Column Name | Required | Default / Format | Description & Valid Values |
 |---|---|---|---|
@@ -77,7 +94,7 @@ The CSV is now simplified with no file path columns required:
 | `floor` | Optional | Integer (e.g. `3`) | Floor on which unit is located |
 | `total_floors` | Optional | Integer (e.g. `7`) | Total floors in the building |
 | `floor_space_sqft` | Optional | Integer (e.g. `1150`) | Area in Square Feet |
-| `property_status` | **Required** | String | `Occupied`, `Vacant`, `Under Maintenance`, `Under Notice` |
+| `property_status` | **Required** | String | `Occupied`, `Vacant`, `Under Maintenance` |
 | `is_listed` | Optional | `true` | Public listing visibility (`true` / `false`) |
 | `available_from` | Optional | `YYYY-MM-DD` | Date unit is available |
 | `owner_name` | **Required** | Text | Property owner's full legal name |
@@ -88,100 +105,66 @@ The CSV is now simplified with no file path columns required:
 | `owner_bank_name` | Optional | Text | e.g. `HDFC Bank`, `State Bank of India` |
 | `owner_bank_account` | Optional | Text | Bank Account Number |
 | `owner_bank_ifsc` | Optional | Text | 11-character IFSC Code |
-| `mou_number` | Optional | Auto-generated (`MOU-YYYY-XXXXX`) | E.g. `MOU-2026-00091` |
+| `is_signatory_different` | **Required** | Boolean (`true`/`false`) | `false` if owner signs; `true` if authorized signatory/POA signs |
+| `signatory_name` | If different | Text | Representative's full name |
+| `signatory_relation` | If different | Text | Relationship to owner (e.g. `POA Holder / Son`, `Spouse`) |
+| `signatory_phone` | If different | 10-digit mobile | Representative's contact number |
+| `signatory_email` | If different | Valid email | Representative's email |
+| `signatory_pan` | Optional | 10-character PAN | Representative's PAN |
+| `signatory_aadhaar` | Optional | 12-digit numeric | Representative's Aadhaar |
 | `mou_start_date` | Optional | `YYYY-MM-DD` | Onboarding / MOU effective date |
 | `mou_status` | Optional | `converted` | `converted`, `signed`, `verified`, `draft` |
-| `mou_fee_percentage` | Optional | `8.0` | Dwelly management fee % |
+| `is_rent_sharing` | **Required** | Boolean (`true`/`false`) | `true` for "Rent share" (% fee), `false` for "Annual subscription" (0% fee) |
+| `mou_fee_percentage` | Optional | Decimal (e.g. `8.0`) | Dwelly management fee % (0.0 if not rent sharing) |
 | `rent_amount` | **Required** | Decimal (e.g. `24000`) | Monthly Rent in INR |
 | `security_deposit` | **Required** | Decimal (e.g. `48000`) | Security Deposit in INR |
 | `society_fee` | Optional | Decimal (e.g. `2000`) | Monthly maintenance fee |
-| `tenant_name` | If `Occupied` | Text | Primary tenant's full legal name |
-| `tenant_phone` | If `Occupied` | 10-digit mobile | Tenant's phone number |
-| `tenant_email` | If `Occupied` | Valid email | Tenant's email address |
-| `tenant_pan` | Optional | 10-character PAN | Tenant PAN |
-| `tenant_aadhaar` | Optional | 12-digit numeric | Tenant Aadhaar |
-| `agreement_code` | Optional | Auto-generated (`TNC-YYYY-XXXXX`) | Tenancy agreement code |
-| `agreement_start_date` | If `Occupied` | `YYYY-MM-DD` | Tenancy start date |
-| `agreement_end_date` | If `Occupied` | `YYYY-MM-DD` | Tenancy expiry date |
+
+> ⚙️ **Note**: `mou_number` and `agreement_code` are **system-generated** using `NumberingService` and do not appear in the CSV.
+
+---
+
+## 👥 File 2: Dedicated Tenants CSV (`existing_tenants_template.csv`)
+
+Dwelly supports multiple tenants per property (primary leaseholder + co-tenants/family members):
+
+| Column Name | Required | Default / Format | Description & Valid Values |
+|---|---|---|---|
+| `property_code` | **Required** | Text | Must match `property_code` in File 1 (e.g. `GAU-0091`) |
+| `is_primary_tenant` | **Required** | Boolean (`true`/`false`) | `true` for primary leaseholder; `false` for co-tenant / family occupant |
+| `name` | **Required** | Text | Tenant's full legal name |
+| `relationship` | Optional | Text | `Self`, `Spouse`, `Son`, `Daughter`, `Roommate`, etc. |
+| `phone` | If Primary | 10-digit mobile | Tenant's phone number |
+| `email` | If Primary | Valid email | Tenant's email address |
+| `address` | Optional | Text | Permanent / previous address |
+| `pan` | Optional | 10-character PAN | Tenant PAN (accepts `pad` or `pan_number`) |
+| `aadhaar` | Optional | 12-digit numeric | Tenant Aadhaar card number |
+| `parent_name` | Optional | Text | Father's / Guardian's full name |
+| `voter_id` | Optional | Text | Voter ID card number |
+| `agreement_start_date` | If Primary | `YYYY-MM-DD` | Tenancy start date |
+| `agreement_end_date` | If Primary | `YYYY-MM-DD` | Tenancy expiry date |
 | `lock_in_months` | Optional | `6` | Lock-in period in months |
 | `notice_period_days` | Optional | `30` | Notice period in days |
 
 ---
 
-## 🛏️ Separate Specifications Checklist CSV (Rooms, Amenities, Inventory)
+## 🛏️ File 3: Specifications Checklist CSV (`property_specifications_template.csv`)
 
-To keep property onboarding fast and clean, granular details like rooms, amenities, and inventory are kept in a separate checklist CSV:
-`database/seeders/data/property_specifications_template.csv`
+Granular details like rooms, amenities, and inventory are maintained in this checklist CSV. The system links them automatically via `property_code`.
 
-The system **links them up automatically via `property_code`**.
+### Column Summary
+- **Linking Column**: `property_code` (e.g. `GAU-0091`)
+- **Rooms**: `room_living_room`, `room_kitchen`, `room_master_bedroom`, `room_second_bedroom`, `room_third_bedroom`, `room_guest_bedroom`, `room_attached_bathroom`, `room_common_bathroom`, `room_balcony`, `room_pooja_room`, `room_servant_room`, `room_study_room`
+- **Amenities**: `amenity_lift`, `amenity_power_backup`, `amenity_security`, `amenity_parking`, `amenity_gym`, `amenity_swimming_pool`, `amenity_clubhouse`
+- **Inventory**: `inv_fan`, `inv_light`, `inv_ac`, `inv_bed`, `inv_wardrobe`, `inv_sofa`, `inv_dining_set`, `inv_geyser`, `inv_fridge`, `inv_tv`, `inv_washing_machine`, `inv_microwave`, `inv_water_purifier`, `inv_chimney`, `inv_keys`
 
-Every column accepts either:
-- **Quantity counts**: e.g., `1`, `2`, `3`, `5`
-- **Yes / No flags**: e.g., `yes` / `no`, `true` / `false` (counts as `1` or `0`)
-
-### Column Mapping Dictionary
-
-#### 1. Linking Column
-- `property_code`: **Required**. Must match the `property_code` in the properties CSV (e.g. `GAU-0091`).
-
-#### 2. Rooms (`room_*`)
-- `room_living_room`: Living Room
-- `room_kitchen`: Modular Kitchen
-- `room_master_bedroom`: Master Bedroom
-- `room_second_bedroom`: Second Bedroom
-- `room_third_bedroom`: Third Bedroom
-- `room_guest_bedroom`: Guest Bedroom
-- `room_attached_bathroom`: Attached Bathroom (e.g. `2`)
-- `room_common_bathroom`: Common Bathroom (e.g. `1`)
-- `room_balcony`: Balconies (e.g. `2`)
-- `room_pooja_room`: Pooja Room (`yes`/`no` or `1`/`0`)
-- `room_servant_room`: Servant Room (`yes`/`no` or `1`/`0`)
-- `room_study_room`: Study / Home Office (`yes`/`no` or `1`/`0`)
-
-#### 3. Amenities (`amenity_*`)
-- `amenity_lift`: Lift / Elevator (`yes`/`no`)
-- `amenity_power_backup`: Full or DG Power Backup (`yes`/`no`)
-- `amenity_security`: 24/7 Security & CCTV (`yes`/`no`)
-- `amenity_parking`: Covered Car Parking (`yes`/`no`)
-- `amenity_gym`: Society Fitness Gym (`yes`/`no`)
-- `amenity_swimming_pool`: Swimming Pool (`yes`/`no`)
-- `amenity_clubhouse`: Community Club House (`yes`/`no`)
-
-#### 4. Inventory (`inv_*`)
-- `inv_fan`: Ceiling Fans (quantity count, e.g. `4`)
-- `inv_light`: LED Lights / Tube lights (quantity count, e.g. `8`)
-- `inv_ac`: Air Conditioners (quantity count, e.g. `2`)
-- `inv_bed`: Beds / Mattresses (quantity count, e.g. `2`)
-- `inv_wardrobe`: Wardrobes / Closets (quantity count, e.g. `3`)
-- `inv_sofa`: Sofa sets (quantity count, e.g. `1`)
-- `inv_dining_set`: Dining table & chairs (e.g. `1`)
-- `inv_geyser`: Water Heaters / Geysers (quantity count, e.g. `2`)
-- `inv_fridge`: Refrigerator (quantity count, e.g. `1`)
-- `inv_tv`: Smart TV (quantity count, e.g. `1`)
-- `inv_washing_machine`: Washing Machine (quantity count, e.g. `1`)
-- `inv_microwave`: Microwave (quantity count, e.g. `1`)
-- `inv_water_purifier`: RO Water Purifier (quantity count, e.g. `1`)
-- `inv_chimney`: Modular Kitchen Chimney (quantity count, e.g. `1`)
-- `inv_keys`: Physical Property Keys (count, e.g. `3` or `4`)
+Accepts integers (e.g. `2`, `4`) or boolean strings (`yes`/`no`, `true`/`false`).
 
 ---
 
-## ⚡ Specifications Seeding Commands
+## ⚡ Standalone Seeding Commands
 
-### Option A: Seed Automatically with Properties
-When you run:
-```bash
-php artisan dwelly:seed-properties-csv
-```
-It will automatically search for `property_specifications_template.csv` (or `property_specifications.csv`) in the same directory and merge specifications for each property.
-
-You can also specify a custom specifications file:
-```bash
-php artisan dwelly:seed-properties-csv --file=/path/to/properties.csv --specs-file=/path/to/specs.csv
-```
-
-### Option B: Standalone Seed or Update Specifications
-If properties already exist and you want to import or update their rooms, amenities, and inventory checklists:
+If properties already exist and you want to import or update specifications separately:
 
 ```bash
 # Dry-run validation:
@@ -193,4 +176,3 @@ php artisan dwelly:seed-property-specs
 # Custom specs file:
 php artisan dwelly:seed-property-specs --file=/path/to/custom_specifications.csv
 ```
-

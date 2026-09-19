@@ -29,6 +29,7 @@ class SeedPropertiesFromCsvTest extends TestCase
 
     protected string $tempCsvPath;
     protected string $tempSpecsCsvPath;
+    protected string $tempTenantsCsvPath;
 
     protected function setUp(): void
     {
@@ -36,6 +37,7 @@ class SeedPropertiesFromCsvTest extends TestCase
 
         $this->tempCsvPath = storage_path('framework/testing/test_properties.csv');
         $this->tempSpecsCsvPath = storage_path('framework/testing/test_specs.csv');
+        $this->tempTenantsCsvPath = storage_path('framework/testing/test_tenants.csv');
         File::ensureDirectoryExists(dirname($this->tempCsvPath));
 
         // Seed basic reference data
@@ -62,6 +64,11 @@ class SeedPropertiesFromCsvTest extends TestCase
                 'city_id' => $blrCity->id,
                 'name' => 'Whitefield',
             ], ['slug' => 'whitefield', 'pincode' => '560066', 'is_active' => true]);
+
+            Locality::firstOrCreate([
+                'city_id' => $blrCity->id,
+                'name' => 'Bellandur',
+            ], ['slug' => 'bellandur', 'pincode' => '560103', 'is_active' => true]);
         }
 
         // Ensure Organization and Branches
@@ -97,6 +104,9 @@ class SeedPropertiesFromCsvTest extends TestCase
         if (File::exists($this->tempSpecsCsvPath)) {
             File::delete($this->tempSpecsCsvPath);
         }
+        if (File::exists($this->tempTenantsCsvPath)) {
+            File::delete($this->tempTenantsCsvPath);
+        }
 
         parent::tearDown();
     }
@@ -109,6 +119,54 @@ class SeedPropertiesFromCsvTest extends TestCase
         ])
         ->expectsOutputToContain('Dry run validation succeeded for 5 rows.')
         ->assertExitCode(0);
+    }
+
+    public function test_can_import_existing_master_templates_live(): void
+    {
+        $this->artisan('dwelly:seed-properties-csv', [
+            '--file' => 'database/seeders/data/existing_properties_template.csv',
+        ])
+        ->expectsOutputToContain('Successfully imported 5 of 5 properties.')
+        ->assertExitCode(0);
+
+        // Verify GAU-0091 (Occupied, Rent Share, Signatory Self, Abhishek & Priya)
+        $prop1 = Property::where('code', 'GAU-0091')->first();
+        $this->assertNotNull($prop1);
+        $this->assertEquals('Occupied', $prop1->status);
+        $mou1 = Mou::where('property_id', $prop1->id)->first();
+        $this->assertNotNull($mou1);
+        $this->assertMatchesRegularExpression('/^MOU-\d{4}-\d{5}$/', $mou1->number);
+        $this->assertTrue($mou1->legal_terms['is_rent_sharing']);
+        $this->assertEquals('Rent share', $mou1->legal_terms['financial_model_name']);
+        $this->assertFalse($mou1->is_signatory_different);
+
+        $ag1 = TenancyAgreement::where('property_id', $prop1->id)->first();
+        $this->assertNotNull($ag1);
+        $this->assertMatchesRegularExpression('/^TNC-\d{4}-\d{5}$/', $ag1->code);
+        $this->assertEquals('Abhishek Sen', $ag1->primaryTenant->party->display_name);
+        $this->assertCount(1, $ag1->secondary_tenants);
+        $this->assertEquals('Priya Sen', $ag1->secondary_tenants[0]['name']);
+        $this->assertEquals('Spouse', $ag1->secondary_tenants[0]['relationship']);
+
+        // Verify GAU-0092 (Occupied, Rent Share, Signatory Different Anupam Saikia)
+        $prop2 = Property::where('code', 'GAU-0092')->first();
+        $this->assertNotNull($prop2);
+        $mou2 = Mou::where('property_id', $prop2->id)->first();
+        $this->assertTrue($mou2->is_signatory_different);
+        $this->assertEquals('Anupam Saikia', $mou2->signatory_details['name']);
+        $ag2 = TenancyAgreement::where('property_id', $prop2->id)->first();
+        $this->assertEquals('Jiten Bordoloi', $ag2->primaryTenant->party->display_name);
+        $this->assertCount(1, $ag2->secondary_tenants);
+        $this->assertEquals('Bikash Baruah', $ag2->secondary_tenants[0]['name']);
+
+        // Verify GAU-0093 (Vacant, Annual Subscription)
+        $prop3 = Property::where('code', 'GAU-0093')->first();
+        $this->assertNotNull($prop3);
+        $this->assertEquals('Vacant', $prop3->status);
+        $mou3 = Mou::where('property_id', $prop3->id)->first();
+        $this->assertFalse($mou3->legal_terms['is_rent_sharing']);
+        $this->assertEquals('Annual subscription', $mou3->legal_terms['financial_model_name']);
+        $this->assertEquals(0, $prop3->agreements()->count());
     }
 
     public function test_validation_fails_on_missing_required_headers(): void
@@ -181,13 +239,13 @@ class SeedPropertiesFromCsvTest extends TestCase
         // Verify MOU & Spatie Media
         $mouOcc = Mou::where('property_id', $propOcc->id)->first();
         $this->assertNotNull($mouOcc);
-        $this->assertEquals('MOU-TEST-01', $mouOcc->number);
+        $this->assertMatchesRegularExpression('/^MOU-\d{4}-\d{5}$/', $mouOcc->number);
         $this->assertTrue($mouOcc->hasMedia('signed_pdf'));
 
         // Verify Tenancy Agreement & Role & Spatie Media
         $agreementOcc = TenancyAgreement::where('property_id', $propOcc->id)->first();
         $this->assertNotNull($agreementOcc);
-        $this->assertEquals('TNC-TEST-01', $agreementOcc->code);
+        $this->assertMatchesRegularExpression('/^TNC-\d{4}-\d{5}$/', $agreementOcc->code);
         $this->assertTrue($agreementOcc->hasMedia('signed_agreement'));
         $this->assertEquals('Mr Tenant', $agreementOcc->primaryTenant?->party?->display_name);
 
@@ -378,5 +436,161 @@ class SeedPropertiesFromCsvTest extends TestCase
         $invKeys = $prop->inventories()->whereHas('inventoryType', fn ($q) => $q->where('slug', 'keys'))->first();
         $this->assertNotNull($invKeys);
         $this->assertEquals(5, $invKeys->count);
+    }
+
+    public function test_can_seed_with_is_rent_sharing_flag_and_financial_models(): void
+    {
+        // 1. Prepare CSV with one rent-sharing property (true) and one annual subscription (false)
+        $propCsv = implode(',', [
+            'property_code', 'building_name', 'address_line_1', 'address_line_2', 'locality', 'city', 'state', 'pincode',
+            'bhk_type', 'property_type', 'furnishing_type', 'floor', 'total_floors', 'floor_space_sqft', 'property_status',
+            'is_listed', 'available_from', 'owner_name', 'owner_phone', 'owner_email', 'owner_pan', 'owner_aadhaar',
+            'owner_bank_name', 'owner_bank_account', 'owner_bank_ifsc', 'mou_start_date', 'mou_status', 'is_rent_sharing',
+            'mou_fee_percentage', 'rent_amount', 'security_deposit', 'society_fee'
+        ]) . "\n";
+
+        // Property 1: is_rent_sharing = true
+        $propCsv .= 'TEST-RS-01,Rent Share Residency,"Flat 101, Zoo Road",,Zoo Road,Guwahati,Assam,781024,2 BHK,Apartment,Semi-Furnished,1,4,1000,Vacant,true,2026-01-01,Owner RS,9876540101,owner.rs@test.com,PANRS0001Z,987654320101,HDFC Bank,50100888881,HDFC0000084,2025-10-01,converted,true,8.5,20000,40000,1000' . "\n";
+
+        // Property 2: is_rent_sharing = false
+        $propCsv .= 'TEST-AS-01,Subscription Heights,"Flat 202, Zoo Road",,Zoo Road,Guwahati,Assam,781024,2 BHK,Apartment,Semi-Furnished,2,4,1000,Vacant,true,2026-01-01,Owner AS,9876540102,owner.as@test.com,PANAS0001Z,987654320102,HDFC Bank,50100888882,HDFC0000084,2025-10-01,converted,false,0.0,25000,50000,1000' . "\n";
+
+        File::put($this->tempCsvPath, $propCsv);
+
+        $this->artisan('dwelly:seed-properties-csv', [
+            '--file' => $this->tempCsvPath,
+        ])->assertExitCode(0);
+
+        // Verify Property 1 (Rent Share)
+        $prop1 = Property::where('code', 'TEST-RS-01')->first();
+        $this->assertNotNull($prop1);
+        $mou1 = Mou::where('property_id', $prop1->id)->first();
+        $this->assertNotNull($mou1);
+        $this->assertEquals('Rent share', $mou1->legal_terms['financial_model_name']);
+        $this->assertTrue($mou1->legal_terms['is_rent_sharing']);
+        $this->assertEquals(8.5, $mou1->legal_terms['fee_percentage']);
+
+        $finTerm1 = $prop1->financialTerms()->latest()->first();
+        $this->assertNotNull($finTerm1);
+        $this->assertEquals('Rent share', $finTerm1->pricing_model);
+        $this->assertEquals(8.5, (float) $finTerm1->fee_percentage);
+
+        // Verify Property 2 (Annual Subscription)
+        $prop2 = Property::where('code', 'TEST-AS-01')->first();
+        $this->assertNotNull($prop2);
+        $mou2 = Mou::where('property_id', $prop2->id)->first();
+        $this->assertNotNull($mou2);
+        $this->assertEquals('Annual subscription', $mou2->legal_terms['financial_model_name']);
+        $this->assertFalse($mou2->legal_terms['is_rent_sharing']);
+        $this->assertEquals(0.0, $mou2->legal_terms['fee_percentage']);
+
+        $finTerm2 = $prop2->financialTerms()->latest()->first();
+        $this->assertNotNull($finTerm2);
+        $this->assertEquals('Annual subscription', $finTerm2->pricing_model);
+        $this->assertEquals(0.0, (float) $finTerm2->fee_percentage);
+    }
+
+    public function test_can_seed_with_different_signing_authority(): void
+    {
+        $propCsv = implode(',', [
+            'property_code', 'building_name', 'address_line_1', 'address_line_2', 'locality', 'city', 'state', 'pincode',
+            'bhk_type', 'property_type', 'furnishing_type', 'floor', 'total_floors', 'floor_space_sqft', 'property_status',
+            'is_listed', 'available_from', 'owner_name', 'owner_phone', 'owner_email', 'owner_pan', 'owner_aadhaar',
+            'owner_bank_name', 'owner_bank_account', 'owner_bank_ifsc', 'is_signatory_different', 'signatory_name',
+            'signatory_relation', 'signatory_phone', 'signatory_email', 'signatory_pan', 'signatory_aadhaar',
+            'mou_start_date', 'mou_status', 'is_rent_sharing', 'mou_fee_percentage', 'rent_amount', 'security_deposit', 'society_fee'
+        ]) . "\n";
+
+        // Signatory different: Anupam Saikia as POA Holder
+        $propCsv .= 'TEST-POA-01,Heritage Mansion,"Villa 10, Zoo Road",,Zoo Road,Guwahati,Assam,781024,3 BHK,Villa,Semi-Furnished,1,2,1800,Vacant,true,2026-01-01,Biren Saikia,9435012345,biren.saikia@test.com,BCDPS2345N,876543210987,HDFC Bank,5010043891234,HDFC0000084,true,Anupam Saikia,POA Holder / Son,9435099999,anupam.saikia@test.com,DAEPS3456P,887654321098,2025-11-01,converted,true,8.0,35000,70000,2000' . "\n";
+
+        File::put($this->tempCsvPath, $propCsv);
+
+        $this->artisan('dwelly:seed-properties-csv', [
+            '--file' => $this->tempCsvPath,
+        ])->assertExitCode(0);
+
+        $prop = Property::where('code', 'TEST-POA-01')->first();
+        $this->assertNotNull($prop);
+        $mou = Mou::where('property_id', $prop->id)->first();
+        $this->assertNotNull($mou);
+
+        $this->assertTrue($mou->is_signatory_different);
+        $this->assertEquals('Anupam Saikia', $mou->signatory_details['name']);
+        $this->assertEquals('POA Holder / Son', $mou->signatory_details['relation']);
+        $this->assertEquals('9435099999', $mou->signatory_details['phone']);
+        $this->assertEquals('anupam.saikia@test.com', $mou->signatory_details['email']);
+        $this->assertEquals('DAEPS3456P', $mou->signatory_details['pan_number']);
+        $this->assertEquals('887654321098', $mou->signatory_details['aadhar_number']);
+
+        // Owner details preserved correctly
+        $this->assertEquals('Biren Saikia', $mou->owner_details['name']);
+        $this->assertEquals('9435012345', $mou->owner_details['phone']);
+    }
+
+    public function test_can_seed_multiple_tenants_from_dedicated_tenants_csv(): void
+    {
+        // 1. Property CSV (no inline tenant columns)
+        $propCsv = implode(',', [
+            'property_code', 'building_name', 'address_line_1', 'address_line_2', 'locality', 'city', 'state', 'pincode',
+            'bhk_type', 'property_type', 'furnishing_type', 'floor', 'total_floors', 'floor_space_sqft', 'property_status',
+            'is_listed', 'available_from', 'owner_name', 'owner_phone', 'owner_email', 'owner_pan', 'owner_aadhaar',
+            'owner_bank_name', 'owner_bank_account', 'owner_bank_ifsc', 'mou_start_date', 'mou_status', 'is_rent_sharing',
+            'mou_fee_percentage', 'rent_amount', 'security_deposit', 'society_fee'
+        ]) . "\n";
+
+        $propCsv .= 'TEST-TEN-01,Skyline Towers,"Flat 4B, Zoo Road",,Zoo Road,Guwahati,Assam,781024,3 BHK,Apartment,Fully Furnished,4,8,1400,Occupied,true,2026-01-01,Owner Skyline,9876540301,owner.sky@test.com,PANSK0001Z,987654320301,HDFC Bank,50100888885,HDFC0000084,2025-10-01,converted,true,8.0,30000,60000,2000' . "\n";
+        File::put($this->tempCsvPath, $propCsv);
+
+        // 2. Tenants CSV with 1 Primary Tenant and 2 Secondary Tenants
+        $tenantsCsv = implode(',', [
+            'property_code', 'is_primary_tenant', 'name', 'relationship', 'phone', 'email', 'address', 'pan', 'aadhaar',
+            'parent_name', 'voter_id', 'agreement_start_date', 'agreement_end_date', 'rent_amount', 'security_deposit',
+            'lock_in_months', 'notice_period_days'
+        ]) . "\n";
+
+        // Primary Tenant
+        $tenantsCsv .= 'TEST-TEN-01,true,Vikram Aditya,Self,9864112233,vikram@example.com,"House 5, Zoo Road, Guwahati",PANVK1122M,123456789012,Late S. Aditya,VTR001,2026-01-01,2026-12-31,30000,60000,6,30' . "\n";
+        // Secondary Tenant 1 (Spouse)
+        $tenantsCsv .= 'TEST-TEN-01,false,Sunita Aditya,Spouse,9864112234,sunita@example.com,"House 5, Zoo Road, Guwahati",PANST1122N,123456789013,R. K. Verma,VTR002,,,,,, ' . "\n";
+        // Secondary Tenant 2 (Brother)
+        $tenantsCsv .= 'TEST-TEN-01,false,Rahul Aditya,Brother,9864112235,rahul@example.com,"House 5, Zoo Road, Guwahati",PANRH1122P,123456789014,Late S. Aditya,VTR003,,,,,, ' . "\n";
+
+        File::put($this->tempTenantsCsvPath, $tenantsCsv);
+
+        $this->artisan('dwelly:seed-properties-csv', [
+            '--file' => $this->tempCsvPath,
+            '--tenants-file' => $this->tempTenantsCsvPath,
+        ])
+        ->expectsOutputToContain('Successfully imported 1 of 1 properties.')
+        ->assertExitCode(0);
+
+        $prop = Property::where('code', 'TEST-TEN-01')->first();
+        $this->assertNotNull($prop);
+
+        // Verify Tenancy Agreement
+        $agreement = TenancyAgreement::where('property_id', $prop->id)->first();
+        $this->assertNotNull($agreement);
+        $this->assertMatchesRegularExpression('/^TNC-\d{4}-\d{5}$/', $agreement->code);
+        $this->assertEquals(30000, (float) $agreement->rent_amount);
+        $this->assertEquals(60000, (float) $agreement->security_deposit);
+
+        // Verify Primary Tenant Role
+        $primaryRole = $agreement->primaryTenant;
+        $this->assertNotNull($primaryRole);
+        $this->assertEquals('Vikram Aditya', $primaryRole->party->display_name);
+        $this->assertTrue($primaryRole->is_primary);
+
+        // Verify Secondary Tenants in JSON array
+        $this->assertIsArray($agreement->secondary_tenants);
+        $this->assertCount(2, $agreement->secondary_tenants);
+        $this->assertEquals('Sunita Aditya', $agreement->secondary_tenants[0]['name']);
+        $this->assertEquals('Spouse', $agreement->secondary_tenants[0]['relationship']);
+        $this->assertEquals('Rahul Aditya', $agreement->secondary_tenants[1]['name']);
+        $this->assertEquals('Brother', $agreement->secondary_tenants[1]['relationship']);
+
+        // Verify Secondary Tenants Roles in database
+        $secondaryRoles = $agreement->roles()->where('is_primary', false)->get();
+        $this->assertCount(2, $secondaryRoles);
     }
 }

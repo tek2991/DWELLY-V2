@@ -93,7 +93,7 @@ class PropertyCsvImportService
      * @param bool $dryRun If true, validates rows without committing changes
      * @return array
      */
-    public function import(string $filePath, bool $dryRun = false, ?string $specsFilePath = null): array
+    public function import(string $filePath, bool $dryRun = false, ?string $specsFilePath = null, ?string $tenantsFilePath = null): array
     {
         $realPath = file_exists($filePath) ? $filePath : base_path($filePath);
 
@@ -120,7 +120,10 @@ class PropertyCsvImportService
             ];
         }
 
-        $validation = $this->validateRows($rows);
+        // Load optional tenants map (keyed by property_code)
+        $tenantsMap = $this->resolveTenantsMap($realPath, $tenantsFilePath);
+
+        $validation = $this->validateRows($rows, $tenantsMap);
         if (!empty($validation['errors'])) {
             return [
                 'success' => false,
@@ -157,8 +160,8 @@ class PropertyCsvImportService
         foreach ($rows as $index => $row) {
             $rowNumber = $index + 2; // Row 1 is header
             try {
-                $property = DB::transaction(function () use ($row, $rowNumber, $realPath, $specsMap) {
-                    return $this->processRow($row, $rowNumber, dirname($realPath), $specsMap);
+                $property = DB::transaction(function () use ($row, $rowNumber, $realPath, $specsMap, $tenantsMap) {
+                    return $this->processRow($row, $rowNumber, dirname($realPath), $specsMap, $tenantsMap);
                 });
 
                 $imported++;
@@ -241,7 +244,7 @@ class PropertyCsvImportService
     /**
      * Validate CSV rows and headers.
      */
-    protected function validateRows(array $rows): array
+    protected function validateRows(array $rows, array $tenantsMap = []): array
     {
         $errors = [];
         $warnings = [];
@@ -285,17 +288,21 @@ class PropertyCsvImportService
                 $warnings[] = "Row {$rowNumber}: Property status '{$row['property_status']}' is non-standard, defaulting to Vacant.";
             }
 
-            // If occupied, tenant fields are required
+            // If occupied, tenant fields or tenant CSV rows are required
             if ($status === 'Occupied') {
-                if (empty($row['tenant_name'])) {
-                    $errors[] = "Row {$rowNumber}: 'tenant_name' is required when property_status is 'Occupied'.";
+                $propCode = strtoupper(trim($row['property_code'] ?? ''));
+                $hasTenantsInCsv = !empty($propCode) && !empty($tenantsMap[$propCode]);
+                $hasInlineTenant = !empty($row['tenant_name']) && !empty($row['tenant_phone']);
+
+                if (!$hasTenantsInCsv && !$hasInlineTenant) {
+                    $errors[] = "Row {$rowNumber}: 'tenant_name' is required when property_status is 'Occupied' (or tenant records must exist in tenants CSV for '{$row['building_name']}').";
                 }
-                if (empty($row['tenant_phone'])) {
-                    $errors[] = "Row {$rowNumber}: 'tenant_phone' is required when property_status is 'Occupied'.";
-                }
-                if (empty($row['tenant_email'])) {
-                    $errors[] = "Row {$rowNumber}: 'tenant_email' is required when property_status is 'Occupied'.";
-                }
+            }
+
+            // Signing authority validation
+            $isSignatoryDiff = filter_var($row['is_signatory_different'] ?? false, FILTER_VALIDATE_BOOLEAN);
+            if ($isSignatoryDiff && empty($row['signatory_name'])) {
+                $errors[] = "Row {$rowNumber}: 'signatory_name' is required when 'is_signatory_different' is true.";
             }
 
             // Numeric validations
@@ -321,7 +328,7 @@ class PropertyCsvImportService
     /**
      * Process a single validated CSV row into domain records.
      */
-    protected function processRow(array $row, int $rowNumber, ?string $csvDir = null, array $specsMap = []): Property
+    protected function processRow(array $row, int $rowNumber, ?string $csvDir = null, array $specsMap = [], array $tenantsMap = []): Property
     {
         $cityName = ucfirst(strtolower($row['city']));
         $stateAssam = State::where('name', 'Assam')->first()?->id;
@@ -407,7 +414,16 @@ class PropertyCsvImportService
         $societyFee = !empty($row['society_fee']) ? (float) $row['society_fee'] : 0.0;
         $feePct = !empty($row['mou_fee_percentage']) ? (float) $row['mou_fee_percentage'] : 8.0;
 
-        $mouNumber = !empty($row['mou_number']) ? trim($row['mou_number']) : NumberingService::generate('mou');
+        $isRentSharing = isset($row['is_rent_sharing'])
+            ? filter_var($row['is_rent_sharing'], FILTER_VALIDATE_BOOLEAN)
+            : true;
+        $appliedFeePct = $isRentSharing ? $feePct : 0.0;
+        $financialModelName = $isRentSharing ? 'Rent share' : 'Annual subscription';
+        $financialModelId = $this->financialModels[$financialModelName]
+            ?? ($this->financialModels[$isRentSharing ? 'rent-share' : 'annual-subscription'] ?? null)
+            ?? (array_values($this->financialModels)[0] ?? null);
+
+        $mouNumber = NumberingService::generate('mou');
         $mouStartDate = !empty($row['mou_start_date']) ? $row['mou_start_date'] : now()->subMonths(3)->toDateString();
 
         $opportunity = Opportunity::firstOrCreate(
@@ -424,12 +440,34 @@ class PropertyCsvImportService
                 'owner_email' => $ownerParty->email,
                 'address' => $property->address_line_1,
                 'expected_rent' => $rent,
-                'expected_financial_model_id' => $this->financialModels['Rent share'] ?? (array_values($this->financialModels)[0] ?? null),
+                'expected_financial_model_id' => $financialModelId,
             ]
         );
 
-        $mou = Mou::firstOrNew(['number' => $mouNumber]);
+        $isSignatoryDiff = filter_var($row['is_signatory_different'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        if ($isSignatoryDiff) {
+            $signatoryDetails = [
+                'name' => trim($row['signatory_name'] ?? ''),
+                'relation' => trim($row['signatory_relation'] ?? 'POA Holder'),
+                'phone' => trim($row['signatory_phone'] ?? ''),
+                'email' => trim($row['signatory_email'] ?? ''),
+                'aadhar_number' => trim($row['signatory_aadhaar'] ?? ($row['signatory_aadhaar_number'] ?? '')),
+                'pan_number' => strtoupper(trim($row['signatory_pan'] ?? ($row['signatory_pan_number'] ?? ''))),
+            ];
+        } else {
+            $signatoryDetails = [
+                'name' => $ownerParty->display_name,
+                'relation' => 'Self',
+                'phone' => $ownerParty->phone,
+                'email' => $ownerParty->email,
+                'aadhar_number' => $ownerParty->individual?->aadhaar_number ?? ($row['owner_aadhaar'] ?? null),
+                'pan_number' => $ownerParty->individual?->pan_number ?? ($row['owner_pan'] ?? null),
+            ];
+        }
+
+        $mou = Mou::firstOrNew(['property_id' => $property->id]);
         $mou->fill([
+            'number' => $mou->exists ? $mou->number : $mouNumber,
             'branch_id' => $branchId,
             'opportunity_id' => $opportunity->id,
             'property_id' => $property->id,
@@ -450,22 +488,19 @@ class PropertyCsvImportService
                 'city' => $cityName,
                 'state' => $stateName,
             ],
-            'signatory_details' => [
-                'name' => $ownerParty->display_name,
-                'relation' => 'Self',
-                'phone' => $ownerParty->phone,
-                'email' => $ownerParty->email,
-            ],
-            'is_signatory_different' => false,
+            'signatory_details' => $signatoryDetails,
+            'is_signatory_different' => $isSignatoryDiff,
             'legal_terms' => [
                 'rent_amount' => $rent,
                 'security_deposit' => $deposit,
                 'society_fee' => $societyFee,
-                'fee_percentage' => $feePct,
+                'fee_percentage' => $appliedFeePct,
                 'city_id' => $city->id,
                 'city_name' => $cityName,
                 'address' => $property->address_line_1,
-                'financial_model_name' => 'Rent share',
+                'financial_model_id' => $financialModelId,
+                'financial_model_name' => $financialModelName,
+                'is_rent_sharing' => $isRentSharing,
             ],
             'bank_details' => [
                 'bank_name' => $row['owner_bank_name'] ?? 'HDFC Bank',
@@ -487,6 +522,9 @@ class PropertyCsvImportService
         // Attach MOU Media
         $this->attachMouDocument($mou, $property, $row['mou_pdf_file'] ?? null, $propDir);
 
+        // Attach Signatory Media if different
+        $this->attachSignatoryDocuments($mou, $row, $propDir);
+
         // 7. Create Onboarding Project & Financial Terms
         $onboarding = OnboardingProject::firstOrNew(['property_id' => $property->id]);
         $onboarding->fill([
@@ -503,8 +541,8 @@ class PropertyCsvImportService
             ['property_id' => $property->id],
             [
                 'mou_id' => $mou->id,
-                'pricing_model' => 'Rent share',
-                'fee_percentage' => $feePct,
+                'pricing_model' => $financialModelName,
+                'fee_percentage' => $appliedFeePct,
                 'effective_from' => $mouStartDate,
                 'created_by' => $this->adminUser?->id,
             ]
@@ -523,8 +561,19 @@ class PropertyCsvImportService
         );
 
         // 8. Create Tenancy Agreement if Occupied or Tenant specified
-        if ($propStatus === 'Occupied' || !empty($row['tenant_name'])) {
-            $this->createTenancyAgreement($property, $row, $branchId, $rent, $deposit, $stateId, $stateName, $propDir);
+        $propertyTenants = $tenantsMap[strtoupper($propCode)] ?? [];
+        if ($propStatus === 'Occupied' || !empty($propertyTenants) || !empty($row['tenant_name'])) {
+            $this->createTenancyAgreementForProperty(
+                $property,
+                $row,
+                $propertyTenants,
+                $branchId,
+                $rent,
+                $deposit,
+                $stateId,
+                $stateName,
+                $propDir
+            );
         }
 
         // 9. Attach Property Photos
@@ -660,7 +709,7 @@ class PropertyCsvImportService
         }
 
         $pricingVersion = $property->pricingVersions()->latest()->first();
-        $agreementCode = !empty($row['agreement_code']) ? trim($row['agreement_code']) : NumberingService::generate('tenancy');
+        $agreementCode = NumberingService::generate('tenancy');
         $startDate = !empty($row['agreement_start_date']) ? $row['agreement_start_date'] : '2026-01-01';
         $endDate = !empty($row['agreement_end_date']) ? $row['agreement_end_date'] : '2026-12-31';
 
@@ -700,6 +749,288 @@ class PropertyCsvImportService
         $this->attachTenancyDocument($agreement, $row['agreement_pdf_file'] ?? null, $propDir);
 
         return $agreement;
+    }
+
+    /**
+     * Create Tenancy Agreement with Primary and Secondary Tenants from dedicated tenants CSV.
+     */
+    protected function createTenancyAgreementForProperty(
+        Property $property,
+        array $row,
+        array $propertyTenants,
+        int $branchId,
+        float $rent,
+        float $deposit,
+        ?int $stateId,
+        string $stateName,
+        ?string $propDir = null
+    ): TenancyAgreement {
+        if (empty($propertyTenants)) {
+            return $this->createTenancyAgreement($property, $row, $branchId, $rent, $deposit, $stateId, $stateName, $propDir);
+        }
+
+        $agreementCode = NumberingService::generate('tenancy');
+        $pricingVersion = $property->pricingVersions()->latest()->first();
+
+        $primaryTenantRow = null;
+        $secondaryTenantRows = [];
+
+        foreach ($propertyTenants as $tRow) {
+            $isPrimary = filter_var($tRow['is_primary_tenant'] ?? false, FILTER_VALIDATE_BOOLEAN);
+            if ($isPrimary && $primaryTenantRow === null) {
+                $primaryTenantRow = $tRow;
+            } else {
+                $secondaryTenantRows[] = $tRow;
+            }
+        }
+
+        if ($primaryTenantRow === null) {
+            $primaryTenantRow = array_shift($secondaryTenantRows);
+        }
+
+        $startDate = !empty($primaryTenantRow['agreement_start_date']) ? $primaryTenantRow['agreement_start_date'] : '2026-01-01';
+        $endDate = !empty($primaryTenantRow['agreement_end_date']) ? $primaryTenantRow['agreement_end_date'] : Carbon::parse($startDate)->addMonths(12)->subDay()->toDateString();
+        $agRent = !empty($primaryTenantRow['rent_amount']) ? (float) $primaryTenantRow['rent_amount'] : $rent;
+        $agDeposit = !empty($primaryTenantRow['security_deposit']) ? (float) $primaryTenantRow['security_deposit'] : $deposit;
+        $lockIn = !empty($primaryTenantRow['lock_in_months']) ? (int) $primaryTenantRow['lock_in_months'] : 6;
+        $notice = !empty($primaryTenantRow['notice_period_days']) ? (int) $primaryTenantRow['notice_period_days'] : 30;
+        $agreementPdf = $primaryTenantRow['agreement_pdf_file'] ?? ($row['agreement_pdf_file'] ?? null);
+
+        // 1. Primary Tenant Party
+        $tName = trim($primaryTenantRow['name'] ?? 'Primary Tenant');
+        $tPhone = trim($primaryTenantRow['phone'] ?? '9999999999');
+        $tEmail = trim($primaryTenantRow['email'] ?? 'tenant@example.com');
+        $tPan = trim($primaryTenantRow['pan'] ?? ($primaryTenantRow['pad'] ?? ($primaryTenantRow['pan_number'] ?? '')));
+        $tAadhaar = trim($primaryTenantRow['aadhaar'] ?? ($primaryTenantRow['aadhaar_number'] ?? ''));
+        $tParent = trim($primaryTenantRow['parent_name'] ?? '');
+        $tVoter = trim($primaryTenantRow['voter_id'] ?? '');
+        $tAddress = trim($primaryTenantRow['address'] ?? ($property->address_line_1));
+
+        $primaryParty = Party::where('email', $tEmail)->whereNotNull('email')
+            ->orWhere('phone', $tPhone)->whereNotNull('phone')
+            ->first();
+
+        if (!$primaryParty) {
+            $primaryParty = Party::create([
+                'party_type' => 'individual',
+                'display_name' => $tName,
+                'phone' => $tPhone,
+                'email' => $tEmail,
+                'state_id' => $stateId,
+            ]);
+        }
+
+        PartyIndividual::firstOrCreate(
+            ['party_id' => $primaryParty->id],
+            [
+                'name' => $tName,
+                'pan_number' => $tPan ?: ('TNPAN' . rand(1000, 9999) . 'X'),
+                'aadhaar_number' => $tAadhaar ?: ('12' . rand(1000000000, 9999999999)),
+                'parent_name' => $tParent ?: null,
+                'voter_id' => $tVoter ?: null,
+            ]
+        );
+
+        if (!empty($tAddress)) {
+            PartyAddress::firstOrCreate(
+                ['party_id' => $primaryParty->id, 'is_primary' => true],
+                [
+                    'type' => 'current',
+                    'address_line_1' => $tAddress,
+                    'city' => $property->city,
+                    'state' => $stateName,
+                    'pincode' => $property->pincode,
+                    'country' => 'India',
+                ]
+            );
+        }
+
+        $primaryParty->enableRole(BusinessRole::TENANT);
+
+        try {
+            app(AccountingProvisioningService::class)->ensurePartyAccountingReady($primaryParty);
+        } catch (\Throwable $e) {
+            Log::warning("Accounting provisioning deferred for Primary Tenant {$tName}: " . $e->getMessage());
+        }
+
+        // 2. Secondary Tenants JSON & Parties
+        $secondaryArray = [];
+        $secondaryParties = [];
+
+        foreach ($secondaryTenantRows as $secRow) {
+            $secName = trim($secRow['name'] ?? 'Secondary Tenant');
+            $secRel = trim($secRow['relationship'] ?? 'Co-Tenant');
+            $secPhone = trim($secRow['phone'] ?? '');
+            $secEmail = trim($secRow['email'] ?? '');
+            $secPan = trim($secRow['pan'] ?? ($secRow['pad'] ?? ($secRow['pan_number'] ?? '')));
+            $secAadhaar = trim($secRow['aadhaar'] ?? ($secRow['aadhaar_number'] ?? ''));
+            $secVoter = trim($secRow['voter_id'] ?? '');
+            $secAddress = trim($secRow['address'] ?? ($property->address_line_1));
+
+            $secondaryArray[] = [
+                'name' => $secName,
+                'relationship' => $secRel,
+                'phone' => $secPhone,
+                'email' => $secEmail,
+                'aadhaar_number' => $secAadhaar,
+                'pan_number' => $secPan,
+                'voter_id' => $secVoter,
+                'photo_file' => $secRow['photo_file'] ?? null,
+                'aadhaar_file' => $secRow['aadhaar_file'] ?? null,
+                'pan_file' => $secRow['pan_file'] ?? null,
+                'voter_id_file' => $secRow['voter_id_file'] ?? null,
+            ];
+
+            $secParty = null;
+            if (!empty($secEmail) || !empty($secPhone)) {
+                $secPartyQuery = Party::query();
+                if (!empty($secEmail)) {
+                    $secPartyQuery->where('email', $secEmail);
+                }
+                if (!empty($secPhone)) {
+                    $secPartyQuery->orWhere('phone', $secPhone);
+                }
+                $secParty = $secPartyQuery->first();
+            }
+
+            if (!$secParty) {
+                $secParty = Party::create([
+                    'party_type' => 'individual',
+                    'display_name' => $secName,
+                    'phone' => $secPhone ?: null,
+                    'email' => $secEmail ?: null,
+                    'state_id' => $stateId,
+                ]);
+            }
+
+            PartyIndividual::firstOrCreate(
+                ['party_id' => $secParty->id],
+                [
+                    'name' => $secName,
+                    'pan_number' => $secPan ?: null,
+                    'aadhaar_number' => $secAadhaar ?: null,
+                    'voter_id' => $secVoter ?: null,
+                ]
+            );
+
+            if (!empty($secAddress)) {
+                PartyAddress::firstOrCreate(
+                    ['party_id' => $secParty->id, 'is_primary' => true],
+                    [
+                        'type' => 'current',
+                        'address_line_1' => $secAddress,
+                        'city' => $property->city,
+                        'state' => $stateName,
+                        'pincode' => $property->pincode,
+                        'country' => 'India',
+                    ]
+                );
+            }
+
+            $secParty->enableRole(BusinessRole::TENANT);
+            $secondaryParties[] = ['party' => $secParty, 'role' => $secRel ?: 'Co-Tenant'];
+        }
+
+        // 3. Create Tenancy Agreement
+        $agreement = TenancyAgreement::firstOrCreate(
+            ['property_id' => $property->id],
+            [
+                'branch_id' => $branchId,
+                'code' => $agreementCode,
+                'status' => 'active',
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+                'rent_amount' => $agRent,
+                'security_deposit' => $agDeposit,
+                'lock_in_period_months' => $lockIn,
+                'notice_period_days' => $notice,
+                'pricing_version_id' => $pricingVersion?->id,
+                'secondary_tenants' => $secondaryArray,
+                'keys_handed_over' => true,
+                'keys_handed_over_at' => Carbon::parse($startDate)->toDateTimeString(),
+                'key_handover_notes' => 'Master key set handed over upon lease execution.',
+                'signed_at' => Carbon::parse($startDate)->subDays(3)->toDateTimeString(),
+                'signed_by_tenant' => true,
+            ]
+        );
+
+        if (!empty($secondaryArray) && empty($agreement->secondary_tenants)) {
+            $agreement->update(['secondary_tenants' => $secondaryArray]);
+        }
+
+        // 4. Attach Primary Role
+        TenancyRole::firstOrCreate(
+            [
+                'tenancy_agreement_id' => $agreement->id,
+                'party_id' => $primaryParty->id,
+            ],
+            [
+                'role_type' => 'Primary Tenant',
+                'is_primary' => true,
+            ]
+        );
+
+        // 5. Attach Secondary Roles
+        foreach ($secondaryParties as $sp) {
+            TenancyRole::firstOrCreate(
+                [
+                    'tenancy_agreement_id' => $agreement->id,
+                    'party_id' => $sp['party']->id,
+                ],
+                [
+                    'role_type' => $sp['role'],
+                    'is_primary' => false,
+                ]
+            );
+        }
+
+        // 6. Attach Tenancy PDF Media
+        $this->attachTenancyDocument($agreement, $agreementPdf, $propDir);
+
+        return $agreement;
+    }
+
+    /**
+     * Attach signatory documents (POA, Aadhaar, PAN) to MOU.
+     */
+    protected function attachSignatoryDocuments(Mou $mou, array $row, ?string $propDir = null): void
+    {
+        if (!filter_var($row['is_signatory_different'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+            return;
+        }
+
+        if (!$mou->hasMedia('signatory_poa')) {
+            $poaPath = !empty($row['signatory_poa_file'])
+                ? $this->resolveAssetPath($row['signatory_poa_file'], 'mous', $propDir)
+                : ($propDir ? ($this->findFileInDir($propDir, ['signatory_poa.pdf', 'poa.pdf', 'power_of_attorney.pdf'])
+                    ?: $this->findFileByPattern($propDir, '/(poa|power_of_attorney).*\.pdf$/i')) : null);
+
+            if ($poaPath && file_exists($poaPath)) {
+                $mou->addMedia($poaPath)->preservingOriginal()->toMediaCollection('signatory_poa');
+            }
+        }
+
+        if (!$mou->hasMedia('signatory_aadhaar')) {
+            $aadhaarPath = !empty($row['signatory_aadhaar_file'])
+                ? $this->resolveAssetPath($row['signatory_aadhaar_file'], 'mous', $propDir)
+                : ($propDir ? ($this->findFileInDir($propDir, ['signatory_aadhaar.pdf', 'signatory_aadhaar.jpg', 'poa_aadhaar.pdf'])
+                    ?: $this->findFileByPattern($propDir, '/signatory_aadhaar.*\.(pdf|jpg|png)$/i')) : null);
+
+            if ($aadhaarPath && file_exists($aadhaarPath)) {
+                $mou->addMedia($aadhaarPath)->preservingOriginal()->toMediaCollection('signatory_aadhaar');
+            }
+        }
+
+        if (!$mou->hasMedia('signatory_pan')) {
+            $panPath = !empty($row['signatory_pan_file'])
+                ? $this->resolveAssetPath($row['signatory_pan_file'], 'mous', $propDir)
+                : ($propDir ? ($this->findFileInDir($propDir, ['signatory_pan.pdf', 'signatory_pan.jpg', 'poa_pan.pdf'])
+                    ?: $this->findFileByPattern($propDir, '/signatory_pan.*\.(pdf|jpg|png)$/i')) : null);
+
+            if ($panPath && file_exists($panPath)) {
+                $mou->addMedia($panPath)->preservingOriginal()->toMediaCollection('signatory_pan');
+            }
+        }
     }
 
     /**
@@ -1543,5 +1874,58 @@ SVG;
             return max(0, (int) $val);
         }
         return $this->parseBoolean($val) ? 1 : 0;
+    }
+
+    /**
+     * Resolve and load tenants map from candidate file paths.
+     */
+    protected function resolveTenantsMap(string $realPropertiesCsvPath, ?string $tenantsFilePath = null): array
+    {
+        $resolved = $tenantsFilePath;
+        if (!$resolved) {
+            $candidates = [
+                dirname($realPropertiesCsvPath) . '/existing_tenants_template.csv',
+                dirname($realPropertiesCsvPath) . '/existing_tenants.csv',
+                dirname($realPropertiesCsvPath) . '/tenants_template.csv',
+                dirname($realPropertiesCsvPath) . '/tenants.csv',
+                dirname($realPropertiesCsvPath) . '/' . str_replace(['properties', 'property'], ['tenants', 'tenant'], basename($realPropertiesCsvPath)),
+                base_path('database/seeders/data/existing_tenants_template.csv'),
+                base_path('database/seeders/data/existing_tenants.csv'),
+            ];
+            foreach ($candidates as $cand) {
+                if (file_exists($cand) && is_readable($cand)) {
+                    $resolved = $cand;
+                    break;
+                }
+            }
+        }
+
+        if ($resolved && file_exists($resolved)) {
+            return $this->loadTenantsMap($resolved);
+        }
+
+        return [];
+    }
+
+    /**
+     * Load tenants keyed by property_code.
+     */
+    public function loadTenantsMap(string $filePath): array
+    {
+        $realPath = file_exists($filePath) ? $filePath : base_path($filePath);
+        if (!file_exists($realPath) || !is_readable($realPath)) {
+            return [];
+        }
+
+        $rows = $this->parseCsv($realPath);
+        $map = [];
+        foreach ($rows as $row) {
+            $code = strtoupper(trim($row['property_code'] ?? ''));
+            if (!empty($code)) {
+                $map[$code][] = $row;
+            }
+        }
+
+        return $map;
     }
 }
