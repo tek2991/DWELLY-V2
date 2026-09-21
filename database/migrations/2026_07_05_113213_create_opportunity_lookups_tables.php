@@ -25,7 +25,7 @@ return new class extends Migration
             $table->string('name');
             $table->string('slug')->unique()->nullable();
             $table->text('description')->nullable();
-            $table->boolean('fee_collection')->default(false);
+            $table->string('fee_collection')->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
