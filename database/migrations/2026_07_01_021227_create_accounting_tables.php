@@ -67,7 +67,9 @@ return new class extends Migration
             $table->text('notes')->nullable();
             
             $table->string('reference')->nullable();
-            $table->nullableMorphs('reference', "{$prefix}txn_reference_idx"); // reference_type, reference_id for Property etc.
+            $table->string('reference_type')->nullable();
+            $table->string('reference_id', 64)->nullable();
+            $table->index(['reference_type', 'reference_id'], "{$prefix}txn_reference_idx");
             
             $table->bigInteger('amount')->default(0); // stored in minor units (cents)
             $table->boolean('pending')->default(false);

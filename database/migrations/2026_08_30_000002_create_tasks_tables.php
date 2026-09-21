@@ -14,8 +14,9 @@ return new class extends Migration
             $table->foreignId('branch_id')->nullable()->constrained('branches')->nullOnDelete();
             $table->char('property_id', 26);
             
-            // Polymorphic link to associated domain records (e.g. Agreement, Deboarding, Party, Opportunity, Maintenance)
-            $table->nullableMorphs('taskable');
+            $table->string('taskable_type')->nullable();
+            $table->string('taskable_id', 64)->nullable();
+            $table->index(['taskable_type', 'taskable_id']);
             
             $table->char('template_id', 26)->nullable();
             $table->string('category')->default('field_work'); // TaskCategory enum

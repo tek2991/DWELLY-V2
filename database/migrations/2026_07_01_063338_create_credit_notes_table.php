@@ -37,7 +37,9 @@ return new class extends Migration
             $table->string('credit_note_number', 30);
             
             $table->string('reference')->nullable();
-            $table->nullableMorphs('reference', "{$prefix}cn_reference_idx");
+            $table->string('reference_type')->nullable();
+            $table->string('reference_id', 64)->nullable();
+            $table->index(['reference_type', 'reference_id'], "{$prefix}cn_reference_idx");
             $table->string('status', 20)->default('draft');
             
             $table->date('issue_date');

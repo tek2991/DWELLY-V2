@@ -32,7 +32,9 @@ return new class extends Migration
             $table->string('bill_number', 30);
             
             $table->string('reference')->nullable();
-            $table->nullableMorphs('reference', "{$prefix}bill_reference_idx");
+            $table->string('reference_type')->nullable();
+            $table->string('reference_id', 64)->nullable();
+            $table->index(['reference_type', 'reference_id'], "{$prefix}bill_reference_idx");
             
             $table->string('vendor_reference', 100)->nullable();
             $table->string('seller_invoice_path')->nullable();
