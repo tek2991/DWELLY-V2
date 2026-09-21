@@ -401,13 +401,32 @@ class PropertySeeder extends Seeder
         $this->roomDefinitions = RoomDefinition::pluck('id', 'name')->toArray();
         $this->vendorTrades = VendorTrade::pluck('id', 'slug')->toArray();
 
-        $this->establishments['Guwahati'] = Establishment::where('city', 'like', '%Guwahati%')
-            ->orWhereIn('name', ['Guwahati Railway Station', 'Cotton Collegiate School', 'Nehru Park', 'Gauhati Medical College & Hospital'])
-            ->pluck('id')->toArray();
+        $guwahatiCityId = $this->cities['Guwahati']?->id;
+        $bangaloreCityId = $this->cities['Bangalore']?->id;
 
-        $this->establishments['Bangalore'] = Establishment::where('city', 'like', '%Bangalore%')
-            ->orWhereIn('name', ['Indiranagar Metro Station', 'Manyata Tech Park', 'Phoenix Marketcity', 'Manipal Hospital'])
-            ->pluck('id')->toArray();
+        $this->establishments['Guwahati'] = Establishment::where(function ($query) use ($guwahatiCityId) {
+            if ($guwahatiCityId) {
+                $query->where('city_id', $guwahatiCityId);
+            }
+            $query->orWhereIn('name', [
+                'Guwahati Railway Station',
+                'Cotton Collegiate School',
+                'Nehru Park',
+                'Gauhati Medical College & Hospital',
+            ]);
+        })->pluck('id')->toArray();
+
+        $this->establishments['Bangalore'] = Establishment::where(function ($query) use ($bangaloreCityId) {
+            if ($bangaloreCityId) {
+                $query->where('city_id', $bangaloreCityId);
+            }
+            $query->orWhereIn('name', [
+                'Indiranagar Metro Station',
+                'Manyata Tech Park',
+                'Phoenix Marketcity',
+                'Manipal Hospital',
+            ]);
+        })->pluck('id')->toArray();
     }
 
     protected function seedOwners(): array
