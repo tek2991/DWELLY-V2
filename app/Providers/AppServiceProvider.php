@@ -30,6 +30,7 @@ use App\Policies\TenancyAgreementPolicy;
 use App\Policies\TenantDeboardingPolicy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Tek2991\Accounting\Contracts\CompanyAccessor;
 use Tek2991\Accounting\Models\Account;
@@ -66,6 +67,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        if ($this->app->runningInConsole()) {
+            Schema::disableForeignKeyConstraints();
+        }
+
         Party::observe(PartyObserver::class);
 
         // Register Domain Model Policies
