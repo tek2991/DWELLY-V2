@@ -42,6 +42,9 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 # (packages/tek2991/accounting is included in build context)
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
+# Publish Filament and package frontend assets into public/
+RUN php artisan filament:assets
+
 # Set correct permissions for Laravel runtime directories
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
     && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
