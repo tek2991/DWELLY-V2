@@ -20,6 +20,13 @@ Dwelly-V2 is a comprehensive property management and accounting application buil
    php artisan key:generate
    ```
 
+### Default Credentials (Seeded)
+When seeded via `php artisan db:seed` or `php artisan migrate:fresh --seed`:
+* **Operations Dashboard**: `/operations`
+* **Email**: `admin@dwelly.in`
+* **Password**: `password`
+* **Role**: `Business Owner`
+
 ### PDF Generation (Important!)
 
 The application uses the `tek2991/accounting` package which relies on `spatie/laravel-pdf` and **Puppeteer** (via Browsershot) for generating high-quality PDFs. 
