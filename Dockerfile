@@ -1,5 +1,8 @@
 # syntax=docker/dockerfile:1
 
+# Global build argument must be declared before the first FROM
+ARG BASE_IMAGE=sites-infra/shared-php-base:latest
+
 # -----------------------------------------------------------
 # Stage 1: Build Frontend Assets (Vite & Tailwind CSS)
 # -----------------------------------------------------------
@@ -20,7 +23,6 @@ RUN npm run build
 # -----------------------------------------------------------
 # Stage 2: Application Container (PHP-FPM)
 # -----------------------------------------------------------
-ARG BASE_IMAGE=sites-infra/shared-php-base:latest
 FROM ${BASE_IMAGE}
 
 WORKDIR /var/www/html
