@@ -18,7 +18,7 @@ return new class extends Migration
             $table->string('accounting_contact_id')->nullable();
             $table->boolean('is_tax_registered')->default(false);
             $table->string('gst_registration_type')->nullable();
-            $table->foreignId('state_id')->nullable()->constrained('acc_states')->nullOnDelete();
+            $table->foreignId('state_id')->nullable()->index();
             $table->timestamps();
         });
 

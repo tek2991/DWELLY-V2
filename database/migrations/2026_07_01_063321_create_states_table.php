@@ -24,11 +24,24 @@ return new class extends Migration
             $table->boolean('is_union_territory')->default(false);
             $table->timestamps();
         });
+
+        if (Schema::hasTable('parties') && Schema::hasColumn('parties', 'state_id')) {
+            Schema::table('parties', function (Blueprint $table) use ($prefix) {
+                $table->foreign('state_id')->references('id')->on("{$prefix}states")->nullOnDelete();
+            });
+        }
     }
 
     public function down(): void
     {
         $prefix = $this->prefix();
+
+        if (Schema::hasTable('parties') && Schema::hasColumn('parties', 'state_id')) {
+            Schema::table('parties', function (Blueprint $table) {
+                $table->dropForeign(['state_id']);
+            });
+        }
+
         Schema::dropIfExists("{$prefix}states");
     }
 };
