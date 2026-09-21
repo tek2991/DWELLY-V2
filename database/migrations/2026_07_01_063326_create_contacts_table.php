@@ -55,11 +55,24 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
         });
+
+        if (Schema::hasTable("{$prefix}accounts")) {
+            Schema::table("{$prefix}accounts", function (Blueprint $table) use ($prefix) {
+                $table->foreign('contact_id')->references('id')->on("{$prefix}contacts")->nullOnDelete();
+            });
+        }
     }
 
     public function down(): void
     {
         $prefix = $this->prefix();
+
+        if (Schema::hasTable("{$prefix}accounts")) {
+            Schema::table("{$prefix}accounts", function (Blueprint $table) use ($prefix) {
+                $table->dropForeign(['contact_id']);
+            });
+        }
+
         Schema::dropIfExists("{$prefix}contacts");
     }
 };

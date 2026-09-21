@@ -44,56 +44,66 @@ return new class extends Migration
             });
         }
 
-        // 6. Database-agnostic Data Backfill
-        $ghyBranchId = DB::table('branches')->where('code', 'GHY')->orWhere('city', 'Guwahati')->value('id') ?? 1;
-        $blrBranchId = DB::table('branches')->where('code', 'BLR')->orWhere('city', 'Bangalore')->value('id') ?? 2;
+        // 6. Database-agnostic Data Backfill (only if branches exist)
+        if (DB::table('branches')->exists()) {
+            $ghyBranchId = DB::table('branches')->where('code', 'GHY')->orWhere('city', 'Guwahati')->value('id');
+            $blrBranchId = DB::table('branches')->where('code', 'BLR')->orWhere('city', 'Bangalore')->value('id');
 
-        // Backfill properties based on city
-        DB::table('properties')
-            ->where('city', 'like', '%Guwahati%')
-            ->update(['branch_id' => $ghyBranchId]);
+            if ($ghyBranchId) {
+                // Backfill properties based on city
+                DB::table('properties')
+                    ->where('city', 'like', '%Guwahati%')
+                    ->update(['branch_id' => $ghyBranchId]);
+            }
 
-        DB::table('properties')
-            ->where('city', 'like', '%Bangalore%')
-            ->update(['branch_id' => $blrBranchId]);
+            if ($blrBranchId) {
+                DB::table('properties')
+                    ->where('city', 'like', '%Bangalore%')
+                    ->update(['branch_id' => $blrBranchId]);
+            }
 
-        // Default any remaining properties to Guwahati
-        DB::table('properties')->whereNull('branch_id')->update(['branch_id' => $ghyBranchId]);
+            if ($ghyBranchId) {
+                // Default any remaining properties to Guwahati
+                DB::table('properties')->whereNull('branch_id')->update(['branch_id' => $ghyBranchId]);
+            }
 
-        // Backfill tenancy_agreements, mous, maintenance_requests from properties
-        $propertyBranches = DB::table('properties')
-            ->whereNotNull('branch_id')
-            ->pluck('branch_id', 'id')
-            ->toArray();
+            // Backfill tenancy_agreements, mous, maintenance_requests from properties
+            $propertyBranches = DB::table('properties')
+                ->whereNotNull('branch_id')
+                ->pluck('branch_id', 'id')
+                ->toArray();
 
-        foreach ($propertyBranches as $propertyId => $branchId) {
-            DB::table('tenancy_agreements')
-                ->where('property_id', $propertyId)
-                ->update(['branch_id' => $branchId]);
+            foreach ($propertyBranches as $propertyId => $branchId) {
+                DB::table('tenancy_agreements')
+                    ->where('property_id', $propertyId)
+                    ->update(['branch_id' => $branchId]);
 
-            DB::table('mous')
-                ->where('property_id', $propertyId)
-                ->update(['branch_id' => $branchId]);
+                DB::table('mous')
+                    ->where('property_id', $propertyId)
+                    ->update(['branch_id' => $branchId]);
 
-            DB::table('maintenance_requests')
-                ->where('property_id', $propertyId)
-                ->update(['branch_id' => $branchId]);
+                DB::table('maintenance_requests')
+                    ->where('property_id', $propertyId)
+                    ->update(['branch_id' => $branchId]);
+            }
+
+            // Backfill opportunities from mous
+            $mouOpportunities = DB::table('mous')
+                ->whereNotNull('opportunity_id')
+                ->whereNotNull('branch_id')
+                ->pluck('branch_id', 'opportunity_id')
+                ->toArray();
+
+            foreach ($mouOpportunities as $opportunityId => $branchId) {
+                DB::table('opportunities')
+                    ->where('id', $opportunityId)
+                    ->update(['branch_id' => $branchId]);
+            }
+
+            if ($ghyBranchId) {
+                DB::table('opportunities')->whereNull('branch_id')->update(['branch_id' => $ghyBranchId]);
+            }
         }
-
-        // Backfill opportunities from mous
-        $mouOpportunities = DB::table('mous')
-            ->whereNotNull('opportunity_id')
-            ->whereNotNull('branch_id')
-            ->pluck('branch_id', 'opportunity_id')
-            ->toArray();
-
-        foreach ($mouOpportunities as $opportunityId => $branchId) {
-            DB::table('opportunities')
-                ->where('id', $opportunityId)
-                ->update(['branch_id' => $branchId]);
-        }
-
-        DB::table('opportunities')->whereNull('branch_id')->update(['branch_id' => $ghyBranchId]);
     }
 
     public function down(): void

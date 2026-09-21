@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('opportunity_sources', function (Blueprint $table) {
             $table->ulid('id')->primary();
-            $table->foreignId('parent_id')->nullable()->constrained('opportunity_sources')->nullOnDelete();
+            $table->foreignUlid('parent_id')->nullable()->constrained('opportunity_sources')->nullOnDelete();
             $table->string('name')->unique();
             $table->string('slug')->unique()->nullable();
             $table->boolean('is_active')->default(true);

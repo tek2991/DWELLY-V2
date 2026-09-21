@@ -52,10 +52,22 @@ return new class extends Migration
 
             $table->index(['area_type', 'area_id']);
         });
+
+        if (Schema::hasTable('properties')) {
+            Schema::table('properties', function (Blueprint $table) {
+                $table->foreign('locality_id')->references('id')->on('localities')->nullOnDelete();
+            });
+        }
     }
 
     public function down(): void
     {
+        if (Schema::hasTable('properties')) {
+            Schema::table('properties', function (Blueprint $table) {
+                $table->dropForeign(['locality_id']);
+            });
+        }
+
         Schema::dropIfExists('staff_geographic_access');
         Schema::dropIfExists('localities');
         Schema::dropIfExists('cities');

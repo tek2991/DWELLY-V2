@@ -24,7 +24,7 @@ return new class extends Migration
             $table->text('notes')->nullable();
 
             // Phase 1: Exit Audit Reference
-            $table->char('move_out_audit_id', 26)->nullable();
+            $table->uuid('move_out_audit_id')->nullable();
             $table->boolean('damages_identified')->default(false);
             $table->text('damage_notes')->nullable();
 

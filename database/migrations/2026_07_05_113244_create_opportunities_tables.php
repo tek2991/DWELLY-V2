@@ -17,7 +17,7 @@ return new class extends Migration
             $table->string('title');
             $table->string('status');
             $table->foreignUlid('opportunity_source_id')->nullable()->constrained('opportunity_sources');
-            $table->foreignUlid('assigned_user_id')->nullable()->constrained('users');
+            $table->foreignId('assigned_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignUlid('owner_party_id')->nullable()->constrained('parties');
             
             $table->string('owner_name')->nullable();
@@ -48,7 +48,7 @@ return new class extends Migration
             $table->string('activity_type');
             $table->text('notes')->nullable();
             $table->json('metadata')->nullable();
-            $table->foreignUlid('performed_by')->nullable()->constrained('users');
+            $table->foreignId('performed_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamp('performed_at');
             $table->timestamps();
         });

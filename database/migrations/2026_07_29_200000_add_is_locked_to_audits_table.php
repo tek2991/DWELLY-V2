@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::table('audits', function (Blueprint $table) {
             $table->boolean('is_locked')->default(false)->after('status');
             $table->timestamp('locked_at')->nullable()->after('is_locked');
-            $table->foreignUuid('locked_by_id')->nullable()->after('locked_at')->constrained('users')->nullOnDelete();
+            $table->foreignId('locked_by_id')->nullable()->after('locked_at')->constrained('users')->nullOnDelete();
         });
     }
 

@@ -9,7 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('tenancy_agreements', function (Blueprint $table) {
-            $table->char('audit_id', 26)->nullable()->after('property_id');
+            $table->uuid('audit_id')->nullable()->after('property_id');
             $table->string('apdcl_consumer_id')->nullable()->after('special_terms');
             $table->text('security_deposit_notes')->nullable()->after('security_deposit');
             $table->json('tenant_bank_details')->nullable()->after('special_terms');

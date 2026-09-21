@@ -37,16 +37,22 @@ return new class extends Migration
             // But we already have MediaLibrary in DomainModel, so we might just use that.
             
             $table->timestamp('verified_at')->nullable();
-            $table->foreignUlid('verified_by')->nullable()->constrained('users');
+            $table->foreignId('verified_by')->nullable()->constrained('users')->nullOnDelete();
             
-            $table->foreignUlid('prepared_by')->nullable()->constrained('users');
-            $table->foreignUlid('generated_by')->nullable()->constrained('users');
+            $table->foreignId('prepared_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('generated_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamp('cancelled_at')->nullable();
             $table->timestamp('expires_at')->nullable();
             
             $table->timestamps();
             $table->softDeletes();
         });
+
+        if (Schema::hasTable('property_financial_terms')) {
+            Schema::table('property_financial_terms', function (Blueprint $table) {
+                $table->foreign('mou_id')->references('id')->on('mous')->nullOnDelete();
+            });
+        }
     }
 
     /**
@@ -54,6 +60,12 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (Schema::hasTable('property_financial_terms')) {
+            Schema::table('property_financial_terms', function (Blueprint $table) {
+                $table->dropForeign(['mou_id']);
+            });
+        }
+
         Schema::dropIfExists('mous');
     }
 };

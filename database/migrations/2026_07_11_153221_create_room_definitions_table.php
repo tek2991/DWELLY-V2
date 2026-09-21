@@ -23,6 +23,12 @@ return new class extends Migration
 
             $table->foreign('room_type_id')->references('id')->on('room_types')->cascadeOnDelete();
         });
+
+        if (Schema::hasTable('property_rooms')) {
+            Schema::table('property_rooms', function (Blueprint $table) {
+                $table->foreign('room_definition_id')->references('id')->on('room_definitions')->cascadeOnDelete();
+            });
+        }
     }
 
     /**
@@ -30,6 +36,12 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (Schema::hasTable('property_rooms')) {
+            Schema::table('property_rooms', function (Blueprint $table) {
+                $table->dropForeign(['room_definition_id']);
+            });
+        }
+
         Schema::dropIfExists('room_definitions');
     }
 };

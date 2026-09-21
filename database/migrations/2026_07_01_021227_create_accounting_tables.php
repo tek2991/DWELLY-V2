@@ -26,8 +26,7 @@ return new class extends Migration
                 ->nullOnDelete();
             $table->foreignId('contact_id')
                 ->nullable()
-                ->constrained("{$prefix}contacts")
-                ->nullOnDelete();
+                ->index();
             
             $table->string('type', 20);              // AccountType enum
             $table->string('reporting_class', 30)->nullable();  // ReportingClass enum

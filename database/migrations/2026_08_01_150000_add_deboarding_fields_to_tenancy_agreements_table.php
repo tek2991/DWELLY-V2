@@ -14,7 +14,7 @@ return new class extends Migration
             $table->date('notice_date')->nullable()->after('vacating_date');
             $table->string('deboarding_reason')->nullable()->after('notice_date');
             $table->text('deboarding_notes')->nullable()->after('deboarding_reason');
-            $table->char('move_out_audit_id', 26)->nullable()->after('deboarding_notes');
+            $table->uuid('move_out_audit_id')->nullable()->after('deboarding_notes');
             $table->boolean('keys_returned')->default(false)->after('move_out_audit_id');
             $table->timestamp('keys_returned_at')->nullable()->after('keys_returned');
             $table->json('deposit_deductions_breakdown')->nullable()->after('keys_returned_at');

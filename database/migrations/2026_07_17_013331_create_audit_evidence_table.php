@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('audit_evidence', function (Blueprint $table) {
             $table->ulid('id')->primary();
-            $table->foreignUlid('audit_item_id')->constrained('audit_items')->cascadeOnDelete();
+            $table->foreignUuid('audit_item_id')->constrained('audit_items')->cascadeOnDelete();
             $table->string('caption')->nullable();
             $table->text('notes')->nullable();
             $table->json('annotation_json')->nullable();

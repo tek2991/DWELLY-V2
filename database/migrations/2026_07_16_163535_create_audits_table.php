@@ -16,7 +16,7 @@ return new class extends Migration
             
             // Core identity
             $table->string('audit_number')->unique();
-            $table->foreignUuid('property_id')->constrained('properties')->cascadeOnDelete();
+            $table->foreignUlid('property_id')->constrained('properties')->cascadeOnDelete();
             
             // Domain ENUMs
             $table->string('audit_type');
@@ -26,15 +26,15 @@ return new class extends Migration
             $table->foreignUuid('reference_audit_id')->nullable()->constrained('audits')->nullOnDelete();
             
             // Assignment & Tracking
-            $table->foreignUuid('inspector_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('inspector_id')->nullable()->constrained('users')->nullOnDelete();
             
             $table->dateTime('scheduled_at')->nullable();
             
             $table->dateTime('completed_at')->nullable();
-            $table->foreignUuid('completed_by_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('completed_by_id')->nullable()->constrained('users')->nullOnDelete();
             
             $table->dateTime('approved_at')->nullable();
-            $table->foreignUuid('approved_by_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('approved_by_id')->nullable()->constrained('users')->nullOnDelete();
             
             $table->text('notes')->nullable();
 
