@@ -10,14 +10,14 @@ return new class extends Migration
     {
         Schema::table('maintenance_client_quote_items', function (Blueprint $table) {
             $table->char('maintenance_request_item_id', 26)->nullable()->after('vendor_quote_id');
-            $table->foreign('maintenance_request_item_id')->references('id')->on('maintenance_request_items')->nullOnDelete();
+            $table->foreign('maintenance_request_item_id', 'mcqi_mri_id_fk')->references('id')->on('maintenance_request_items')->nullOnDelete();
         });
     }
 
     public function down(): void
     {
         Schema::table('maintenance_client_quote_items', function (Blueprint $table) {
-            $table->dropForeign(['maintenance_request_item_id']);
+            $table->dropForeign('mcqi_mri_id_fk');
             $table->dropColumn('maintenance_request_item_id');
         });
     }

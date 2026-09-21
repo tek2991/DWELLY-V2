@@ -58,8 +58,8 @@ return new class extends Migration
             $table->integer('sort_order')->default(0);
             $table->timestamps();
 
-            $table->foreign('maintenance_client_quote_id')->references('id')->on('maintenance_client_quotes')->cascadeOnDelete();
-            $table->foreign('vendor_quote_id')->references('id')->on('maintenance_vendor_quotes')->nullOnDelete();
+            $table->foreign('maintenance_client_quote_id', 'mcqi_mcq_id_fk')->references('id')->on('maintenance_client_quotes')->cascadeOnDelete();
+            $table->foreign('vendor_quote_id', 'mcqi_vq_id_fk')->references('id')->on('maintenance_vendor_quotes')->nullOnDelete();
         });
 
         Schema::table('maintenance_requests', function (Blueprint $table) {
