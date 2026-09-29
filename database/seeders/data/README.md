@@ -120,7 +120,7 @@ php artisan db:seed --class=CsvPropertySeeder
 | `security_deposit` | **Required** | Decimal (e.g. `48000`) | Security Deposit in INR |
 | `society_fee` | Optional | Decimal (e.g. `2000`) | Monthly maintenance fee |
 
-> ⚙️ **Note**: `mou_number` and `agreement_code` are **system-generated** using `NumberingService` and do not appear in the CSV.
+> ⚙️ **Note**: `opportunity_number`, `mou_number` and `agreement_code` are **system-generated** using `NumberingService` and do not appear in the CSV.
 
 ---
 

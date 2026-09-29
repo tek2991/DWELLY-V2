@@ -10,11 +10,14 @@ use App\Domain\Audit\Models\Audit;
 use App\Domain\Maintenance\Enums\MaintenancePriority;
 use App\Domain\Maintenance\Enums\MaintenanceStatus;
 use App\Domain\Maintenance\Models\MaintenanceRequest;
+use App\Domain\Opportunity\Enums\OpportunityStatus;
+use App\Domain\Opportunity\Models\Opportunity;
 use App\Domain\Property\Models\Property;
 use App\Domain\Task\Enums\TaskStatus;
 use App\Domain\Task\Models\Task;
 use App\Filament\Resources\Operations\AuditResource;
 use App\Filament\Resources\Operations\MaintenanceRequestResource;
+use App\Filament\Resources\Operations\OpportunityResource;
 use App\Filament\Resources\Operations\TaskResource;
 use App\Filament\Resources\Operations\TenantDeboardingResource;
 use App\Filament\Resources\Properties\PropertyResource;
@@ -52,30 +55,57 @@ class OperationsDashboard extends Page
 
     protected function getHeaderActions(): array
     {
+        return [];
+    }
+
+    public function getQuickActions(): array
+    {
         return [
-            Action::make('new_tenancy')
-                ->label('New Tenancy / Lease')
-                ->icon('heroicon-m-document-text')
-                ->color('success')
-                ->url(fn (): string => TenancyAgreementResource::getUrl('create')),
-
-            Action::make('new_maintenance')
-                ->label('New Maintenance Ticket')
-                ->icon('heroicon-m-wrench-screwdriver')
-                ->color('danger')
-                ->url(fn (): string => MaintenanceRequestResource::getUrl('create')),
-
-            Action::make('schedule_audit')
-                ->label('Schedule Audit')
-                ->icon('heroicon-m-clipboard-document-check')
-                ->color('warning')
-                ->url(fn (): string => AuditResource::getUrl('create')),
-
-            Action::make('new_task')
-                ->label('Create Work Order / Task')
-                ->icon('heroicon-m-plus')
-                ->color('primary')
-                ->url(fn (): string => TaskResource::getUrl('create')),
+            [
+                'label' => 'New Lead / Opportunity',
+                'description' => 'Onboard property lead',
+                'icon' => 'heroicon-m-sparkles',
+                'color' => '#6366f1',
+                'bg_light' => '#eef2ff',
+                'border_color' => '#c7d2fe',
+                'url' => OpportunityResource::getUrl('create'),
+            ],
+            [
+                'label' => 'New Tenancy / Lease',
+                'description' => 'Draft lease agreement',
+                'icon' => 'heroicon-m-document-text',
+                'color' => '#059669',
+                'bg_light' => '#ecfdf5',
+                'border_color' => '#a7f3d0',
+                'url' => TenancyAgreementResource::getUrl('create'),
+            ],
+            [
+                'label' => 'New Maintenance Ticket',
+                'description' => 'Log repair or issue',
+                'icon' => 'heroicon-m-wrench-screwdriver',
+                'color' => '#dc2626',
+                'bg_light' => '#fef2f2',
+                'border_color' => '#fecaca',
+                'url' => MaintenanceRequestResource::getUrl('create'),
+            ],
+            [
+                'label' => 'Schedule Audit',
+                'description' => 'Property inspection',
+                'icon' => 'heroicon-m-clipboard-document-check',
+                'color' => '#d97706',
+                'bg_light' => '#fffbeb',
+                'border_color' => '#fde68a',
+                'url' => AuditResource::getUrl('create'),
+            ],
+            [
+                'label' => 'Create Work Order / Task',
+                'description' => 'Assign team task',
+                'icon' => 'heroicon-m-plus-circle',
+                'color' => '#7c3aed',
+                'bg_light' => '#f5f3ff',
+                'border_color' => '#ddd6fe',
+                'url' => TaskResource::getUrl('create'),
+            ],
         ];
     }
 
@@ -180,6 +210,19 @@ class OperationsDashboard extends Page
             ->limit(8)
             ->get();
 
+        // Active Opportunities / Supply Pipeline
+        $activeOpportunities = Opportunity::whereNotIn('status', [
+            OpportunityStatus::CONVERTED,
+            OpportunityStatus::CLOSED_LOST,
+        ]);
+        $activeOpportunitiesCount = (clone $activeOpportunities)->count();
+        $readyForMouCount = (clone $activeOpportunities)->where('status', OpportunityStatus::READY_FOR_MOU)->count();
+        $recentOpportunities = (clone $activeOpportunities)
+            ->with(['opportunitySource', 'assignedUser', 'latestActivity'])
+            ->latest()
+            ->limit(6)
+            ->get();
+
         return [
             'total' => $total,
             'occupied' => $occupied,
@@ -190,6 +233,9 @@ class OperationsDashboard extends Page
             'occupancy_rate' => $occupancyRate,
             'onboarding_properties' => $onboardingList,
             'vacant_properties' => $vacantList,
+            'active_opportunities_count' => $activeOpportunitiesCount,
+            'ready_for_mou_count' => $readyForMouCount,
+            'recent_opportunities' => $recentOpportunities,
         ];
     }
 

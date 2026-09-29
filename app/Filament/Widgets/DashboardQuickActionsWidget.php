@@ -4,7 +4,7 @@ namespace App\Filament\Widgets;
 
 use App\Filament\Resources\Operations\AuditResource;
 use App\Filament\Resources\Operations\MaintenanceRequestResource;
-use App\Filament\Resources\Properties\PropertyResource;
+use App\Filament\Resources\Operations\OpportunityResource;
 use App\Filament\Resources\TenancyAgreements\TenancyAgreementResource;
 use Filament\Widgets\Widget;
 
@@ -26,13 +26,13 @@ class DashboardQuickActionsWidget extends Widget
     {
         return [
             [
-                'label' => 'Add Property',
-                'description' => 'Onboard new unit',
-                'icon' => 'heroicon-m-building-office-2',
+                'label' => 'Add Opportunity',
+                'description' => 'Onboard new lead',
+                'icon' => 'heroicon-m-sparkles',
                 'color' => '#0284c7', // Sky
                 'bg_light' => '#f0f9ff',
                 'border_color' => '#bae6fd',
-                'url' => PropertyResource::getUrl('create'),
+                'url' => OpportunityResource::getUrl('create'),
             ],
             [
                 'label' => 'New Tenancy',

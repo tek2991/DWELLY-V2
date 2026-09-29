@@ -11,17 +11,11 @@ use App\Filament\Resources\Operations\MOUResource;
 use App\Filament\Resources\Operations\OpportunityResource;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
-use Filament\Actions\ForceDeleteBulkAction;
-use Filament\Actions\RestoreBulkAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
-use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 class OpportunitiesTable
@@ -49,6 +43,18 @@ class OpportunitiesTable
                     ->badge()
                     ->sortable(),
 
+                TextColumn::make('expected_rent')
+                    ->label('Expected Rent')
+                    ->money('INR')
+                    ->sortable()
+                    ->placeholder('—')
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                TextColumn::make('opportunitySource.name')
+                    ->label('Source')
+                    ->placeholder('—')
+                    ->toggleable(isToggledHiddenByDefault: true),
+
                 TextColumn::make('estimatedPropertyType.name')
                     ->label('Type')
                     ->placeholder('—')
@@ -59,17 +65,6 @@ class OpportunitiesTable
                     ->placeholder('—')
                     ->badge()
                     ->color('gray')
-                    ->toggleable(),
-
-                TextColumn::make('expected_rent')
-                    ->label('Expected Rent')
-                    ->money('INR')
-                    ->sortable()
-                    ->placeholder('—'),
-
-                TextColumn::make('opportunitySource.name')
-                    ->label('Source')
-                    ->placeholder('—')
                     ->toggleable(),
 
                 TextColumn::make('source_phone')
@@ -88,11 +83,11 @@ class OpportunitiesTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->defaultSort('created_at', 'desc')
             ->recordUrl(
                 fn (Opportunity $record): string => OpportunityResource::getUrl('view', ['record' => $record]),
             )
             ->filters([
-                TrashedFilter::make(),
                 SelectFilter::make('status')
                     ->options(OpportunityStatus::class),
                 SelectFilter::make('opportunity_source_id')
@@ -104,9 +99,6 @@ class OpportunitiesTable
             ])
             ->actions([
                 ViewAction::make(),
-                EditAction::make()
-                    ->visible(fn ($record) => OpportunityResource::canEdit($record)),
-
                 ActionGroup::make([
                     Action::make('markReadyForMou')
                         ->label('Ready For MOU')
@@ -164,7 +156,7 @@ class OpportunitiesTable
                         ->label('Close Lost')
                         ->icon('heroicon-o-x-circle')
                         ->color('danger')
-                        ->visible(fn (Opportunity $record) => ! in_array($record->status, [OpportunityStatus::CONVERTED, OpportunityStatus::CLOSED_LOST, OpportunityStatus::CANCELLED, OpportunityStatus::MOU_SIGNED]) && (auth()->user()?->can('update', $record) ?? false))
+                        ->visible(fn (Opportunity $record) => ! in_array($record->status, [OpportunityStatus::CONVERTED, OpportunityStatus::CLOSED_LOST, OpportunityStatus::MOU_SIGNED]) && (auth()->user()?->can('update', $record) ?? false))
                         ->form([
                             Textarea::make('notes')->label('Reason for losing')->placeholder('Enter details regarding why this lead was lost...')->required(),
                         ])
@@ -172,11 +164,7 @@ class OpportunitiesTable
                 ])->label('Actions'),
             ])
             ->bulkActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                    ForceDeleteBulkAction::make(),
-                    RestoreBulkAction::make(),
-                ]),
+                // Deletion of opportunities is not permitted
             ]);
     }
 }

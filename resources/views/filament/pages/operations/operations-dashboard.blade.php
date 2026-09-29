@@ -5,6 +5,44 @@
 
     <div style="display: flex; flex-direction: column; gap: 1.25rem; width: 100%;">
         
+        <!-- Quick Launch & Fast Actions Section -->
+        <x-filament::section>
+            <x-slot name="heading">
+                <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <div style="width: 1.75rem; height: 1.75rem; border-radius: 0.375rem; background: #e0f2fe; color: #0284c7; display: flex; align-items: center; justify-content: center;">
+                            <x-filament::icon icon="heroicon-m-bolt" style="width: 1rem; height: 1rem;" />
+                        </div>
+                        <span style="font-weight: 700; font-size: 0.9375rem; color: #0f172a;">Quick Launch & Fast Actions</span>
+                    </div>
+                    <span style="font-size: 0.6875rem; font-weight: 600; color: #64748b; background: #f1f5f9; padding: 0.125rem 0.5rem; border-radius: 9999px;">
+                        Operations workflow shortcuts
+                    </span>
+                </div>
+            </x-slot>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.625rem; margin-top: 0.25rem;">
+                @foreach ($this->getQuickActions() as $action)
+                    <a href="{{ $action['url'] }}" 
+                       style="text-decoration: none; display: flex; align-items: center; gap: 0.625rem; padding: 0.625rem 0.75rem; border-radius: 0.5rem; background: #ffffff; border: 1px solid {{ $action['border_color'] }}; transition: all 0.15s ease; box-shadow: 0 1px 2px rgba(0,0,0,0.02);"
+                       onmouseover="this.style.borderColor='{{ $action['color'] }}'; this.style.backgroundColor='{{ $action['bg_light'] }}'; this.style.transform='translateY(-1px)';"
+                       onmouseout="this.style.borderColor='{{ $action['border_color'] }}'; this.style.backgroundColor='#ffffff'; this.style.transform='translateY(0)';">
+                        <div style="width: 2rem; height: 2rem; border-radius: 0.375rem; background: {{ $action['bg_light'] }}; color: {{ $action['color'] }}; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                            <x-filament::icon :icon="$action['icon']" style="width: 1.125rem; height: 1.125rem;" />
+                        </div>
+                        <div style="min-width: 0; flex: 1;">
+                            <div style="font-size: 0.75rem; font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                {{ $action['label'] }}
+                            </div>
+                            <div style="font-size: 0.625rem; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                {{ $action['description'] }}
+                            </div>
+                        </div>
+                    </a>
+                @endforeach
+            </div>
+        </x-filament::section>
+
         <!-- Tab Navigation Bar -->
         <div style="background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 0.75rem; padding: 0.3125rem; display: flex; gap: 0.3125rem; overflow-x: auto;">
             
@@ -77,8 +115,21 @@
             @endphp
 
             <!-- KPI Cards Grid -->
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.875rem;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.875rem;">
                 
+                <a href="{{ \App\Filament\Resources\Operations\OpportunityResource::getUrl() }}?activeTab=active" style="text-decoration: none; color: inherit; display: block;">
+                    <div style="background: #ffffff; border: 1px solid #e0e7ff; border-radius: 0.75rem; padding: 1rem 1.25rem; border-left: 4px solid #6366f1; height: 100%; transition: all 0.2s ease;">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <div style="font-size: 0.6875rem; font-weight: 700; color: #4338ca; text-transform: uppercase;">Active Landlord Leads</div>
+                            <x-filament::icon icon="heroicon-m-sparkles" style="width: 1.125rem; height: 1.125rem; color: #6366f1;" />
+                        </div>
+                        <div style="font-size: 1.625rem; font-weight: 800; color: #0f172a; margin-top: 0.25rem;">{{ $pipeline['active_opportunities_count'] }}</div>
+                        <div style="font-size: 0.75rem; color: #6366f1; font-weight: 600; margin-top: 0.25rem;">
+                            {{ $pipeline['ready_for_mou_count'] > 0 ? $pipeline['ready_for_mou_count'] . ' Ready for MOU &rarr;' : 'View Pipeline &rarr;' }}
+                        </div>
+                    </div>
+                </a>
+
                 <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 0.75rem; padding: 1rem 1.25rem;">
                     <div style="font-size: 0.6875rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Occupancy Rate</div>
                     <div style="font-size: 1.625rem; font-weight: 800; color: #059669; margin-top: 0.25rem;">{{ $pipeline['occupancy_rate'] }}%</div>
@@ -195,6 +246,86 @@
                 </x-filament::section>
 
             </div>
+
+            <!-- Active Landlord Pipeline Section -->
+            <x-filament::section style="margin-top: 1.25rem;">
+                <x-slot name="heading">
+                    <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <x-filament::icon icon="heroicon-m-sparkles" style="width: 1.25rem; height: 1.25rem; color: #6366f1;" />
+                            <span style="font-weight: 700; font-size: 0.9375rem;">Active Landlord Leads & Supply Pipeline</span>
+                            <span style="font-size: 0.6875rem; font-weight: 700; background: #e0e7ff; color: #4338ca; padding: 0.125rem 0.5rem; border-radius: 9999px;">
+                                {{ $pipeline['active_opportunities_count'] }} Active
+                            </span>
+                        </div>
+                        <a href="{{ \App\Filament\Resources\Operations\OpportunityResource::getUrl() }}?activeTab=active" style="font-size: 0.75rem; color: #0284c7; text-decoration: none; font-weight: 600;">View All Opportunities &rarr;</a>
+                    </div>
+                </x-slot>
+
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; text-align: left; border-collapse: collapse; font-size: 0.8125rem;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid #e2e8f0; color: #64748b;">
+                                <th style="padding: 0.625rem 0.5rem;">Opportunity #</th>
+                                <th style="padding: 0.625rem 0.5rem;">Lead Title / Owner</th>
+                                <th style="padding: 0.625rem 0.5rem;">Relationship Manager</th>
+                                <th style="padding: 0.625rem 0.5rem;">Expected Rent</th>
+                                <th style="padding: 0.625rem 0.5rem;">Status</th>
+                                <th style="padding: 0.625rem 0.5rem; text-align: right;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse ($pipeline['recent_opportunities'] as $opp)
+                                <tr style="border-bottom: 1px solid #f1f5f9;">
+                                    <td style="padding: 0.625rem 0.5rem; font-weight: 700; color: #0f172a;">{{ $opp->number }}</td>
+                                    <td style="padding: 0.625rem 0.5rem;">
+                                        <div style="font-weight: 600; color: #1e293b;">{{ $opp->title }}</div>
+                                        <div style="font-size: 0.6875rem; color: #64748b;">👤 {{ $opp->owner_name ?? 'N/A' }}</div>
+                                    </td>
+                                    <td style="padding: 0.625rem 0.5rem;">
+                                        <div style="font-weight: 600; color: #1e293b; display: flex; align-items: center; gap: 0.375rem;">
+                                            @if ($opp->assignedUser)
+                                                <span>{{ $opp->assignedUser->name }}</span>
+                                            @else
+                                                <span style="color: #94a3b8; font-style: italic; font-weight: 400;">Unassigned</span>
+                                            @endif
+                                        </div>
+                                        @php
+                                            $latestAct = $opp->latestActivity;
+                                        @endphp
+                                        @if ($latestAct)
+                                            <div style="font-size: 0.6875rem; color: #64748b; margin-top: 0.1875rem; display: flex; align-items: center; gap: 0.25rem;" @if($latestAct->notes) title="{{ $latestAct->notes }}" @endif>
+                                                <span style="font-weight: 600; color: #4338ca;">{{ $latestAct->activity_type?->getLabel() ?? ucfirst($latestAct->activity_type?->value ?? 'Activity') }}</span>
+                                                <span style="color: #94a3b8;">&bull;</span>
+                                                <span style="color: #64748b;">{{ ($latestAct->performed_at ?? $latestAct->created_at)?->diffForHumans() }}</span>
+                                            </div>
+                                        @else
+                                            <div style="font-size: 0.6875rem; color: #94a3b8; margin-top: 0.1875rem;">
+                                                Created {{ $opp->created_at?->diffForHumans() }}
+                                            </div>
+                                        @endif
+                                    </td>
+                                    <td style="padding: 0.625rem 0.5rem; font-weight: 700; color: #0f172a;">
+                                        {{ $opp->expected_rent > 0 ? '₹' . number_format($opp->expected_rent) : '—' }}
+                                    </td>
+                                    <td style="padding: 0.625rem 0.5rem;">
+                                        <span style="display: inline-flex; align-items: center; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; background: #e0f2fe; color: #0369a1;">
+                                            {{ $opp->status->getLabel() }}
+                                        </span>
+                                    </td>
+                                    <td style="padding: 0.625rem 0.5rem; text-align: right;">
+                                        <a href="{{ \App\Filament\Resources\Operations\OpportunityResource::getUrl('view', ['record' => $opp]) }}" style="font-weight: 600; color: #0284c7; text-decoration: none;">View</a>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="6" style="padding: 1.5rem; text-align: center; color: #64748b;">No active opportunities currently in pipeline.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </x-filament::section>
 
         <!-- ================= TAB 2: MAINTENANCE & WORKS ================= -->
         @elseif ($activeTab === 'maintenance')

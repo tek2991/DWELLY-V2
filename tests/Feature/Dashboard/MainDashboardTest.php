@@ -106,6 +106,19 @@ class MainDashboardTest extends TestCase
         $alerts = $component->instance()->getAlertsData();
         $this->assertGreaterThanOrEqual(1, $alerts['maintenance']['count']);
         $this->assertGreaterThanOrEqual(1, $alerts['maintenance']['urgent_count']);
+
+        $this->assertArrayHasKey('opportunities', $alerts);
+        \App\Domain\Opportunity\Models\Opportunity::create([
+            'number' => 'OPP-DASH-01',
+            'title' => 'Dashboard Test Opp',
+            'owner_name' => 'Owner Dash',
+            'owner_phone' => '9999999999',
+            'status' => \App\Domain\Opportunity\Enums\OpportunityStatus::READY_FOR_MOU,
+        ]);
+
+        $alertsAfter = $component->instance()->getAlertsData();
+        $this->assertEquals(1, $alertsAfter['opportunities']['count']);
+        $this->assertEquals(1, $alertsAfter['opportunities']['ready_count']);
     }
 
     public function test_all_three_trend_charts_render_without_errors(): void

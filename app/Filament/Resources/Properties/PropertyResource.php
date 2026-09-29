@@ -4,7 +4,6 @@ namespace App\Filament\Resources\Properties;
 
 use App\Domain\Property\Models\Property;
 use App\Filament\Clusters\PropertiesCluster;
-use App\Filament\Resources\Properties\Pages\CreateProperty;
 use App\Filament\Resources\Properties\Pages\EditProperty;
 use App\Filament\Resources\Properties\Pages\ListProperties;
 use App\Filament\Resources\Properties\Pages\OnboardingDashboard;
@@ -49,7 +48,7 @@ class PropertyResource extends Resource
 
     public static function canCreate(): bool
     {
-        return auth()->user()?->can('create', Property::class) ?? false;
+        return false;
     }
 
     public static function canEdit(Model $record): bool
@@ -95,7 +94,6 @@ class PropertyResource extends Resource
     {
         return [
             'index' => ListProperties::route('/'),
-            'create' => CreateProperty::route('/create'),
             'edit' => EditProperty::route('/{record}/edit'),
             'financials' => PropertyFinancials::route('/{record}/financials'),
             'onboarding' => OnboardingDashboard::route('/{record}/onboarding'),

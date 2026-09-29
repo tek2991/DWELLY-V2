@@ -54,13 +54,25 @@ class DashboardQuickActionsTest extends TestCase
         $this->assertCount(7, $actions);
 
         $labels = array_column($actions, 'label');
-        $this->assertContains('Add Property', $labels);
+        $this->assertContains('Add Opportunity', $labels);
         $this->assertContains('New Tenancy', $labels);
         $this->assertContains('Log Repair Ticket', $labels);
         $this->assertContains('Schedule Audit', $labels);
         $this->assertContains('Generate Rent', $labels);
         $this->assertContains('Disburse Payouts', $labels);
         $this->assertContains('Renewals Console', $labels);
+
+        $opportunityAction = collect($actions)->firstWhere('label', 'Add Opportunity');
+        $this->assertEquals(\App\Filament\Resources\Operations\OpportunityResource::getUrl('create'), $opportunityAction['url']);
+    }
+
+    public function test_property_create_page_route_does_not_exist(): void
+    {
+        $this->assertFalse(\App\Filament\Resources\Properties\PropertyResource::canCreate());
+
+        $this->actingAs($this->user)
+            ->get('/operations/properties/properties/create')
+            ->assertNotFound();
     }
 
     public function test_expiring_leases_alert_calculates_correctly(): void

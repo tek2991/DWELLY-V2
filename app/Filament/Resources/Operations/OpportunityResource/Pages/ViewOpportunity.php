@@ -57,7 +57,18 @@ class ViewOpportunity extends ViewRecord
     {
         return [
             EditAction::make()
-                ->visible(fn (Opportunity $record) => OpportunityResource::canEdit($record)),
+                ->disabled(fn (Opportunity $record): bool => $record->status === OpportunityStatus::CLOSED_LOST)
+                ->tooltip(fn (Opportunity $record): ?string => $record->status === OpportunityStatus::CLOSED_LOST ? 'Closed lost opportunities cannot be edited' : null)
+                ->url(fn (Opportunity $record): ?string => $record->status === OpportunityStatus::CLOSED_LOST ? null : OpportunityResource::getUrl('edit', ['record' => $record]))
+                ->visible(function (Opportunity $record): bool {
+                    if ($record->status === OpportunityStatus::CLOSED_LOST) {
+                        $user = auth()->user();
+
+                        return $user?->hasRole(\App\Domain\Auth\Enums\RoleName::BUSINESS_OWNER) || $user?->hasRole('admin') || ($user?->roles->isEmpty() ?? false) || ($user?->can('opportunity.update') ?? false);
+                    }
+
+                    return OpportunityResource::canEdit($record);
+                }),
 
             Action::make('markReadyForMou')
                 ->label('Ready For MOU')
@@ -118,7 +129,7 @@ class ViewOpportunity extends ViewRecord
                 ->label('Close Lost')
                 ->icon('heroicon-o-x-circle')
                 ->color('danger')
-                ->visible(fn (Opportunity $record) => ! in_array($record->status, [OpportunityStatus::CLOSED_LOST, OpportunityStatus::CANCELLED, OpportunityStatus::CONVERTED]) && (auth()->user()?->can('update', $record) ?? false))
+                ->visible(fn (Opportunity $record) => ! in_array($record->status, [OpportunityStatus::CLOSED_LOST, OpportunityStatus::CONVERTED, OpportunityStatus::MOU_SIGNED]) && (auth()->user()?->can('update', $record) ?? false))
                 ->modalHeading('Mark Lead as Closed / Lost')
                 ->modalDescription('Specify the reason for losing this opportunity.')
                 ->form([

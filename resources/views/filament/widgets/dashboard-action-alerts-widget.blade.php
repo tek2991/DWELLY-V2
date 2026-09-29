@@ -14,9 +14,51 @@
         $alerts = $this->getAlertsData();
     @endphp
 
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; margin-top: 0.375rem;">
+    <style>
+        .operational-action-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 0.875rem;
+            margin-top: 0.5rem;
+        }
+        @media (max-width: 1100px) {
+            .operational-action-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+        @media (max-width: 640px) {
+            .operational-action-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+
+    <div class="operational-action-grid">
         
-        <!-- 1. Urgent Maintenance -->
+        <!-- 1. Active Opportunities / Supply Pipeline -->
+        <a href="{{ $alerts['opportunities']['url'] }}" style="text-decoration: none; color: inherit; display: block;">
+            <div style="background: #ffffff; border: 1px solid #e0e7ff; border-radius: 0.625rem; padding: 0.875rem 1rem; box-shadow: 0 1px 2px rgba(0,0,0,0.03); transition: all 0.2s ease; border-left: 4px solid #6366f1; height: 100%; display: flex; flex-direction: column; justify-content: space-between;">
+                <div style="display: flex; align-items: flex-start; justify-content: space-between;">
+                    <div>
+                        <div style="font-size: 0.625rem; font-weight: 700; color: #4338ca; text-transform: uppercase; letter-spacing: 0.05em;">Active Leads</div>
+                        <div style="font-size: 1.375rem; font-weight: 800; color: #0f172a; margin-top: 0.25rem;">
+                            {{ $alerts['opportunities']['count'] }}
+                        </div>
+                    </div>
+                    <div style="width: 2rem; height: 2rem; border-radius: 0.5rem; background: #eef2ff; color: #4f46e5; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                        <x-filament::icon icon="heroicon-m-sparkles" style="width: 1.125rem; height: 1.125rem;" />
+                    </div>
+                </div>
+                <div style="margin-top: 0.625rem; display: flex; align-items: center; justify-content: space-between; gap: 0.25rem;">
+                    <span style="font-size: 0.625rem; font-weight: 700; color: {{ $alerts['opportunities']['ready_count'] > 0 ? '#4338ca' : '#64748b' }}; background: {{ $alerts['opportunities']['ready_count'] > 0 ? '#e0e7ff' : '#f1f5f9' }}; padding: 0.125rem 0.375rem; border-radius: 9999px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        {{ $alerts['opportunities']['ready_count'] > 0 ? $alerts['opportunities']['ready_count'] . ' Ready for MOU' : 'Pipeline Active' }}
+                    </span>
+                    <span style="font-size: 0.75rem; color: #94a3b8; font-weight: 700; flex-shrink: 0;">&rarr;</span>
+                </div>
+            </div>
+        </a>
+
+        <!-- 2. Urgent Maintenance -->
         <a href="{{ $alerts['maintenance']['url'] }}" style="text-decoration: none; color: inherit; display: block;">
             <div style="background: #ffffff; border: 1px solid #fee2e2; border-radius: 0.625rem; padding: 0.875rem 1rem; box-shadow: 0 1px 2px rgba(0,0,0,0.03); transition: all 0.2s ease; border-left: 4px solid #ef4444; height: 100%; display: flex; flex-direction: column; justify-content: space-between;">
                 <div style="display: flex; align-items: flex-start; justify-content: space-between;">

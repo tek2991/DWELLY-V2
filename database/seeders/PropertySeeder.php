@@ -123,32 +123,39 @@ class PropertySeeder extends Seeder
                 $property->save();
 
                 // 2. Create Opportunity
-                $oppNumber = sprintf('OPP-2026-%05d', $index + 2);
-                $opportunity = Opportunity::firstOrCreate(
-                    ['number' => $oppNumber],
-                    [
-                        'branch_id' => $branchId,
-                        'title' => "{$def['bhk_name']} at {$def['building_name']} - {$owner->display_name}",
-                        'status' => 'converted',
-                        'opportunity_source_id' => $this->opportunitySources[array_rand($this->opportunitySources)],
-                        'assigned_user_id' => $this->executiveUser->id,
-                        'owner_party_id' => $owner->id,
-                        'owner_name' => $owner->display_name,
-                        'owner_phone' => $owner->phone,
-                        'owner_email' => $owner->email,
-                        'address' => $def['address_line_1'],
-                        'estimated_property_type_id' => $def['property_type_id'],
-                        'estimated_bhk' => $def['bhk_name'],
-                        'estimated_size' => $def['sqft'],
-                        'estimated_is_furnished' => str_contains(strtolower($def['furnishing_name']), 'furnished'),
-                        'expected_rent' => $def['rent'],
-                        'expected_financial_model_id' => $this->financialModels['Rent share'] ?? array_values($this->financialModels)[0],
-                    ]
-                );
+                $mou = $property->exists ? $property->mous()->first() : null;
+                $opportunity = $mou?->opportunity;
+
+                if (! $opportunity) {
+                    $oppNumber = NumberingService::generate('opportunity');
+                    $opportunity = Opportunity::firstOrCreate(
+                        ['number' => $oppNumber],
+                        [
+                            'branch_id' => $branchId,
+                            'title' => "{$def['bhk_name']} at {$def['building_name']} - {$owner->display_name}",
+                            'status' => 'converted',
+                            'opportunity_source_id' => $this->opportunitySources[array_rand($this->opportunitySources)],
+                            'assigned_user_id' => $this->executiveUser->id,
+                            'owner_party_id' => $owner->id,
+                            'owner_name' => $owner->display_name,
+                            'owner_phone' => $owner->phone,
+                            'owner_email' => $owner->email,
+                            'address' => $def['address_line_1'],
+                            'estimated_property_type_id' => $def['property_type_id'],
+                            'estimated_bhk' => $def['bhk_name'],
+                            'estimated_size' => $def['sqft'],
+                            'estimated_is_furnished' => str_contains(strtolower($def['furnishing_name']), 'furnished'),
+                            'expected_rent' => $def['rent'],
+                            'expected_financial_model_id' => $this->financialModels['Rent share'] ?? array_values($this->financialModels)[0],
+                        ]
+                    );
+                }
 
                 // 3. Create MOU linking Property to Owner Party
-                $mouNumber = NumberingService::generate('mou');
-                $mou = Mou::firstOrNew(['number' => $mouNumber]);
+                if (! $mou) {
+                    $mouNumber = NumberingService::generate('mou');
+                    $mou = Mou::firstOrNew(['number' => $mouNumber]);
+                }
                 $mou->fill([
                     'branch_id' => $branchId,
                     'opportunity_id' => $opportunity->id,

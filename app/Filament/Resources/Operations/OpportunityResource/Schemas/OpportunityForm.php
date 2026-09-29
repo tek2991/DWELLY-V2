@@ -184,13 +184,10 @@ class OpportunityForm
                                             $label = e($status->getLabel());
                                             $color = match ($status) {
                                                 OpportunityStatus::NEW => 'bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200',
-                                                OpportunityStatus::CONTACTED => 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-200',
-                                                OpportunityStatus::SITE_VISIT_SCHEDULED, OpportunityStatus::SITE_VISIT_COMPLETED => 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200',
-                                                OpportunityStatus::NEGOTIATION => 'bg-purple-100 text-purple-800 dark:bg-purple-900/60 dark:text-purple-200',
                                                 OpportunityStatus::READY_FOR_MOU => 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200 font-bold',
                                                 OpportunityStatus::MOU_CREATED => 'bg-sky-100 text-sky-800 dark:bg-sky-900/60 dark:text-sky-200',
                                                 OpportunityStatus::MOU_SIGNED, OpportunityStatus::CONVERTED => 'bg-green-100 text-green-800 dark:bg-green-900/60 dark:text-green-200 font-bold',
-                                                OpportunityStatus::CLOSED_LOST, OpportunityStatus::CANCELLED => 'bg-red-100 text-red-800 dark:bg-red-900/60 dark:text-red-200',
+                                                OpportunityStatus::CLOSED_LOST => 'bg-red-100 text-red-800 dark:bg-red-900/60 dark:text-red-200',
                                             };
 
                                             return new HtmlString("<div class=\"flex items-center gap-1.5 flex-wrap\"><span class=\"inline-flex items-center px-3 py-1 rounded-full text-xs font-bold {$color}\">{$label}</span></div>");

@@ -4,10 +4,12 @@ namespace App\Filament\Resources\Operations\OpportunityResource\Pages;
 
 use App\Domain\Opportunity\Enums\OpportunityStatus;
 use App\Domain\Opportunity\Models\Opportunity;
+use App\Domain\Opportunity\Services\OpportunityWorkflowService;
 use App\Filament\Resources\Operations\OpportunityResource;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\ForceDeleteAction;
-use Filament\Actions\RestoreAction;
+use Filament\Actions\Action;
+use Filament\Actions\ViewAction;
+use Filament\Forms\Components\Textarea;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\HtmlString;
@@ -15,6 +17,17 @@ use Illuminate\Support\HtmlString;
 class EditOpportunity extends EditRecord
 {
     protected static string $resource = OpportunityResource::class;
+
+    public function mount(int | string $record): void
+    {
+        parent::mount($record);
+
+        /** @var Opportunity $opportunity */
+        $opportunity = $this->getRecord();
+        if ($opportunity->status === OpportunityStatus::CLOSED_LOST) {
+            abort(403, 'Closed lost opportunities cannot be edited.');
+        }
+    }
 
     public function getSubheading(): ?Htmlable
     {
@@ -43,9 +56,22 @@ class EditOpportunity extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            DeleteAction::make(),
-            ForceDeleteAction::make(),
-            RestoreAction::make(),
+            ViewAction::make(),
+            Action::make('closeLost')
+                ->label('Close Lost')
+                ->icon('heroicon-o-x-circle')
+                ->color('danger')
+                ->visible(fn (Opportunity $record) => ! in_array($record->status, [OpportunityStatus::CONVERTED, OpportunityStatus::CLOSED_LOST, OpportunityStatus::MOU_SIGNED]) && (auth()->user()?->can('update', $record) ?? false))
+                ->modalHeading('Mark Lead as Closed / Lost')
+                ->modalDescription('Specify the reason for losing this opportunity.')
+                ->form([
+                    Textarea::make('notes')->label('Reason for losing')->placeholder('Enter details regarding why this lead was lost...')->required(),
+                ])
+                ->action(function (Opportunity $record, array $data) {
+                    app(OpportunityWorkflowService::class)->closeLost($record, $data['notes'] ?? null);
+                    Notification::make()->title('Opportunity marked as Closed / Lost')->success()->send();
+                    $this->redirect(OpportunityResource::getUrl('view', ['record' => $record]));
+                }),
         ];
     }
 

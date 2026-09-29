@@ -87,6 +87,11 @@ class Opportunity extends DomainModel implements HasMedia
         return $this->hasMany(OpportunityActivity::class)->orderBy('performed_at', 'desc');
     }
 
+    public function latestActivity(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(OpportunityActivity::class)->latestOfMany('performed_at');
+    }
+
     public function snapshots(): HasMany
     {
         return $this->hasMany(OpportunitySnapshot::class)->orderBy('created_at', 'desc');

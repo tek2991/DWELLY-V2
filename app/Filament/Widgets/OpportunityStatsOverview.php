@@ -15,10 +15,7 @@ class OpportunityStatsOverview extends BaseWidget
     {
         $total = Opportunity::count();
         
-        $closed = Opportunity::whereIn('status', [
-            OpportunityStatus::CLOSED_LOST,
-            OpportunityStatus::CANCELLED,
-        ])->count();
+        $closed = Opportunity::where('status', OpportunityStatus::CLOSED_LOST)->count();
 
         $convertedToMou = Opportunity::whereIn('status', [
             OpportunityStatus::READY_FOR_MOU,

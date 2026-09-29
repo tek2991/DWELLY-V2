@@ -4,3 +4,5 @@
 4. Mobile layout - Audit, maintenance
 5. Generate MOU in editable format, DOC
 6. In financial page, after pdf verification no option to edit further
+
+7. How is rent share in oppurtunity implemented?

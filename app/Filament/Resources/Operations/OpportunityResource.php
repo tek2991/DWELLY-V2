@@ -49,12 +49,31 @@ class OpportunityResource extends Resource
             return auth()->user()?->can('create', Opportunity::class) ?? false;
         }
 
+        if ($record instanceof Opportunity && $record->status === \App\Domain\Opportunity\Enums\OpportunityStatus::CLOSED_LOST) {
+            return false;
+        }
+
         return auth()->user()?->can('update', $record) ?? false;
     }
 
     public static function canDelete(Model $record): bool
     {
-        return auth()->user()?->can('delete', $record) ?? false;
+        return false;
+    }
+
+    public static function canDeleteAny(): bool
+    {
+        return false;
+    }
+
+    public static function canForceDelete(Model $record): bool
+    {
+        return false;
+    }
+
+    public static function canForceDeleteAny(): bool
+    {
+        return false;
     }
 
     public static function form(Schema $schema): Schema

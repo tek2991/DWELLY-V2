@@ -202,4 +202,35 @@ class NumberingServiceTest extends TestCase
         $code = NumberingService::generate('mou');
         $this->assertEquals("MOU-{$year}-00002", $code);
     }
+
+    public function test_it_generates_opportunity_number_avoiding_collisions_with_variable_padding(): void
+    {
+        $year = Carbon::now()->year;
+
+        // Simulate existing database records with mixed padding (5-digit and 6-digit legacy codes)
+        \App\Domain\Opportunity\Models\Opportunity::create([
+            'title' => 'Opp 51',
+            'number' => "OPP-{$year}-00051",
+            'owner_name' => 'Owner 51',
+            'owner_phone' => '1111111111',
+            'status' => \App\Domain\Opportunity\Enums\OpportunityStatus::NEW,
+        ]);
+
+        \App\Domain\Opportunity\Models\Opportunity::create([
+            'title' => 'Opp 52',
+            'number' => "OPP-{$year}-000052",
+            'owner_name' => 'Owner 52',
+            'owner_phone' => '2222222222',
+            'status' => \App\Domain\Opportunity\Enums\OpportunityStatus::NEW,
+        ]);
+
+        $action = app(\App\Domain\Opportunity\Actions\GenerateOpportunityNumberAction::class);
+        $code = $action->execute();
+
+        // Must discover sequence past 52 and not collide with 52
+        $this->assertEquals("OPP-{$year}-00053", $code);
+
+        $nextCode = $action->execute();
+        $this->assertEquals("OPP-{$year}-00054", $nextCode);
+    }
 }

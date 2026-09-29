@@ -89,6 +89,23 @@ class OperationsDashboardTest extends TestCase
             'branch_id' => $this->branch->id,
         ]);
 
+        $opp = \App\Domain\Opportunity\Models\Opportunity::create([
+            'branch_id' => $this->branch->id,
+            'number' => 'OPP-OPS-01',
+            'title' => 'Ops Pipeline Opp',
+            'owner_name' => 'Ops Owner',
+            'owner_phone' => '9999999999',
+            'assigned_user_id' => $this->user->id,
+            'status' => \App\Domain\Opportunity\Enums\OpportunityStatus::NEW,
+        ]);
+
+        $opp->activities()->create([
+            'activity_type' => \App\Domain\Opportunity\Enums\OpportunityActivityType::CALL,
+            'notes' => 'Discussed expected rent with owner',
+            'performed_by' => $this->user->id,
+            'performed_at' => now(),
+        ]);
+
         $component = Livewire::actingAs($this->user)
             ->test(OperationsDashboard::class);
 
@@ -97,6 +114,14 @@ class OperationsDashboardTest extends TestCase
         $this->assertEquals(1, $data['vacant']);
         $this->assertEquals(1, $data['occupied']);
         $this->assertEquals(50.0, $data['occupancy_rate']);
+        $this->assertEquals(1, $data['active_opportunities_count']);
+        $this->assertCount(1, $data['recent_opportunities']);
+
+        $component->assertSee($this->user->name);
+        $component->assertSee('Call');
+        $component->assertSee('Quick Launch');
+        $component->assertSee('New Lead / Opportunity');
+        $this->assertCount(5, $component->instance()->getQuickActions());
     }
 
     public function test_maintenance_data_categorizes_by_priority(): void

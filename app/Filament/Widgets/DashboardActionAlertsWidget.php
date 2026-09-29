@@ -13,8 +13,11 @@ use App\Domain\Maintenance\Enums\MaintenanceStatus;
 use App\Domain\Maintenance\Models\MaintenanceRequest;
 use App\Domain\Task\Enums\TaskStatus;
 use App\Domain\Task\Models\Task;
+use App\Domain\Opportunity\Enums\OpportunityStatus;
+use App\Domain\Opportunity\Models\Opportunity;
 use App\Filament\Resources\Operations\AuditResource;
 use App\Filament\Resources\Operations\MaintenanceRequestResource;
+use App\Filament\Resources\Operations\OpportunityResource;
 use App\Filament\Resources\Operations\TaskResource;
 use App\Filament\Resources\Operations\TenantDeboardingResource;
 use Filament\Widgets\Widget;
@@ -92,7 +95,22 @@ class DashboardActionAlertsWidget extends Widget
         $expiringLeasesCount = (clone $expiringLeasesQuery)->count();
         $expiringRentTotal = (float) (clone $expiringLeasesQuery)->sum('rent_amount');
 
+        // 8. Active Opportunities / Pipeline
+        $activeOpportunitiesQuery = Opportunity::whereNotIn('status', [
+            OpportunityStatus::CONVERTED,
+            OpportunityStatus::CLOSED_LOST,
+        ]);
+        $activeOpportunitiesCount = (clone $activeOpportunitiesQuery)->count();
+        $readyForMouCount = (clone $activeOpportunitiesQuery)
+            ->where('status', OpportunityStatus::READY_FOR_MOU)
+            ->count();
+
         return [
+            'opportunities' => [
+                'count' => $activeOpportunitiesCount,
+                'ready_count' => $readyForMouCount,
+                'url' => OpportunityResource::getUrl() . '?activeTab=active',
+            ],
             'maintenance' => [
                 'count' => $maintenanceCount,
                 'urgent_count' => $urgentMaintenanceCount,
