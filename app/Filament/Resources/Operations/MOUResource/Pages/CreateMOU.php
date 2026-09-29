@@ -68,6 +68,23 @@ class CreateMOU extends CreateRecord
             $opportunity = !empty($data['opportunity_id']) ? Opportunity::find($data['opportunity_id']) : null;
             $data['signatory_details'] = app(\App\Domain\Mou\Services\MouService::class)->getSignatoryDetailsForOwner($party, $opportunity);
         }
+
+        // Sync dynamic kyc_documents numbers to legacy details arrays for downstream compatibility
+        if (!empty($data['kyc_documents']['owner']['aadhaar']['number'])) {
+            $data['owner_details']['aadhar_number'] = $data['kyc_documents']['owner']['aadhaar']['number'];
+        }
+        if (!empty($data['kyc_documents']['owner']['pan']['number'])) {
+            $data['owner_details']['pan_number'] = $data['kyc_documents']['owner']['pan']['number'];
+        }
+        if (!empty($data['kyc_documents']['owner']['electricity_bill']['number'])) {
+            $data['legal_terms']['electricity_consumer_id'] = $data['kyc_documents']['owner']['electricity_bill']['number'];
+        }
+        if (!empty($data['kyc_documents']['signatory']['aadhaar']['number'])) {
+            $data['signatory_details']['aadhar_number'] = $data['kyc_documents']['signatory']['aadhaar']['number'];
+        }
+        if (!empty($data['kyc_documents']['signatory']['pan']['number'])) {
+            $data['signatory_details']['pan_number'] = $data['kyc_documents']['signatory']['pan']['number'];
+        }
         
         return $data;
     }

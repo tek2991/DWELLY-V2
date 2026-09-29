@@ -536,5 +536,127 @@ class MOUResourceTest extends TestCase
                 'state_id' => 'required',
             ]);
     }
+
+    public function test_mous_tabs_filter_by_status(): void
+    {
+        \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'Business Owner', 'guard_name' => 'web']);
+        $user = User::factory()->create();
+        $user->assignRole('Business Owner');
+        $this->actingAs($user);
+
+        $opp = Opportunity::create([
+            'number' => 'OPP-TABS-01',
+            'title' => 'Tab Test Opp',
+            'owner_name' => 'Tab Owner',
+            'owner_phone' => '9876543210',
+            'assigned_user_id' => $user->id,
+            'status' => \App\Domain\Opportunity\Enums\OpportunityStatus::NEW,
+        ]);
+
+        $activeMou = Mou::create([
+            'number' => 'MOU-ACT-01',
+            'opportunity_id' => $opp->id,
+            'status' => MouStatus::DRAFT,
+            'owner_name' => 'Active Owner',
+            'owner_phone' => '9876543210',
+        ]);
+
+        $convertedMou = Mou::create([
+            'number' => 'MOU-CNV-01',
+            'opportunity_id' => $opp->id,
+            'status' => MouStatus::CONVERTED,
+            'owner_name' => 'Converted Owner',
+            'owner_phone' => '9876543211',
+        ]);
+
+        $cancelledMou = Mou::create([
+            'number' => 'MOU-CNC-01',
+            'opportunity_id' => $opp->id,
+            'status' => MouStatus::CANCELLED,
+            'owner_name' => 'Cancelled Owner',
+            'owner_phone' => '9876543212',
+        ]);
+        $cancelledMou->delete();
+
+        // Default 'all' tab shows all
+        Livewire::test(MOUResource\Pages\ListMOUs::class)
+            ->assertCanSeeTableRecords([$activeMou, $convertedMou, $cancelledMou]);
+
+        // 'active' tab shows only active
+        Livewire::test(MOUResource\Pages\ListMOUs::class)
+            ->set('activeTab', 'active')
+            ->assertCanSeeTableRecords([$activeMou])
+            ->assertCanNotSeeTableRecords([$convertedMou, $cancelledMou]);
+
+        // 'converted' tab shows only converted
+        Livewire::test(MOUResource\Pages\ListMOUs::class)
+            ->set('activeTab', 'converted')
+            ->assertCanSeeTableRecords([$convertedMou])
+            ->assertCanNotSeeTableRecords([$activeMou, $cancelledMou]);
+
+        // 'cancelled' tab shows only cancelled
+        Livewire::test(MOUResource\Pages\ListMOUs::class)
+            ->set('activeTab', 'cancelled')
+            ->assertCanSeeTableRecords([$cancelledMou])
+            ->assertCanNotSeeTableRecords([$activeMou, $convertedMou]);
+    }
+
+    public function test_mous_table_is_sorted_by_latest_first(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $opp = Opportunity::create([
+            'number' => 'OPP-SORT-01',
+            'title' => 'Sort Test Opp',
+            'owner_name' => 'Sort Owner',
+            'owner_phone' => '9876543210',
+            'assigned_user_id' => $user->id,
+            'status' => \App\Domain\Opportunity\Enums\OpportunityStatus::NEW,
+        ]);
+
+        $older = Mou::create([
+            'number' => 'MOU-OLD',
+            'opportunity_id' => $opp->id,
+            'status' => MouStatus::DRAFT,
+            'created_at' => now()->subDays(2),
+        ]);
+
+        $newer = Mou::create([
+            'number' => 'MOU-NEW',
+            'opportunity_id' => $opp->id,
+            'status' => MouStatus::DRAFT,
+            'created_at' => now(),
+        ]);
+
+        Livewire::test(MOUResource\Pages\ListMOUs::class)
+            ->assertCanSeeTableRecords([$newer, $older], inOrder: true);
+    }
+
+    public function test_trashed_filter_is_not_present_in_mous_table(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $test = Livewire::test(MOUResource\Pages\ListMOUs::class);
+
+        $filters = $test->instance()->getTable()->getFilters();
+        $this->assertArrayNotHasKey('trashed', $filters);
+    }
+
+    public function test_opportunity_column_is_hidden_by_default(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $test = Livewire::test(MOUResource\Pages\ListMOUs::class);
+
+        $column = $test->instance()->getTable()->getColumn('opportunity.title');
+
+        $this->assertTrue($column->isToggledHiddenByDefault());
+        $this->assertTrue($column->isToggledHidden());
+    }
 }
+
+
 

@@ -22,7 +22,6 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
-use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Storage;
 
@@ -50,7 +49,8 @@ class MOUsTable
                     ->label('Opportunity / Lead')
                     ->searchable()
                     ->weight('medium')
-                    ->description(fn (Mou $record) => $record->party?->display_name ? "👤 {$record->party->display_name}" : ($record->owner_name ? "👤 {$record->owner_name}" : null)),
+                    ->description(fn (Mou $record) => $record->party?->display_name ? "👤 {$record->party->display_name}" : ($record->owner_name ? "👤 {$record->owner_name}" : null))
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('party.display_name')
                     ->label('Party / Owner')
@@ -73,8 +73,11 @@ class MOUsTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->defaultSort('created_at', 'desc')
+            ->recordUrl(
+                fn (Mou $record): string => MOUResource::getUrl('view', ['record' => $record]),
+            )
             ->filters([
-                TrashedFilter::make(),
                 SelectFilter::make('type')
                     ->options(MouType::class),
                 SelectFilter::make('status')

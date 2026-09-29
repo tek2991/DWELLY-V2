@@ -164,19 +164,69 @@ class MouPdfService
 
         // Process Owner documents
         $ownerName = $mou->party->display_name ?? 'Property Owner';
-        $processMedia('owner_aadhaar', 'Property Owner (Aadhaar)', $ownerName);
-        $processMedia('owner_pan', 'Property Owner (PAN)', $ownerName);
-        $processMedia('cancelled_cheque', 'Property Owner (Cancelled Cheque)', $ownerName);
-        $processMedia('electricity_bill', 'Property Owner (Electricity Bill)', $ownerName);
-        $processMedia('mou_attachments', 'Property Owner Attachments', $ownerName);
+        $processedCollections = [];
+
+        try {
+            $ownerDocs = \App\Domain\Shared\Models\KycDocumentType::query()
+                ->where('is_active', true)
+                ->where('mou_owner_requirement', '!=', \App\Domain\Shared\Enums\KycRequirementLevel::DISABLED)
+                ->orderBy('sort_order')
+                ->get();
+
+            foreach ($ownerDocs as $doc) {
+                $col = $mou->getDocumentCollectionName($doc->code, 'owner');
+                $processMedia($col, "Property Owner ({$doc->name})", $ownerName);
+                $processedCollections[] = $col;
+            }
+        } catch (\Throwable $e) {
+            // Fallback
+        }
+
+        $legacyOwnerCollections = [
+            'owner_aadhaar' => 'Property Owner (Aadhaar)',
+            'owner_pan' => 'Property Owner (PAN)',
+            'cancelled_cheque' => 'Property Owner (Cancelled Cheque)',
+            'electricity_bill' => 'Property Owner (Electricity Bill)',
+            'mou_attachments' => 'Property Owner Attachments',
+        ];
+        foreach ($legacyOwnerCollections as $col => $label) {
+            if (!in_array($col, $processedCollections)) {
+                $processMedia($col, $label, $ownerName);
+            }
+        }
         
         // Process Signatory documents
         if ($mou->is_signatory_different) {
             $signatoryName = $mou->signatory_details['name'] ?? 'Signatory Authority';
-            $processMedia('signatory_aadhaar', 'Signatory Authority (Aadhaar)', $signatoryName);
-            $processMedia('signatory_pan', 'Signatory Authority (PAN)', $signatoryName);
-            $processMedia('signatory_poa', 'Signatory Authority (Power of Attorney)', $signatoryName);
-            $processMedia('signatory_documents', 'Signatory Authority Attachments', $signatoryName);
+            $processedSignatoryCols = [];
+
+            try {
+                $signatoryDocs = \App\Domain\Shared\Models\KycDocumentType::query()
+                    ->where('is_active', true)
+                    ->where('mou_signatory_requirement', '!=', \App\Domain\Shared\Enums\KycRequirementLevel::DISABLED)
+                    ->orderBy('sort_order')
+                    ->get();
+
+                foreach ($signatoryDocs as $doc) {
+                    $col = $mou->getDocumentCollectionName($doc->code, 'signatory');
+                    $processMedia($col, "Signatory Authority ({$doc->name})", $signatoryName);
+                    $processedSignatoryCols[] = $col;
+                }
+            } catch (\Throwable $e) {
+                // Fallback
+            }
+
+            $legacySignatoryCols = [
+                'signatory_aadhaar' => 'Signatory Authority (Aadhaar)',
+                'signatory_pan' => 'Signatory Authority (PAN)',
+                'signatory_poa' => 'Signatory Authority (Power of Attorney)',
+                'signatory_documents' => 'Signatory Authority Attachments',
+            ];
+            foreach ($legacySignatoryCols as $col => $label) {
+                if (!in_array($col, $processedSignatoryCols)) {
+                    $processMedia($col, $label, $signatoryName);
+                }
+            }
         }
 
         if (empty($attachments)) {

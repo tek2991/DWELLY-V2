@@ -33,6 +33,7 @@ class Mou extends DomainModel implements HasMedia
         'signatory_details',
         'is_signatory_different',
         'status',
+        'kyc_documents',
         'legal_terms',
         'bank_details',
         'verified_at',
@@ -45,6 +46,7 @@ class Mou extends DomainModel implements HasMedia
     ];
 
     protected $casts = [
+        'kyc_documents' => 'array',
         'legal_terms' => 'array',
         'bank_details' => 'array',
         'owner_details' => 'array',
@@ -52,8 +54,6 @@ class Mou extends DomainModel implements HasMedia
         'is_signatory_different' => 'boolean',
         'status' => MouStatus::class,
         'type' => \App\Domain\Mou\Enums\MouType::class,
-        'legal_terms' => 'array',
-        'bank_details' => 'array',
         'verified_at' => 'datetime',
         'cancelled_at' => 'datetime',
         'expires_at' => 'datetime',
@@ -76,6 +76,45 @@ class Mou extends DomainModel implements HasMedia
         $this->addMediaCollection('signatory_aadhaar');
         $this->addMediaCollection('signatory_pan');
         $this->addMediaCollection('signatory_poa');
+    }
+
+    public function getDocumentCollectionName(string $code, string $context = 'owner'): string
+    {
+        if ($context === 'signatory') {
+            return match ($code) {
+                'power_of_attorney' => 'signatory_poa',
+                default => "signatory_{$code}",
+            };
+        }
+
+        return match ($code) {
+            'cancelled_cheque' => 'cancelled_cheque',
+            'electricity_bill' => 'electricity_bill',
+            default => "owner_{$code}",
+        };
+    }
+
+    public function hasDocument(string $code, string $context = 'owner'): bool
+    {
+        $collection = $this->getDocumentCollectionName($code, $context);
+        if ($this->hasMedia($collection)) {
+            return true;
+        }
+
+        return $this->getMedia($context === 'signatory' ? 'signatory_documents' : 'mou_attachments')
+            ->contains(fn ($media) => $media->getCustomProperty('document_type') === $code);
+    }
+
+    public function getDocumentMedia(string $code, string $context = 'owner')
+    {
+        $collection = $this->getDocumentCollectionName($code, $context);
+        $media = $this->getMedia($collection);
+        if ($media->isNotEmpty()) {
+            return $media;
+        }
+
+        return $this->getMedia($context === 'signatory' ? 'signatory_documents' : 'mou_attachments')
+            ->filter(fn ($media) => $media->getCustomProperty('document_type') === $code);
     }
 
     public function opportunity(): BelongsTo

@@ -7,6 +7,8 @@ use App\Domain\Mou\Models\Mou;
 use App\Domain\Opportunity\Enums\MouStatus;
 use App\Domain\Opportunity\Models\FinancialModel;
 use App\Domain\Property\Models\UtilityProvider;
+use App\Domain\Shared\Enums\KycRequirementLevel;
+use App\Domain\Shared\Models\KycDocumentType;
 use App\Filament\Resources\Operations\MOUResource;
 use App\Filament\Resources\Operations\OpportunityResource;
 use App\Filament\Resources\Parties\PartyResource;
@@ -272,6 +274,18 @@ class MOUForm
                             Section::make('🏢 Property & Commercial Legal Terms')
                                 ->description('These details are mapped to the MOU Document and can be modified here without affecting the original Opportunity.')
                                 ->schema([
+                                    DatePicker::make('start_date')
+                                        ->label('MOU Agreement Start Date')
+                                        ->required()
+                                        ->native(false),
+
+                                    Select::make('legal_terms.financial_model_id')
+                                        ->label('Financial Model')
+                                        ->options(fn () => FinancialModel::pluck('name', 'id'))
+                                        ->required()
+                                        ->searchable()
+                                        ->preload(),
+
                                     TextInput::make('legal_terms.rent_amount')
                                         ->label('Agreed Monthly Rent')
                                         ->placeholder('e.g. 50000')
@@ -287,13 +301,6 @@ class MOUForm
                                         ->minValue(0)
                                         ->maxValue(100),
 
-                                    Select::make('legal_terms.financial_model_id')
-                                        ->label('Financial Model')
-                                        ->options(fn () => FinancialModel::pluck('name', 'id'))
-                                        ->required()
-                                        ->searchable()
-                                        ->preload(),
-
                                     Select::make('legal_terms.electricity_provider_id')
                                         ->label('Electricity Provider')
                                         ->options(function () {
@@ -303,12 +310,6 @@ class MOUForm
                                         })
                                         ->searchable()
                                         ->preload()
-                                        ->required(),
-
-                                    TextInput::make('legal_terms.electricity_consumer_id')
-                                        ->label('Electricity Consumer / Connection Number')
-                                        ->placeholder('e.g. CA-992817263')
-                                        ->maxLength(255)
                                         ->required(),
 
                                     Select::make('legal_terms.city_id')
@@ -328,132 +329,247 @@ class MOUForm
                             // 📁 Section 3: Owner KYC & Verification Documents
                             Section::make('📁 Owner KYC & Verification Documents')
                                 ->description('Attach official identity, banking, and utility documents for agreement compilation and audit records.')
-                                ->schema([
-                                    DatePicker::make('start_date')
-                                        ->label('MOU Agreement Start Date')
-                                        ->required()
-                                        ->native(false),
-
-                                    Grid::make(2)
-                                        ->schema([
-                                            SpatieMediaLibraryFileUpload::make('owner_aadhaar')
-                                                ->collection('owner_aadhaar')
-                                                ->label('Owner Aadhaar Card')
-                                                ->helperText('Front & Back image or PDF')
-                                                ->openable()
-                                                ->downloadable()
-                                                ->previewable()
-                                                ->required(),
-
-                                            SpatieMediaLibraryFileUpload::make('owner_pan')
-                                                ->collection('owner_pan')
-                                                ->label('Owner PAN Card')
-                                                ->helperText('Clear image or PDF')
-                                                ->openable()
-                                                ->downloadable()
-                                                ->previewable()
-                                                ->required(),
-
-                                            SpatieMediaLibraryFileUpload::make('cancelled_cheque')
-                                                ->collection('cancelled_cheque')
-                                                ->label('Cancelled Cheque / Bank Proof')
-                                                ->helperText('Cancelled Cheque or Bank Passbook copy')
-                                                ->openable()
-                                                ->downloadable()
-                                                ->previewable()
-                                                ->required(),
-
-                                            SpatieMediaLibraryFileUpload::make('electricity_bill')
-                                                ->collection('electricity_bill')
-                                                ->label('Electricity Bill')
-                                                ->helperText('Recent electricity bill image or PDF')
-                                                ->openable()
-                                                ->downloadable()
-                                                ->previewable()
-                                                ->required(),
-                                        ]),
-
-                                    Actions::make([
-                                        Action::make('uploadDocumentModal')
-                                            ->label('Upload Additional Documents')
-                                            ->icon('heroicon-o-arrow-up-tray')
-                                            ->color('primary')
-                                            ->button()
-                                            ->disabled(fn (?Mou $record) => $record && (
-                                                in_array($record->status, [
-                                                    MouStatus::VERIFIED,
-                                                    MouStatus::CONVERTED,
-                                                    MouStatus::COMPLETED,
-                                                    MouStatus::CANCELLED,
-                                                ]) || ! MOUResource::canEdit($record)
-                                            ))
-                                            ->tooltip(fn (?Mou $record) => $record && (
-                                                in_array($record->status, [
-                                                    MouStatus::VERIFIED,
-                                                    MouStatus::CONVERTED,
-                                                    MouStatus::COMPLETED,
-                                                    MouStatus::CANCELLED,
-                                                ]) || ! MOUResource::canEdit($record)
-                                            ) ? 'Document uploads are locked once the agreement is verified or converted.' : null)
-                                            ->modalHeading('Upload Document (Select Type & File)')
-                                            ->modalDescription('Select document type (Passport, Voter ID, MGNREGA Card, Sale Deed, etc.) and attach file.')
-                                            ->form([
-                                                Select::make('document_type')
-                                                    ->label('Document Type')
-                                                    ->options(\App\Domain\Shared\Enums\DocumentType::class)
-                                                    ->required()
-                                                    ->searchable(),
-                                                FileUpload::make('files')
-                                                    ->label('Files (Images / PDF)')
-                                                    ->multiple()
-                                                    ->preserveFilenames()
-                                                    ->required(),
-                                            ])
-                                            ->action(function (array $data, ?Mou $record, Set $set, Get $get) {
-                                                $collection = match ($data['document_type']) {
-                                                    'aadhaar', 'owner_aadhaar' => 'owner_aadhaar',
-                                                    'pan', 'owner_pan' => 'owner_pan',
-                                                    'cancelled_cheque' => 'cancelled_cheque',
-                                                    'electricity_bill' => 'electricity_bill',
-                                                    'power_of_attorney' => 'signatory_poa',
-                                                    default => 'mou_attachments',
-                                                };
-
-                                                if ($record && $record->exists) {
-                                                    foreach ($data['files'] as $path) {
-                                                        $fullPath = Storage::disk(config('filament.default_filesystem_disk'))->path($path);
-                                                        if (! file_exists($fullPath)) {
-                                                            $fullPath = Storage::disk('public')->path($path);
+                                ->headerActions([
+                                    Action::make('uploadDocumentModal')
+                                        ->label('Upload Additional Document')
+                                        ->icon('heroicon-m-plus')
+                                        ->color('primary')
+                                        ->size('sm')
+                                        ->disabled(fn (?Mou $record) => $record && (
+                                            in_array($record->status, [
+                                                MouStatus::VERIFIED,
+                                                MouStatus::CONVERTED,
+                                                MouStatus::COMPLETED,
+                                                MouStatus::CANCELLED,
+                                            ]) || ! MOUResource::canEdit($record)
+                                        ))
+                                        ->tooltip(fn (?Mou $record) => $record && (
+                                            in_array($record->status, [
+                                                MouStatus::VERIFIED,
+                                                MouStatus::CONVERTED,
+                                                MouStatus::COMPLETED,
+                                                MouStatus::CANCELLED,
+                                            ]) || ! MOUResource::canEdit($record)
+                                        ) ? 'Document uploads are locked once the agreement is verified or converted.' : null)
+                                        ->modalHeading('Upload Additional Document')
+                                        ->modalDescription('Select document type to attach and configure for the owner.')
+                                        ->form([
+                                            Select::make('document_type')
+                                                ->label('Document Type')
+                                                ->options(fn () => static::getDocumentTypeOptions('owner'))
+                                                ->required()
+                                                ->searchable()
+                                                ->live(),
+                                            TextInput::make('document_number')
+                                                ->label(function (Get $get) {
+                                                    $code = $get('document_type');
+                                                    if ($code) {
+                                                        $docType = KycDocumentType::where('code', $code)->first();
+                                                        if ($docType && $docType->has_number) {
+                                                            return $docType->number_label ?: "{$docType->name} Number";
                                                         }
+                                                    }
+                                                    return 'Document Number';
+                                                })
+                                                ->placeholder(function (Get $get) {
+                                                    $code = $get('document_type');
+                                                    if ($code) {
+                                                        $docType = KycDocumentType::where('code', $code)->first();
+                                                        return 'Enter ' . strtolower($docType?->name ?? 'document') . ' number...';
+                                                    }
+                                                    return 'Enter document number...';
+                                                })
+                                                ->visible(function (Get $get) {
+                                                    $code = $get('document_type');
+                                                    if (! $code) {
+                                                        return false;
+                                                    }
+                                                    $docType = KycDocumentType::where('code', $code)->first();
+                                                    return (bool) ($docType?->has_number);
+                                                }),
+                                            FileUpload::make('files')
+                                                ->label('Files (Images / PDF)')
+                                                ->multiple()
+                                                ->preserveFilenames()
+                                                ->required(),
+                                        ])
+                                        ->action(function (array $data, ?Mou $record, Set $set, Get $get) {
+                                            $docCode = $data['document_type'];
+                                            $collection = match ($docCode) {
+                                                'aadhaar', 'owner_aadhaar' => 'owner_aadhaar',
+                                                'pan', 'owner_pan' => 'owner_pan',
+                                                'cancelled_cheque' => 'cancelled_cheque',
+                                                'electricity_bill' => 'electricity_bill',
+                                                'power_of_attorney' => 'signatory_poa',
+                                                default => "owner_{$docCode}",
+                                            };
 
-                                                        $record->addMedia($fullPath)
-                                                            ->withCustomProperties([
-                                                                'document_type' => $data['document_type'],
-                                                            ])
-                                                            ->toMediaCollection($collection);
+                                            $docNumber = $data['document_number'] ?? null;
+
+                                            if ($record && $record->exists) {
+                                                foreach ($data['files'] as $path) {
+                                                    $fullPath = Storage::disk(config('filament.default_filesystem_disk'))->path($path);
+                                                    if (! file_exists($fullPath)) {
+                                                        $fullPath = Storage::disk('public')->path($path);
                                                     }
-                                                    $record->refresh();
-                                                    Notification::make()->title('Document Uploaded Successfully')->success()->send();
-                                                } else {
-                                                    $existing = $get($collection) ?? [];
-                                                    if (is_string($existing)) {
-                                                        $existing = [$existing];
-                                                    }
-                                                    $merged = array_values(array_unique(array_merge((array) $existing, (array) $data['files'])));
-                                                    $set($collection, $merged);
-                                                    Notification::make()
-                                                        ->title('Document Attached')
-                                                        ->body('File added to form. It will be saved when you submit the MOU.')
-                                                        ->success()
-                                                        ->send();
+
+                                                    $record->addMedia($fullPath)
+                                                        ->withCustomProperties([
+                                                            'document_type' => $docCode,
+                                                        ])
+                                                        ->toMediaCollection($collection);
                                                 }
-                                            }),
-                                    ]),
+
+                                                if (! empty($docNumber)) {
+                                                    $kycDocs = $record->kyc_documents ?? [];
+                                                    $kycDocs['owner'][$docCode]['number'] = $docNumber;
+                                                    $updateData = ['kyc_documents' => $kycDocs];
+                                                    if ($docCode === 'electricity_bill') {
+                                                        $legalTerms = $record->legal_terms ?? [];
+                                                        $legalTerms['electricity_consumer_id'] = $docNumber;
+                                                        $updateData['legal_terms'] = $legalTerms;
+                                                    }
+                                                    $record->update($updateData);
+                                                    $set("kyc_documents.owner.{$docCode}.number", $docNumber);
+                                                }
+
+                                                $record->refresh();
+                                                Notification::make()->title('Document Uploaded Successfully')->success()->send();
+                                            } else {
+                                                $existing = $get($collection) ?? [];
+                                                if (is_string($existing)) {
+                                                    $existing = [$existing];
+                                                }
+                                                $merged = array_values(array_unique(array_merge((array) $existing, (array) $data['files'])));
+                                                $set($collection, $merged);
+
+                                                if (! empty($docNumber)) {
+                                                    $set("kyc_documents.owner.{$docCode}.number", $docNumber);
+                                                    if ($docCode === 'electricity_bill') {
+                                                        $set('legal_terms.electricity_consumer_id', $docNumber);
+                                                    }
+                                                }
+
+                                                Notification::make()
+                                                    ->title('Document Attached')
+                                                    ->body('File added to form. It will be saved when you submit the MOU.')
+                                                    ->success()
+                                                    ->send();
+                                            }
+                                        }),
+                                ])
+                                ->schema([
+                                    Grid::make(['default' => 1, 'md' => 2])
+                                        ->schema(static::getDynamicOwnerKycFields()),
                                 ]),
 
                             // ✍️ Section 4: Signatory Authority & POA Details
                             Section::make('✍️ Signatory Authority & POA Details')
                                 ->description('Specify whether the agreement is signed by the registered owner or an authorized Power of Attorney (POA).')
+                                ->headerActions([
+                                    Action::make('uploadSignatoryDocumentModal')
+                                        ->label('Upload Additional Document')
+                                        ->icon('heroicon-m-plus')
+                                        ->color('primary')
+                                        ->size('sm')
+                                        ->visible(fn (Get $get) => (bool) $get('is_signatory_different'))
+                                        ->modalHeading('Upload Signatory Document (Select Type & File)')
+                                        ->modalDescription('Select document type and attach file for Signatory Authority.')
+                                        ->form([
+                                            Select::make('document_type')
+                                                ->label('Document Type')
+                                                ->options(fn () => static::getDocumentTypeOptions('signatory'))
+                                                ->required()
+                                                ->searchable()
+                                                ->live(),
+                                            TextInput::make('document_number')
+                                                ->label(function (Get $get) {
+                                                    $code = $get('document_type');
+                                                    if ($code) {
+                                                        $docType = KycDocumentType::where('code', $code)->first();
+                                                        if ($docType && $docType->has_number) {
+                                                            return 'Signatory ' . ($docType->number_label ?: "{$docType->name} Number");
+                                                        }
+                                                    }
+                                                    return 'Signatory Document Number';
+                                                })
+                                                ->placeholder(function (Get $get) {
+                                                    $code = $get('document_type');
+                                                    if ($code) {
+                                                        $docType = KycDocumentType::where('code', $code)->first();
+                                                        return 'Enter signatory ' . strtolower($docType?->name ?? 'document') . ' number...';
+                                                    }
+                                                    return 'Enter signatory document number...';
+                                                })
+                                                ->visible(function (Get $get) {
+                                                    $code = $get('document_type');
+                                                    if (! $code) {
+                                                        return false;
+                                                    }
+                                                    $docType = KycDocumentType::where('code', $code)->first();
+                                                    return (bool) ($docType?->has_number);
+                                                }),
+                                            FileUpload::make('files')
+                                                ->label('Files (Images / PDF)')
+                                                ->multiple()
+                                                ->preserveFilenames()
+                                                ->required(),
+                                        ])
+                                        ->action(function (array $data, ?Mou $record, Set $set, Get $get) {
+                                            $docCode = $data['document_type'];
+                                            $collection = match ($docCode) {
+                                                'aadhaar' => 'signatory_aadhaar',
+                                                'pan' => 'signatory_pan',
+                                                'power_of_attorney' => 'signatory_poa',
+                                                default => "signatory_{$docCode}",
+                                            };
+
+                                            $docNumber = $data['document_number'] ?? null;
+
+                                            if ($record && $record->exists) {
+                                                foreach ($data['files'] as $path) {
+                                                    $fullPath = Storage::disk(config('filament.default_filesystem_disk'))->path($path);
+                                                    if (! file_exists($fullPath)) {
+                                                        $fullPath = Storage::disk('public')->path($path);
+                                                    }
+
+                                                    $record->addMedia($fullPath)
+                                                        ->withCustomProperties([
+                                                            'document_type' => $docCode,
+                                                            'entity_type' => 'signatory',
+                                                        ])
+                                                        ->toMediaCollection($collection);
+                                                }
+
+                                                if (! empty($docNumber)) {
+                                                    $kycDocs = $record->kyc_documents ?? [];
+                                                    $kycDocs['signatory'][$docCode]['number'] = $docNumber;
+                                                    $record->update(['kyc_documents' => $kycDocs]);
+                                                    $set("kyc_documents.signatory.{$docCode}.number", $docNumber);
+                                                }
+
+                                                $record->refresh();
+                                                Notification::make()->title('Signatory Document Uploaded Successfully')->success()->send();
+                                            } else {
+                                                $existing = $get($collection) ?? [];
+                                                if (is_string($existing)) {
+                                                    $existing = [$existing];
+                                                }
+                                                $merged = array_values(array_unique(array_merge((array) $existing, (array) $data['files'])));
+                                                $set($collection, $merged);
+
+                                                if (! empty($docNumber)) {
+                                                    $set("kyc_documents.signatory.{$docCode}.number", $docNumber);
+                                                }
+
+                                                Notification::make()
+                                                    ->title('Signatory Document Attached')
+                                                    ->body('File added to form. It will be saved when you submit the MOU.')
+                                                    ->success()
+                                                    ->send();
+                                            }
+                                        }),
+                                ])
                                 ->schema([
                                     Toggle::make('is_signatory_different')
                                         ->label('Is Signatory Authority different from Property Owner?')
@@ -477,104 +593,14 @@ class MOUForm
                                                 ->label('Email Address')
                                                 ->email()
                                                 ->required(fn (Get $get) => $get('is_signatory_different')),
-                                            TextInput::make('signatory_details.aadhar_number')
-                                                ->label('Aadhaar Number')
-                                                ->required(fn (Get $get) => $get('is_signatory_different')),
-                                            TextInput::make('signatory_details.pan_number')
-                                                ->label('PAN Number')
-                                                ->required(fn (Get $get) => $get('is_signatory_different')),
                                         ])
                                         ->visible(fn (Get $get) => $get('is_signatory_different')),
 
-                                    Grid::make(3)
-                                        ->schema([
-                                            SpatieMediaLibraryFileUpload::make('signatory_aadhaar')
-                                                ->collection('signatory_aadhaar')
-                                                ->label('Signatory Aadhaar Card')
-                                                ->openable()
-                                                ->downloadable()
-                                                ->previewable()
-                                                ->required(fn (Get $get) => $get('is_signatory_different')),
-
-                                            SpatieMediaLibraryFileUpload::make('signatory_pan')
-                                                ->collection('signatory_pan')
-                                                ->label('Signatory PAN Card')
-                                                ->openable()
-                                                ->downloadable()
-                                                ->previewable()
-                                                ->required(fn (Get $get) => $get('is_signatory_different')),
-
-                                            SpatieMediaLibraryFileUpload::make('signatory_poa')
-                                                ->collection('signatory_poa')
-                                                ->label('Power of Attorney (POA) Document')
-                                                ->openable()
-                                                ->downloadable()
-                                                ->previewable()
-                                                ->required(fn (Get $get) => $get('is_signatory_different')),
-                                        ])
-                                        ->visible(fn (Get $get) => $get('is_signatory_different')),
-
-                                    Actions::make([
-                                        Action::make('uploadSignatoryDocumentModal')
-                                            ->label('Upload Additional Signatory Documents')
-                                            ->icon('heroicon-o-arrow-up-tray')
-                                            ->color('primary')
-                                            ->button()
-                                            ->modalHeading('Upload Signatory Document (Select Type & File)')
-                                            ->modalDescription('Select document type (Passport, Voter ID, Power of Attorney, etc.) and attach file for Signatory Authority.')
-                                            ->form([
-                                                Select::make('document_type')
-                                                    ->label('Document Type')
-                                                    ->options(\App\Domain\Shared\Enums\DocumentType::class)
-                                                    ->required()
-                                                    ->searchable(),
-                                                FileUpload::make('files')
-                                                    ->label('Files (Images / PDF)')
-                                                    ->multiple()
-                                                    ->preserveFilenames()
-                                                    ->required(),
-                                            ])
-                                            ->action(function (array $data, ?Mou $record, Set $set, Get $get) {
-                                                $collection = match ($data['document_type']) {
-                                                    'aadhaar' => 'signatory_aadhaar',
-                                                    'pan' => 'signatory_pan',
-                                                    'power_of_attorney' => 'signatory_poa',
-                                                    default => 'signatory_documents',
-                                                };
-
-                                                if ($record && $record->exists) {
-                                                    foreach ($data['files'] as $path) {
-                                                        $fullPath = Storage::disk(config('filament.default_filesystem_disk'))->path($path);
-                                                        if (! file_exists($fullPath)) {
-                                                            $fullPath = Storage::disk('public')->path($path);
-                                                        }
-
-                                                        $record->addMedia($fullPath)
-                                                            ->withCustomProperties([
-                                                                'document_type' => $data['document_type'],
-                                                                'entity_type' => 'signatory',
-                                                            ])
-                                                            ->toMediaCollection($collection);
-                                                    }
-                                                    $record->refresh();
-                                                    Notification::make()->title('Signatory Document Uploaded Successfully')->success()->send();
-                                                } else {
-                                                    $existing = $get($collection) ?? [];
-                                                    if (is_string($existing)) {
-                                                        $existing = [$existing];
-                                                    }
-                                                    $merged = array_values(array_unique(array_merge((array) $existing, (array) $data['files'])));
-                                                    $set($collection, $merged);
-                                                    Notification::make()
-                                                        ->title('Signatory Document Attached')
-                                                        ->body('File added to form. It will be saved when you submit the MOU.')
-                                                        ->success()
-                                                        ->send();
-                                                }
-                                            }),
-                                    ])
-                                    ->visible(fn (Get $get) => $get('is_signatory_different')),
-                                ])->columns(1)
+                                    Grid::make(['default' => 1, 'md' => 2])
+                                        ->schema(static::getDynamicSignatoryKycFields())
+                                        ->visible(fn (Get $get) => (bool) $get('is_signatory_different')),
+                                ])
+                                ->columns(1)
                                 ->collapsible(),
 
                             // 🏦 Section 5: Banking & Settlement Details
@@ -730,4 +756,337 @@ class MOUForm
                 ]),
         ]);
     }
+
+    public static function getDocumentTypeOptions(string $context = 'owner'): array
+    {
+        try {
+            $query = KycDocumentType::query()->where('is_active', true);
+            if ($context === 'signatory') {
+                $query->where('mou_signatory_requirement', '!=', KycRequirementLevel::DISABLED);
+            } else {
+                $query->where('mou_owner_requirement', '!=', KycRequirementLevel::DISABLED);
+            }
+            $options = $query->orderBy('sort_order')->pluck('name', 'code')->toArray();
+            if (! empty($options)) {
+                return $options;
+            }
+        } catch (\Throwable $e) {
+        }
+
+        return collect(\App\Domain\Shared\Enums\DocumentType::cases())
+            ->mapWithKeys(fn ($case) => [$case->value => $case->getLabel()])
+            ->toArray();
+    }
+
+    public static function getDynamicOwnerKycFields(): array
+    {
+        $fields = [];
+
+        try {
+            $docs = KycDocumentType::query()
+                ->where('is_active', true)
+                ->where('mou_owner_requirement', '!=', KycRequirementLevel::DISABLED)
+                ->orderBy('sort_order')
+                ->get();
+        } catch (\Throwable $e) {
+            $docs = collect();
+        }
+
+        if ($docs->isEmpty()) {
+            return [
+                Section::make('Aadhaar Card *')
+                    ->icon('heroicon-m-identification')
+                    ->compact()
+                    ->schema([
+                        SpatieMediaLibraryFileUpload::make('owner_aadhaar')
+                            ->collection('owner_aadhaar')
+                            ->label('Owner Aadhaar Card *')
+                            ->hintIcon('heroicon-m-information-circle', tooltip: 'Front & Back image or PDF')
+                            ->openable()->downloadable()->previewable()->required(),
+                    ]),
+                Section::make('PAN Card *')
+                    ->icon('heroicon-m-credit-card')
+                    ->compact()
+                    ->schema([
+                        SpatieMediaLibraryFileUpload::make('owner_pan')
+                            ->collection('owner_pan')
+                            ->label('Owner PAN Card *')
+                            ->hintIcon('heroicon-m-information-circle', tooltip: 'Clear image or PDF')
+                            ->openable()->downloadable()->previewable()->required(),
+                    ]),
+                Section::make('Cancelled Cheque / Bank Proof *')
+                    ->icon('heroicon-m-banknotes')
+                    ->compact()
+                    ->schema([
+                        SpatieMediaLibraryFileUpload::make('cancelled_cheque')
+                            ->collection('cancelled_cheque')
+                            ->label('Cancelled Cheque / Bank Proof *')
+                            ->hintIcon('heroicon-m-information-circle', tooltip: 'Cancelled Cheque or Bank Passbook copy')
+                            ->openable()->downloadable()->previewable()->required(),
+                    ]),
+                Section::make('Electricity Bill *')
+                    ->icon('heroicon-m-bolt')
+                    ->compact()
+                    ->schema([
+                        SpatieMediaLibraryFileUpload::make('electricity_bill')
+                            ->collection('electricity_bill')
+                            ->label('Electricity Bill *')
+                            ->hintIcon('heroicon-m-information-circle', tooltip: 'Recent electricity bill image or PDF')
+                            ->openable()->downloadable()->previewable()->required(),
+                    ]),
+            ];
+        }
+
+        foreach ($docs as $doc) {
+            $collectionName = match ($doc->code) {
+                'cancelled_cheque' => 'cancelled_cheque',
+                'electricity_bill' => 'electricity_bill',
+                default => "owner_{$doc->code}",
+            };
+            $isMandatory = $doc->isMouOwnerMandatory();
+            $badge = $isMandatory ? ' *' : '';
+            $tooltip = $doc->description ?: "Attach {$doc->name} image or PDF";
+
+            $isVisible = function (?Mou $record, Get $get) use ($doc, $isMandatory, $collectionName): bool {
+                if ($isMandatory) {
+                    return true;
+                }
+
+                return (bool) (
+                    $record?->hasMedia($collectionName) ||
+                    ! empty($get($collectionName)) ||
+                    ! empty($get("kyc_documents.owner.{$doc->code}.number")) ||
+                    ! empty($record?->kyc_documents['owner'][$doc->code])
+                );
+            };
+
+            $icon = $doc->icon ?: match ($doc->code) {
+                'aadhaar' => 'heroicon-m-identification',
+                'pan' => 'heroicon-m-credit-card',
+                'cancelled_cheque' => 'heroicon-m-banknotes',
+                'electricity_bill' => 'heroicon-m-bolt',
+                'power_of_attorney' => 'heroicon-m-scale',
+                'passport' => 'heroicon-m-globe-alt',
+                'driving_license' => 'heroicon-m-truck',
+                'voter_id' => 'heroicon-m-identification',
+                default => 'heroicon-m-document-text',
+            };
+
+            $cardFields = [];
+
+            if ($doc->has_number) {
+                $numberLabel = ($doc->number_label ?: "{$doc->name} Number") . $badge;
+                $fileLabel = "{$doc->name} File" . $badge;
+
+                $numberField = TextInput::make("kyc_documents.owner.{$doc->code}.number")
+                    ->label($numberLabel)
+                    ->placeholder("Enter {$doc->name} number...")
+                    ->default(function (?Mou $record) use ($doc) {
+                        if (! empty($record?->kyc_documents['owner'][$doc->code]['number'])) {
+                            return $record->kyc_documents['owner'][$doc->code]['number'];
+                        }
+                        if ($doc->code === 'aadhaar') {
+                            return $record?->party?->individual?->aadhaar_number ?? ($record?->owner_details['aadhar_number'] ?? null);
+                        }
+                        if ($doc->code === 'pan') {
+                            return $record?->party?->individual?->pan_number ?? $record?->party?->organization?->pan ?? ($record?->owner_details['pan_number'] ?? null);
+                        }
+                        if ($doc->code === 'electricity_bill') {
+                            return $record?->legal_terms['electricity_consumer_id'] ?? null;
+                        }
+
+                        return null;
+                    })
+                    ->required($isMandatory);
+
+                if (! empty($doc->number_regex)) {
+                    $numberField->regex($doc->number_regex);
+                }
+
+                $cardFields[] = $numberField;
+            } else {
+                $fileLabel = $doc->name . $badge;
+            }
+
+            $fileField = SpatieMediaLibraryFileUpload::make($collectionName)
+                ->collection($collectionName)
+                ->label($fileLabel)
+                ->hintIcon('heroicon-m-information-circle', tooltip: $tooltip)
+                ->openable()
+                ->downloadable()
+                ->previewable()
+                ->required($isMandatory);
+
+            $cardFields[] = $fileField;
+
+            $card = Section::make($doc->name . $badge)
+                ->icon($icon)
+                ->compact()
+                ->schema($cardFields);
+
+            if (! $isMandatory) {
+                $card->visible($isVisible);
+            }
+
+            $fields[] = $card;
+        }
+
+        return $fields;
+    }
+
+    public static function getDynamicSignatoryKycFields(): array
+    {
+        $schema = [];
+
+        try {
+            $docs = KycDocumentType::query()
+                ->where('is_active', true)
+                ->where('mou_signatory_requirement', '!=', KycRequirementLevel::DISABLED)
+                ->orderBy('sort_order')
+                ->get();
+        } catch (\Throwable $e) {
+            $docs = collect();
+        }
+
+        if ($docs->isEmpty()) {
+            return [
+                Section::make('Signatory Aadhaar Card *')
+                    ->icon('heroicon-m-identification')
+                    ->compact()
+                    ->schema([
+                        TextInput::make('kyc_documents.signatory.aadhaar.number')
+                            ->label('Signatory Aadhaar Number *')
+                            ->placeholder('Enter signatory Aadhaar number...')
+                            ->required(fn (Get $get) => $get('is_signatory_different')),
+                        SpatieMediaLibraryFileUpload::make('signatory_aadhaar')
+                            ->collection('signatory_aadhaar')
+                            ->label('Signatory Aadhaar Card File *')
+                            ->hintIcon('heroicon-m-information-circle', tooltip: 'Front & Back image or PDF')
+                            ->openable()->downloadable()->previewable()
+                            ->required(fn (Get $get) => $get('is_signatory_different')),
+                    ]),
+                Section::make('Signatory PAN Card *')
+                    ->icon('heroicon-m-credit-card')
+                    ->compact()
+                    ->schema([
+                        TextInput::make('kyc_documents.signatory.pan.number')
+                            ->label('Signatory PAN Number *')
+                            ->placeholder('Enter signatory PAN number...')
+                            ->required(fn (Get $get) => $get('is_signatory_different')),
+                        SpatieMediaLibraryFileUpload::make('signatory_pan')
+                            ->collection('signatory_pan')
+                            ->label('Signatory PAN Card File *')
+                            ->hintIcon('heroicon-m-information-circle', tooltip: 'Clear image or PDF')
+                            ->openable()->downloadable()->previewable()
+                            ->required(fn (Get $get) => $get('is_signatory_different')),
+                    ]),
+                Section::make('Power of Attorney (POA) Document *')
+                    ->icon('heroicon-m-scale')
+                    ->compact()
+                    ->schema([
+                        SpatieMediaLibraryFileUpload::make('signatory_poa')
+                            ->collection('signatory_poa')
+                            ->label('Power of Attorney (POA) File *')
+                            ->hintIcon('heroicon-m-information-circle', tooltip: 'Power of Attorney document')
+                            ->openable()->downloadable()->previewable()
+                            ->required(fn (Get $get) => $get('is_signatory_different')),
+                    ]),
+            ];
+        }
+
+        foreach ($docs as $doc) {
+            $collectionName = match ($doc->code) {
+                'power_of_attorney' => 'signatory_poa',
+                default => "signatory_{$doc->code}",
+            };
+            $isMandatory = $doc->isMouSignatoryMandatory();
+            $badge = $isMandatory ? ' *' : '';
+            $tooltip = $doc->description ?: "Attach signatory {$doc->name} image or PDF";
+
+            $isSignatoryVisible = function (?Mou $record, Get $get) use ($doc, $isMandatory, $collectionName): bool {
+                if (! (bool) $get('is_signatory_different')) {
+                    return false;
+                }
+
+                if ($isMandatory) {
+                    return true;
+                }
+
+                return (bool) (
+                    $record?->hasMedia($collectionName) ||
+                    ! empty($get($collectionName)) ||
+                    ! empty($get("kyc_documents.signatory.{$doc->code}.number")) ||
+                    ! empty($record?->kyc_documents['signatory'][$doc->code])
+                );
+            };
+
+            $icon = $doc->icon ?: match ($doc->code) {
+                'aadhaar' => 'heroicon-m-identification',
+                'pan' => 'heroicon-m-credit-card',
+                'power_of_attorney' => 'heroicon-m-scale',
+                'passport' => 'heroicon-m-globe-alt',
+                'driving_license' => 'heroicon-m-truck',
+                'voter_id' => 'heroicon-m-identification',
+                default => 'heroicon-m-document-text',
+            };
+
+            $cardFields = [];
+
+            if ($doc->has_number) {
+                $numberLabel = 'Signatory ' . ($doc->number_label ?: "{$doc->name} Number") . $badge;
+                $fileLabel = "Signatory {$doc->name} File" . $badge;
+
+                $numberField = TextInput::make("kyc_documents.signatory.{$doc->code}.number")
+                    ->label($numberLabel)
+                    ->placeholder("Enter signatory {$doc->name} number...")
+                    ->default(function (?Mou $record) use ($doc) {
+                        if (! empty($record?->kyc_documents['signatory'][$doc->code]['number'])) {
+                            return $record->kyc_documents['signatory'][$doc->code]['number'];
+                        }
+                        if ($doc->code === 'aadhaar') {
+                            return $record?->signatory_details['aadhar_number'] ?? null;
+                        }
+                        if ($doc->code === 'pan') {
+                            return $record?->signatory_details['pan_number'] ?? null;
+                        }
+
+                        return null;
+                    })
+                    ->required(fn (Get $get) => $get('is_signatory_different') && $isMandatory);
+
+                if (! empty($doc->number_regex)) {
+                    $numberField->regex($doc->number_regex);
+                }
+
+                $cardFields[] = $numberField;
+            } else {
+                $fileLabel = 'Signatory ' . $doc->name . $badge;
+            }
+
+            $fileField = SpatieMediaLibraryFileUpload::make($collectionName)
+                ->collection($collectionName)
+                ->label($fileLabel)
+                ->hintIcon('heroicon-m-information-circle', tooltip: $tooltip)
+                ->openable()
+                ->downloadable()
+                ->previewable()
+                ->required(fn (Get $get) => $get('is_signatory_different') && $isMandatory);
+
+            $cardFields[] = $fileField;
+
+            $card = Section::make("Signatory {$doc->name}" . $badge)
+                ->icon($icon)
+                ->compact()
+                ->schema($cardFields);
+
+            if (! $isMandatory) {
+                $card->visible($isSignatoryVisible);
+            }
+
+            $schema[] = $card;
+        }
+
+        return $schema;
+    }
 }
+
