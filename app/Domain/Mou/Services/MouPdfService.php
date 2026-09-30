@@ -2,23 +2,36 @@
 
 namespace App\Domain\Mou\Services;
 
+use App\Domain\Mou\Enums\MouType;
 use App\Domain\Mou\Models\Mou;
+use App\Domain\Shared\Enums\DocumentType;
+use App\Domain\Shared\Enums\KycRequirementLevel;
+use App\Domain\Shared\Models\KycDocumentType;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 
 class MouPdfService
 {
     /**
      * Generate the MOU PDF without attachments.
      *
-     * @param Mou $mou
      * @return string The binary content of the PDF.
      */
     public function generateMouPdf(Mou $mou)
     {
         $mou->load(['property', 'party', 'signatoryParty']);
 
-        $view = ($mou->type && $mou->type !== \App\Domain\Mou\Enums\MouType::ONBOARDING)
+        if (! empty($mou->agreement_content)) {
+            $compiledHtml = app(MouTemplateService::class)->compileForPdf($mou, $mou->agreement_content);
+            $pdf = Pdf::loadView('pdf.mou_custom', [
+                'mou' => $mou,
+                'content' => $compiledHtml,
+            ]);
+
+            return $pdf->output();
+        }
+
+        $view = ($mou->type && $mou->type !== MouType::ONBOARDING)
             ? 'pdf.mou_addendum'
             : 'pdf.mou';
 
@@ -36,7 +49,6 @@ class MouPdfService
     /**
      * Generate the KYC Documents PDF including attachments.
      *
-     * @param Mou $mou
      * @return string|null The binary content of the KYC PDF or null if no attachments.
      */
     public function generateKycPdf(Mou $mou)
@@ -45,17 +57,19 @@ class MouPdfService
 
         $attachments = [];
 
-        $processMedia = function($collectionName, $ownerType, $ownerName) use ($mou, &$attachments) {
+        $processMedia = function ($collectionName, $ownerType, $ownerName) use ($mou, &$attachments) {
             $mediaItems = $mou->getMedia($collectionName);
             foreach ($mediaItems as $media) {
                 $path = $media->getPath();
-                if (!file_exists($path)) continue;
-                
+                if (! file_exists($path)) {
+                    continue;
+                }
+
                 $mimeType = $media->mime_type;
                 $docTypeVal = $media->getCustomProperty('document_type');
-                $docTypeLabel = $docTypeVal ? (\App\Domain\Shared\Enums\DocumentType::tryFrom($docTypeVal)?->getLabel() ?? str($docTypeVal)->headline()) : null;
+                $docTypeLabel = $docTypeVal ? (DocumentType::tryFrom($docTypeVal)?->getLabel() ?? str($docTypeVal)->headline()) : null;
                 $effectiveOwnerType = $docTypeLabel ? "{$ownerType} - {$docTypeLabel}" : $ownerType;
-                
+
                 if (str_starts_with($mimeType, 'image/')) {
                     $type = pathinfo($path, PATHINFO_EXTENSION);
                     $data = file_get_contents($path);
@@ -98,8 +112,8 @@ class MouPdfService
                         imagedestroy($img);
                     }
 
-                    $base64 = 'data:image/' . $type . ';base64,' . base64_encode($data);
-                    
+                    $base64 = 'data:image/'.$type.';base64,'.base64_encode($data);
+
                     $attachments[] = [
                         'name' => $media->file_name,
                         'data' => $base64,
@@ -108,16 +122,16 @@ class MouPdfService
                     ];
                 } elseif ($mimeType === 'application/pdf') {
                     // Convert PDF to images using Ghostscript
-                    $tempDir = sys_get_temp_dir() . '/' . uniqid('pdf_pages_');
+                    $tempDir = sys_get_temp_dir().'/'.uniqid('pdf_pages_');
                     mkdir($tempDir);
-                    
-                    $cmd = "gs -q -dNOPAUSE -dBATCH -sDEVICE=jpeg -r150 -dJPEGQ=85 -sOutputFile=" . escapeshellarg($tempDir . "/page_%03d.jpg") . " " . escapeshellarg($path);
+
+                    $cmd = 'gs -q -dNOPAUSE -dBATCH -sDEVICE=jpeg -r150 -dJPEGQ=85 -sOutputFile='.escapeshellarg($tempDir.'/page_%03d.jpg').' '.escapeshellarg($path);
                     exec($cmd, $output, $returnVar);
-                    
+
                     if ($returnVar === 0) {
-                        $files = glob($tempDir . "/page_*.jpg");
+                        $files = glob($tempDir.'/page_*.jpg');
                         sort($files);
-                        
+
                         $pageIndex = 1;
                         foreach ($files as $file) {
                             $data = file_get_contents($file);
@@ -128,15 +142,15 @@ class MouPdfService
                                 $height = imagesy($img);
                                 $maxWidth = 800;
                                 $maxHeight = 1000;
-        
+
                                 if ($width > $maxWidth || $height > $maxHeight) {
                                     $ratio = min($maxWidth / $width, $maxHeight / $height);
                                     $newWidth = $width * $ratio;
                                     $newHeight = $height * $ratio;
-        
+
                                     $newImg = imagecreatetruecolor($newWidth, $newHeight);
                                     imagecopyresampled($newImg, $img, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
-                                    
+
                                     ob_start();
                                     imagejpeg($newImg, null, 70);
                                     $data = ob_get_clean();
@@ -144,15 +158,15 @@ class MouPdfService
                                 }
                                 imagedestroy($img);
                             }
-                            
-                            $base64 = 'data:image/jpeg;base64,' . base64_encode($data);
+
+                            $base64 = 'data:image/jpeg;base64,'.base64_encode($data);
                             $attachments[] = [
-                                'name' => $media->file_name . ' (Page ' . $pageIndex . ')',
+                                'name' => $media->file_name.' (Page '.$pageIndex.')',
                                 'data' => $base64,
                                 'ownerType' => $effectiveOwnerType,
                                 'ownerName' => $ownerName,
                             ];
-                            
+
                             $pageIndex++;
                             unlink($file); // clean up
                         }
@@ -167,9 +181,9 @@ class MouPdfService
         $processedCollections = [];
 
         try {
-            $ownerDocs = \App\Domain\Shared\Models\KycDocumentType::query()
+            $ownerDocs = KycDocumentType::query()
                 ->where('is_active', true)
-                ->where('mou_owner_requirement', '!=', \App\Domain\Shared\Enums\KycRequirementLevel::DISABLED)
+                ->where('mou_owner_requirement', '!=', KycRequirementLevel::DISABLED)
                 ->orderBy('sort_order')
                 ->get();
 
@@ -190,20 +204,20 @@ class MouPdfService
             'mou_attachments' => 'Property Owner Attachments',
         ];
         foreach ($legacyOwnerCollections as $col => $label) {
-            if (!in_array($col, $processedCollections)) {
+            if (! in_array($col, $processedCollections)) {
                 $processMedia($col, $label, $ownerName);
             }
         }
-        
+
         // Process Signatory documents
         if ($mou->is_signatory_different) {
             $signatoryName = $mou->signatory_details['name'] ?? 'Signatory Authority';
             $processedSignatoryCols = [];
 
             try {
-                $signatoryDocs = \App\Domain\Shared\Models\KycDocumentType::query()
+                $signatoryDocs = KycDocumentType::query()
                     ->where('is_active', true)
-                    ->where('mou_signatory_requirement', '!=', \App\Domain\Shared\Enums\KycRequirementLevel::DISABLED)
+                    ->where('mou_signatory_requirement', '!=', KycRequirementLevel::DISABLED)
                     ->orderBy('sort_order')
                     ->get();
 
@@ -223,7 +237,7 @@ class MouPdfService
                 'signatory_documents' => 'Signatory Authority Attachments',
             ];
             foreach ($legacySignatoryCols as $col => $label) {
-                if (!in_array($col, $processedSignatoryCols)) {
+                if (! in_array($col, $processedSignatoryCols)) {
                     $processMedia($col, $label, $signatoryName);
                 }
             }
@@ -248,34 +262,34 @@ class MouPdfService
     public function saveMouPdf(Mou $mou)
     {
         $pdfContent = $this->generateMouPdf($mou);
-        $filename = 'MOU_' . ($mou->number ?? $mou->id) . '.pdf';
-        
-        $tempPath = sys_get_temp_dir() . '/' . $filename;
+        $filename = 'MOU_'.($mou->number ?? $mou->id).'.pdf';
+
+        $tempPath = sys_get_temp_dir().'/'.$filename;
         file_put_contents($tempPath, $pdfContent);
 
         // Also generate KYC documents and append to MOU
         $kycContent = $this->generateKycPdf($mou);
         if ($kycContent) {
-            $kycTempPath = sys_get_temp_dir() . '/kyc_' . uniqid() . '.pdf';
+            $kycTempPath = sys_get_temp_dir().'/kyc_'.uniqid().'.pdf';
             file_put_contents($kycTempPath, $kycContent);
-            
-            $mergedTempPath = sys_get_temp_dir() . '/merged_' . uniqid() . '.pdf';
-            $cmd = "gs -q -dNOPAUSE -dBATCH -sDEVICE=pdfwrite -sOutputFile=" . escapeshellarg($mergedTempPath) . " " . escapeshellarg($tempPath) . " " . escapeshellarg($kycTempPath);
+
+            $mergedTempPath = sys_get_temp_dir().'/merged_'.uniqid().'.pdf';
+            $cmd = 'gs -q -dNOPAUSE -dBATCH -sDEVICE=pdfwrite -sOutputFile='.escapeshellarg($mergedTempPath).' '.escapeshellarg($tempPath).' '.escapeshellarg($kycTempPath);
             exec($cmd, $output, $returnVar);
-            
+
             if ($returnVar === 0 && file_exists($mergedTempPath)) {
                 copy($mergedTempPath, $tempPath);
                 unlink($mergedTempPath);
             } else {
-                \Illuminate\Support\Facades\Log::error('Ghostscript failed to merge KYC into MOU. Return var: ' . $returnVar);
+                Log::error('Ghostscript failed to merge KYC into MOU. Return var: '.$returnVar);
             }
-            
+
             unlink($kycTempPath);
         }
 
         $mou->addMedia($tempPath)
             ->toMediaCollection('signed_pdf'); // or draft_pdf
-            
+
         // Clean up any stray KYC collections
         $mou->clearMediaCollection('kyc_documents');
     }

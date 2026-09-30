@@ -4,11 +4,11 @@ namespace Tests\Feature\Administration;
 
 use App\Domain\Shared\Enums\KycRequirementLevel;
 use App\Domain\Shared\Models\KycDocumentType;
-use App\Filament\Resources\Administration\KycDocumentTypeResource;
 use App\Filament\Resources\Administration\KycDocumentTypeResource\Pages\ManageKycDocumentTypes;
 use App\Models\User;
 use Database\Seeders\KycDocumentTypeSeeder;
 use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -158,5 +158,57 @@ class KycDocumentTypeResourceTest extends TestCase
         $doc->refresh();
         $this->assertEquals('Updated Document Name', $doc->name);
         $this->assertEquals('original_code', $doc->code);
+    }
+
+    public function test_system_document_types_cannot_be_deleted_via_model(): void
+    {
+        $this->seed(KycDocumentTypeSeeder::class);
+
+        $panDoc = KycDocumentType::where('code', 'pan')->firstOrFail();
+        $this->assertTrue($panDoc->isSystem());
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage("Cannot delete system-reserved KYC document type '{$panDoc->name}'.");
+        $panDoc->delete();
+    }
+
+    public function test_custom_document_type_can_be_deleted_via_model(): void
+    {
+        $customDoc = KycDocumentType::create([
+            'name' => 'Custom Utility Bill',
+            'code' => 'custom_util_bill',
+            'mou_owner_requirement' => KycRequirementLevel::DISABLED,
+            'mou_signatory_requirement' => KycRequirementLevel::DISABLED,
+            'tenancy_primary_requirement' => KycRequirementLevel::DISABLED,
+            'tenancy_secondary_requirement' => KycRequirementLevel::DISABLED,
+            'is_active' => true,
+        ]);
+
+        $this->assertFalse($customDoc->isSystem());
+        $this->assertTrue($customDoc->delete());
+        $this->assertDatabaseMissing('kyc_document_types', ['id' => $customDoc->id]);
+    }
+
+    public function test_system_document_types_hide_delete_action_in_table(): void
+    {
+        $user = User::factory()->create();
+        $this->seed(KycDocumentTypeSeeder::class);
+
+        $panDoc = KycDocumentType::where('code', 'pan')->firstOrFail();
+
+        $customDoc = KycDocumentType::create([
+            'name' => 'Custom Non-System Doc',
+            'code' => 'custom_non_system_doc',
+            'mou_owner_requirement' => KycRequirementLevel::DISABLED,
+            'mou_signatory_requirement' => KycRequirementLevel::DISABLED,
+            'tenancy_primary_requirement' => KycRequirementLevel::DISABLED,
+            'tenancy_secondary_requirement' => KycRequirementLevel::DISABLED,
+            'is_active' => true,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(ManageKycDocumentTypes::class)
+            ->assertTableActionHidden(DeleteAction::class, $panDoc)
+            ->assertTableActionVisible(DeleteAction::class, $customDoc);
     }
 }

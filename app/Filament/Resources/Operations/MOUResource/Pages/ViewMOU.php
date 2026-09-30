@@ -118,7 +118,7 @@ class ViewMOU extends ViewRecord
                 MOUResource::getResolvePartyAction(),
                 MOUResource::getUpdatePartyAction(),
                 MOUResource::getProvisionAccountingAction(),
-                MOUResource::getGeneratePdfAction(),
+                MOUResource::getDraftAgreementAction(),
                 MOUResource::getUploadSignedCopyAction(),
                 MOUResource::getArchiveAction(),
             ])

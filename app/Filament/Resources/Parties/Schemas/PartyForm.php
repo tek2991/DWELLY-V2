@@ -64,20 +64,32 @@ class PartyForm
 
                 Section::make('Individual Details')
                     ->schema([
-                        TextInput::make('individual_data.name')->label('Full Name')->required(),
-                        TextInput::make('individual_data.aadhaar_number'),
-                        TextInput::make('individual_data.pan_number'),
-                        TextInput::make('individual_data.voter_id')->label('Voter ID'),
+                        TextInput::make('individual_data.name')
+                            ->label('Full Name')
+                            ->required(),
+                        TextInput::make('individual_data.pan_number')
+                            ->label('PAN Number')
+                            ->placeholder('e.g. ABCDE1234F')
+                            ->maxLength(10)
+                            ->extraInputAttributes(['style' => 'text-transform: uppercase'])
+                            ->rules(['nullable', 'regex:/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/i'])
+                            ->validationMessages([
+                                'regex' => 'The PAN format is invalid. Expected format: ABCDE1234F (5 letters, 4 digits, 1 letter).',
+                            ])
+                            ->dehydrateStateUsing(fn (?string $state) => $state ? strtoupper(trim($state)) : null)
+                            ->helperText('10-character Permanent Account Number used for tax compliance, TDS, and invoices.'),
                         TextInput::make('individual_data.gstin')
                             ->label('GSTIN')
-                            ->key('individual_gstin')
+                            ->placeholder('e.g. 29ABCDE1234FZ5')
                             ->maxLength(15)
+                            ->extraInputAttributes(['style' => 'text-transform: uppercase'])
                             ->live(debounce: 500)
-                            ->afterStateUpdated(function (?string $state, $set, $get) {
+                            ->afterStateUpdated(function (?string $state, Set $set, Get $get) {
                                 if (empty($state)) {
                                     return;
                                 }
 
+                                $state = strtoupper(trim($state));
                                 $validator = new GstinValidator;
                                 $stateCode = $validator->extractStateCode($state);
 
@@ -87,9 +99,20 @@ class PartyForm
                                         $set('../../state_id', $matchedState->id);
                                     }
                                 }
+
+                                if (strlen($state) >= 12) {
+                                    $currentPan = $get('../pan_number') ?? $get('individual_data.pan_number');
+                                    if (empty($currentPan)) {
+                                        $extractedPan = substr($state, 2, 10);
+                                        if (preg_match('/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/i', $extractedPan)) {
+                                            $set('../pan_number', strtoupper($extractedPan));
+                                            $set('individual_data.pan_number', strtoupper($extractedPan));
+                                        }
+                                    }
+                                }
                             })
                             ->rules([
-                                fn ($get): \Closure => function (string $attribute, $value, \Closure $fail) use ($get) {
+                                fn (Get $get): \Closure => function (string $attribute, $value, \Closure $fail) use ($get) {
                                     $validator = new GstinValidator;
                                     $selectedState = State::find($get('../../state_id'));
                                     $result = $validator->validate($value, $selectedState);
@@ -101,24 +124,41 @@ class PartyForm
                                     }
                                 },
                             ])
-                            ->visible(fn ($get) => $get('is_tax_registered')),
+                            ->dehydrateStateUsing(fn (?string $state) => $state ? strtoupper(trim($state)) : null)
+                            ->helperText('15-digit Goods & Services Tax Identification Number for tax invoices.')
+                            ->visible(fn (Get $get) => (bool) ($get('is_tax_registered') ?? $get('../../is_tax_registered'))),
                     ])
                     ->columns(2)
                     ->visible(fn (Get $get) => $get('party_type') === 'individual'),
 
                 Section::make('Organization Details')
                     ->schema([
-                        TextInput::make('organization_data.legal_name')->required(),
+                        TextInput::make('organization_data.legal_name')
+                            ->label('Company / Entity Legal Name')
+                            ->required(),
+                        TextInput::make('organization_data.pan')
+                            ->label('PAN Number')
+                            ->placeholder('e.g. ABCDE1234F')
+                            ->maxLength(10)
+                            ->extraInputAttributes(['style' => 'text-transform: uppercase'])
+                            ->rules(['nullable', 'regex:/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/i'])
+                            ->validationMessages([
+                                'regex' => 'The PAN format is invalid. Expected format: ABCDE1234F (5 letters, 4 digits, 1 letter).',
+                            ])
+                            ->dehydrateStateUsing(fn (?string $state) => $state ? strtoupper(trim($state)) : null)
+                            ->helperText('10-character Permanent Account Number of the organization.'),
                         TextInput::make('organization_data.gstin')
                             ->label('GSTIN')
-                            ->key('organization_gstin')
+                            ->placeholder('e.g. 29ABCDE1234FZ5')
                             ->maxLength(15)
+                            ->extraInputAttributes(['style' => 'text-transform: uppercase'])
                             ->live(debounce: 500)
-                            ->afterStateUpdated(function (?string $state, $set, $get) {
+                            ->afterStateUpdated(function (?string $state, Set $set, Get $get) {
                                 if (empty($state)) {
                                     return;
                                 }
 
+                                $state = strtoupper(trim($state));
                                 $validator = new GstinValidator;
                                 $stateCode = $validator->extractStateCode($state);
 
@@ -128,9 +168,20 @@ class PartyForm
                                         $set('../../state_id', $matchedState->id);
                                     }
                                 }
+
+                                if (strlen($state) >= 12) {
+                                    $currentPan = $get('../pan') ?? $get('organization_data.pan');
+                                    if (empty($currentPan)) {
+                                        $extractedPan = substr($state, 2, 10);
+                                        if (preg_match('/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/i', $extractedPan)) {
+                                            $set('../pan', strtoupper($extractedPan));
+                                            $set('organization_data.pan', strtoupper($extractedPan));
+                                        }
+                                    }
+                                }
                             })
                             ->rules([
-                                fn ($get): \Closure => function (string $attribute, $value, \Closure $fail) use ($get) {
+                                fn (Get $get): \Closure => function (string $attribute, $value, \Closure $fail) use ($get) {
                                     $validator = new GstinValidator;
                                     $selectedState = State::find($get('../../state_id'));
                                     $result = $validator->validate($value, $selectedState);
@@ -142,9 +193,11 @@ class PartyForm
                                     }
                                 },
                             ])
-                            ->visible(fn ($get) => $get('is_tax_registered')),
-                        TextInput::make('organization_data.pan'),
-                        TextInput::make('organization_data.contact_person_name'),
+                            ->dehydrateStateUsing(fn (?string $state) => $state ? strtoupper(trim($state)) : null)
+                            ->helperText('15-digit Goods & Services Tax Identification Number for B2B billing.')
+                            ->visible(fn (Get $get) => (bool) ($get('is_tax_registered') ?? $get('../../is_tax_registered'))),
+                        TextInput::make('organization_data.contact_person_name')
+                            ->label('Contact Person Name'),
                     ])
                     ->columns(2)
                     ->visible(fn (Get $get) => $get('party_type') === 'organization'),

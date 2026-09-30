@@ -137,7 +137,7 @@ class MOUsTable
                     MOUResource::getUpdatePartyAction(),
 
                     MOUResource::getProvisionAccountingAction(),
-                    MOUResource::getGeneratePdfAction(),
+                    MOUResource::getDraftAgreementAction(),
                     MOUResource::getUploadSignedCopyAction(),
                     MOUResource::getVerifyAction(),
                     MOUResource::getConvertToPropertyAction(),

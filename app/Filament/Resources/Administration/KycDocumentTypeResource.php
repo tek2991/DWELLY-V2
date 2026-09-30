@@ -11,24 +11,24 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
-use Filament\Forms\Components\Select;
 use Filament\Resources\Resource;
-use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
-use Illuminate\Support\HtmlString;
-use Illuminate\Support\Str;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
+use Illuminate\Support\HtmlString;
+use Illuminate\Support\Str;
 
 class KycDocumentTypeResource extends Resource
 {
@@ -205,6 +205,7 @@ class KycDocumentTypeResource extends Resource
                     ->searchable(['name', 'code'])
                     ->sortable()
                     ->weight('bold')
+                    ->description(fn (KycDocumentType $record) => $record->isSystem() ? 'Core System Document' : null)
                     ->icon(fn (KycDocumentType $record) => $record->icon ?: 'heroicon-m-document-text')
                     ->tooltip(function (KycDocumentType $record): HtmlString {
                         $code = e($record->code);
@@ -212,9 +213,9 @@ class KycDocumentTypeResource extends Resource
 
                         $html = '<div style="max-width: 280px; line-height: 1.4; text-align: left;">';
                         if ($desc) {
-                            $html .= '<div style="margin-bottom: 6px; font-size: 12px; font-weight: 400;">' . $desc . '</div>';
+                            $html .= '<div style="margin-bottom: 6px; font-size: 12px; font-weight: 400;">'.$desc.'</div>';
                         }
-                        $html .= '<div style="text-align: right; font-size: 10px; font-weight: 700; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; letter-spacing: 0.03em;">' . $code . '</div>';
+                        $html .= '<div style="text-align: right; font-size: 10px; font-weight: 700; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; letter-spacing: 0.03em;">'.$code.'</div>';
                         $html .= '</div>';
 
                         return new HtmlString($html);
@@ -266,11 +267,13 @@ class KycDocumentTypeResource extends Resource
             ->actions([
                 EditAction::make()
                     ->modalWidth('3xl'),
-                DeleteAction::make(),
+                DeleteAction::make()
+                    ->hidden(fn (KycDocumentType $record) => $record->isSystem()),
             ])
             ->bulkActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    DeleteBulkAction::make()
+                        ->action(fn (Collection $records) => $records->reject->isSystem()->each->delete()),
                 ]),
             ]);
     }

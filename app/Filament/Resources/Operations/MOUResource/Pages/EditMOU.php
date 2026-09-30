@@ -106,7 +106,7 @@ class EditMOU extends EditRecord
                 MOUResource::getResolvePartyAction('dropdownResolveParty'),
                 MOUResource::getUpdatePartyAction('dropdownUpdateParty'),
                 MOUResource::getProvisionAccountingAction('dropdownProvisionAccounting'),
-                MOUResource::getGeneratePdfAction('dropdownGeneratePdf'),
+                MOUResource::getDraftAgreementAction('dropdownDraftAgreement'),
                 MOUResource::getUploadSignedCopyAction('dropdownUploadSignedCopy'),
                 MOUResource::getVerifyAction('dropdownVerify'),
                 MOUResource::getConvertToPropertyAction('dropdownConvertToProperty'),

@@ -647,7 +647,7 @@ class MOUForm
                                 ->schema([
                                     Actions::make([
                                         MOUResource::getUploadSignedCopyAction(),
-                                        MOUResource::getGeneratePdfAction(),
+                                        MOUResource::getDraftAgreementAction(),
                                     ])
                                         ->alignment(Alignment::End)
                                         ->columnSpanFull(),

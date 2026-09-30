@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Parties\Tables;
 use App\Domain\Auth\Enums\RoleName;
 use App\Domain\Party\Enums\BusinessRole;
 use App\Domain\Party\Enums\VendorOnboardingStatus;
+use App\Domain\Party\Models\Party;
 use App\Domain\Party\Services\VendorOnboardingService;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -28,6 +29,36 @@ class PartiesTable
                 TextColumn::make('party_type')
                     ->badge()
                     ->sortable(),
+                TextColumn::make('tax_pan')
+                    ->label('PAN')
+                    ->state(fn (Party $record) => $record->party_type === 'individual'
+                        ? $record->individual?->pan_number
+                        : $record->organization?->pan)
+                    ->badge()
+                    ->color('gray')
+                    ->placeholder('None')
+                    ->searchable(query: function ($query, string $search) {
+                        $query->where(function ($q) use ($search) {
+                            $q->whereHas('individual', fn ($iq) => $iq->where('pan_number', 'like', "%{$search}%"))
+                                ->orWhereHas('organization', fn ($oq) => $oq->where('pan', 'like', "%{$search}%"));
+                        });
+                    })
+                    ->toggleable(),
+                TextColumn::make('tax_gstin')
+                    ->label('GSTIN')
+                    ->state(fn (Party $record) => $record->party_type === 'individual'
+                        ? $record->individual?->gstin
+                        : $record->organization?->gstin)
+                    ->badge()
+                    ->color(fn ($state) => $state ? 'success' : 'gray')
+                    ->placeholder('None')
+                    ->searchable(query: function ($query, string $search) {
+                        $query->where(function ($q) use ($search) {
+                            $q->whereHas('individual', fn ($iq) => $iq->where('gstin', 'like', "%{$search}%"))
+                                ->orWhereHas('organization', fn ($oq) => $oq->where('gstin', 'like', "%{$search}%"));
+                        });
+                    })
+                    ->toggleable(),
                 TextColumn::make('email')
                     ->searchable()
                     ->sortable(),
@@ -62,6 +93,17 @@ class PartiesTable
                             $query->whereHas('ownerProfile');
                         } elseif ($data['value'] === 'tenant') {
                             $query->whereHas('tenantProfile');
+                        }
+                    }),
+                SelectFilter::make('is_tax_registered')
+                    ->label('Tax (GST) Status')
+                    ->options([
+                        '1' => 'GST Registered',
+                        '0' => 'Unregistered',
+                    ])
+                    ->query(function ($query, array $data) {
+                        if (isset($data['value']) && $data['value'] !== '') {
+                            $query->where('is_tax_registered', (bool) $data['value']);
                         }
                     }),
                 SelectFilter::make('vendor_status')

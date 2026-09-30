@@ -7,7 +7,27 @@ use Illuminate\Database\Eloquent\Builder;
 
 class KycDocumentType extends DomainModel
 {
+    public const SYSTEM_CODES = [
+        'pan',
+        'aadhaar',
+        'electricity_bill',
+    ];
+
     protected $table = 'kyc_document_types';
+
+    protected static function booted(): void
+    {
+        static::deleting(function (self $doc) {
+            if ($doc->isSystem()) {
+                throw new \InvalidArgumentException("Cannot delete system-reserved KYC document type '{$doc->name}'.");
+            }
+        });
+    }
+
+    public function isSystem(): bool
+    {
+        return in_array($this->code, self::SYSTEM_CODES, true);
+    }
 
     protected $fillable = [
         'name',
