@@ -44,16 +44,28 @@ class PropertyOnboardingService
                 }
             }
 
+            $branchId = $mou->branch_id ?? $mou->opportunity?->branch_id;
+            $assignedExecutiveId = $mou->opportunity?->assigned_user_id;
+
             // Logic to extract data from MOU and create Property
             $property = Property::create([
+                'branch_id' => $branchId,
                 'code' => null,
-                'status' => 'draft',
+                'status' => \App\Domain\Property\Enums\PropertyStatus::ONBOARDING->value,
                 'address_line_1' => $mou->legal_terms['address'] ?? $mou->opportunity?->address,
                 'building_name' => $mou->opportunity?->title,
                 'property_type_id' => $mou->opportunity?->estimated_property_type_id,
                 'bhk_type_id' => \Illuminate\Support\Facades\DB::table('bhk_types')->where('name', $mou->opportunity?->estimated_bhk)->value('id'),
                 'locality_id' => $localityId,
                 'city' => $cityName,
+                'assigned_executive_id' => $assignedExecutiveId,
+            ]);
+
+            // Create Onboarding Project to immediately integrate with Onboarding pipeline & dashboards
+            \App\Domain\Property\Models\OnboardingProject::create([
+                'property_id' => $property->id,
+                'status' => 'Draft',
+                'assigned_executive_id' => $assignedExecutiveId,
             ]);
 
             $mou->update([

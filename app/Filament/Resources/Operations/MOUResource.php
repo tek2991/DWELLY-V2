@@ -110,18 +110,24 @@ class MOUResource extends Resource
     public static function getDraftAgreementAction(string $name = 'draftAgreement'): Action
     {
         return Action::make($name)
-            ->label(fn (?Mou $record) => $record?->hasMedia('draft_pdf') ? 'Edit Agreement Draft' : 'Prepare Agreement Draft')
+            ->label(fn (?Mou $record) => $record?->hasMedia('draft_pdf') ? 'Edit Draft' : 'Prepare Draft')
             ->icon('heroicon-o-pencil-square')
             ->color('warning')
             ->size('sm')
-            ->visible(fn (?Mou $record) => $record && in_array($record->status, [
-                MouStatus::DRAFT,
-                MouStatus::PARTY_PENDING,
-                MouStatus::READY_TO_GENERATE,
-                MouStatus::PDF_GENERATED,
-                MouStatus::DOWNLOADED,
-                MouStatus::SIGNED_COPY_UPLOADED,
-            ]) && static::canEdit($record))
+            ->visible(function (?Mou $record, $livewire = null, ?string $operation = null): bool {
+                if ($livewire instanceof \App\Filament\Resources\Operations\MOUResource\Pages\EditMOU || $operation === 'edit') {
+                    return false;
+                }
+
+                return (bool) ($record && in_array($record->status, [
+                    MouStatus::DRAFT,
+                    MouStatus::PARTY_PENDING,
+                    MouStatus::READY_TO_GENERATE,
+                    MouStatus::PDF_GENERATED,
+                    MouStatus::DOWNLOADED,
+                    MouStatus::SIGNED_COPY_UPLOADED,
+                ]) && static::canEdit($record));
+            })
             ->slideOver()
             ->modalWidth('7xl')
             ->modalHeading(fn (?Mou $record) => "MOU Agreement Customizer — #{$record?->number}")
@@ -407,14 +413,20 @@ class MOUResource extends Resource
             ->color('gray')
             ->size('sm')
             ->tooltip('Directly compile the PDF without opening the text editor')
-            ->visible(fn (?Mou $record) => $record && in_array($record->status, [
-                MouStatus::DRAFT,
-                MouStatus::PARTY_PENDING,
-                MouStatus::READY_TO_GENERATE,
-                MouStatus::PDF_GENERATED,
-                MouStatus::DOWNLOADED,
-                MouStatus::SIGNED_COPY_UPLOADED,
-            ]) && static::canEdit($record))
+            ->visible(function (?Mou $record, $livewire = null, ?string $operation = null): bool {
+                if ($livewire instanceof \App\Filament\Resources\Operations\MOUResource\Pages\EditMOU || $operation === 'edit') {
+                    return false;
+                }
+
+                return (bool) ($record && in_array($record->status, [
+                    MouStatus::DRAFT,
+                    MouStatus::PARTY_PENDING,
+                    MouStatus::READY_TO_GENERATE,
+                    MouStatus::PDF_GENERATED,
+                    MouStatus::DOWNLOADED,
+                    MouStatus::SIGNED_COPY_UPLOADED,
+                ]) && static::canEdit($record));
+            })
             ->requiresConfirmation(fn (?Mou $record) => (bool) $record?->hasMedia('draft_pdf'))
             ->modalHeading(fn (?Mou $record) => $record?->hasMedia('draft_pdf') ? 'Regenerate Draft PDF' : 'Generate Draft PDF')
             ->modalDescription(fn (?Mou $record) => $record?->hasMedia('signed_pdf')
@@ -434,15 +446,21 @@ class MOUResource extends Resource
     public static function getUploadSignedCopyAction(string $name = 'uploadSignedCopy'): Action
     {
         return Action::make($name)
-            ->label('Upload Signed PDF')
+            ->label('Upload Signed')
             ->icon('heroicon-o-document-arrow-up')
             ->color('info')
             ->size('sm')
-            ->visible(fn (?Mou $record) => $record && in_array($record->status, [
-                MouStatus::PDF_GENERATED,
-                MouStatus::DOWNLOADED,
-                MouStatus::SIGNED_COPY_UPLOADED,
-            ]) && static::canEdit($record))
+            ->visible(function (?Mou $record, $livewire = null, ?string $operation = null): bool {
+                if ($livewire instanceof \App\Filament\Resources\Operations\MOUResource\Pages\EditMOU || $operation === 'edit') {
+                    return false;
+                }
+
+                return (bool) ($record && in_array($record->status, [
+                    MouStatus::PDF_GENERATED,
+                    MouStatus::DOWNLOADED,
+                    MouStatus::SIGNED_COPY_UPLOADED,
+                ]) && static::canEdit($record));
+            })
             ->form([
                 Forms\Components\FileUpload::make('signed_pdf')
                     ->label('Signed PDF File')

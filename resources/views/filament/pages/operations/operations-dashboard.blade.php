@@ -181,9 +181,37 @@
                             <tbody>
                                 @forelse ($pipeline['onboarding_properties'] as $prop)
                                     <tr style="border-bottom: 1px solid #f1f5f9;">
-                                        <td style="padding: 0.625rem 0.5rem; font-weight: 700; color: #0f172a;">{{ $prop->code ?? 'PROP-' . $prop->id }}</td>
+                                        <td style="padding: 0.625rem 0.5rem; font-weight: 700; color: #0f172a;">
+                                            @if ($prop->code)
+                                                <span style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.75rem; font-weight: 700; background: #f1f5f9; color: #0f172a; padding: 0.15rem 0.45rem; border-radius: 0.375rem; border: 1px solid #e2e8f0;">
+                                                    #{{ $prop->code }}
+                                                </span>
+                                            @else
+                                                <span style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.6875rem; font-weight: 600; color: #b45309; background: #fffbeb; padding: 0.15rem 0.45rem; border-radius: 0.375rem; border: 1px dashed #fcd34d;" title="Code pending assignment during onboarding">
+                                                    <span style="width: 0.375rem; height: 0.375rem; border-radius: 9999px; background: #f59e0b; display: inline-block;"></span>
+                                                    Pending Code
+                                                </span>
+                                            @endif
+                                        </td>
                                         <td style="padding: 0.625rem 0.5rem;">
-                                            <div style="font-weight: 600; color: #1e293b;">{{ $prop->building_name ?? $prop->name ?? 'Property' }}</div>
+                                            <div style="display: flex; align-items: center; gap: 0.375rem; flex-wrap: wrap;">
+                                                <span style="font-weight: 600; color: #1e293b;">{{ $prop->building_name ?? $prop->name ?? 'Property' }}</span>
+                                                @if ($prop->onboardingProject)
+                                                    @php
+                                                        $stage = $prop->onboardingProject->status;
+                                                        $stageBadge = match ($stage) {
+                                                            'Activated' => ['bg' => '#ecfdf5', 'color' => '#059669', 'border' => '#a7f3d0'],
+                                                            'Pending Review' => ['bg' => '#fffbeb', 'color' => '#b45309', 'border' => '#fde68a'],
+                                                            'Changes Requested' => ['bg' => '#fef2f2', 'color' => '#dc2626', 'border' => '#fecaca'],
+                                                            'In Progress' => ['bg' => '#eff6ff', 'color' => '#2563eb', 'border' => '#bfdbfe'],
+                                                            default => ['bg' => '#f8fafc', 'color' => '#64748b', 'border' => '#e2e8f0'],
+                                                        };
+                                                    @endphp
+                                                    <span style="font-size: 0.625rem; font-weight: 600; padding: 0.05rem 0.375rem; border-radius: 9999px; background: {{ $stageBadge['bg'] }}; color: {{ $stageBadge['color'] }}; border: 1px solid {{ $stageBadge['border'] }};">
+                                                        {{ $stage }}
+                                                    </span>
+                                                @endif
+                                            </div>
                                             <div style="font-size: 0.6875rem; color: #64748b;">{{ $prop->localityRef?->name ?? $prop->city ?? 'N/A' }}</div>
                                         </td>
                                         <td style="padding: 0.625rem 0.5rem; color: #475569;">{{ $prop->owner?->display_name ?? 'Pending' }}</td>
@@ -223,7 +251,17 @@
                             <tbody>
                                 @forelse ($pipeline['vacant_properties'] as $prop)
                                     <tr style="border-bottom: 1px solid #f1f5f9;">
-                                        <td style="padding: 0.625rem 0.5rem; font-weight: 700; color: #0f172a;">{{ $prop->code ?? 'PROP-' . $prop->id }}</td>
+                                        <td style="padding: 0.625rem 0.5rem; font-weight: 700; color: #0f172a;">
+                                            @if ($prop->code)
+                                                <span style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.75rem; font-weight: 700; background: #f1f5f9; color: #0f172a; padding: 0.15rem 0.45rem; border-radius: 0.375rem; border: 1px solid #e2e8f0;">
+                                                    #{{ $prop->code }}
+                                                </span>
+                                            @else
+                                                <span style="display: inline-flex; align-items: center; font-size: 0.6875rem; font-weight: 600; color: #64748b; background: #f8fafc; padding: 0.15rem 0.45rem; border-radius: 0.375rem; border: 1px dashed #cbd5e1;">
+                                                    Unassigned
+                                                </span>
+                                            @endif
+                                        </td>
                                         <td style="padding: 0.625rem 0.5rem;">
                                             <div style="font-weight: 600; color: #1e293b;">{{ $prop->building_name ?? $prop->name ?? 'Property' }}</div>
                                             <div style="font-size: 0.6875rem; color: #64748b;">{{ $prop->localityRef?->name ?? $prop->city ?? 'N/A' }}</div>

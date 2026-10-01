@@ -115,11 +115,11 @@ class ViewMOU extends ViewRecord
                 ->visible(fn ($record) => MOUResource::canEdit($record)),
 
             ActionGroup::make([
+                MOUResource::getDraftAgreementAction(),
+                MOUResource::getUploadSignedCopyAction(),
                 MOUResource::getResolvePartyAction(),
                 MOUResource::getUpdatePartyAction(),
                 MOUResource::getProvisionAccountingAction(),
-                MOUResource::getDraftAgreementAction(),
-                MOUResource::getUploadSignedCopyAction(),
                 MOUResource::getArchiveAction(),
             ])
                 ->label('Actions')

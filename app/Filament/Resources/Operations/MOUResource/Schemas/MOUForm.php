@@ -646,11 +646,12 @@ class MOUForm
                             Section::make('⚡ MOU Status & Workflow Hub')
                                 ->schema([
                                     Actions::make([
-                                        MOUResource::getUploadSignedCopyAction(),
                                         MOUResource::getDraftAgreementAction(),
+                                        MOUResource::getUploadSignedCopyAction(),
                                     ])
                                         ->alignment(Alignment::End)
-                                        ->columnSpanFull(),
+                                        ->columnSpanFull()
+                                        ->visible(fn (?string $operation = null): bool => $operation !== 'edit'),
 
                                     Placeholder::make('status_header_badge')
                                         ->label('Operational Status')
@@ -686,8 +687,8 @@ class MOUForm
                                     Placeholder::make('workflow_guidance_banner')
                                         ->hiddenLabel()
                                         ->columnSpanFull()
-                                        ->visible(function (?Mou $record) {
-                                            if (! $record) {
+                                        ->visible(function (?Mou $record, ?string $operation = null) {
+                                            if (! $record || $operation === 'edit') {
                                                 return false;
                                             }
 

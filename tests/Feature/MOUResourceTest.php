@@ -51,8 +51,30 @@ class MOUResourceTest extends TestCase
 
         $this->assertDatabaseHas('properties', [
             'building_name' => 'Test Opportunity for MOU Conversion',
-            'status' => 'draft',
+            'status' => 'Onboarding',
         ]);
+
+        $this->assertDatabaseHas('onboarding_projects', [
+            'status' => 'Draft',
+        ]);
+
+        $property = \App\Domain\Property\Models\Property::where('building_name', 'Test Opportunity for MOU Conversion')->first();
+        $this->assertNotNull($property);
+        $this->assertNotNull($property->onboardingProject);
+
+        // Verify visibility in Onboarding Queue
+        Livewire::test(\App\Filament\Pages\Properties\OnboardingQueue::class)
+            ->assertSee('Test Opportunity for MOU Conversion');
+
+        // Verify visibility on Operations Dashboard
+        $opsDashboard = Livewire::test(\App\Filament\Pages\Operations\OperationsDashboard::class);
+        $pipelineData = $opsDashboard->instance()->getPipelineData();
+        $this->assertEquals(1, $pipelineData['onboarding']);
+        $this->assertTrue($pipelineData['onboarding_properties']->contains('id', $property->id));
+
+        // Verify visibility in Property Stages Overview widget
+        Livewire::test(\App\Filament\Widgets\PropertyStagesOverviewWidget::class)
+            ->assertSee('In Onboarding');
     }
 
     public function test_view_mou_page_converting_mou_to_property_redirects_to_property_resource_page()
@@ -655,6 +677,79 @@ class MOUResourceTest extends TestCase
 
         $this->assertTrue($column->isToggledHiddenByDefault());
         $this->assertTrue($column->isToggledHidden());
+    }
+
+    public function test_edit_mode_has_no_pdf_upload_or_generation_actions(): void
+    {
+        \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'Business Owner', 'guard_name' => 'web']);
+        $user = User::factory()->create();
+        $user->assignRole('Business Owner');
+        $this->actingAs($user);
+
+        $opp = Opportunity::create([
+            'number' => 'OPP-EDIT-TEST',
+            'title' => 'Opportunity Edit Mode Test',
+            'owner_name' => 'Test Owner',
+            'owner_phone' => '9988776655',
+            'assigned_user_id' => $user->id,
+            'status' => \App\Domain\Opportunity\Enums\OpportunityStatus::NEW,
+        ]);
+
+        $mou = Mou::create([
+            'number' => 'MOU-EDIT-TEST',
+            'opportunity_id' => $opp->id,
+            'status' => MouStatus::PDF_GENERATED,
+            'owner_name' => 'Test Owner',
+            'owner_phone' => '9988776655',
+            'legal_terms' => [
+                'rent_amount' => 55000,
+                'fee_percentage' => 10,
+                'address' => 'Sample Address',
+            ],
+        ]);
+
+        Livewire::test(MOUResource\Pages\EditMOU::class, ['record' => $mou->getKey()])
+            ->assertSuccessful()
+            ->assertActionDoesNotExist('draftAgreement')
+            ->assertActionDoesNotExist('dropdownDraftAgreement')
+            ->assertActionDoesNotExist('uploadSignedCopy')
+            ->assertActionDoesNotExist('dropdownUploadSignedCopy')
+            ->assertActionDoesNotExist('generatePdf')
+            ->assertActionDoesNotExist('dropdownGeneratePdf')
+            // Data points can be edited
+            ->assertFormFieldExists('legal_terms.rent_amount')
+            ->assertFormFieldExists('legal_terms.fee_percentage')
+            ->assertFormFieldExists('legal_terms.address');
+    }
+
+    public function test_view_mode_has_draft_agreement_and_upload_signed_copy_actions(): void
+    {
+        \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'Business Owner', 'guard_name' => 'web']);
+        $user = User::factory()->create();
+        $user->assignRole('Business Owner');
+        $this->actingAs($user);
+
+        $opp = Opportunity::create([
+            'number' => 'OPP-VIEW-TEST',
+            'title' => 'Opportunity View Mode Test',
+            'owner_name' => 'Test Owner',
+            'owner_phone' => '9988776655',
+            'assigned_user_id' => $user->id,
+            'status' => \App\Domain\Opportunity\Enums\OpportunityStatus::NEW,
+        ]);
+
+        $mou = Mou::create([
+            'number' => 'MOU-VIEW-TEST',
+            'opportunity_id' => $opp->id,
+            'status' => MouStatus::PDF_GENERATED,
+            'owner_name' => 'Test Owner',
+            'owner_phone' => '9988776655',
+        ]);
+
+        Livewire::test(MOUResource\Pages\ViewMOU::class, ['record' => $mou->getKey()])
+            ->assertSuccessful()
+            ->assertActionVisible('draftAgreement')
+            ->assertActionVisible('uploadSignedCopy');
     }
 }
 

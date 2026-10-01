@@ -5,4 +5,5 @@
 5. Generate MOU in editable format, DOC
 6. In financial page, after pdf verification no option to edit further
 7. How is rent share in oppurtunity implemented?
-8. MOU workflow review and testing.
+8. [x] MOU workflow review and testing. When in edit mode, no pdf upload, generation. upload nad generate button side by side.
+9. Remove the delete button for properties, properties can only be archived, it should never delete.

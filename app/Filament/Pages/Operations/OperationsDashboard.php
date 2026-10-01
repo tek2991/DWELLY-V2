@@ -198,7 +198,7 @@ class OperationsDashboard extends Page
 
         // Onboarding properties needing action
         $onboardingList = Property::whereIn('status', ['Onboarding', 'onboarding'])
-            ->with(['localityRef.city', 'owner'])
+            ->with(['localityRef.city', 'owner', 'onboardingProject'])
             ->latest('updated_at')
             ->limit(8)
             ->get();
