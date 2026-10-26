@@ -71,7 +71,7 @@ class DashboardQuickActionsTest extends TestCase
         $this->assertFalse(\App\Filament\Resources\Properties\PropertyResource::canCreate());
 
         $this->actingAs($this->user)
-            ->get('/operations/properties/properties/create')
+            ->get('/operations/properties/create')
             ->assertNotFound();
     }
 

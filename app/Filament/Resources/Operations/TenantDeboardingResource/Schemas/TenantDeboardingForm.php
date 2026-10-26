@@ -653,26 +653,14 @@ class TenantDeboardingForm
         return $schema
             ->columns(1)
             ->components([
-                Section::make('6. Destination Property Status & Final Handover')
-                    ->description('Set property destination status and finalize deboarding workflow.')
+                Section::make('6. Deboarding Stage & Final Handover')
+                    ->description('Review deboarding workflow stage and final handover status. Property will cleanly return to Vacant upon completion.')
                     ->columnSpanFull()
                     ->schema([
-                        Grid::make(2)
-                            ->schema([
-                                Select::make('new_property_status')
-                                    ->label('Destination Property Status after Deboarding')
-                                    ->options([
-                                        'vacant' => 'Vacant & Ready for New Onboarding',
-                                        'under_maintenance' => 'Under Maintenance (Further deep repairs / renovations)',
-                                    ])
-                                    ->default('vacant')
-                                    ->required(),
-
-                                Select::make('status')
-                                    ->label('Deboarding Workflow Stage')
-                                    ->options(DeboardingStatus::class)
-                                    ->required(),
-                            ]),
+                        Select::make('status')
+                            ->label('Deboarding Workflow Stage')
+                            ->options(DeboardingStatus::class)
+                            ->required(),
                     ]),
             ]);
     }

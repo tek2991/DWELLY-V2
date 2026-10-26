@@ -10,6 +10,7 @@ use App\Domain\Property\Models\Property;
 use App\Domain\Property\Services\PropertyOnboardingValidator;
 use App\Filament\Resources\Operations\MOUResource;
 use App\Filament\Resources\Parties\PartyResource;
+use App\Filament\Resources\Properties\Pages\PropertyFinancials;
 use App\Filament\Resources\Properties\PropertyResource;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Placeholder;
@@ -323,7 +324,7 @@ class PropertyForm
                                                     : 'Standard Model';
                                             }),
                                     ])->columns(3)
-                                    ->hidden(fn(?Model $record) => ! $record || $record->pricingVersions()->count() === 0),
+                                    ->hidden(fn(?Model $record) => ! $record || $record->pricingVersions()->count() === 0 || ! PropertyFinancials::canAccess(['record' => $record->id])),
 
                                 // 📢 Section 5: Marketing & Availability
                                 Section::make('📢 Marketing & Listing Configuration')
@@ -365,7 +366,57 @@ class PropertyForm
                                                     default => 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
                                                 };
 
-                                                return new HtmlString("<div class=\"flex items-center gap-1.5 flex-wrap\"><span class=\"inline-flex items-center px-3 py-1 rounded-full text-xs font-bold {$color}\">{$label}</span></div>");
+                                                $badges = ["<span class=\"inline-flex items-center px-3 py-1 rounded-full text-xs font-bold {$color}\">{$label}</span>"];
+
+                                                if ($record && $record->openMaintenanceRequests()->exists()) {
+                                                    $count = $record->openMaintenanceRequests()->count();
+                                                    $oldest = $record->openMaintenanceRequests()->oldest('created_at')->first();
+                                                    $age = $oldest?->created_at?->diffForHumans();
+                                                    $badges[] = "<span class=\"inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-200 border border-rose-300 dark:border-rose-700\" title=\"{$count} active repair ticket(s), oldest created {$age}\">🔧 Maintenance ({$count})</span>";
+                                                }
+
+                                                return new HtmlString("<div class=\"flex items-center gap-1.5 flex-wrap\">" . implode('', $badges) . "</div>");
+                                            }),
+
+                                        Placeholder::make('active_maintenance_indicator')
+                                            ->label('Active Maintenance Tickets')
+                                            ->columnSpanFull()
+                                            ->visible(fn (?Property $record) => (bool) $record && $record->openMaintenanceRequests()->exists())
+                                            ->content(function (?Property $record) {
+                                                if (! $record) {
+                                                    return null;
+                                                }
+
+                                                $openTickets = $record->openMaintenanceRequests()->latest('created_at')->get();
+                                                if ($openTickets->isEmpty()) {
+                                                    return null;
+                                                }
+
+                                                $count = $openTickets->count();
+                                                $oldest = $openTickets->sortBy('created_at')->first();
+                                                $oldestAge = $oldest?->created_at?->diffForHumans();
+
+                                                $items = $openTickets->take(3)->map(function ($t) {
+                                                    $ticketNum = $t->ticket_number ? "#{$t->ticket_number}: " : '';
+                                                    $statusLabel = $t->status?->getLabel() ?? ucfirst((string) $t->status);
+                                                    $age = $t->created_at?->diffForHumans();
+
+                                                    return "<li style=\"margin-top: 4px;\"><strong>{$ticketNum}</strong>" . e($t->title) . " &mdash; <span style=\"font-weight: 600;\">{$statusLabel}</span> ({$age})</li>";
+                                                })->implode('');
+
+                                                $moreText = $count > 3 ? '<p style="margin: 4px 0 0 0; font-size: 11px; color: #991b1b;">+ ' . ($count - 3) . ' more ticket(s)</p>' : '';
+
+                                                return new HtmlString(
+                                                    '<div style="background-color: #fef2f2; border: 1px solid #fecaca; border-left: 4px solid #ef4444; padding: 10px 12px; border-radius: 6px; font-size: 12px; color: #991b1b;">' .
+                                                        '<div style="font-weight: 700; display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">' .
+                                                            '<span>🔧 ' . $count . ' Open Maintenance Ticket' . ($count > 1 ? 's' : '') . '</span>' .
+                                                            '<span style="font-size: 11px; font-weight: 600; color: #b91c1c;">Oldest: ' . $oldestAge . '</span>' .
+                                                        '</div>' .
+                                                        '<ul style="padding-left: 18px; margin: 4px 0 0 0; color: #7f1d1d;">' . $items . '</ul>' .
+                                                        $moreText .
+                                                        '<p style="margin: 6px 0 0 0; font-size: 11px; color: #6b7280;">Manage work orders and approvals in the <strong>Maintenance Requests</strong> tab below.</p>' .
+                                                    '</div>'
+                                                );
                                             }),
 
                                         Placeholder::make('property_code_badge')
@@ -441,19 +492,22 @@ class PropertyForm
                                                     return '';
                                                 }
 
-                                                $financialsUrl = PropertyResource::getUrl('financials', ['record' => $record]);
                                                 $onboardingUrl = PropertyResource::getUrl('onboarding', ['record' => $record]);
                                                 $mou = $record->mous()->latest()->first();
                                                 $mouUrl = $mou ? MOUResource::getUrl('view', ['record' => $mou]) : null;
 
-                                                $links = [
-                                                    '<a href="' . $financialsUrl . '" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: 6px; background-color: #f8fafc; border: 1px solid #e2e8f0; color: #0f172a; text-decoration: none; font-size: 12px; font-weight: 600;">' .
+                                                $links = [];
+
+                                                if (PropertyFinancials::canAccess(['record' => $record->id])) {
+                                                    $financialsUrl = PropertyResource::getUrl('financials', ['record' => $record]);
+                                                    $links[] = '<a href="' . $financialsUrl . '" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: 6px; background-color: #f8fafc; border: 1px solid #e2e8f0; color: #0f172a; text-decoration: none; font-size: 12px; font-weight: 600;">' .
                                                         '<span>💳 Financial Terms & MOU</span><span style="color: #2563eb;">&rarr;</span>' .
-                                                        '</a>',
-                                                    '<a href="' . $onboardingUrl . '" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: 6px; background-color: #f8fafc; border: 1px solid #e2e8f0; color: #0f172a; text-decoration: none; font-size: 12px; font-weight: 600;">' .
-                                                        '<span>📋 Onboarding Dashboard</span><span style="color: #2563eb;">&rarr;</span>' .
-                                                        '</a>',
-                                                ];
+                                                        '</a>';
+                                                }
+
+                                                $links[] = '<a href="' . $onboardingUrl . '" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: 6px; background-color: #f8fafc; border: 1px solid #e2e8f0; color: #0f172a; text-decoration: none; font-size: 12px; font-weight: 600;">' .
+                                                    '<span>📋 Onboarding Dashboard</span><span style="color: #2563eb;">&rarr;</span>' .
+                                                    '</a>';
 
                                                 if ($mouUrl) {
                                                     $links[] = '<a href="' . $mouUrl . '" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: 6px; background-color: #f8fafc; border: 1px solid #e2e8f0; color: #0f172a; text-decoration: none; font-size: 12px; font-weight: 600;">' .

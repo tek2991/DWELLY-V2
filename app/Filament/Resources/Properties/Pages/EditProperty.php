@@ -24,6 +24,7 @@ class EditProperty extends EditRecord
                 ->icon('heroicon-o-currency-rupee')
                 ->color('success')
                 ->tooltip('View active pricing versions, bank details, and linked MOU')
+                ->visible(fn (Property $record): bool => PropertyFinancials::canAccess(['record' => $record->id]))
                 ->url(fn (Property $record): string => PropertyResource::getUrl('financials', ['record' => $record])),
 
             Action::make('onboarding')

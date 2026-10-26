@@ -96,6 +96,9 @@ class TenancyAgreement extends DomainModel implements HasMedia
         $this->addMediaCollection('signed_agreement')->singleFile();
         $this->addMediaCollection('tenant_aadhaar');
         $this->addMediaCollection('tenant_pan');
+        $this->addMediaCollection('tenant_voter_id');
+        $this->addMediaCollection('tenant_passport');
+        $this->addMediaCollection('tenant_driving_license');
         $this->addMediaCollection('tenant_photo')->singleFile();
         $this->addMediaCollection('cancelled_cheque');
         $this->addMediaCollection('kyc_documents');

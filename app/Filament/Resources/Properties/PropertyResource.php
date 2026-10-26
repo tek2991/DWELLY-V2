@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\Properties;
 
 use App\Domain\Property\Models\Property;
-use App\Filament\Clusters\PropertiesCluster;
 use App\Filament\Resources\Properties\Pages\EditProperty;
 use App\Filament\Resources\Properties\Pages\ListProperties;
 use App\Filament\Resources\Properties\Pages\OnboardingDashboard;
@@ -33,13 +32,13 @@ class PropertyResource extends Resource
 {
     protected static ?string $model = Property::class;
 
-    protected static ?string $cluster = PropertiesCluster::class;
-
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBuildingOffice2;
 
-    protected static ?string $navigationLabel = 'All Properties';
+    protected static \UnitEnum|string|null $navigationGroup = 'Properties & Leasing';
 
-    protected static ?int $navigationSort = 1;
+    protected static ?string $navigationLabel = 'Properties';
+
+    protected static ?int $navigationSort = 2;
 
     public static function canViewAny(): bool
     {

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Properties\RelationManagers;
 
+use App\Filament\Resources\Properties\Pages\PropertyFinancials;
 use App\Filament\Resources\Properties\RelationManagers\Traits\LocksDuringPropertyOnboarding;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
@@ -15,12 +16,18 @@ use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 
 class PricingVersionsRelationManager extends RelationManager
 {
     use LocksDuringPropertyOnboarding;
 
     protected static string $relationship = 'pricingVersions';
+
+    public static function canViewForRecord(Model $ownerRecord, string $pageClass): bool
+    {
+        return PropertyFinancials::canAccess(['record' => $ownerRecord->id]);
+    }
 
     public function form(Schema $schema): Schema
     {

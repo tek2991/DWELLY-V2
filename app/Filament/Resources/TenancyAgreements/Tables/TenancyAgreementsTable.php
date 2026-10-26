@@ -110,7 +110,14 @@ class TenancyAgreementsTable
                     })
                     ->html()
                     ->sortable(),
+
+                TextColumn::make('created_at')
+                    ->label('Created')
+                    ->dateTime('d M Y, H:i')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->defaultSort('created_at', 'desc')
             ->filters([
                 SelectFilter::make('status')
                     ->label('Status')

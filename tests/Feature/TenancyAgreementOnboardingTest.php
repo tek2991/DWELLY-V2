@@ -599,4 +599,49 @@ class TenancyAgreementOnboardingTest extends TestCase
             ->assertSuccessful()
             ->assertCanSeeTableRecords([]);
     }
+
+    public function test_create_tenancy_agreement_has_merged_identity_and_kyc_fields()
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $testable = Livewire::test(CreateTenancyAgreement::class);
+        $form = $testable->instance()->form;
+
+        // Verify photo, aadhaar, and pan fields are present in the merged KYC section
+        $this->assertNotNull($form->getComponent('tenant_photo'));
+        $this->assertNotNull($form->getComponent('new_tenant.aadhaar_number'));
+        $this->assertNotNull($form->getComponent('tenant_aadhaar'));
+        $this->assertNotNull($form->getComponent('new_tenant.pan_number'));
+        $this->assertNotNull($form->getComponent('tenant_pan'));
+
+        // Verify document type options helper returns options for primary tenant
+        $docTypes = \App\Filament\Resources\TenancyAgreements\Schemas\TenancyAgreementForm::getDocumentTypeOptions('primary_tenant');
+        $this->assertNotEmpty($docTypes);
+        $this->assertArrayHasKey('aadhaar', $docTypes);
+    }
+
+    public function test_create_tenancy_agreement_property_dropdown_options_format_code_then_name()
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $property = Property::create([
+            'code' => 'GAU 001',
+            'building_name' => 'Tarun Nagar GF1',
+            'address_line_1' => 'H/N 27, Tarun Nagar, Guwahati',
+            'status' => 'vacant',
+        ]);
+
+        $testable = Livewire::test(CreateTenancyAgreement::class);
+        $form = $testable->instance()->form;
+
+        /** @var \Filament\Forms\Components\Select $propertySelect */
+        $propertySelect = $form->getComponent('property_id');
+        $this->assertNotNull($propertySelect);
+
+        $options = $propertySelect->getOptions();
+        $this->assertArrayHasKey($property->id, $options);
+        $this->assertEquals('GAU 001 - Tarun Nagar GF1', $options[$property->id]);
+    }
 }

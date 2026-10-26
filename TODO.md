@@ -6,4 +6,5 @@
 6. In financial page, after pdf verification no option to edit further
 7. How is rent share in oppurtunity implemented?
 8. [x] MOU workflow review and testing. When in edit mode, no pdf upload, generation. upload nad generate button side by side.
-9. Remove the delete button for properties, properties can only be archived, it should never delete.
+9. Remove the delete button for properties, properties can only be archived, it should never be deleted.
+10. Clarification: Should MOU, Onboarding etc be assigned to a specific person, or it is just role based? If role based, how should responsibility be fixed.

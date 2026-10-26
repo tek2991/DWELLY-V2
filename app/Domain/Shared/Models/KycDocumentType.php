@@ -11,6 +11,7 @@ class KycDocumentType extends DomainModel
         'pan',
         'aadhaar',
         'electricity_bill',
+        'passport_photo',
     ];
 
     protected $table = 'kyc_document_types';

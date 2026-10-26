@@ -12,6 +12,20 @@ class KycDocumentTypeSeeder extends Seeder
     {
         $documents = [
             [
+                'name' => 'Passport Photo',
+                'code' => 'passport_photo',
+                'description' => 'Passport-sized photograph of the tenant',
+                'icon' => 'heroicon-m-user-circle',
+                'has_number' => false,
+                'number_label' => null,
+                'mou_owner_requirement' => KycRequirementLevel::DISABLED,
+                'mou_signatory_requirement' => KycRequirementLevel::DISABLED,
+                'tenancy_primary_requirement' => KycRequirementLevel::MANDATORY,
+                'tenancy_secondary_requirement' => KycRequirementLevel::MANDATORY,
+                'is_active' => true,
+                'sort_order' => 0,
+            ],
+            [
                 'name' => 'Aadhaar Card',
                 'code' => 'aadhaar',
                 'description' => 'Front & Back image or PDF of Government Aadhaar card',

@@ -5,7 +5,7 @@ namespace App\Filament\Pages\Properties;
 use App\Domain\Property\Enums\OnboardingStatus;
 use App\Domain\Property\Models\Property;
 use App\Domain\Property\Services\PropertyOnboardingValidator;
-use App\Filament\Clusters\PropertiesCluster;
+use App\Filament\Clusters\OnboardingsCluster;
 use App\Filament\Resources\Properties\PropertyResource;
 use BackedEnum;
 use Filament\Actions\Action;
@@ -25,13 +25,13 @@ class OnboardingQueue extends Page implements HasTable
 
     protected string $view = 'filament.pages.properties.onboarding-queue';
 
-    protected static ?string $cluster = PropertiesCluster::class;
+    protected static ?string $cluster = OnboardingsCluster::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentList;
 
     protected static ?string $navigationLabel = 'Onboarding Queue';
 
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 1;
 
     public function getTitle(): string|Htmlable
     {

@@ -5,8 +5,9 @@ namespace Tests\Feature\Navigation;
 use App\Filament\Clusters\AdministrationCluster;
 use App\Filament\Clusters\AuditsCluster;
 use App\Filament\Clusters\GeographicCluster;
-use App\Filament\Clusters\PropertiesCluster;
+use App\Filament\Clusters\OnboardingsCluster;
 use App\Filament\Clusters\ReferenceData\ReferenceDataCluster;
+use App\Filament\Resources\Properties\PropertyResource;
 use App\Filament\Pages\Billing\BulkGenerateMonthlyRent;
 use App\Filament\Pages\Billing\BulkGenerateOwnerPayouts;
 use App\Filament\Pages\Billing\FinancialDashboard;
@@ -58,14 +59,17 @@ class NavigationHierarchyTest extends TestCase
         $this->assertEquals('Properties & Leasing', OperationsDashboard::getNavigationGroup());
         $this->assertEquals(1, OperationsDashboard::getNavigationSort());
 
-        $this->assertEquals('Properties & Leasing', PropertiesCluster::getNavigationGroup());
-        $this->assertEquals(2, PropertiesCluster::getNavigationSort());
+        $this->assertEquals('Properties & Leasing', PropertyResource::getNavigationGroup());
+        $this->assertEquals(2, PropertyResource::getNavigationSort());
+
+        $this->assertEquals('Properties & Leasing', OnboardingsCluster::getNavigationGroup());
+        $this->assertEquals(3, OnboardingsCluster::getNavigationSort());
 
         $this->assertEquals('Properties & Leasing', TenancyAgreementResource::getNavigationGroup());
-        $this->assertEquals(3, TenancyAgreementResource::getNavigationSort());
+        $this->assertEquals(4, TenancyAgreementResource::getNavigationSort());
 
         $this->assertEquals('Properties & Leasing', TenantDeboardingResource::getNavigationGroup());
-        $this->assertEquals(4, TenantDeboardingResource::getNavigationSort());
+        $this->assertEquals(5, TenantDeboardingResource::getNavigationSort());
     }
 
     public function test_maintenance_and_field_ops_group_items(): void

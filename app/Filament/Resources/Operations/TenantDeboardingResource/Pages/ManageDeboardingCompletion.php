@@ -11,6 +11,7 @@ use App\Filament\Resources\Operations\TenantDeboardingResource\Pages\Concerns\Ha
 use App\Filament\Resources\Operations\TenantDeboardingResource\Schemas\TenantDeboardingForm;
 use BackedEnum;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -18,6 +19,7 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\HtmlString;
 
 class ManageDeboardingCompletion extends EditRecord
 {
@@ -67,14 +69,36 @@ class ManageDeboardingCompletion extends EditRecord
                 ->modalHeading('Finalize Deboarding & Vacate Property')
                 ->modalDescription('This will permanently lock the exit audit, finalize the security deposit settlement, mark the tenancy agreement as Vacated, and update property status.')
                 ->form([
-                    Select::make('new_property_status')
-                        ->label('Destination Property Status')
-                        ->options([
-                            'vacant' => 'Vacant & Ready for Onboarding',
-                            'under_maintenance' => 'Under Maintenance / Further Repairs Needed',
-                        ])
-                        ->default(fn () => $record->new_property_status ?? 'vacant')
-                        ->required(),
+                    Placeholder::make('property_status_info')
+                        ->label('Property Handover Status')
+                        ->content(function () use ($record) {
+                            $tickets = $record->maintenanceRequests;
+                            if ($tickets->isEmpty()) {
+                                $deduction = (float) ($record->maintenance_deduction ?? 0);
+                                if ($deduction > 0) {
+                                    return new HtmlString('<div style="color: #b45309; font-size: 13px; background: #fffbeb; padding: 10px 12px; border-radius: 6px; border: 1px dashed #fcd34d;">' .
+                                        '⚠️ <strong>Turnover Damage Deductions:</strong> A damage deduction of <strong>₹' . number_format($deduction, 2) . '</strong> was recorded on deposit. Property will be marked <strong>Vacant</strong> upon completion. If repair work orders are needed, you can raise a ticket from Step 3.' .
+                                        '</div>');
+                                }
+
+                                return new HtmlString('<div style="font-size: 13px; color: #166534; background: #f0fdf4; padding: 8px 12px; border-radius: 6px; border: 1px solid #bbf7d0;">' .
+                                    '✅ Property will be cleanly marked <strong>Vacant</strong> upon completion.' .
+                                    '</div>');
+                            }
+
+                            $list = $tickets->map(function ($t) {
+                                $statusLabel = $t->status?->getLabel() ?? ucfirst((string) $t->status);
+                                $age = $t->created_at?->diffForHumans();
+
+                                return "<li style=\"margin-top: 4px;\"><strong>#{$t->ticket_number}</strong>: " . e($t->title) . " &mdash; <span style=\"color: #b45309; font-weight: 600;\">{$statusLabel}</span> (created {$age})</li>";
+                            })->implode('');
+
+                            return new HtmlString('<div style="background: #f8fafc; padding: 10px 12px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 13px;">' .
+                                '<p style="font-weight: 600; color: #1e293b; margin: 0 0 4px 0;">Active Maintenance Tickets (' . $tickets->count() . '):</p>' .
+                                '<ul style="padding-left: 20px; margin: 0; color: #475569;">' . $list . '</ul>' .
+                                '<p style="margin: 6px 0 0 0; color: #64748b; font-size: 12px;">Property will be marked <strong>Vacant</strong>. The open tickets will automatically track repairs under the Maintenance tab.</p>' .
+                                '</div>');
+                        }),
 
                     TextInput::make('net_refund')
                         ->label('Net Deposit Refundable Amount (₹)')
@@ -125,7 +149,7 @@ class ManageDeboardingCompletion extends EditRecord
                     $service = app(TenancyDeboardingService::class);
                     $service->completeDeboardingAndVacate(
                         $record,
-                        $data['new_property_status'] ?? 'vacant',
+                        'vacant',
                         [
                             'net_refund' => $data['net_refund'] ?? $record->net_deposit_refund,
                             'settlement_status' => $data['settlement_status'] ?? 'settled',
@@ -136,7 +160,7 @@ class ManageDeboardingCompletion extends EditRecord
 
                     Notification::make()
                         ->title('Tenant Deboarding Completed')
-                        ->body("Deboarding #{$record->code} completed. Property set to {$data['new_property_status']}.")
+                        ->body("Deboarding #{$record->code} completed. Property marked Vacant.")
                         ->success()
                         ->send();
 

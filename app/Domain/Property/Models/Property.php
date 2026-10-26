@@ -2,12 +2,15 @@
 
 namespace App\Domain\Property\Models;
 
+use App\Domain\Geographic\Models\Locality;
+use App\Domain\Maintenance\Enums\MaintenanceStatus;
+use App\Domain\Maintenance\Models\MaintenanceRequest;
 use App\Domain\Shared\Models\DomainModel;
 use App\Domain\Shared\Traits\BelongsToBranch;
-use App\Domain\Geographic\Models\Locality;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class Property extends DomainModel
 {
@@ -132,7 +135,28 @@ class Property extends DomainModel
 
     public function maintenanceRequests(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
-        return $this->hasMany(\App\Domain\Maintenance\Models\MaintenanceRequest::class);
+        return $this->hasMany(MaintenanceRequest::class);
+    }
+
+    public function openMaintenanceRequests(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(MaintenanceRequest::class)
+            ->whereNotIn('status', [
+                MaintenanceStatus::RESOLVED,
+                MaintenanceStatus::CLOSED,
+                MaintenanceStatus::CANCELLED,
+            ]);
+    }
+
+    public function scopeWithOpenMaintenance(Builder $query): Builder
+    {
+        return $query->whereHas('maintenanceRequests', function (Builder $q) {
+            $q->whereNotIn('status', [
+                MaintenanceStatus::RESOLVED,
+                MaintenanceStatus::CLOSED,
+                MaintenanceStatus::CANCELLED,
+            ]);
+        });
     }
 
     public function ownerPayouts(): \Illuminate\Database\Eloquent\Relations\HasMany

@@ -189,7 +189,7 @@
                                             @else
                                                 <span style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.6875rem; font-weight: 600; color: #b45309; background: #fffbeb; padding: 0.15rem 0.45rem; border-radius: 0.375rem; border: 1px dashed #fcd34d;" title="Code pending assignment during onboarding">
                                                     <span style="width: 0.375rem; height: 0.375rem; border-radius: 9999px; background: #f59e0b; display: inline-block;"></span>
-                                                    Pending Code
+                                                    N/A
                                                 </span>
                                             @endif
                                         </td>

@@ -10,10 +10,14 @@ use App\Domain\Opportunity\Models\Opportunity;
 use App\Domain\Property\Models\OnboardingProject;
 use App\Domain\Property\Models\Property;
 use App\Filament\Pages\Properties\ReviewQueue;
+use App\Filament\Resources\Properties\Pages\EditProperty;
+use App\Filament\Resources\Properties\Pages\ListProperties;
 use App\Filament\Resources\Properties\Pages\PropertyFinancials;
+use App\Filament\Resources\Properties\RelationManagers\PricingVersionsRelationManager;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class SupplyAndOnboardingRbacTest extends TestCase
@@ -243,5 +247,48 @@ class SupplyAndOnboardingRbacTest extends TestCase
 
         $this->actingAs($this->opsExecutive);
         $this->assertFalse(PropertyFinancials::canAccess(['record' => $property->id]));
+    }
+
+    public function test_properties_table_and_views_hide_financials_from_unauthorized_roles(): void
+    {
+        $org = \Tek2991\Accounting\Models\Organization::create([
+            'name' => 'Dwelly Living Private Limited',
+            'legal_name' => 'Dwelly Living Private Limited',
+        ]);
+
+        $branch = \App\Models\Branch::create([
+            'organization_id' => $org->id,
+            'name' => 'Bangalore Central',
+            'code' => 'BLR-01',
+            'city' => 'Bangalore',
+        ]);
+
+        foreach ([$this->owner, $this->cityManager, $this->supplyManager, $this->demandManager, $this->opsManager, $this->opsExecutive, $this->accountant] as $u) {
+            $u->branches()->syncWithoutDetaching([$branch->id]);
+        }
+
+        $property = Property::create([
+            'branch_id' => $branch->id,
+            'building_name' => 'Brigade Gateway 401',
+            'status' => 'Vacant',
+        ]);
+
+        // Authorized: Accountant can view financials action & pricing relation
+        $this->actingAs($this->accountant);
+        $this->assertTrue(PricingVersionsRelationManager::canViewForRecord($property, EditProperty::class));
+        Livewire::test(ListProperties::class)
+            ->assertTableActionVisible('financials', $property);
+
+        // Unauthorized: Demand Manager cannot view financials action & pricing relation
+        $this->actingAs($this->demandManager);
+        $this->assertFalse(PricingVersionsRelationManager::canViewForRecord($property, EditProperty::class));
+        Livewire::test(ListProperties::class)
+            ->assertTableActionHidden('financials', $property);
+
+        // Unauthorized: Operations Executive cannot view financials action & pricing relation
+        $this->actingAs($this->opsExecutive);
+        $this->assertFalse(PricingVersionsRelationManager::canViewForRecord($property, EditProperty::class));
+        Livewire::test(ListProperties::class)
+            ->assertTableActionHidden('financials', $property);
     }
 }

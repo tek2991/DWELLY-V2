@@ -190,7 +190,7 @@ class OperationsDashboard extends Page
         $occupied = Property::whereIn('status', ['Occupied', 'occupied'])->count();
         $vacant = Property::whereIn('status', ['Vacant', 'vacant'])->count();
         $onboarding = Property::whereIn('status', ['Onboarding', 'onboarding'])->count();
-        $maintenance = Property::whereIn('status', ['Maintenance', 'maintenance', 'under_maintenance'])->count();
+        $maintenance = Property::withOpenMaintenance()->count();
         $archived = Property::whereIn('status', ['Archived', 'archived'])->count();
 
         $activeUnits = $occupied + $vacant + $maintenance;
