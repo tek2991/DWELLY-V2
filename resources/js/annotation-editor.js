@@ -24,6 +24,7 @@ export class AnnotationEditor {
         this.canvas = new fabric.Canvas(canvasElement, {
             isDrawingMode: false,
             preserveObjectStacking: true,
+            allowTouchScrolling: false,
         });
         
         this.imageUrl = getRelativeUrl(imageUrl);
@@ -50,10 +51,20 @@ export class AnnotationEditor {
             this.imgNativeHeight = img.height;
 
             // Determine available space for the canvas based on window dimensions
-            let availableWidth = Math.min(window.innerWidth - 380, 1150);
-            let availableHeight = Math.min(window.innerHeight - 140, 720);
-            if (availableWidth <= 0) availableWidth = 900;
-            if (availableHeight <= 0) availableHeight = 650;
+            const isMobile = window.innerWidth < 768;
+            let availableWidth, availableHeight;
+
+            if (isMobile) {
+                // On mobile devices, use near full screen width with small margin
+                availableWidth = Math.max(window.innerWidth - 32, 280);
+                // Allow vertical clearance for toolbar and bottom action bar
+                availableHeight = Math.max(window.innerHeight - 200, 240);
+            } else {
+                availableWidth = Math.min(window.innerWidth - 380, 1150);
+                availableHeight = Math.min(window.innerHeight - 140, 720);
+                if (availableWidth <= 0) availableWidth = 800;
+                if (availableHeight <= 0) availableHeight = 600;
+            }
             
             let scale = Math.min(availableWidth / img.width, availableHeight / img.height);
             this.currentScale = scale;
@@ -447,6 +458,7 @@ export class AnnotationViewer {
             isDrawingMode: false,
             selection: false,
             preserveObjectStacking: true,
+            allowTouchScrolling: false,
         });
         
         this.imageUrl = getRelativeUrl(imageUrl);
@@ -459,10 +471,18 @@ export class AnnotationViewer {
             console.log('[AnnotationViewer] Loading image from:', this.imageUrl);
             const img = await fabric.Image.fromURL(this.imageUrl, { crossOrigin: 'anonymous' });
             
-            let availableWidth = Math.min(window.innerWidth - 460, 920);
-            let availableHeight = Math.min(window.innerHeight - 220, 600);
-            if (availableWidth <= 0) availableWidth = 750;
-            if (availableHeight <= 0) availableHeight = 500;
+            const isMobile = window.innerWidth < 768;
+            let availableWidth, availableHeight;
+
+            if (isMobile) {
+                availableWidth = Math.max(window.innerWidth - 48, 280);
+                availableHeight = Math.max(window.innerHeight - 260, 240);
+            } else {
+                availableWidth = Math.min(window.innerWidth - 460, 920);
+                availableHeight = Math.min(window.innerHeight - 220, 600);
+                if (availableWidth <= 0) availableWidth = 700;
+                if (availableHeight <= 0) availableHeight = 450;
+            }
 
             let scale = Math.min(availableWidth / img.width, availableHeight / img.height);
 

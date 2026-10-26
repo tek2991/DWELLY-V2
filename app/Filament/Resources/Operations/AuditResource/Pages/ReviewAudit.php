@@ -26,7 +26,7 @@ class ReviewAudit extends Page
 
     public function getTitle(): string | Htmlable
     {
-        return 'Review Audit: ' . ($this->record->property->code ?? $this->record->id);
+        return 'Review Audit: ' . ($this->record->audit_number ?? $this->record->property?->code ?? $this->record->id);
     }
 
     protected function getHeaderActions(): array

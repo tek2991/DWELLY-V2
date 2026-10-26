@@ -13,6 +13,7 @@ use Filament\Forms\Form;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\ToggleButtons;
 use Illuminate\Support\Facades\Log;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
@@ -30,6 +31,12 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
     public $referenceItems = [];
     public ?string $referenceAuditNumber = null;
     public $activeCategoryId = null;
+    public string $itemFilter = 'all'; // 'all', 'pending', 'inspected', 'rejected'
+
+    public function setItemFilter(string $filter): void
+    {
+        $this->itemFilter = in_array($filter, ['all', 'pending', 'inspected', 'rejected']) ? $filter : 'all';
+    }
 
     public function mount(Audit $audit)
     {
@@ -655,6 +662,7 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
                 \Filament\Schemas\Components\Section::make('Inspection Details')
                     ->schema([
                         Select::make('condition')
+                            ->label('Condition')
                             ->options(ItemCondition::class)
                             ->required()
                             ->disabled(function (?AuditItem $record = null) {
@@ -664,6 +672,14 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
                         Textarea::make('remarks')
                             ->label('Fresh Inspection Remarks')
                             ->maxLength(65535)
+                            ->hintAction(
+                                Action::make('speakRemarks')
+                                    ->icon('heroicon-o-microphone')
+                                    ->label('Dictate')
+                                    ->color('primary')
+                                    ->tooltip('Tap to speak (speech-to-text dictation)')
+                                    ->alpineClickHandler('window.dictateRemarks($el)')
+                            )
                             ->disabled(function (?AuditItem $record = null) {
                                 $item = $this->currentItemId ? AuditItem::find($this->currentItemId) : $record;
                                 return !$item || !$item->isEditable();
@@ -680,52 +696,47 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
                         \Filament\Schemas\Components\View::make('livewire.operations.evidence-gallery-form-field')
                     ])
             ])
-            ->modalSubmitAction(function ($action, ?AuditItem $record = null) {
+            ->modalSubmitAction(function (Action $action, ?AuditItem $record = null) {
                 $item = $this->currentItemId ? AuditItem::find($this->currentItemId) : $record;
-                return ($item && $item->isEditable()) ? $action : $action->hidden();
+                if (!$item || !$item->isEditable()) {
+                    return $action->hidden();
+                }
+
+                return $action
+                    ->label('Save')
+                    ->icon('heroicon-o-check')
+                    ->color('gray')
+                    ->button()
+                    ->extraAttributes(['class' => 'audit-btn-save']);
             })
-            ->extraModalFooterActions(function (?AuditItem $record = null) {
+            ->modalCancelAction(function (Action $action) {
+                return $action
+                    ->label('Cancel')
+                    ->color('gray')
+                    ->extraAttributes(['class' => 'audit-btn-cancel hidden sm:inline-flex']);
+            })
+            ->extraModalFooterActions(function (?AuditItem $record = null): array {
+                $item = $this->currentItemId ? AuditItem::find($this->currentItemId) : $record;
+                $prevId = $item ? $this->getPreviousItemId($item) : null;
+                $nextId = $item ? $this->getNextItemId($item) : null;
+
                 return [
                     Action::make('prevItem')
-                        ->label('Previous')
+                        ->label('‹ Prev')
                         ->icon('heroicon-o-chevron-left')
                         ->color('gray')
                         ->button()
-                        ->disabled(function () {
-                            $item = $this->currentItemId ? AuditItem::find($this->currentItemId) : null;
-                            return !$item || !$this->getPreviousItemId($item);
-                        })
-                        ->action(function (?AuditItem $record = null) {
-                            $item = $this->currentItemId ? AuditItem::find($this->currentItemId) : $record;
-                            if (!$item) return;
-
-                            $prevId = $this->getPreviousItemId($item);
-                            if (!$prevId) return;
-
-                            $this->saveCurrentItemFormData();
-                            $this->replaceMountedAction('editItem', ['item_id' => $prevId], ['seq' => microtime(true)]);
-                        }),
+                        ->disabled(!$prevId)
+                        ->action('navigatePreviousItem')
+                        ->extraAttributes(['class' => 'audit-btn-prev']),
 
                     Action::make('nextItem')
-                        ->label('Next')
-                        ->icon('heroicon-o-chevron-right')
-                        ->iconPosition('after')
-                        ->color('gray')
+                        ->label($nextId ? 'Save & Next ➔' : 'Save & Finish ✓')
+                        ->icon($nextId ? 'heroicon-o-arrow-right' : 'heroicon-o-check-circle')
+                        ->color($nextId ? 'primary' : 'success')
                         ->button()
-                        ->disabled(function () {
-                            $item = $this->currentItemId ? AuditItem::find($this->currentItemId) : null;
-                            return !$item || !$this->getNextItemId($item);
-                        })
-                        ->action(function (?AuditItem $record = null) {
-                            $item = $this->currentItemId ? AuditItem::find($this->currentItemId) : $record;
-                            if (!$item) return;
-
-                            $nextId = $this->getNextItemId($item);
-                            if (!$nextId) return;
-
-                            $this->saveCurrentItemFormData();
-                            $this->replaceMountedAction('editItem', ['item_id' => $nextId], ['seq' => microtime(true)]);
-                        }),
+                        ->action('saveAndNextItem')
+                        ->extraAttributes(['class' => 'audit-btn-next']),
                 ];
             })
             ->using(function (?AuditItem $record = null, array $data = [], ?Action $action = null): AuditItem {
@@ -785,19 +796,10 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
             return;
         }
 
-        $data = [];
         $schema = $this->getMountedActionSchema();
-        if ($schema) {
-            $rawState = $schema->getRawState();
-            if (is_array($rawState)) {
-                $data = $rawState;
-            }
-        }
-
-        if (empty($data) && !empty($this->mountedActions)) {
-            $lastIndex = array_key_last($this->mountedActions);
-            $data = $this->mountedActions[$lastIndex]['data'] ?? [];
-        }
+        $schemaData = ($schema && is_array($schema->getRawState())) ? $schema->getRawState() : [];
+        $mountedData = !empty($this->mountedActions) ? ($this->mountedActions[array_key_last($this->mountedActions)]['data'] ?? []) : [];
+        $data = array_merge($schemaData, $mountedData);
 
         $updateData = [];
         $hasChanges = false;
@@ -838,6 +840,71 @@ class AuditInspectionComponent extends Component implements HasForms, HasActions
                 ->log('Inspection: ' . $item->name . ' auto-saved');
 
             $this->audit->load('categories.items');
+        }
+    }
+
+    public function saveAndNextItem(): void
+    {
+        if (!$this->currentItemId) {
+            return;
+        }
+
+        $item = AuditItem::find($this->currentItemId);
+        if (!$item) {
+            return;
+        }
+
+        $schema = $this->getMountedActionSchema();
+        $schemaData = ($schema && is_array($schema->getRawState())) ? $schema->getRawState() : [];
+        $mountedData = !empty($this->mountedActions) ? ($this->mountedActions[array_key_last($this->mountedActions)]['data'] ?? []) : [];
+        $data = array_merge($schemaData, $mountedData);
+
+        if (empty($data['condition']) && empty($item->condition)) {
+            \Filament\Notifications\Notification::make()
+                ->title('Condition Required')
+                ->body('Please select an item condition before proceeding.')
+                ->warning()
+                ->send();
+            return;
+        }
+
+        $this->saveCurrentItemFormData();
+
+        $nextId = $this->getNextItemId($item);
+        if ($nextId) {
+            \Filament\Notifications\Notification::make()
+                ->title('Saved: ' . $item->name)
+                ->success()
+                ->send();
+
+            $this->replaceMountedAction('editItem', ['item_id' => $nextId]);
+        } else {
+            \Filament\Notifications\Notification::make()
+                ->title('Category Completed')
+                ->body('All items in this section have been inspected.')
+                ->success()
+                ->send();
+
+            $this->unmountAction();
+        }
+    }
+
+    public function navigatePreviousItem(): void
+    {
+        if (!$this->currentItemId) {
+            return;
+        }
+
+        $item = AuditItem::find($this->currentItemId);
+        if (!$item) {
+            return;
+        }
+
+        $this->saveCurrentItemFormData();
+
+        $prevId = $this->getPreviousItemId($item);
+        if ($prevId) {
+            $this->replaceMountedAction('editItem', ['item_id' => $prevId]);
         }
     }
 

@@ -1,4 +1,75 @@
-<div @mount-edit-item.window="$wire.mountEditItem($event.detail.itemId)" style="display: flex; flex-direction: column; gap: 1.5rem;">
+<div @mount-edit-item.window="$wire.mountEditItem($event.detail.itemId)" style="display: flex; flex-direction: column; gap: 1.5rem; position: relative;">
+    <style>
+        @media (max-width: 768px) {
+            .fi-modal-footer {
+                position: sticky !important;
+                bottom: 0 !important;
+                background: white !important;
+                z-index: 30 !important;
+                border-top: 1px solid rgba(229, 231, 235, 1) !important;
+                padding-top: 0.75rem !important;
+                padding-bottom: 0.75rem !important;
+                box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.05) !important;
+            }
+            .fi-modal-footer-actions {
+                display: flex !important;
+                width: 100% !important;
+                align-items: center !important;
+                justify-content: space-between !important;
+                gap: 0.5rem !important;
+                flex-wrap: nowrap !important;
+            }
+            .fi-modal-footer-actions .audit-btn-prev {
+                order: 1 !important;
+                flex: 0 0 auto !important;
+                padding-left: 0.625rem !important;
+                padding-right: 0.625rem !important;
+            }
+            .fi-modal-footer-actions .audit-btn-save {
+                order: 2 !important;
+                flex: 0 0 auto !important;
+                padding-left: 0.75rem !important;
+                padding-right: 0.75rem !important;
+            }
+            .fi-modal-footer-actions .audit-btn-next {
+                order: 3 !important;
+                flex: 1 1 auto !important;
+                justify-content: center !important;
+                font-weight: 700 !important;
+                box-shadow: 0 1px 3px rgba(79, 70, 229, 0.3) !important;
+            }
+            .fi-modal-footer-actions .audit-btn-cancel {
+                display: none !important;
+            }
+            .audit-mobile-fab {
+                display: flex !important;
+                position: fixed !important;
+                bottom: 4.5rem !important;
+                right: 1.25rem !important;
+                z-index: 35 !important;
+            }
+            .audit-mobile-sticky-bar {
+                display: flex !important;
+                position: fixed !important;
+                bottom: 0 !important;
+                left: 0 !important;
+                right: 0 !important;
+                z-index: 30 !important;
+                background: rgba(255, 255, 255, 0.97) !important;
+                backdrop-filter: blur(8px) !important;
+                border-top: 1px solid rgba(229, 231, 235, 1) !important;
+                padding: 0.625rem 1rem !important;
+                box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08) !important;
+                align-items: center !important;
+                justify-content: space-between !important;
+            }
+        }
+        @media (min-width: 769px) {
+            .audit-mobile-fab, .audit-mobile-sticky-bar {
+                display: none !important;
+            }
+        }
+    </style>
     @php
         $totalItems = $audit->items->count();
         $pendingItems = $audit->items->where('status', \App\Domain\Audit\Enums\ItemStatus::PENDING)->count();
@@ -21,12 +92,16 @@
                     @if($audit->status === \App\Domain\Audit\Enums\AuditStatus::DRAFT)
                         {{ $this->startAuditAction }}
                     @elseif($audit->canSubmit())
-                        {{ $this->submitForReviewAction }}
+                        @if($progress === 100)
+                            {{ $this->submitForReviewAction }}
+                        @else
+                            <div class="hidden sm:inline-flex">
+                                {{ $this->submitForReviewAction }}
+                            </div>
+                        @endif
                     @endif
                 </x-slot>
             </x-audit-header>
-
-
 
             @if(!$audit->isInspector())
                 <div style="background-color: rgba(254, 242, 242, 1); border: 1px solid rgba(252, 165, 165, 1); color: rgba(153, 27, 27, 1); padding: 0.75rem 1rem; border-radius: 0.375rem; font-size: 0.875rem; display: flex; align-items: center; gap: 0.5rem;">
@@ -64,22 +139,33 @@
                 </div>
             @elseif($audit->status === \App\Domain\Audit\Enums\AuditStatus::IN_PROGRESS)
                 @if(($requiresVideo && !$hasVideo) || $pendingItems > 0)
-                    <div style="background-color: rgba(254, 249, 195, 1); border: 1px solid rgba(253, 224, 71, 1); color: rgba(133, 77, 14, 1); padding: 0.75rem 1rem; border-radius: 0.375rem; font-size: 0.875rem; display: flex; align-items: center; gap: 0.5rem;">
-                        <x-filament::icon icon="heroicon-o-information-circle" style="width: 1.25rem; height: 1.25rem; flex-shrink: 0;" />
-                        <span>
+                    <div style="background-color: #fffbeb; border: 1px solid #fde68a; color: #92400e; padding: 0.5rem 0.75rem; border-radius: 0.375rem; font-size: 0.8125rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <x-filament::icon icon="heroicon-m-information-circle" style="width: 1.125rem; height: 1.125rem; flex-shrink: 0; color: #d97706;" />
+                        <span style="line-height: 1.35;">
                             @if($requiresVideo && !$hasVideo && $pendingItems > 0)
-                                <strong>Property layout video</strong> must be uploaded and <strong>{{ $pendingItems }}</strong> item(s) pending inspection.
+                                <strong>Property layout video</strong> required &bull; <strong>{{ $pendingItems }}</strong> item(s) pending inspection.
                             @elseif($requiresVideo && !$hasVideo)
-                                <strong>Property layout video</strong> must be uploaded before submitting for review.
+                                <strong>Property layout video</strong> must be uploaded before submitting.
                             @else
-                                All audit items have to be inspected before submitting for review. (<strong>{{ $pendingItems }}</strong> item(s) pending inspection)
+                                <strong>{{ $pendingItems }}</strong> item(s) pending inspection before submitting.
                             @endif
                         </span>
                     </div>
                 @else
-                    <div style="background-color: rgba(240, 253, 244, 1); border: 1px solid rgba(187, 247, 208, 1); color: rgba(22, 101, 52, 1); padding: 0.75rem 1rem; border-radius: 0.375rem; font-size: 0.875rem; display: flex; align-items: center; gap: 0.5rem;">
-                        <x-filament::icon icon="heroicon-o-check-circle" style="width: 1.25rem; height: 1.25rem; flex-shrink: 0;" />
-                        <span><strong>Inspection &amp; Layout Video Complete!</strong> Click <strong>Submit for Approval</strong> to send this audit for review.</span>
+                    <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; padding: 0.625rem 0.875rem; border-radius: 0.375rem; font-size: 0.8125rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <x-filament::icon icon="heroicon-o-check-circle" style="width: 1.125rem; height: 1.125rem; flex-shrink: 0; color: #16a34a;" />
+                            <span><strong>All tasks completed!</strong> Ready to submit for review.</span>
+                        </div>
+                        <div class="sm:hidden">
+                            <button
+                                type="button"
+                                wire:click="mountAction('submitForReview')"
+                                style="display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.35rem 0.75rem; font-size: 0.8125rem; font-weight: 600; color: white; background-color: #16a34a; border-radius: 0.375rem; border: none; cursor: pointer;"
+                            >
+                                Submit Now
+                            </button>
+                        </div>
                     </div>
                 @endif
             @elseif(in_array($audit->status, [\App\Domain\Audit\Enums\AuditStatus::APPROVED, \App\Domain\Audit\Enums\AuditStatus::COMPLETED]))
@@ -91,12 +177,12 @@
 
             <!-- Row 3: Progress Bar & Counter -->
             <div>
-                <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.875rem; font-weight: 500; color: rgba(55, 65, 81, 1); margin-bottom: 0.375rem;">
+                <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8125rem; font-weight: 600; color: #374151; margin-bottom: 0.375rem;">
                     <span>Inspection Progress</span>
-                    <span>{{ $completedRequirements }} / {{ $totalRequirements }} Tasks Completed ({{ $progress }}%)</span>
+                    <span style="color: #4b5563;">{{ $completedRequirements }} / {{ $totalRequirements }} Tasks ({{ $progress }}%)</span>
                 </div>
-                <div style="width: 100%; background-color: rgba(156, 163, 175, 0.2); border-radius: 9999px; height: 0.5rem; overflow: hidden;">
-                    <div style="background-color: var(--primary-600); height: 100%; border-radius: 9999px; transition: all 0.5s; width: {{ $progress }}%;"></div>
+                <div style="width: 100%; background-color: rgba(229, 231, 235, 1); border-radius: 9999px; height: 0.45rem; overflow: hidden;">
+                    <div style="background-color: #16a34a; height: 100%; border-radius: 9999px; transition: all 0.5s; width: {{ $progress }}%;"></div>
                 </div>
             </div>
 
@@ -136,13 +222,19 @@
             @endif
 
             @foreach($audit->categories as $category)
+                @php
+                    $catTotal = $category->items->count();
+                    $catInspected = $category->items->where('status', '!=', \App\Domain\Audit\Enums\ItemStatus::PENDING)->count();
+                    $isCategoryComplete = $catTotal > 0 && ($catInspected === $catTotal);
+                @endphp
                 <x-filament::tabs.item
                     :active="$activeCategoryId === $category->id"
                     wire:click="setActiveCategory('{{ $category->id }}')"
+                    :icon="$isCategoryComplete ? 'heroicon-m-check-circle' : null"
                 >
                     {{ $category->name }}
-                    <x-slot name="badge">
-                        {{ $category->items->where('status', '!=', \App\Domain\Audit\Enums\ItemStatus::PENDING)->count() }} / {{ $category->items->count() }}
+                    <x-slot name="badge" :color="$isCategoryComplete ? 'success' : 'gray'">
+                        {{ $catInspected }} / {{ $catTotal }}
                     </x-slot>
                 </x-filament::tabs.item>
             @endforeach
@@ -289,10 +381,64 @@
                 @php
                     $activeCategory = $audit->categories->firstWhere('id', $activeCategoryId);
                     $activeCategoryName = strtolower($activeCategory?->name ?? '');
+                    $catItems = $activeCategory ? $activeCategory->items : collect();
+                    $catTotalCount = $catItems->count();
+                    $catPendingCount = $catItems->where('status', \App\Domain\Audit\Enums\ItemStatus::PENDING)->count();
+                    $catInspectedCount = $catItems->where('status', \App\Domain\Audit\Enums\ItemStatus::INSPECTED)->count();
+                    $catRejectedCount = $catItems->where('status', \App\Domain\Audit\Enums\ItemStatus::REJECTED)->count();
+
+                    $filteredItems = match($itemFilter) {
+                        'pending' => $catItems->where('status', \App\Domain\Audit\Enums\ItemStatus::PENDING),
+                        'inspected' => $catItems->where('status', \App\Domain\Audit\Enums\ItemStatus::INSPECTED),
+                        'rejected' => $catItems->where('status', \App\Domain\Audit\Enums\ItemStatus::REJECTED),
+                        default => $catItems,
+                    };
                 @endphp
+
+            @if($catTotalCount > 0)
+                <!-- Quick Filter Chips for Mobile / Desktop -->
+                <div style="display: flex; align-items: center; gap: 0.5rem; overflow-x: auto; padding: 0.25rem 0; -webkit-overflow-scrolling: touch; scrollbar-width: none;">
+                    <button
+                        type="button"
+                        wire:click="setItemFilter('all')"
+                        style="padding: 0.35rem 0.75rem; border-radius: 9999px; font-size: 0.8125rem; font-weight: 600; cursor: pointer; border: 1px solid {{ $itemFilter === 'all' ? '#4f46e5' : '#e5e7eb' }}; background: {{ $itemFilter === 'all' ? '#eef2ff' : 'white' }}; color: {{ $itemFilter === 'all' ? '#4f46e5' : '#4b5563' }}; white-space: nowrap;"
+                    >
+                        All ({{ $catTotalCount }})
+                    </button>
+                    <button
+                        type="button"
+                        wire:click="setItemFilter('pending')"
+                        style="padding: 0.35rem 0.75rem; border-radius: 9999px; font-size: 0.8125rem; font-weight: 600; cursor: pointer; border: 1px solid {{ $itemFilter === 'pending' ? '#f59e0b' : '#e5e7eb' }}; background: {{ $itemFilter === 'pending' ? '#fffbeb' : 'white' }}; color: {{ $itemFilter === 'pending' ? '#b45309' : '#4b5563' }}; white-space: nowrap;"
+                    >
+                        ⏳ Pending ({{ $catPendingCount }})
+                    </button>
+                    @if($catRejectedCount > 0)
+                        <button
+                            type="button"
+                            wire:click="setItemFilter('rejected')"
+                            style="padding: 0.35rem 0.75rem; border-radius: 9999px; font-size: 0.8125rem; font-weight: 600; cursor: pointer; border: 1px solid {{ $itemFilter === 'rejected' ? '#ef4444' : '#e5e7eb' }}; background: {{ $itemFilter === 'rejected' ? '#fef2f2' : 'white' }}; color: {{ $itemFilter === 'rejected' ? '#dc2626' : '#4b5563' }}; white-space: nowrap;"
+                        >
+                            ⚠️ Issues ({{ $catRejectedCount }})
+                        </button>
+                    @endif
+                    <button
+                        type="button"
+                        wire:click="setItemFilter('inspected')"
+                        style="padding: 0.35rem 0.75rem; border-radius: 9999px; font-size: 0.8125rem; font-weight: 600; cursor: pointer; border: 1px solid {{ $itemFilter === 'inspected' ? '#22c55e' : '#e5e7eb' }}; background: {{ $itemFilter === 'inspected' ? '#f0fdf4' : 'white' }}; color: {{ $itemFilter === 'inspected' ? '#16a34a' : '#4b5563' }}; white-space: nowrap;"
+                    >
+                        ✅ Completed ({{ $catInspectedCount }})
+                    </button>
+                </div>
+            @endif
             
-            @if($activeCategory && $activeCategory->items->isNotEmpty())
-                @foreach($activeCategory->items as $item)
+            @if($catItems->isNotEmpty())
+                @if($filteredItems->isEmpty())
+                    <div style="text-align: center; padding: 2rem 1rem; color: rgba(107, 114, 128, 1); background: rgba(249, 250, 251, 1); border-radius: 0.5rem; border: 1px dashed rgba(209, 213, 219, 1);">
+                        No items match the <strong>{{ ucfirst($itemFilter) }}</strong> filter.
+                        <button type="button" wire:click="setItemFilter('all')" style="color: #4f46e5; text-decoration: underline; background: none; border: none; cursor: pointer; margin-left: 0.25rem;">View All Items</button>
+                    </div>
+                @else
+                    @foreach($filteredItems as $item)
                     @php
                         $isRejected = $item->status === \App\Domain\Audit\Enums\ItemStatus::REJECTED;
                         $lastReview = $item->reviews()->orderBy('created_at', 'desc')->first();
@@ -400,6 +546,7 @@
                         </div>
                     </x-filament::section>
                 @endforeach
+                @endif
             @else
                 <div style="text-align: center; padding: 1.5rem; color: rgba(107, 114, 128, 1);">
                     No items in this category yet. Click below to add an item.
@@ -408,18 +555,41 @@
         @endif
     </div>
     @if($activeCategoryId !== 'layout_video')
-            <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
+        <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
+            @if($activeCategoryName === 'rooms')
+                {{ $this->createRoomAction }}
+            @elseif($activeCategoryName === 'inventory')
+                {{ $this->createInventoryAction }}
+            @elseif($activeCategoryName === 'utilities')
+                {{ $this->createUtilityAction }}
+            @else
+                {{ $this->createItemAction }}
+            @endif
+        </div>
+
+        @if($this->isAuditEditable())
+            <!-- Mobile Floating Action Button (FAB) -->
+            <div class="audit-mobile-fab">
                 @if($activeCategoryName === 'rooms')
-                    {{ $this->createRoomAction }}
+                    <button type="button" wire:click="mountAction('createRoom')" style="display: flex; align-items: center; justify-content: center; width: 3.5rem; height: 3.5rem; border-radius: 9999px; background-color: #4f46e5; color: white; border: none; box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.4); cursor: pointer;" title="Add Room">
+                        <x-filament::icon icon="heroicon-o-plus" style="width: 1.75rem; height: 1.75rem;" />
+                    </button>
                 @elseif($activeCategoryName === 'inventory')
-                    {{ $this->createInventoryAction }}
+                    <button type="button" wire:click="mountAction('createInventory')" style="display: flex; align-items: center; justify-content: center; width: 3.5rem; height: 3.5rem; border-radius: 9999px; background-color: #4f46e5; color: white; border: none; box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.4); cursor: pointer;" title="Add Inventory Item">
+                        <x-filament::icon icon="heroicon-o-plus" style="width: 1.75rem; height: 1.75rem;" />
+                    </button>
                 @elseif($activeCategoryName === 'utilities')
-                    {{ $this->createUtilityAction }}
+                    <button type="button" wire:click="mountAction('createUtility')" style="display: flex; align-items: center; justify-content: center; width: 3.5rem; height: 3.5rem; border-radius: 9999px; background-color: #4f46e5; color: white; border: none; box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.4); cursor: pointer;" title="Add Utility">
+                        <x-filament::icon icon="heroicon-o-plus" style="width: 1.75rem; height: 1.75rem;" />
+                    </button>
                 @else
-                    {{ $this->createItemAction }}
+                    <button type="button" wire:click="mountAction('createItem')" style="display: flex; align-items: center; justify-content: center; width: 3.5rem; height: 3.5rem; border-radius: 9999px; background-color: #4f46e5; color: white; border: none; box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.4); cursor: pointer;" title="Add Found Item">
+                        <x-filament::icon icon="heroicon-o-plus" style="width: 1.75rem; height: 1.75rem;" />
+                    </button>
                 @endif
             </div>
         @endif
+    @endif
     @endif
 
     <!-- Evidence Modal with Fabric Annotation Viewer -->
@@ -428,22 +598,50 @@
         @open-evidence-review-modal.window="openModal($event.detail)"
         x-show="isOpen"
         x-cloak
+        class="evidence-modal-backdrop"
         style="position: fixed; inset: 0; z-index: 99999; display: flex; align-items: center; justify-content: center; background-color: rgba(17, 24, 39, 0.85); backdrop-filter: blur(4px); padding: 1.5rem;"
     >
         <style>
             .evidence-modal-canvas-wrapper .canvas-container {
                 margin: 0 auto !important;
             }
+            @media (max-width: 767px) {
+                .evidence-modal-backdrop {
+                    padding: 0.5rem !important;
+                }
+                .evidence-modal-card {
+                    max-width: 98vw !important;
+                    max-height: 95vh !important;
+                    width: 100% !important;
+                }
+                .evidence-modal-workspace {
+                    flex-direction: column !important;
+                    min-height: auto !important;
+                    overflow-y: auto !important;
+                }
+                .evidence-modal-canvas-pane {
+                    padding: 0.5rem !important;
+                    flex: none !important;
+                }
+                .evidence-modal-remarks-pane {
+                    width: 100% !important;
+                    border-left: none !important;
+                    border-top: 1px solid #374151 !important;
+                    max-height: 220px !important;
+                    flex: none !important;
+                }
+            }
         </style>
         <div 
             @click.away="closeModal()" 
+            class="evidence-modal-card"
             style="background: #1f2937; border-radius: 0.75rem; max-width: 94vw; max-height: 92vh; width: 1150px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); border: 1px solid #374151; margin: auto;"
         >
             <!-- Modal Header -->
-            <div style="display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; background: #111827; border-bottom: 1px solid #374151;">
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1.25rem; background: #111827; border-bottom: 1px solid #374151;">
                 <div>
-                    <h4 style="margin: 0; font-size: 1.125rem; font-weight: 600; color: white;" x-text="'Evidence: ' + itemName"></h4>
-                    <div style="font-size: 0.75rem; color: #9ca3af; margin-top: 0.25rem;">Viewing annotated inspection photo &amp; remarks</div>
+                    <h4 style="margin: 0; font-size: 1.05rem; font-weight: 600; color: white;" x-text="'Evidence: ' + itemName"></h4>
+                    <div style="font-size: 0.75rem; color: #9ca3af; margin-top: 0.2rem;">Viewing annotated inspection photo &amp; remarks</div>
                 </div>
                 <button 
                     type="button" 
@@ -455,16 +653,16 @@
             </div>
 
             <!-- Modal Workspace (Canvas + Remarks Side Panel) -->
-            <div style="flex: 1; display: flex; overflow: hidden; background: #111827; min-height: 480px;">
+            <div class="evidence-modal-workspace" style="flex: 1; display: flex; overflow: hidden; background: #111827; min-height: 480px;">
                 <!-- Left: Centered Canvas Area -->
-                <div style="flex: 1; overflow: auto; padding: 1.5rem; display: flex; align-items: center; justify-content: center; background: #111827;">
+                <div class="evidence-modal-canvas-pane" style="flex: 1; overflow: auto; padding: 1.5rem; display: flex; align-items: center; justify-content: center; background: #111827; touch-action: none;">
                     <div wire:ignore x-ref="modalCanvasContainer" class="evidence-modal-canvas-wrapper" style="box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); outline: 1px solid rgba(255,255,255,0.1); border-radius: 0.375rem; overflow: hidden; display: flex; align-items: center; justify-content: center; margin: auto;">
                         <canvas id="evidenceModalCanvas"></canvas>
                     </div>
                 </div>
 
                 <!-- Right: Annotations & Remarks Side Panel -->
-                <div style="width: 320px; background-color: #1f2937; border-left: 1px solid #374151; display: flex; flex-direction: column; flex-shrink: 0;">
+                <div class="evidence-modal-remarks-pane" style="width: 320px; background-color: #1f2937; border-left: 1px solid #374151; display: flex; flex-direction: column; flex-shrink: 0;">
                     <div style="padding: 0.875rem 1rem; border-bottom: 1px solid #374151; font-size: 0.75rem; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; justify-content: space-between;">
                         <span>Annotations &amp; Remarks</span>
                         <span x-text="layers.length" style="background: #374151; color: white; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;"></span>
@@ -513,10 +711,103 @@
             />
         </div>
     @endif
+
+    <!-- Mobile Sticky Action / Progress Bar -->
+    <div class="audit-mobile-sticky-bar">
+        <div style="display: flex; flex-direction: column; gap: 0.125rem;">
+            <div style="font-size: 0.75rem; font-weight: 700; color: #4b5563; text-transform: uppercase; letter-spacing: 0.05em;">
+                {{ $completedRequirements }}/{{ $totalRequirements }} Tasks ({{ $progress }}%)
+            </div>
+            <div style="font-size: 0.8125rem; font-weight: 600; color: #111827;">
+                @if($pendingItems === 0 && $hasVideo)
+                    <span style="color: #16a34a;">Ready for approval</span>
+                @else
+                    <span>{{ $pendingItems }} item(s) pending</span>
+                @endif
+            </div>
+        </div>
+
+        <div>
+            @if($audit->canSubmit() && $progress === 100)
+                <button 
+                    type="button" 
+                    wire:click="mountAction('submitForReview')" 
+                    style="display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.45rem 0.875rem; font-size: 0.8125rem; font-weight: 600; color: white; background-color: #16a34a; border-radius: 0.375rem; border: none; box-shadow: 0 1px 2px rgba(0,0,0,0.1); cursor: pointer;"
+                >
+                    <x-filament::icon icon="heroicon-o-paper-airplane" style="width: 1rem; height: 1rem;" />
+                    <span>Submit</span>
+                </button>
+            @elseif($audit->status === \App\Domain\Audit\Enums\AuditStatus::DRAFT && $audit->canStart())
+                <button 
+                    type="button" 
+                    wire:click="mountAction('startAudit')" 
+                    style="display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.45rem 0.875rem; font-size: 0.8125rem; font-weight: 600; color: white; background-color: #2563eb; border-radius: 0.375rem; border: none; box-shadow: 0 1px 2px rgba(0,0,0,0.1); cursor: pointer;"
+                >
+                    <x-filament::icon icon="heroicon-o-play" style="width: 1rem; height: 1rem;" />
+                    <span>Start</span>
+                </button>
+            @endif
+        </div>
+    </div>
 </div>
 
 @script
 <script>
+    window.dictateRemarks = function(btn) {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert('Voice dictation is not supported by your current browser. Please use Chrome or Safari.');
+            return;
+        }
+
+        const modalWindow = btn.closest('.fi-modal-window') || document;
+        const textarea = modalWindow.querySelector('textarea[name*="remarks"], textarea');
+        if (!textarea) return;
+
+        if (window._activeRecognition) {
+            try { window._activeRecognition.stop(); } catch(e) {}
+            window._activeRecognition = null;
+            btn.style.color = '';
+            return;
+        }
+
+        const recognition = new SpeechRecognition();
+        window._activeRecognition = recognition;
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.lang = 'en-US';
+
+        btn.style.color = '#ef4444';
+
+        recognition.onresult = function(event) {
+            const text = event.results[0][0].transcript;
+            if (text) {
+                const current = textarea.value.trim();
+                const updated = current ? (current + ' ' + text) : text;
+                textarea.value = updated;
+                textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                textarea.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        };
+
+        recognition.onend = function() {
+            btn.style.color = '';
+            window._activeRecognition = null;
+        };
+
+        recognition.onerror = function() {
+            btn.style.color = '';
+            window._activeRecognition = null;
+        };
+
+        try {
+            recognition.start();
+        } catch(e) {
+            btn.style.color = '';
+            window._activeRecognition = null;
+        }
+    };
+
     Alpine.data('evidenceReviewModal', () => ({
         isOpen: false,
         imageUrl: '',

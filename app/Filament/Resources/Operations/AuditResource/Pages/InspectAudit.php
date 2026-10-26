@@ -34,8 +34,7 @@ class InspectAudit extends Page
 
     public function getTitle(): string | Htmlable
     {
-        $code = $this->record->property->code ?? $this->record->audit_number ?? $this->record->id;
-        return 'Audit Inspection: ' . $code;
+        return 'Audit Inspection: ' . ($this->record->audit_number ?? $this->record->property?->code ?? $this->record->id);
     }
 
     protected function getHeaderActions(): array

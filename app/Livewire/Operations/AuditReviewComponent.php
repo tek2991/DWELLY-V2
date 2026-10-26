@@ -34,6 +34,15 @@ class AuditReviewComponent extends Component implements HasActions, HasForms
 
     public $activeCategoryId = null;
 
+    public string $itemFilter = 'all';
+
+    public function setItemFilter(string $filter): void
+    {
+        if (in_array($filter, ['all', 'pending', 'approved', 'rejected'])) {
+            $this->itemFilter = $filter;
+        }
+    }
+
     public function mount(Audit $audit)
     {
         $this->audit = $audit->load('media');
