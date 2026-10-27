@@ -91,6 +91,9 @@
 </head>
 <body>
 
+    @if(!empty($customContent))
+        {!! $customContent !!}
+    @else
     <div class="header">
         <h2>LEAVE AND LICENSE AGREEMENT</h2>
     </div>
@@ -349,6 +352,7 @@
             <td>{{ $tenantBankDetails['pan_number'] ?? $tenant->individual?->pan_number ?? '_______________________' }}</td>
         </tr>
     </table>
+    @endif
 
     <div class="page-break"></div>
 

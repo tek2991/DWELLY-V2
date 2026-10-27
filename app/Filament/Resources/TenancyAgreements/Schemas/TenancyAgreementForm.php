@@ -31,6 +31,7 @@ use Filament\Schemas\Components\Actions as SchemaActions;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
@@ -321,124 +322,7 @@ class TenancyAgreementForm
                 Section::make('📁 3. Primary Tenant KYC & Document Collection')
                     ->description('Attach official identity, photo, and banking verification documents for the primary tenant.')
                     ->headerActions([
-                        Action::make('uploadDocumentModal')
-                            ->label('Upload Additional Document')
-                            ->icon('heroicon-m-plus')
-                            ->color('primary')
-                            ->size('sm')
-                            ->modalHeading('Upload Additional Document')
-                            ->modalDescription('Select document type to attach and configure for the primary tenant.')
-                            ->form([
-                                Select::make('document_type')
-                                    ->label('Document Type')
-                                    ->options(fn () => static::getDocumentTypeOptions('primary_tenant'))
-                                    ->required()
-                                    ->searchable()
-                                    ->live(),
-                                TextInput::make('document_number')
-                                    ->label(function (Get $get) {
-                                        $code = $get('document_type');
-                                        if ($code) {
-                                            $docType = KycDocumentType::where('code', $code)->first();
-                                            if ($docType && $docType->has_number) {
-                                                return $docType->number_label ?: "{$docType->name} Number";
-                                            }
-                                        }
-                                        return 'Document Number';
-                                    })
-                                    ->placeholder(function (Get $get) {
-                                        $code = $get('document_type');
-                                        if ($code) {
-                                            $docType = KycDocumentType::where('code', $code)->first();
-                                            return 'Enter '.strtolower($docType?->name ?? 'document').' number...';
-                                        }
-                                        return 'Enter document number...';
-                                    })
-                                    ->visible(function (Get $get) {
-                                        $code = $get('document_type');
-                                        if (! $code) {
-                                            return false;
-                                        }
-                                        $docType = KycDocumentType::where('code', $code)->first();
-                                        return (bool) ($docType?->has_number);
-                                    }),
-                                FileUpload::make('files')
-                                    ->label('Files (Images / PDF)')
-                                    ->multiple()
-                                    ->preserveFilenames()
-                                    ->required(),
-                            ])
-                            ->action(function (array $data, ?TenancyAgreement $record, Set $set, Get $get) {
-                                $docCode = $data['document_type'];
-                                $collection = match ($docCode) {
-                                    'passport_photo', 'tenant_photo' => 'tenant_photo',
-                                    'aadhaar', 'tenant_aadhaar' => 'tenant_aadhaar',
-                                    'pan', 'tenant_pan' => 'tenant_pan',
-                                    'cancelled_cheque' => 'cancelled_cheque',
-                                    'voter_id' => 'tenant_voter_id',
-                                    'passport' => 'tenant_passport',
-                                    'driving_license' => 'tenant_driving_license',
-                                    default => "tenant_{$docCode}",
-                                };
-
-                                $docNumber = $data['document_number'] ?? null;
-
-                                if ($record && $record->exists) {
-                                    foreach ($data['files'] as $path) {
-                                        $fullPath = Storage::disk(config('filament.default_filesystem_disk'))->path($path);
-                                        if (! file_exists($fullPath)) {
-                                            $fullPath = Storage::disk('public')->path($path);
-                                        }
-
-                                        $record->addMedia($fullPath)
-                                            ->withCustomProperties([
-                                                'document_type' => $docCode,
-                                            ])
-                                            ->toMediaCollection($collection);
-                                    }
-
-                                    if (! empty($docNumber)) {
-                                        $primaryTenant = $record->primaryTenant?->party;
-                                        if ($primaryTenant && $primaryTenant->individual) {
-                                            if ($docCode === 'aadhaar') {
-                                                $primaryTenant->individual->update(['aadhaar_number' => $docNumber]);
-                                            } elseif ($docCode === 'pan') {
-                                                $primaryTenant->individual->update(['pan_number' => $docNumber]);
-                                            } elseif ($docCode === 'voter_id') {
-                                                $primaryTenant->individual->update(['voter_id' => $docNumber]);
-                                            }
-                                        }
-                                    }
-
-                                    $record->refresh();
-                                    Notification::make()->title('Document Uploaded Successfully')->success()->send();
-                                } else {
-                                    $existing = $get($collection) ?? [];
-                                    if (is_string($existing)) {
-                                        $existing = [$existing];
-                                    }
-                                    $merged = array_values(array_unique(array_merge((array) $existing, (array) $data['files'])));
-                                    $set($collection, $merged);
-
-                                    if (! empty($docNumber)) {
-                                        if ($docCode === 'aadhaar') {
-                                            $set('new_tenant.aadhaar_number', $docNumber);
-                                        } elseif ($docCode === 'pan') {
-                                            $set('new_tenant.pan_number', $docNumber);
-                                        } elseif ($docCode === 'voter_id') {
-                                            $set('new_tenant.voter_id', $docNumber);
-                                        }
-                                        $set("new_tenant.{$docCode}_number", $docNumber);
-                                        $set("kyc_documents.tenant.{$docCode}.number", $docNumber);
-                                    }
-
-                                    Notification::make()
-                                        ->title('Document Attached')
-                                        ->body('File added to form. It will be saved when you submit the Tenancy Agreement.')
-                                        ->success()
-                                        ->send();
-                                }
-                            }),
+                        static::getTenantKycUploadAction(),
                     ])
                     ->schema([
                         Grid::make(['default' => 1, 'md' => 2])
@@ -1124,176 +1008,213 @@ class TenancyAgreementForm
             ]);
     }
 
-    public static function configureSecondaryTenantsForm(Schema $schema): Schema
+    public static function configureTenantKycAndOccupantsForm(Schema $schema): Schema
     {
         return $schema
             ->columns(1)
             ->components([
-                Section::make('Secondary Tenants & Family Members')
-                    ->description('Manage family members or co-tenants living with the primary tenant, along with identity details and KYC documents.')
-                    ->schema([
-                        Repeater::make('secondary_tenants')
-                            ->label('Secondary Tenants / Family Members')
-                            ->default([])
-                            ->addActionLabel('Add Family Member / Co-Tenant')
-                            ->collapsible()
-                            ->collapsed(fn (array $state): bool => ! empty($state['name']))
-                            ->itemLabel(fn (array $state): ?string => ! empty($state['name'])
-                                ? ($state['name'].(! empty($state['relationship']) ? ' • '.$state['relationship'] : ''))
-                                : 'New Family Member'
-                            )
-                            ->deleteAction(fn ($action) => $action->label('Remove Member')->icon('heroicon-o-trash'))
-                            ->reorderable(false)
+                Tabs::make('TenantsAndKycTabs')
+                    ->tabs([
+                        Tabs\Tab::make('Primary Tenant KYC')
+                            ->icon('heroicon-m-user-circle')
                             ->schema([
-                                Section::make('👤 Personal Information')
-                                    ->compact()
+                                Section::make('Tenant KYC & Verification Documents')
+                                    ->description('Attach official identity, photo, and banking verification documents for the primary tenant.')
+                                    ->headerActions([
+                                        static::getTenantKycUploadAction(),
+                                    ])
                                     ->schema([
-                                        Grid::make(4)
-                                            ->schema([
-                                                TextInput::make('name')
-                                                    ->label('Full Name (Required)')
-                                                    ->required()
-                                                    ->placeholder('e.g. Rahul Sharma'),
+                                        Grid::make(['default' => 1, 'md' => 2])
+                                            ->schema(static::getDynamicTenantKycFields()),
 
-                                                Select::make('relationship')
-                                                    ->label('Relationship (Required)')
-                                                    ->options([
-                                                        'Spouse' => 'Spouse',
-                                                        'Son' => 'Son',
-                                                        'Daughter' => 'Daughter',
-                                                        'Father' => 'Father',
-                                                        'Mother' => 'Mother',
-                                                        'Brother' => 'Brother',
-                                                        'Sister' => 'Sister',
-                                                        'Co-Tenant' => 'Co-Tenant / Roommate',
-                                                        'Relative' => 'Relative',
-                                                        'Other' => 'Other',
+                                        SpatieMediaLibraryFileUpload::make('kyc_documents')
+                                            ->label('Additional Tenant KYC Attachments')
+                                            ->collection('kyc_documents')
+                                            ->multiple()
+                                            ->reorderable()
+                                            ->downloadable()
+                                            ->openable()
+                                            ->columnSpanFull()
+                                            ->visible(fn (?TenancyAgreement $record, Get $get) => ($record && $record->hasMedia('kyc_documents')) || ! empty($get('kyc_documents'))),
+                                    ])
+                                    ->columnSpanFull(),
+                            ]),
+
+                        Tabs\Tab::make('Secondary Tenants & Family Members')
+                            ->icon('heroicon-m-users')
+                            ->badge(fn (?TenancyAgreement $record) => count($record?->secondary_tenants ?? []) ?: null)
+                            ->schema([
+                                Section::make('Secondary Tenants & Family Members')
+                                    ->description('Manage family members or co-tenants living with the primary tenant, along with identity details and KYC documents.')
+                                    ->schema([
+                                        Repeater::make('secondary_tenants')
+                                            ->label('Secondary Tenants / Family Members')
+                                            ->default([])
+                                            ->addActionLabel('Add Family Member / Co-Tenant')
+                                            ->collapsible()
+                                            ->collapsed(fn (array $state): bool => ! empty($state['name']))
+                                            ->itemLabel(fn (array $state): ?string => ! empty($state['name'])
+                                                ? ($state['name'].(! empty($state['relationship']) ? ' • '.$state['relationship'] : ''))
+                                                : 'New Family Member'
+                                            )
+                                            ->deleteAction(fn ($action) => $action->label('Remove Member')->icon('heroicon-o-trash'))
+                                            ->reorderable(false)
+                                            ->schema([
+                                                Section::make('👤 Personal Information')
+                                                    ->compact()
+                                                    ->schema([
+                                                        Grid::make(4)
+                                                            ->schema([
+                                                                TextInput::make('name')
+                                                                    ->label('Full Name (Required)')
+                                                                    ->required()
+                                                                    ->placeholder('e.g. Rahul Sharma'),
+
+                                                                Select::make('relationship')
+                                                                    ->label('Relationship (Required)')
+                                                                    ->options([
+                                                                        'Spouse' => 'Spouse',
+                                                                        'Son' => 'Son',
+                                                                        'Daughter' => 'Daughter',
+                                                                        'Father' => 'Father',
+                                                                        'Mother' => 'Mother',
+                                                                        'Brother' => 'Brother',
+                                                                        'Sister' => 'Sister',
+                                                                        'Co-Tenant' => 'Co-Tenant / Roommate',
+                                                                        'Relative' => 'Relative',
+                                                                        'Other' => 'Other',
+                                                                    ])
+                                                                    ->required(),
+
+                                                                TextInput::make('phone')
+                                                                    ->label('Phone (Optional)')
+                                                                    ->tel()
+                                                                    ->placeholder('e.g. 9876543210'),
+
+                                                                TextInput::make('email')
+                                                                    ->label('Email (Optional)')
+                                                                    ->email()
+                                                                    ->placeholder('e.g. rahul@example.com'),
+                                                            ]),
+                                                    ]),
+
+                                                Section::make('📂 KYC & Verification Documents')
+                                                    ->description('Attach official identity, photo, and verification documents for this co-tenant.')
+                                                    ->headerActions([
+                                                        Action::make('uploadSecondaryDocumentModal')
+                                                            ->label('Upload Additional Document')
+                                                            ->icon('heroicon-m-plus')
+                                                            ->color('primary')
+                                                            ->size('sm')
+                                                            ->modalHeading('Upload Additional Document for Co-Tenant')
+                                                            ->modalDescription('Select document type to attach for this family member / co-tenant.')
+                                                            ->form([
+                                                                Select::make('document_type')
+                                                                    ->label('Document Type')
+                                                                    ->options(fn () => static::getDocumentTypeOptions('secondary_tenant'))
+                                                                    ->required()
+                                                                    ->searchable()
+                                                                    ->live(),
+                                                                TextInput::make('document_number')
+                                                                    ->label(function (Get $get) {
+                                                                        $code = $get('document_type');
+                                                                        if ($code) {
+                                                                            $docType = KycDocumentType::where('code', $code)->first();
+                                                                            if ($docType && $docType->has_number) {
+                                                                                return $docType->number_label ?: "{$docType->name} Number";
+                                                                            }
+                                                                        }
+                                                                        return 'Document Number';
+                                                                    })
+                                                                    ->placeholder(function (Get $get) {
+                                                                        $code = $get('document_type');
+                                                                        if ($code) {
+                                                                            $docType = KycDocumentType::where('code', $code)->first();
+                                                                            return 'Enter '.strtolower($docType?->name ?? 'document').' number...';
+                                                                        }
+                                                                        return 'Enter document number...';
+                                                                    })
+                                                                    ->visible(function (Get $get) {
+                                                                        $code = $get('document_type');
+                                                                        if (! $code) {
+                                                                            return false;
+                                                                        }
+                                                                        $docType = KycDocumentType::where('code', $code)->first();
+                                                                        return (bool) ($docType?->has_number);
+                                                                    }),
+                                                                FileUpload::make('files')
+                                                                    ->label('Files (Images / PDF)')
+                                                                    ->directory('tenancy-secondary-kyc')
+                                                                    ->preserveFilenames()
+                                                                    ->required(),
+                                                            ])
+                                                            ->action(function (array $data, Set $set, Get $get) {
+                                                                $docType = $data['document_type'];
+                                                                $targetFileField = match ($docType) {
+                                                                    'passport_photo' => 'photo_file',
+                                                                    'aadhaar' => 'aadhaar_file',
+                                                                    'pan' => 'pan_file',
+                                                                    'voter_id' => 'voter_id_file',
+                                                                    'other', 'other_kyc' => 'other_kyc_files',
+                                                                    default => "{$docType}_file",
+                                                                };
+                                                                $targetNumberField = match ($docType) {
+                                                                    'aadhaar' => 'aadhaar_number',
+                                                                    'pan' => 'pan_number',
+                                                                    'voter_id' => 'voter_id',
+                                                                    default => "{$docType}_number",
+                                                                };
+
+                                                                $uploadedFiles = (array) ($data['files'] ?? []);
+                                                                if (in_array($docType, ['other', 'other_kyc'])) {
+                                                                    $existing = (array) ($get('other_kyc_files') ?? []);
+                                                                    $set('other_kyc_files', array_values(array_unique(array_merge($existing, $uploadedFiles))));
+                                                                } else {
+                                                                    if (! empty($uploadedFiles)) {
+                                                                        $set($targetFileField, is_array($uploadedFiles) ? reset($uploadedFiles) : $uploadedFiles);
+                                                                    }
+                                                                    if (! empty($data['document_number'])) {
+                                                                        $set($targetNumberField, $data['document_number']);
+                                                                    }
+                                                                }
+
+                                                                Notification::make()
+                                                                    ->title('Document Attached')
+                                                                    ->body('File and details added to this secondary tenant.')
+                                                                    ->success()
+                                                                    ->send();
+                                                            }),
                                                     ])
-                                                    ->required(),
+                                                    ->schema([
+                                                        Grid::make(['default' => 1, 'md' => 2])
+                                                            ->schema(static::getDynamicSecondaryTenantKycFields()),
 
-                                                TextInput::make('phone')
-                                                    ->label('Phone (Optional)')
-                                                    ->tel()
-                                                    ->placeholder('e.g. 9876543210'),
-
-                                                TextInput::make('email')
-                                                    ->label('Email (Optional)')
-                                                    ->email()
-                                                    ->placeholder('e.g. rahul@example.com'),
-                                            ]),
+                                                        FileUpload::make('other_kyc_files')
+                                                            ->label('Additional Supporting Documents / Other Attachments')
+                                                            ->helperText('Other supporting documents (Police Verification, Relationship Proof, etc.)')
+                                                            ->directory('tenancy-secondary-kyc')
+                                                            ->multiple()
+                                                            ->reorderable()
+                                                            ->downloadable()
+                                                            ->openable()
+                                                            ->columnSpanFull(),
+                                                    ]),
+                                            ])
+                                            ->columnSpanFull(),
                                     ]),
-
-                                Section::make('🪪 Identity Details')
-                                    ->compact()
-                                    ->schema([
-                                        Grid::make(3)
-                                            ->schema([
-                                                TextInput::make('aadhaar_number')
-                                                    ->label('Aadhaar Number (Optional)')
-                                                    ->placeholder('12-digit Aadhaar')
-                                                    ->maxLength(14),
-
-                                                TextInput::make('pan_number')
-                                                    ->label('PAN Number (Optional)')
-                                                    ->placeholder('10-character PAN')
-                                                    ->maxLength(10),
-
-                                                TextInput::make('voter_id')
-                                                    ->label('Voter Card Number (Optional)')
-                                                    ->placeholder('Voter Card / EPIC Number'),
-                                            ]),
-                                    ]),
-
-                                Section::make('📂 KYC & Verification Documents')
-                                    ->compact()
-                                    ->schema([
-                                        Grid::make(4)
-                                            ->schema([
-                                                FileUpload::make('photo_file')
-                                                    ->label('Passport Photo (Required)')
-                                                    ->helperText('Passport-sized photograph')
-                                                    ->image()
-                                                    ->avatar()
-                                                    ->required()
-                                                    ->directory('tenancy-secondary-kyc')
-                                                    ->downloadable()
-                                                    ->openable()
-                                                    ->columnSpan(1),
-
-                                                FileUpload::make('aadhaar_file')
-                                                    ->label('Aadhaar Card (Optional)')
-                                                    ->helperText('Front & Back image or PDF')
-                                                    ->directory('tenancy-secondary-kyc')
-                                                    ->downloadable()
-                                                    ->openable()
-                                                    ->columnSpan(1),
-
-                                                FileUpload::make('pan_file')
-                                                    ->label('PAN Card (Optional)')
-                                                    ->helperText('Clear image or PDF')
-                                                    ->directory('tenancy-secondary-kyc')
-                                                    ->downloadable()
-                                                    ->openable()
-                                                    ->columnSpan(1),
-
-                                                FileUpload::make('voter_id_file')
-                                                    ->label('Voter Card (Optional)')
-                                                    ->helperText('Clear image or PDF of Voter Card')
-                                                    ->directory('tenancy-secondary-kyc')
-                                                    ->downloadable()
-                                                    ->openable()
-                                                    ->columnSpan(1),
-                                            ]),
-
-                                        SchemaActions::make([
-                                            Action::make('uploadSecondaryDocumentModal')
-                                                ->label('Upload additional document')
-                                                ->icon('heroicon-o-arrow-up-tray')
-                                                ->color('primary')
-                                                ->button()
-                                                ->modalHeading('Upload Secondary Tenant Document (Select Type & File)')
-                                                ->modalDescription('Select document type (Passport, Voter ID, Police Verification, Income Proof, Student ID, etc.) and attach file.')
-                                                ->form([
-                                                    Select::make('document_type')
-                                                        ->label('Document Type')
-                                                        ->options(DocumentType::class)
-                                                        ->required()
-                                                        ->searchable(),
-                                                    FileUpload::make('files')
-                                                        ->label('Files (Images / PDF)')
-                                                        ->directory('tenancy-secondary-kyc')
-                                                        ->multiple()
-                                                        ->preserveFilenames()
-                                                        ->required(),
-                                                ])
-                                                ->action(function (array $data, Set $set, Get $get) {
-                                                    $uploadedFiles = (array) ($data['files'] ?? []);
-                                                    if (empty($uploadedFiles)) {
-                                                        return;
-                                                    }
-
-                                                    $docType = $data['document_type'];
-                                                    $targetField = match ($docType) {
-                                                        'aadhaar', 'tenant_aadhaar' => 'aadhaar_file',
-                                                        'pan', 'tenant_pan' => 'pan_file',
-                                                        'photo', 'tenant_photo' => 'photo_file',
-                                                        default => 'voter_id_file',
-                                                    };
-
-                                                    $set($targetField, reset($uploadedFiles));
-
-                                                    Notification::make()
-                                                        ->title('Document Attached')
-                                                        ->body('File added to secondary tenant KYC.')
-                                                        ->success()
-                                                        ->send();
-                                                }),
-                                        ]),
-                                    ]),
-                            ])
-                            ->columnSpanFull(),
+                            ]),
                     ]),
             ]);
+    }
+
+    public static function configureSecondaryTenantsForm(Schema $schema): Schema
+    {
+        return static::configureTenantKycAndOccupantsForm($schema);
+    }
+
+    public static function configureTenantKycForm(Schema $schema): Schema
+    {
+        return static::configureTenantKycAndOccupantsForm($schema);
     }
 
     public static function configureDocumentsForm(Schema $schema): Schema
@@ -1302,136 +1223,21 @@ class TenancyAgreementForm
             ->columns(1)
             ->components([
                 Section::make('Draft Document Management & Actions')
-                    ->description('Compile Leave & License Agreement PDF and Word (.docx) drafts with Annexures I, II, and III.')
+                    ->description('Compile Leave & License Agreement PDF and Word (.docx) drafts with Annexures I, II, and III (pulled automatically from Move-In Audit).')
                     ->schema([
-                        Placeholder::make('draft_actions_card')
-                            ->label('Draft Actions & Downloads')
-                            ->content(new HtmlString(
-                                '<div style="background-color: rgba(128, 128, 128, 0.04); border: 1px solid rgba(128, 128, 128, 0.2); border-radius: 0.75rem; padding: 1.25rem; margin-bottom: 1.25rem;">'.
-                                    '<div style="font-weight: 700; font-size: 15px; color: inherit; margin-bottom: 0.35rem;">Compile & Download Draft Documents</div>'.
-                                    '<div style="font-size: 13px; color: rgba(128, 128, 128, 0.85); margin-bottom: 1rem;">Compile Leave & License Agreement PDF and Word (.docx) drafts with Annexures I, II, and III (pulled automatically from Move-In Audit).</div>'.
-                                    '<div style="display: flex; gap: 10px; flex-wrap: wrap;">'.
-                                    '<button type="button" wire:click="generateDraftDocuments" wire:loading.attr="disabled" style="display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; background-color: #2563eb; color: #ffffff; font-weight: 600; font-size: 13px; border-radius: 6px; border: none; cursor: pointer;">'.
-                                    '<svg style="width: 16px; height: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"></path></svg>'.
-                                    'Generate Draft Documents'.
-                                    '</button>'.
-                                    '<button type="button" wire:click="downloadDraftPdf" style="display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; background-color: #059669; color: #ffffff; font-weight: 600; font-size: 13px; border-radius: 6px; border: none; cursor: pointer;">'.
-                                    '<svg style="width: 16px; height: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>'.
-                                    'Download Draft PDF'.
-                                    '</button>'.
-                                    '<button type="button" wire:click="downloadDraftWord" style="display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; background-color: #0891b2; color: #ffffff; font-weight: 600; font-size: 13px; border-radius: 6px; border: none; cursor: pointer;">'.
-                                    '<svg style="width: 16px; height: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>'.
-                                    'Download Draft Word (.docx)'.
-                                    '</button>'.
-                                    '</div>'.
-                                    '</div>'
-                            ))
-                            ->columnSpanFull(),
-                    ]),
+                        Placeholder::make('draft_workflow_hub')
+                            ->hiddenLabel()
+                            ->columnSpanFull()
+                            ->content(fn (?TenancyAgreement $record) => view('tenancy-agreements.draft-workflow-hub', [
+                                'record' => $record,
+                            ])),
 
-                Section::make('Tenant KYC & Verification Documents')
-                    ->description('View, upload, or update tenant identity, address, and bank verification documents.')
-                    ->schema([
-                        Grid::make(4)
-                            ->schema([
-                                SpatieMediaLibraryFileUpload::make('tenant_photo')
-                                    ->collection('tenant_photo')
-                                    ->label('Tenant Passport Photo')
-                                    ->helperText('Passport-sized photograph')
-                                    ->image()
-                                    ->required()
-                                    ->downloadable()
-                                    ->openable(),
-
-                                SpatieMediaLibraryFileUpload::make('tenant_aadhaar')
-                                    ->collection('tenant_aadhaar')
-                                    ->label('Tenant Aadhaar Card')
-                                    ->helperText('Front & Back image or PDF')
-                                    ->downloadable()
-                                    ->openable(),
-
-                                SpatieMediaLibraryFileUpload::make('tenant_pan')
-                                    ->collection('tenant_pan')
-                                    ->label('Tenant PAN Card')
-                                    ->helperText('Clear image or PDF')
-                                    ->downloadable()
-                                    ->openable(),
-
-                                SpatieMediaLibraryFileUpload::make('cancelled_cheque')
-                                    ->collection('cancelled_cheque')
-                                    ->label('Cancelled Cheque / Bank Proof')
-                                    ->helperText('Cancelled Cheque or Passbook')
-                                    ->downloadable()
-                                    ->openable(),
-                            ]),
-
-                        SpatieMediaLibraryFileUpload::make('kyc_documents')
-                            ->label('Additional Tenant KYC Attachments')
-                            ->collection('kyc_documents')
-                            ->multiple()
-                            ->reorderable()
-                            ->downloadable()
-                            ->openable()
-                            ->columnSpanFull(),
-
-                        SchemaActions::make([
-                            Action::make('uploadDocumentModal')
-                                ->label('Upload additional document')
-                                ->icon('heroicon-o-arrow-up-tray')
-                                ->color('primary')
-                                ->button()
-                                ->modalHeading('Upload Document (Select Type & File)')
-                                ->modalDescription('Select document type (Passport, Voter ID, Police Verification, Income Proof, Sale Deed, etc.) and attach file.')
-                                ->form([
-                                    Select::make('document_type')
-                                        ->label('Document Type')
-                                        ->options(fn () => static::getDocumentTypeOptions('primary_tenant'))
-                                        ->required()
-                                        ->searchable(),
-                                    FileUpload::make('files')
-                                        ->label('Files (Images / PDF)')
-                                        ->multiple()
-                                        ->preserveFilenames()
-                                        ->required(),
-                                ])
-                                ->action(function (array $data, ?TenancyAgreement $record, Set $set, Get $get) {
-                                    $collection = match ($data['document_type']) {
-                                        'aadhaar', 'tenant_aadhaar' => 'tenant_aadhaar',
-                                        'pan', 'tenant_pan' => 'tenant_pan',
-                                        'cancelled_cheque' => 'cancelled_cheque',
-                                        default => 'kyc_documents',
-                                    };
-
-                                    if ($record && $record->exists) {
-                                        foreach ($data['files'] as $path) {
-                                            $fullPath = Storage::disk(config('filament.default_filesystem_disk'))->path($path);
-                                            if (! file_exists($fullPath)) {
-                                                $fullPath = Storage::disk('public')->path($path);
-                                            }
-
-                                            $record->addMedia($fullPath)
-                                                ->withCustomProperties([
-                                                    'document_type' => $data['document_type'],
-                                                ])
-                                                ->toMediaCollection($collection);
-                                        }
-                                        $record->refresh();
-                                        Notification::make()->title('Document Uploaded Successfully')->success()->send();
-                                    } else {
-                                        $existing = $get($collection) ?? [];
-                                        if (is_string($existing)) {
-                                            $existing = [$existing];
-                                        }
-                                        $merged = array_values(array_unique(array_merge((array) $existing, (array) $data['files'])));
-                                        $set($collection, $merged);
-                                        Notification::make()
-                                            ->title('Document Attached')
-                                            ->body('File added to form. It will be saved when you submit the Tenancy Agreement.')
-                                            ->success()
-                                            ->send();
-                                    }
-                                }),
-                        ]),
+                        Placeholder::make('draft_version_history')
+                            ->label('Document History & Versions')
+                            ->columnSpanFull()
+                            ->content(fn (?TenancyAgreement $record) => view('tenancy-agreements.version-history', [
+                                'record' => $record,
+                            ])),
                     ]),
 
                 Section::make('Executed & Signed Agreement')
@@ -1764,14 +1570,162 @@ class TenancyAgreementForm
             }
             $options = $query->orderBy('sort_order')->pluck('name', 'code')->toArray();
             if (! empty($options)) {
+                if ($context === 'secondary_tenant' && ! isset($options['other'])) {
+                    $options['other'] = 'Other Supporting Document';
+                }
+
                 return $options;
             }
         } catch (\Throwable $e) {
         }
 
-        return collect(DocumentType::cases())
+        $options = collect(DocumentType::cases())
             ->mapWithKeys(fn ($case) => [$case->value => $case->getLabel()])
             ->toArray();
+
+        if ($context === 'secondary_tenant' && ! isset($options['other'])) {
+            $options['other'] = 'Other Supporting Document';
+        }
+
+        return $options;
+    }
+
+    public static function getTenantKycUploadAction(): Action
+    {
+        return Action::make('uploadDocumentModal')
+            ->label('Upload Additional Document')
+            ->icon('heroicon-m-plus')
+            ->color('primary')
+            ->size('sm')
+            ->modalHeading('Upload Additional Document')
+            ->modalDescription('Select document type to attach and configure for the primary tenant.')
+            ->form([
+                Select::make('document_type')
+                    ->label('Document Type')
+                    ->options(fn () => static::getDocumentTypeOptions('primary_tenant'))
+                    ->required()
+                    ->searchable()
+                    ->live(),
+                TextInput::make('document_number')
+                    ->label(function (Get $get) {
+                        $code = $get('document_type');
+                        if ($code) {
+                            $docType = KycDocumentType::where('code', $code)->first();
+                            if ($docType && $docType->has_number) {
+                                return $docType->number_label ?: "{$docType->name} Number";
+                            }
+                        }
+                        return 'Document Number';
+                    })
+                    ->placeholder(function (Get $get) {
+                        $code = $get('document_type');
+                        if ($code) {
+                            $docType = KycDocumentType::where('code', $code)->first();
+                            return 'Enter '.strtolower($docType?->name ?? 'document').' number...';
+                        }
+                        return 'Enter document number...';
+                    })
+                    ->visible(function (Get $get) {
+                        $code = $get('document_type');
+                        if (! $code) {
+                            return false;
+                        }
+                        $docType = KycDocumentType::where('code', $code)->first();
+                        return (bool) ($docType?->has_number);
+                    }),
+                FileUpload::make('files')
+                    ->label('Files (Images / PDF)')
+                    ->multiple()
+                    ->preserveFilenames()
+                    ->required(),
+            ])
+            ->action(function (array $data, ?TenancyAgreement $record, ?Set $set = null, ?Get $get = null) {
+                $docCode = $data['document_type'];
+                $collection = match ($docCode) {
+                    'passport_photo', 'tenant_photo' => 'tenant_photo',
+                    'aadhaar', 'tenant_aadhaar' => 'tenant_aadhaar',
+                    'pan', 'tenant_pan' => 'tenant_pan',
+                    'cancelled_cheque' => 'cancelled_cheque',
+                    'voter_id' => 'tenant_voter_id',
+                    'passport' => 'tenant_passport',
+                    'driving_license' => 'tenant_driving_license',
+                    default => "tenant_{$docCode}",
+                };
+
+                $docNumber = $data['document_number'] ?? null;
+
+                if ($record && $record->exists) {
+                    foreach ($data['files'] as $path) {
+                        $fullPath = Storage::disk(config('filament.default_filesystem_disk'))->path($path);
+                        if (! file_exists($fullPath)) {
+                            $fullPath = Storage::disk('public')->path($path);
+                        }
+
+                        $record->addMedia($fullPath)
+                            ->withCustomProperties([
+                                'document_type' => $docCode,
+                            ])
+                            ->toMediaCollection($collection);
+                    }
+
+                    if (! empty($docNumber)) {
+                        $primaryTenant = $record->primaryTenant?->party;
+                        if ($primaryTenant) {
+                            $update = [];
+                            if ($docCode === 'aadhaar') {
+                                $update['aadhaar_number'] = $docNumber;
+                            } elseif ($docCode === 'pan') {
+                                $update['pan_number'] = $docNumber;
+                            } elseif ($docCode === 'voter_id') {
+                                $update['voter_id'] = $docNumber;
+                            }
+                            if (! empty($update)) {
+                                $primaryTenant->individual()->updateOrCreate([], $update);
+                            }
+                        }
+                        if ($set) {
+                            if ($docCode === 'aadhaar') {
+                                $set('new_tenant.aadhaar_number', $docNumber);
+                            } elseif ($docCode === 'pan') {
+                                $set('new_tenant.pan_number', $docNumber);
+                            } elseif ($docCode === 'voter_id') {
+                                $set('new_tenant.voter_id', $docNumber);
+                            }
+                            $set("new_tenant.{$docCode}_number", $docNumber);
+                        }
+                    }
+
+                    $record->refresh();
+                    Notification::make()->title('Document Uploaded Successfully')->success()->send();
+                } else {
+                    $existing = $get ? ($get($collection) ?? []) : [];
+                    if (is_string($existing)) {
+                        $existing = [$existing];
+                    }
+                    $merged = array_values(array_unique(array_merge((array) $existing, (array) $data['files'])));
+                    if ($set) {
+                        $set($collection, $merged);
+                    }
+
+                    if (! empty($docNumber) && $set) {
+                        if ($docCode === 'aadhaar') {
+                            $set('new_tenant.aadhaar_number', $docNumber);
+                        } elseif ($docCode === 'pan') {
+                            $set('new_tenant.pan_number', $docNumber);
+                        } elseif ($docCode === 'voter_id') {
+                            $set('new_tenant.voter_id', $docNumber);
+                        }
+                        $set("new_tenant.{$docCode}_number", $docNumber);
+                        $set("kyc_documents.tenant.{$docCode}.number", $docNumber);
+                    }
+
+                    Notification::make()
+                        ->title('Document Attached')
+                        ->body('File added to form. It will be saved when you submit the Tenancy Agreement.')
+                        ->success()
+                        ->send();
+                }
+            });
     }
 
     public static function getDynamicTenantKycFields(): array
@@ -1799,7 +1753,7 @@ class TenancyAgreementForm
                             ->label('Passport Photo *')
                             ->hintIcon('heroicon-m-information-circle', tooltip: 'Passport-sized photograph')
                             ->image()->avatar()->previewable()
-                            ->required(fn (Get $get) => (bool) $get('create_new_tenant')),
+                            ->required(fn (Get $get, ?string $operation) => $operation === 'create' && (bool) $get('create_new_tenant')),
                     ]),
                 Section::make('Aadhaar Card *')
                     ->icon('heroicon-m-identification')
@@ -1808,13 +1762,15 @@ class TenancyAgreementForm
                         TextInput::make('new_tenant.aadhaar_number')
                             ->label('Aadhaar Number *')
                             ->placeholder('12-digit Aadhaar number')
-                            ->required(fn (Get $get) => (bool) $get('create_new_tenant')),
+                            ->formatStateUsing(fn (?TenancyAgreement $record, $state) => $state ?: $record?->primaryTenant?->party?->individual?->aadhaar_number)
+                            ->default(fn (?TenancyAgreement $record) => $record?->primaryTenant?->party?->individual?->aadhaar_number)
+                            ->required(fn (Get $get, ?string $operation) => $operation === 'create' && (bool) $get('create_new_tenant')),
                         SpatieMediaLibraryFileUpload::make('tenant_aadhaar')
                             ->collection('tenant_aadhaar')
                             ->label('Tenant Aadhaar Card *')
                             ->hintIcon('heroicon-m-information-circle', tooltip: 'Front & Back image or PDF')
                             ->openable()->downloadable()->previewable()
-                            ->required(fn (Get $get) => (bool) $get('create_new_tenant')),
+                            ->required(fn (Get $get, ?string $operation) => $operation === 'create' && (bool) $get('create_new_tenant')),
                     ]),
                 Section::make('PAN Card *')
                     ->icon('heroicon-m-credit-card')
@@ -1823,7 +1779,9 @@ class TenancyAgreementForm
                         TextInput::make('new_tenant.pan_number')
                             ->label('PAN Number *')
                             ->placeholder('10-character PAN')
-                            ->required(fn (Get $get) => (bool) $get('create_new_tenant')),
+                            ->formatStateUsing(fn (?TenancyAgreement $record, $state) => $state ?: $record?->primaryTenant?->party?->individual?->pan_number)
+                            ->default(fn (?TenancyAgreement $record) => $record?->primaryTenant?->party?->individual?->pan_number)
+                            ->required(fn (Get $get, ?string $operation) => $operation === 'create' && (bool) $get('create_new_tenant')),
                         SpatieMediaLibraryFileUpload::make('tenant_pan')
                             ->collection('tenant_pan')
                             ->label('Tenant PAN Card (Optional)')
@@ -1869,7 +1827,8 @@ class TenancyAgreementForm
                     ($record && $record->hasMedia($collectionName)) ||
                     ! empty($get($collectionName)) ||
                     ! empty($get($numberFieldStateName)) ||
-                    ! empty($get("kyc_documents.tenant.{$doc->code}.number"))
+                    ! empty($get("kyc_documents.tenant.{$doc->code}.number")) ||
+                    ($record && $doc->code === 'voter_id' && ! empty($record->primaryTenant?->party?->individual?->voter_id))
                 );
             };
 
@@ -1893,6 +1852,21 @@ class TenancyAgreementForm
                 $numberField = TextInput::make($numberFieldStateName)
                     ->label($numberLabel)
                     ->placeholder("Enter {$doc->name} number...")
+                    ->formatStateUsing(function (?TenancyAgreement $record, $state) use ($doc) {
+                        if ($state !== null && $state !== '') {
+                            return $state;
+                        }
+                        if ($doc->code === 'aadhaar') {
+                            return $record?->primaryTenant?->party?->individual?->aadhaar_number;
+                        }
+                        if ($doc->code === 'pan') {
+                            return $record?->primaryTenant?->party?->individual?->pan_number;
+                        }
+                        if ($doc->code === 'voter_id') {
+                            return $record?->primaryTenant?->party?->individual?->voter_id;
+                        }
+                        return null;
+                    })
                     ->default(function (?TenancyAgreement $record, Get $get) use ($doc) {
                         if ($doc->code === 'aadhaar') {
                             return $record?->primaryTenant?->party?->individual?->aadhaar_number;
@@ -1905,11 +1879,14 @@ class TenancyAgreementForm
                         }
                         return null;
                     })
-                    ->required(function (Get $get) use ($isMandatory, $doc) {
-                        if (! (bool) $get('create_new_tenant')) {
-                            return false;
+                    ->required(function (Get $get, ?string $operation) use ($isMandatory, $doc) {
+                        if ($operation === 'create') {
+                            if (! (bool) $get('create_new_tenant')) {
+                                return false;
+                            }
+                            return $isMandatory || in_array($doc->code, ['aadhaar', 'pan']);
                         }
-                        return $isMandatory || in_array($doc->code, ['aadhaar', 'pan']);
+                        return false;
                     });
 
                 if (! empty($doc->number_regex)) {
@@ -1929,11 +1906,14 @@ class TenancyAgreementForm
                 ->openable()
                 ->downloadable()
                 ->previewable()
-                ->required(function (Get $get) use ($isMandatory) {
-                    if (! (bool) $get('create_new_tenant')) {
-                        return false;
+                ->required(function (Get $get, ?string $operation) use ($isMandatory) {
+                    if ($operation === 'create') {
+                        if (! (bool) $get('create_new_tenant')) {
+                            return false;
+                        }
+                        return $isMandatory;
                     }
-                    return $isMandatory;
+                    return false;
                 });
 
             if ($doc->code === 'passport_photo') {
@@ -1949,6 +1929,156 @@ class TenancyAgreementForm
 
             if (! $isMandatory && ! in_array($doc->code, ['aadhaar', 'pan', 'cancelled_cheque'])) {
                 $card->visible($isVisible);
+            }
+
+            $fields[] = $card;
+        }
+
+        return $fields;
+    }
+
+    public static function getDynamicSecondaryTenantKycFields(): array
+    {
+        $fields = [];
+
+        try {
+            $docs = KycDocumentType::query()
+                ->where('is_active', true)
+                ->where('tenancy_secondary_requirement', '!=', KycRequirementLevel::DISABLED)
+                ->orderBy('sort_order')
+                ->get();
+        } catch (\Throwable $e) {
+            $docs = collect();
+        }
+
+        if ($docs->isEmpty()) {
+            return [
+                Section::make('Passport Photo *')
+                    ->icon('heroicon-m-user-circle')
+                    ->compact()
+                    ->schema([
+                        FileUpload::make('photo_file')
+                            ->label('Passport Photo *')
+                            ->hintIcon('heroicon-m-information-circle', tooltip: 'Passport-sized photograph')
+                            ->image()->avatar()->previewable()
+                            ->directory('tenancy-secondary-kyc')
+                            ->downloadable()->openable(),
+                    ]),
+                Section::make('Aadhaar Card')
+                    ->icon('heroicon-m-identification')
+                    ->compact()
+                    ->schema([
+                        TextInput::make('aadhaar_number')
+                            ->label('Aadhaar Number (Optional)')
+                            ->placeholder('12-digit Aadhaar number'),
+                        FileUpload::make('aadhaar_file')
+                            ->label('Aadhaar Card (Optional)')
+                            ->hintIcon('heroicon-m-information-circle', tooltip: 'Front & Back image or PDF')
+                            ->directory('tenancy-secondary-kyc')
+                            ->downloadable()->openable()->previewable(),
+                    ]),
+                Section::make('PAN Card')
+                    ->icon('heroicon-m-credit-card')
+                    ->compact()
+                    ->schema([
+                        TextInput::make('pan_number')
+                            ->label('PAN Number (Optional)')
+                            ->placeholder('10-character PAN'),
+                        FileUpload::make('pan_file')
+                            ->label('PAN Card (Optional)')
+                            ->hintIcon('heroicon-m-information-circle', tooltip: 'Clear image or PDF')
+                            ->directory('tenancy-secondary-kyc')
+                            ->downloadable()->openable()->previewable(),
+                    ]),
+                Section::make('Voter ID Card')
+                    ->icon('heroicon-m-identification')
+                    ->compact()
+                    ->schema([
+                        TextInput::make('voter_id')
+                            ->label('Voter Card Number (Optional)')
+                            ->placeholder('Voter Card / EPIC Number'),
+                        FileUpload::make('voter_id_file')
+                            ->label('Voter Card (Optional)')
+                            ->hintIcon('heroicon-m-information-circle', tooltip: 'Clear image or PDF of Voter Card')
+                            ->directory('tenancy-secondary-kyc')
+                            ->downloadable()->openable()->previewable(),
+                    ]),
+            ];
+        }
+
+        foreach ($docs as $doc) {
+            $isMandatory = $doc->isTenancySecondaryMandatory();
+            $badge = $isMandatory ? ' *' : '';
+            $tooltip = $doc->description ?: "Attach {$doc->name} image or PDF";
+
+            $fileFieldName = match ($doc->code) {
+                'passport_photo' => 'photo_file',
+                'aadhaar' => 'aadhaar_file',
+                'pan' => 'pan_file',
+                'voter_id' => 'voter_id_file',
+                default => "{$doc->code}_file",
+            };
+
+            $numberFieldName = match ($doc->code) {
+                'aadhaar' => 'aadhaar_number',
+                'pan' => 'pan_number',
+                'voter_id' => 'voter_id',
+                default => "{$doc->code}_number",
+            };
+
+            $icon = $doc->icon ?: match ($doc->code) {
+                'passport_photo' => 'heroicon-m-user-circle',
+                'aadhaar' => 'heroicon-m-identification',
+                'pan' => 'heroicon-m-credit-card',
+                'cancelled_cheque' => 'heroicon-m-banknotes',
+                'passport' => 'heroicon-m-globe-alt',
+                'driving_license' => 'heroicon-m-truck',
+                'voter_id' => 'heroicon-m-identification',
+                default => 'heroicon-m-document-text',
+            };
+
+            $cardFields = [];
+
+            if ($doc->has_number) {
+                $numberLabel = ($doc->number_label ?: "{$doc->name} Number") . ($isMandatory ? ' *' : ' (Optional)');
+                $fileLabel = "{$doc->name} File" . ($isMandatory ? ' *' : ' (Optional)');
+
+                $numberField = TextInput::make($numberFieldName)
+                    ->label($numberLabel)
+                    ->placeholder("Enter {$doc->name} number...");
+
+                if (! empty($doc->number_regex)) {
+                    $numberField->regex($doc->number_regex);
+                }
+
+                $cardFields[] = $numberField;
+            } else {
+                $fileLabel = $doc->name . ($isMandatory ? ' *' : ' (Optional)');
+            }
+
+            $fileField = FileUpload::make($fileFieldName)
+                ->label($fileLabel)
+                ->hintIcon('heroicon-m-information-circle', tooltip: $tooltip)
+                ->directory('tenancy-secondary-kyc')
+                ->openable()
+                ->downloadable()
+                ->previewable();
+
+            if ($doc->code === 'passport_photo') {
+                $fileField->image()->avatar();
+            }
+
+            $cardFields[] = $fileField;
+
+            $card = Section::make($doc->name . $badge)
+                ->icon($icon)
+                ->compact()
+                ->schema($cardFields);
+
+            if (! $isMandatory && ! in_array($doc->code, ['passport_photo', 'aadhaar', 'pan', 'voter_id'])) {
+                $card->visible(function (Get $get) use ($fileFieldName, $numberFieldName, $doc) {
+                    return ! empty($get($fileFieldName)) || ($doc->has_number && ! empty($get($numberFieldName)));
+                });
             }
 
             $fields[] = $card;

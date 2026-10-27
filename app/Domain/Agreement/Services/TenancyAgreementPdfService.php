@@ -58,6 +58,11 @@ class TenancyAgreementPdfService
         $auditCategories = $agreement->audit ? $agreement->audit->categories : collect();
         $roomGroupedItems = $this->organizeAuditByRoom($agreement);
 
+        $customContent = null;
+        if (! empty($agreement->agreement_content)) {
+            $customContent = app(TenancyAgreementTemplateService::class)->compileForPdf($agreement, $agreement->agreement_content);
+        }
+
         $pdf = Pdf::loadView('pdf.tenancy_agreement', [
             'agreement' => $agreement,
             'property' => $agreement->property,
@@ -74,21 +79,26 @@ class TenancyAgreementPdfService
             'audit' => $agreement->audit,
             'auditCategories' => $auditCategories,
             'roomGroupedItems' => $roomGroupedItems,
+            'customContent' => $customContent,
         ]);
 
         return $pdf->output();
     }
 
-    public function saveDraftPdf(TenancyAgreement $agreement): void
+    public function saveDraftPdf(TenancyAgreement $agreement): \Spatie\MediaLibrary\MediaCollections\Models\Media
     {
         $binary = $this->generatePdf($agreement);
-        $filename = 'Tenancy_Agreement_Draft_' . ($agreement->code ?? $agreement->id) . '.pdf';
+        $filename = ($agreement->code ?? 'Draft') . '-draft-v' . ($agreement->version ?? 1) . '.pdf';
         
         $tempPath = sys_get_temp_dir() . '/' . $filename;
         file_put_contents($tempPath, $binary);
 
-        $agreement->clearMediaCollection('draft_pdf');
-        $agreement->addMedia($tempPath)->toMediaCollection('draft_pdf');
+        return $agreement->addMedia($tempPath)
+            ->withCustomProperties([
+                'version' => $agreement->version ?? 1,
+                'compiled_at' => now()->toIso8601String(),
+            ])
+            ->toMediaCollection('draft_pdf');
     }
 
     public function organizeAuditByRoom(TenancyAgreement $agreement): array

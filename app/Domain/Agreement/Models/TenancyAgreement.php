@@ -40,6 +40,9 @@ class TenancyAgreement extends DomainModel implements HasMedia
         'secondary_tenants',
         'tenant_bank_details',
         'pricing_version_id',
+        'version',
+        'agreement_content',
+        'agreement_customized_at',
         'signed_at',
         'signed_by_tenant',
         'keys_handed_over',
@@ -68,6 +71,7 @@ class TenancyAgreement extends DomainModel implements HasMedia
         'start_date' => 'date',
         'end_date' => 'date',
         'signed_at' => 'datetime',
+        'agreement_customized_at' => 'datetime',
         'keys_handed_over_at' => 'datetime',
         'deboarded_at' => 'datetime',
         'vacating_date' => 'date',
@@ -87,7 +91,23 @@ class TenancyAgreement extends DomainModel implements HasMedia
         'secondary_tenants' => 'array',
         'key_details' => 'array',
         'deposit_deductions_breakdown' => 'array',
+        'version' => 'integer',
     ];
+
+    public function getLatestDraftPdf(): ?\Spatie\MediaLibrary\MediaCollections\Models\Media
+    {
+        return $this->getMedia('draft_pdf')->sortByDesc('id')->first();
+    }
+
+    public function getLatestDraftWord(): ?\Spatie\MediaLibrary\MediaCollections\Models\Media
+    {
+        return $this->getMedia('draft_word')->sortByDesc('id')->first();
+    }
+
+    public function getSignedAgreement(): ?\Spatie\MediaLibrary\MediaCollections\Models\Media
+    {
+        return $this->getFirstMedia('signed_agreement');
+    }
 
     public function registerMediaCollections(): void
     {

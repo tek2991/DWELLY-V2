@@ -313,16 +313,20 @@ class TenancyAgreementDocxService
         return file_get_contents($tempPath);
     }
 
-    public function saveDraftDocx(TenancyAgreement $agreement): void
+    public function saveDraftDocx(TenancyAgreement $agreement): \Spatie\MediaLibrary\MediaCollections\Models\Media
     {
         $binary = $this->generateDocx($agreement);
-        $filename = 'Tenancy_Agreement_Draft_'.($agreement->code ?? $agreement->id).'.docx';
+        $filename = ($agreement->code ?? 'Draft') . '-draft-v' . ($agreement->version ?? 1) . '.docx';
 
         $tempPath = sys_get_temp_dir().'/'.$filename;
         file_put_contents($tempPath, $binary);
 
-        $agreement->clearMediaCollection('draft_word');
-        $agreement->addMedia($tempPath)->toMediaCollection('draft_word');
+        return $agreement->addMedia($tempPath)
+            ->withCustomProperties([
+                'version' => $agreement->version ?? 1,
+                'compiled_at' => now()->toIso8601String(),
+            ])
+            ->toMediaCollection('draft_word');
     }
 
     private function addTableRow($table, string $label, string $value): void

@@ -18,13 +18,13 @@ class ManageSecondaryTenants extends EditRecord
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUsers;
 
-    protected static ?string $navigationLabel = '3. Secondary Tenants';
+    protected static ?string $navigationLabel = '3. Tenant KYC & Occupants';
 
-    protected static ?string $title = 'Tenancy Agreement – Secondary Tenants & Family Members';
+    protected static ?string $title = 'Tenancy Agreement – Tenant KYC & Secondary Occupants';
 
     public function form(Schema $schema): Schema
     {
-        return TenancyAgreementForm::configureSecondaryTenantsForm($schema);
+        return TenancyAgreementForm::configureTenantKycAndOccupantsForm($schema);
     }
 
     protected function getFormActions(): array
@@ -41,6 +41,44 @@ class ManageSecondaryTenants extends EditRecord
         }
 
         return parent::getFormActions();
+    }
+
+    protected function mutateFormDataBeforeFill(array $data): array
+    {
+        $record = $this->getRecord();
+        $individual = $record->primaryTenant?->party?->individual;
+
+        if ($individual) {
+            $data['new_tenant'] = [
+                'aadhaar_number' => $individual->aadhaar_number,
+                'pan_number' => $individual->pan_number,
+                'voter_id' => $individual->voter_id,
+            ];
+        }
+
+        return $data;
+    }
+
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        $record = $this->getRecord();
+        $primaryParty = $record->primaryTenant?->party;
+
+        if ($primaryParty && ! empty($data['new_tenant'])) {
+            $tenantData = $data['new_tenant'];
+            $updateData = array_filter([
+                'aadhaar_number' => $tenantData['aadhaar_number'] ?? null,
+                'pan_number' => $tenantData['pan_number'] ?? null,
+                'voter_id' => $tenantData['voter_id'] ?? null,
+            ]);
+            if (! empty($updateData)) {
+                $primaryParty->individual()->updateOrCreate([], $updateData);
+            }
+        }
+
+        unset($data['new_tenant'], $data['kyc_documents_upload']);
+
+        return $data;
     }
 
     protected function getRedirectUrl(): ?string

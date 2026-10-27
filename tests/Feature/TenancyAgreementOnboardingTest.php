@@ -23,10 +23,15 @@ use App\Domain\Property\Models\UtilityProvider;
 use App\Domain\Property\Models\UtilityType;
 use App\Filament\Resources\TenancyAgreements\Pages\CreateTenancyAgreement;
 use App\Filament\Resources\TenancyAgreements\Pages\ListTenancyAgreements;
+use App\Filament\Resources\TenancyAgreements\Pages\ManageAgreementDocuments;
+use App\Filament\Resources\TenancyAgreements\Pages\ManageSecondaryTenants;
+use App\Filament\Resources\TenancyAgreements\Pages\ManageTenantKyc;
 use App\Filament\Resources\TenancyAgreements\Schemas\TenancyAgreementForm;
+use Database\Seeders\KycDocumentTypeSeeder;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -643,5 +648,571 @@ class TenancyAgreementOnboardingTest extends TestCase
         $options = $propertySelect->getOptions();
         $this->assertArrayHasKey($property->id, $options);
         $this->assertEquals('GAU 001 - Tarun Nagar GF1', $options[$property->id]);
+    }
+
+    public function test_manage_agreement_documents_has_dynamic_tenant_kyc_and_prefills_identity_numbers()
+    {
+        $this->seed(KycDocumentTypeSeeder::class);
+
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $property = Property::create([
+            'building_name' => 'Kyc Test Building',
+            'address_line_1' => 'Bhangagarh, Guwahati',
+            'status' => 'vacant',
+        ]);
+
+        $tenant = Party::create([
+            'display_name' => 'Rahul Talukdar',
+            'phone' => '9876543210',
+            'party_type' => 'individual',
+        ]);
+
+        $tenant->individual()->create([
+            'name' => 'Rahul Talukdar',
+            'aadhaar_number' => '112233445566',
+            'pan_number' => 'ABCDE9999Z',
+        ]);
+
+        $agreement = TenancyAgreement::create([
+            'property_id' => $property->id,
+            'code' => 'TNC-2026-KYC-01',
+            'status' => 'draft',
+            'start_date' => '2026-10-01',
+            'end_date' => '2027-08-31',
+            'rent_amount' => 15000,
+            'security_deposit' => 30000,
+        ]);
+
+        $agreement->roles()->create([
+            'party_id' => $tenant->id,
+            'role_type' => 'Primary Tenant',
+            'is_primary' => true,
+        ]);
+
+        $testable = Livewire::test(ManageTenantKyc::class, ['record' => $agreement->id]);
+        $form = $testable->instance()->form;
+
+        // Verify dynamic KYC components exist
+        $this->assertNotNull($form->getComponent('tenant_photo'));
+        $this->assertNotNull($form->getComponent('new_tenant.aadhaar_number'));
+        $this->assertNotNull($form->getComponent('tenant_aadhaar'));
+        $this->assertNotNull($form->getComponent('new_tenant.pan_number'));
+        $this->assertNotNull($form->getComponent('tenant_pan'));
+        $this->assertNotNull($form->getComponent('cancelled_cheque'));
+
+        // Verify identity numbers pre-fill from party individual
+        $testable->assertFormSet([
+            'new_tenant.aadhaar_number' => '112233445566',
+            'new_tenant.pan_number' => 'ABCDE9999Z',
+        ]);
+    }
+
+    public function test_manage_tenant_kyc_can_save_updated_tenant_identity_numbers()
+    {
+        $this->seed(KycDocumentTypeSeeder::class);
+
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $property = Property::create([
+            'building_name' => 'Save Kyc Test Building',
+            'address_line_1' => 'Ulubari, Guwahati',
+            'status' => 'vacant',
+        ]);
+
+        $tenant = Party::create([
+            'display_name' => 'Naveen Bora',
+            'phone' => '9876543211',
+            'party_type' => 'individual',
+        ]);
+
+        $tenant->individual()->create([
+            'name' => 'Naveen Bora',
+            'aadhaar_number' => '111122223333',
+            'pan_number' => 'AAAAA1111A',
+        ]);
+
+        $agreement = TenancyAgreement::create([
+            'property_id' => $property->id,
+            'code' => 'TNC-2026-KYC-02',
+            'status' => 'draft',
+            'start_date' => '2026-10-01',
+            'end_date' => '2027-08-31',
+            'rent_amount' => 15000,
+            'security_deposit' => 30000,
+        ]);
+
+        $agreement->roles()->create([
+            'party_id' => $tenant->id,
+            'role_type' => 'Primary Tenant',
+            'is_primary' => true,
+        ]);
+
+        $file = UploadedFile::fake()->create('agreement.pdf', 100, 'application/pdf');
+        $agreement->addMedia($file)->toMediaCollection('signed_agreement');
+        $agreement->update([
+            'signed_at' => '2026-10-01 10:00:00',
+            'signed_by_tenant' => true,
+        ]);
+
+        Livewire::test(ManageTenantKyc::class, ['record' => $agreement->id])
+            ->fillForm([
+                'new_tenant.aadhaar_number' => '999988887777',
+                'new_tenant.pan_number' => 'BBBBB2222B',
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertEquals('999988887777', $tenant->individual->fresh()->aadhaar_number);
+        $this->assertEquals('BBBBB2222B', $tenant->individual->fresh()->pan_number);
+    }
+
+    public function test_manage_tenant_kyc_upload_document_modal_attaches_media_and_syncs_number()
+    {
+        $this->seed(KycDocumentTypeSeeder::class);
+
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $property = Property::create([
+            'building_name' => 'Modal Upload Test Building',
+            'address_line_1' => 'Zoo Road, Guwahati',
+            'status' => 'vacant',
+        ]);
+
+        $tenant = Party::create([
+            'display_name' => 'Dipankar Barman',
+            'phone' => '9876543299',
+            'party_type' => 'individual',
+        ]);
+
+        $tenant->individual()->create([
+            'name' => 'Dipankar Barman',
+            'aadhaar_number' => '555566667777',
+            'pan_number' => 'ABCDE1111X',
+        ]);
+
+        $agreement = TenancyAgreement::create([
+            'property_id' => $property->id,
+            'code' => 'TNC-2026-KYC-03',
+            'status' => 'draft',
+            'start_date' => '2026-10-01',
+            'end_date' => '2027-08-31',
+            'rent_amount' => 15000,
+            'security_deposit' => 30000,
+        ]);
+
+        $agreement->roles()->create([
+            'party_id' => $tenant->id,
+            'role_type' => 'Primary Tenant',
+            'is_primary' => true,
+        ]);
+
+        \Illuminate\Support\Facades\Storage::fake('public');
+        $uploaded = UploadedFile::fake()->create('voter_card.pdf', 100, 'application/pdf');
+        $storedPath = $uploaded->store('temp-uploads', 'public');
+
+        // Optional document is not rendered initially on fresh form
+        $testable = Livewire::test(ManageTenantKyc::class, ['record' => $agreement->id]);
+        $this->assertNull($testable->instance()->form->getComponent('tenant_voter_id'));
+
+        // Action definition check
+        $action = TenancyAgreementForm::getTenantKycUploadAction();
+        $this->assertEquals('uploadDocumentModal', $action->getName());
+
+        // Execute action callback directly
+        $actionClosure = $action->getActionFunction();
+        $actionClosure([
+            'document_type' => 'voter_id',
+            'document_number' => 'VOTER998877',
+            'files' => [$storedPath],
+        ], $agreement);
+
+        $agreement->refresh();
+        $this->assertTrue($agreement->hasMedia('tenant_voter_id'));
+        $this->assertEquals('VOTER998877', $tenant->individual->fresh()->voter_id);
+
+        // After upload, voter id component is visible on form
+        $updatedTestable = Livewire::test(ManageTenantKyc::class, ['record' => $agreement->id]);
+        $this->assertNotNull($updatedTestable->instance()->form->getComponent('tenant_voter_id'));
+        $this->assertNotNull($updatedTestable->instance()->form->getComponent('new_tenant.voter_id'));
+    }
+
+    public function test_manage_agreement_documents_generates_versioned_draft_documents_and_populates_media()
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $property = Property::create([
+            'building_name' => 'Drafts Test Building',
+            'address_line_1' => 'Ganesguri, Guwahati',
+            'status' => 'vacant',
+        ]);
+
+        $tenant = Party::create([
+            'display_name' => 'Draft Test Tenant',
+            'phone' => '9876543212',
+            'party_type' => 'individual',
+        ]);
+
+        $tenant->individual()->create([
+            'name' => 'Draft Test Tenant',
+        ]);
+
+        $agreement = TenancyAgreement::create([
+            'property_id' => $property->id,
+            'code' => 'TNC-2026-DFT-01',
+            'status' => 'draft',
+            'start_date' => '2026-11-01',
+            'end_date' => '2027-09-30',
+            'rent_amount' => 18000,
+            'security_deposit' => 36000,
+            'version' => 1,
+        ]);
+
+        $agreement->roles()->create([
+            'party_id' => $tenant->id,
+            'role_type' => 'Primary Tenant',
+            'is_primary' => true,
+        ]);
+
+        $testable = Livewire::test(ManageAgreementDocuments::class, ['record' => $agreement->id]);
+
+        // First generation
+        $testable->call('generateDraftDocuments');
+
+        $agreement->refresh();
+        $this->assertTrue($agreement->hasMedia('draft_pdf'));
+        $this->assertTrue($agreement->hasMedia('draft_word'));
+        $this->assertEquals(1, $agreement->version);
+
+        $latestPdf = $agreement->getLatestDraftPdf();
+        $this->assertNotNull($latestPdf);
+        $this->assertEquals(1, $latestPdf->getCustomProperty('version'));
+
+        // Second generation increments version
+        $testable->call('generateDraftDocuments');
+        $agreement->refresh();
+        $this->assertEquals(2, $agreement->version);
+        $this->assertCount(2, $agreement->getMedia('draft_pdf'));
+        $this->assertCount(2, $agreement->getMedia('draft_word'));
+
+        $newLatestPdf = $agreement->getLatestDraftPdf();
+        $this->assertEquals(2, $newLatestPdf->getCustomProperty('version'));
+    }
+
+    public function test_manage_agreement_documents_can_preview_and_download_drafts()
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $property = Property::create([
+            'building_name' => 'Preview Test Building',
+            'address_line_1' => 'Panbazar, Guwahati',
+            'status' => 'vacant',
+        ]);
+
+        $tenant = Party::create([
+            'display_name' => 'Preview Tenant',
+            'phone' => '9876543213',
+            'party_type' => 'individual',
+        ]);
+
+        $tenant->individual()->create([
+            'name' => 'Preview Tenant',
+        ]);
+
+        $agreement = TenancyAgreement::create([
+            'property_id' => $property->id,
+            'code' => 'TNC-2026-DFT-02',
+            'status' => 'draft',
+            'start_date' => '2026-11-01',
+            'end_date' => '2027-09-30',
+            'rent_amount' => 20000,
+            'security_deposit' => 40000,
+            'version' => 1,
+        ]);
+
+        $agreement->roles()->create([
+            'party_id' => $tenant->id,
+            'role_type' => 'Primary Tenant',
+            'is_primary' => true,
+        ]);
+
+        $testable = Livewire::test(ManageAgreementDocuments::class, ['record' => $agreement->id]);
+
+        // Preview mounts viewHistoryPdf action
+        $testable->call('previewDraftPdf')
+            ->assertActionMounted('viewHistoryPdf');
+
+        // Download draft pdf returns a download response
+        $pdfResponse = $testable->instance()->downloadDraftPdf();
+        $this->assertInstanceOf(\Symfony\Component\HttpFoundation\Response::class, $pdfResponse);
+
+        // Download draft word returns a download response
+        $wordResponse = $testable->instance()->downloadDraftWord();
+        $this->assertInstanceOf(\Symfony\Component\HttpFoundation\Response::class, $wordResponse);
+    }
+
+    public function test_tenancy_agreement_draft_customizer_action_and_compilation()
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $property = Property::create([
+            'building_name' => 'Customizer Test Building',
+            'address_line_1' => 'Ulubari, Guwahati',
+            'status' => 'vacant',
+        ]);
+
+        $tenant = Party::create([
+            'display_name' => 'Customizer Tenant',
+            'phone' => '9876543214',
+            'party_type' => 'individual',
+        ]);
+
+        $tenant->individual()->create([
+            'name' => 'Customizer Tenant',
+        ]);
+
+        $agreement = TenancyAgreement::create([
+            'property_id' => $property->id,
+            'code' => 'TNC-2026-CUST-01',
+            'status' => 'draft',
+            'start_date' => '2026-11-01',
+            'end_date' => '2027-09-30',
+            'rent_amount' => 25000,
+            'security_deposit' => 50000,
+            'version' => 1,
+        ]);
+
+        $agreement->roles()->create([
+            'party_id' => $tenant->id,
+            'role_type' => 'Primary Tenant',
+            'is_primary' => true,
+        ]);
+
+        $customClause = '<p>Customized Clause: The tenant agrees to absolute quiet hours between 10 PM and 7 AM.</p>';
+
+        $testable = Livewire::test(ManageAgreementDocuments::class, ['record' => $agreement->id])
+            ->assertActionVisible('draftAgreement')
+            ->mountAction('draftAgreement')
+            ->setActionData([
+                'agreement_content' => $customClause,
+            ])
+            ->callMountedAction();
+
+        $agreement->refresh();
+        $this->assertStringContainsString('Customized Clause: The tenant agrees to absolute quiet hours', $agreement->agreement_content);
+        $this->assertNotNull($agreement->agreement_customized_at);
+        $this->assertTrue($agreement->hasMedia('draft_pdf'));
+        $this->assertTrue($agreement->hasMedia('draft_word'));
+
+        // Verify PDF template compiler resolves custom content
+        $templateService = app(\App\Domain\Agreement\Services\TenancyAgreementTemplateService::class);
+        $compiled = $templateService->compileForPdf($agreement);
+        $this->assertStringContainsString('Customized Clause: The tenant agrees to absolute quiet hours', $compiled);
+    }
+
+    public function test_tenancy_agreement_reset_customizer_template()
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $property = Property::create([
+            'building_name' => 'Reset Test Building',
+            'address_line_1' => 'Dispur, Guwahati',
+            'status' => 'vacant',
+        ]);
+
+        $tenant = Party::create([
+            'display_name' => 'Reset Tenant',
+            'phone' => '9876543215',
+            'party_type' => 'individual',
+        ]);
+
+        $tenant->individual()->create([
+            'name' => 'Reset Tenant',
+        ]);
+
+        $agreement = TenancyAgreement::create([
+            'property_id' => $property->id,
+            'code' => 'TNC-2026-RST-01',
+            'status' => 'draft',
+            'start_date' => '2026-11-01',
+            'end_date' => '2027-09-30',
+            'rent_amount' => 22000,
+            'security_deposit' => 44000,
+            'version' => 1,
+            'agreement_content' => '<p>Some custom content that should be cleared</p>',
+            'agreement_customized_at' => now(),
+        ]);
+
+        $agreement->roles()->create([
+            'party_id' => $tenant->id,
+            'role_type' => 'Primary Tenant',
+            'is_primary' => true,
+        ]);
+
+        $this->assertNotNull($agreement->agreement_content);
+
+        // Mount customizer action and verify action is mounted
+        $testable = Livewire::test(ManageAgreementDocuments::class, ['record' => $agreement->id])
+            ->mountAction('draftAgreement')
+            ->assertActionMounted('draftAgreement');
+
+        // Verify resetting clears custom content and restores default template
+        $agreement->update([
+            'agreement_content' => null,
+            'agreement_customized_at' => null,
+        ]);
+
+        $agreement->refresh();
+        $this->assertNull($agreement->agreement_content);
+        $this->assertNull($agreement->agreement_customized_at);
+
+        $templateService = app(\App\Domain\Agreement\Services\TenancyAgreementTemplateService::class);
+        $fresh = $templateService->getDefaultContent($agreement, true);
+        $this->assertStringContainsString('Reset Tenant', $fresh);
+        $this->assertStringContainsString('Reset Test Building', $fresh);
+    }
+
+    public function test_tenancy_agreement_merged_tenant_kyc_and_occupants_tab()
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $property = Property::create([
+            'building_name' => 'Subnav Test Building',
+            'address_line_1' => 'Six Mile, Guwahati',
+            'status' => 'vacant',
+        ]);
+
+        $tenant = Party::create([
+            'display_name' => 'Subnav Tenant',
+            'phone' => '9876543216',
+            'party_type' => 'individual',
+        ]);
+
+        $agreement = TenancyAgreement::create([
+            'property_id' => $property->id,
+            'code' => 'TNC-2026-NAV-01',
+            'status' => 'draft',
+            'start_date' => '2026-11-01',
+            'end_date' => '2027-09-30',
+            'rent_amount' => 18000,
+            'security_deposit' => 36000,
+        ]);
+
+        $agreement->roles()->create([
+            'party_id' => $tenant->id,
+            'role_type' => 'Primary Tenant',
+            'is_primary' => true,
+        ]);
+
+        // ManageSecondaryTenants is now the merged tab (3. Tenant KYC & Occupants)
+        $testable = Livewire::test(ManageSecondaryTenants::class, ['record' => $agreement->id])
+            ->assertSuccessful();
+
+        $form = $testable->instance()->form;
+        // Contains Primary Tenant KYC components
+        $this->assertNotNull($form->getComponent('tenant_photo'));
+        $this->assertNotNull($form->getComponent('new_tenant.aadhaar_number'));
+        $this->assertNotNull($form->getComponent('tenant_aadhaar'));
+
+        // Contains Secondary Tenants repeater
+        $this->assertNotNull($form->getComponent('secondary_tenants'));
+
+        // Can mount ManageAgreementDocuments page directly as step 4
+        Livewire::test(ManageAgreementDocuments::class, ['record' => $agreement->id])
+            ->assertSuccessful();
+    }
+
+    public function test_secondary_tenants_kyc_dynamic_cards_and_saving()
+    {
+        $this->seed(KycDocumentTypeSeeder::class);
+
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $property = Property::create([
+            'building_name' => 'Secondary KYC Building',
+            'address_line_1' => 'Ulubari, Guwahati',
+            'status' => 'vacant',
+        ]);
+
+        $tenant = Party::create([
+            'display_name' => 'Primary Tenant Person',
+            'phone' => '9876543299',
+            'party_type' => 'individual',
+        ]);
+
+        $disk = config('filament.default_filesystem_disk', 'public');
+        Storage::fake($disk);
+        Storage::disk($disk)->put('tenancy-secondary-kyc/priya_photo.jpg', 'fake-photo');
+        Storage::disk($disk)->put('tenancy-secondary-kyc/priya_aadhaar.pdf', 'fake-aadhaar');
+        Storage::disk($disk)->put('tenancy-secondary-kyc/priya_pan.jpg', 'fake-pan');
+        Storage::disk($disk)->put('tenancy-secondary-kyc/priya_voter.jpg', 'fake-voter');
+        Storage::disk($disk)->put('tenancy-secondary-kyc/marriage_certificate.pdf', 'fake-cert');
+
+        $agreement = TenancyAgreement::create([
+            'property_id' => $property->id,
+            'code' => 'TNC-SEC-01',
+            'status' => 'draft',
+            'start_date' => '2026-11-01',
+            'end_date' => '2027-09-30',
+            'rent_amount' => 20000,
+            'security_deposit' => 40000,
+            'secondary_tenants' => [
+                [
+                    'name' => 'Priya Sharma',
+                    'relationship' => 'Spouse',
+                    'phone' => '9876543201',
+                    'email' => 'priya@example.com',
+                    'aadhaar_number' => '1234-5678-9012',
+                    'pan_number' => 'ABCDE1234F',
+                    'voter_id' => 'VTR1234567',
+                    'photo_file' => 'tenancy-secondary-kyc/priya_photo.jpg',
+                    'aadhaar_file' => 'tenancy-secondary-kyc/priya_aadhaar.pdf',
+                    'pan_file' => 'tenancy-secondary-kyc/priya_pan.jpg',
+                    'voter_id_file' => 'tenancy-secondary-kyc/priya_voter.jpg',
+                    'other_kyc_files' => ['tenancy-secondary-kyc/marriage_certificate.pdf'],
+                ],
+            ],
+        ]);
+
+        $agreement->roles()->create([
+            'party_id' => $tenant->id,
+            'role_type' => 'Primary Tenant',
+            'is_primary' => true,
+        ]);
+
+        // Verify options for secondary tenant KYC modal
+        $options = TenancyAgreementForm::getDocumentTypeOptions('secondary_tenant');
+        $this->assertArrayHasKey('passport_photo', $options);
+        $this->assertArrayHasKey('aadhaar', $options);
+        $this->assertArrayHasKey('pan', $options);
+        $this->assertArrayHasKey('other', $options);
+        $this->assertArrayNotHasKey('cancelled_cheque', $options); // Disabled for secondary
+
+        // Verify ManageSecondaryTenants mounts and loads data
+        $testable = Livewire::test(ManageSecondaryTenants::class, ['record' => $agreement->id])
+            ->assertSuccessful();
+
+        $form = $testable->instance()->form;
+        $secondaryComponent = $form->getComponent('secondary_tenants');
+        $this->assertNotNull($secondaryComponent);
+
+        // Save page and verify persisted
+        $testable->call('save')->assertHasNoErrors();
+
+        $agreement->refresh();
+        $this->assertCount(1, $agreement->secondary_tenants);
+        $this->assertEquals('Priya Sharma', $agreement->secondary_tenants[0]['name']);
+        $this->assertEquals('1234-5678-9012', $agreement->secondary_tenants[0]['aadhaar_number']);
+        $this->assertEquals('tenancy-secondary-kyc/priya_aadhaar.pdf', $agreement->secondary_tenants[0]['aadhaar_file']);
+        $this->assertEquals('tenancy-secondary-kyc/marriage_certificate.pdf', $agreement->secondary_tenants[0]['other_kyc_files'][0]);
     }
 }
