@@ -130,7 +130,7 @@ class MaintenanceQuotationSubNavigationTest extends TestCase
         $this->assertStringContainsString('Quotation Workflow Progress', $content);
     }
 
-    public function test_import_vendor_quotes_action_maps_defect_items(): void
+    public function test_pricing_page_renders_defect_coverage_status_widget(): void
     {
         $user = User::factory()->create();
         $property = Property::create([
@@ -155,20 +155,6 @@ class MaintenanceQuotationSubNavigationTest extends TestCase
             'severity' => 'medium',
         ]);
 
-        $vendor = \App\Domain\Party\Models\Party::create([
-            'display_name' => 'Quick Plumbing Services',
-            'party_type' => 'individual',
-        ]);
-
-        $vendorQuote = \App\Domain\Maintenance\Models\MaintenanceVendorQuote::create([
-            'maintenance_request_id' => $request->id,
-            'vendor_party_id' => $vendor->id,
-            'maintenance_request_item_ids' => [$item1->id],
-            'trade_title' => 'Plumbing Works',
-            'quoted_cost' => 1200.00,
-            'status' => 'draft',
-        ]);
-
         $quote = MaintenanceClientQuote::create([
             'quote_number' => 'QT-2026-9900',
             'maintenance_request_id' => $request->id,
@@ -178,7 +164,8 @@ class MaintenanceQuotationSubNavigationTest extends TestCase
         Livewire::actingAs($user)
             ->test(ManageClientQuotation::class, ['record' => $quote->getRouteKey()])
             ->assertSuccessful()
-            ->assertSee('Import Vendor Quotes');
+            ->assertSee('Repair Defect Coverage Status')
+            ->assertSee('Leaking bathroom pipe');
     }
 
     public function test_pricing_page_loads_and_persists_unit_rates_correctly(): void
@@ -1167,7 +1154,7 @@ class MaintenanceQuotationSubNavigationTest extends TestCase
         $this->assertTrue($deleteVendorAction->isConfirmationRequired());
     }
 
-    public function test_import_from_vendor_quotes_requires_confirmation(): void
+    public function test_sync_vendor_costs_requires_confirmation(): void
     {
         $user = User::factory()->create();
 
@@ -1197,10 +1184,10 @@ class MaintenanceQuotationSubNavigationTest extends TestCase
 
         $schema = $testPricing->instance()->getSchema('form');
         $section = collect($schema->getComponents())->first(fn ($c) => $c instanceof \Filament\Schemas\Components\Section && str_contains($c->getHeading(), 'Itemized Line Items'));
-        $importAction = collect($section->getHeaderActions())->first(fn ($a) => $a->getName() === 'importFromVendorQuotes');
+        $syncAction = collect($section->getHeaderActions())->first(fn ($a) => $a->getName() === 'syncVendorCosts');
 
-        $this->assertNotNull($importAction);
-        $this->assertTrue($importAction->isConfirmationRequired());
+        $this->assertNotNull($syncAction);
+        $this->assertTrue($syncAction->isConfirmationRequired());
     }
 
     public function test_manage_quotation_approval_hides_save_button_when_approved(): void

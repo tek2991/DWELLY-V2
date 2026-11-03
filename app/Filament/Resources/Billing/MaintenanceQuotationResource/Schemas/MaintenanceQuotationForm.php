@@ -25,6 +25,7 @@ use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
@@ -620,7 +621,7 @@ class MaintenanceQuotationForm
                         ->visible(fn ($record) => ! in_array($record?->status, ['approved', 'archived']))
                         ->requiresConfirmation()
                         ->modalHeading('Sync Line Item Costs with Tab 1?')
-                        ->modalDescription('This will update the contractor vendor cost base for all linked line items using the latest quotes from Tab 1 and recalculate client pricing. Existing custom line descriptions will be preserved.')
+                        ->modalDescription('This will update the contractor vendor cost base and vendor assignment for all linked line items using the latest quotes from Tab 1 and recalculate client pricing. Existing custom line descriptions will be preserved.')
                         ->modalSubmitActionLabel('Yes, Sync Costs')
                         ->action(function (Get $get, Set $set, $record, $livewire) {
                             $ticketId = $record?->maintenance_request_id
@@ -636,12 +637,24 @@ class MaintenanceQuotationForm
                             $items = $get('items') ?? [];
                             $syncedCount = 0;
 
+                            $quoteUsageCounts = array_count_values(array_filter(array_column($items, 'vendor_quote_id')));
+
                             foreach ($items as $index => $item) {
                                 $vQuoteId = $item['vendor_quote_id'] ?? null;
                                 if ($vQuoteId && isset($dbQuotes[$vQuoteId])) {
-                                    $newCost = (float) $dbQuotes[$vQuoteId]->quoted_cost;
-                                    $qty = (float) ($item['quantity'] ?? 1);
-                                    $items[$index]['vendor_cost'] = $newCost;
+                                    $vq = $dbQuotes[$vQuoteId];
+                                    $items[$index]['vendor_party_id'] = $vq->vendor_party_id;
+
+                                    // Only overwrite vendor_cost directly if this quote is used by exactly one line item (not split)
+                                    // Only overwrite vendor_cost directly if this quote is used by exactly one line item (not split)
+                                    if (($quoteUsageCounts[$vQuoteId] ?? 1) === 1) {
+                                        $newCost = (float) $vq->quoted_cost;
+                                        $items[$index]['vendor_cost'] = $newCost;
+                                    } else {
+                                        $newCost = (float) ($items[$index]['vendor_cost'] ?? 0);
+                                    }
+
+                                    $qty = (float) ($items[$index]['quantity'] ?? 1);
                                     $newClientPrice = round($newCost * (1 + $marginPct / 100), 2);
                                     $newTotal = round($qty * $newClientPrice, 2);
                                     $items[$index]['unit_price'] = $newClientPrice;
@@ -661,93 +674,181 @@ class MaintenanceQuotationForm
 
                             Notification::make()
                                 ->title('Vendor Costs Synchronized & Saved')
-                                ->body("Updated vendor cost base, recalculated pricing, and saved {$syncedCount} linked line items.")
+                                ->body("Updated vendor cost base, vendor links, and recalculated pricing for {$syncedCount} line items.")
                                 ->success()
                                 ->send();
                         }),
-
-                    Action::make('importFromVendorQuotes')
-                        ->label('Import Vendor Quotes')
-                        ->icon('heroicon-o-arrow-down-tray')
-                        ->color('info')
-                        ->button()
-                        ->size('sm')
-                        ->requiresConfirmation()
-                        ->modalHeading('Import Vendor Quotes to Line Items?')
-                        ->modalDescription('This will import contractor trade estimates from Tab 1 and append them as itemized line items with markup applied. Are you sure you want to proceed?')
-                        ->modalSubmitActionLabel('Yes, Import Quotes')
-                        ->visible(fn ($record) => ! in_array($record?->status, ['approved', 'archived']))
-                        ->action(function (Get $get, Set $set, $record, $livewire) {
+                ])
+                ->schema([
+                    // Defect Items Coverage Status Widget
+                    Placeholder::make('defect_items_coverage_status')
+                        ->label('')
+                        ->hiddenLabel()
+                        ->columnSpanFull()
+                        ->content(function (Get $get, $record, $livewire) {
                             $ticketId = $record?->maintenance_request_id
                                 ?? $livewire->record?->maintenance_request_id
                                 ?? $get('maintenance_request_id');
-                            $quotes = [];
 
-                            if ($ticketId) {
-                                $marginPct = (float) ($get('margin_percentage') ?? SettingService::get('financials.default_margin_percentage', 10.00));
-                                $dbQuotes = MaintenanceVendorQuote::where('maintenance_request_id', $ticketId)->get();
-                                foreach ($dbQuotes as $q) {
-                                    $targetItemIds = [];
-                                    if (! empty($q->maintenance_request_item_ids) && is_array($q->maintenance_request_item_ids)) {
-                                        $targetItemIds = $q->maintenance_request_item_ids;
-                                    } elseif ($q->maintenance_request_item_id) {
-                                        $targetItemIds = [$q->maintenance_request_item_id];
+                            if (! $ticketId) {
+                                return null;
+                            }
+
+                            $ticketItems = MaintenanceRequestItem::where('maintenance_request_id', $ticketId)
+                                ->with(['itemable'])
+                                ->get();
+
+                            if ($ticketItems->isEmpty()) {
+                                return null;
+                            }
+
+                            $items = $get('items') ?? [];
+                            $coverageMap = [];
+                            $lineCounter = 0;
+
+                            foreach ($items as $line) {
+                                $lineCounter++;
+                                $lineNum = $lineCounter;
+                                $targetIds = (array) ($line['maintenance_request_item_ids'] ?? []);
+                                if (empty($targetIds) && ! empty($line['maintenance_request_item_id'])) {
+                                    $targetIds = [$line['maintenance_request_item_id']];
+                                }
+                                $lineDesc = $line['description'] ?? "Line #{$lineNum}";
+                                $clientRate = (float) ($line['unit_price'] ?? $line['unit_rate'] ?? 0);
+                                $vPartyId = $line['vendor_party_id'] ?? null;
+                                $vQuoteId = $line['vendor_quote_id'] ?? null;
+
+                                foreach ($targetIds as $tid) {
+                                    if ($tid) {
+                                        $coverageMap[$tid][] = [
+                                            'line_num' => $lineNum,
+                                            'description' => $lineDesc,
+                                            'client_price' => $clientRate,
+                                            'vendor_party_id' => $vPartyId,
+                                            'vendor_quote_id' => $vQuoteId,
+                                        ];
                                     }
+                                }
+                            }
 
-                                    if (empty($targetItemIds)) {
-                                        $ticketItemCount = MaintenanceRequestItem::where('maintenance_request_id', $ticketId)->count();
-                                        if ($ticketItemCount === 1) {
-                                            $targetItemIds = [MaintenanceRequestItem::where('maintenance_request_id', $ticketId)->value('id')];
+                            $totalItems = $ticketItems->count();
+                            $coveredItemsCount = 0;
+                            foreach ($ticketItems as $tItem) {
+                                if (! empty($coverageMap[$tItem->id])) {
+                                    $coveredItemsCount++;
+                                }
+                            }
+
+                            $pct = $totalItems > 0 ? round(($coveredItemsCount / $totalItems) * 100) : 0;
+                            $allCovered = $coveredItemsCount >= $totalItems;
+
+                            $cardsHtml = '';
+                            foreach ($ticketItems as $item) {
+                                $isCovered = ! empty($coverageMap[$item->id]);
+
+                                $locationName = 'General Property Area';
+                                if ($item->itemable instanceof \App\Domain\Property\Models\PropertyRoom) {
+                                    $locationName = '🚪 ' . ($item->itemable->custom_name ?: ($item->itemable->roomDefinition?->name ?? "Room #{$item->itemable->id}"));
+                                } elseif ($item->itemable instanceof \App\Domain\Property\Models\PropertyInventory) {
+                                    $locationName = '📦 ' . ($item->itemable->inventoryType?->name ?? "Item #{$item->itemable->id}");
+                                } elseif ($item->itemable instanceof \App\Domain\Property\Models\PropertyUtility) {
+                                    $locationName = '⚡ ' . ($item->itemable->utilityType?->name ?? "Utility #{$item->itemable->id}");
+                                }
+
+                                $issue = $item->issue_description ?: 'Reported Defect';
+                                $action = $item->repair_action ? ucfirst(strtolower($item->repair_action)) : null;
+                                $displayIssue = ($action ? "{$action}: " : '') . Str::limit($issue, 45);
+
+                                if ($isCovered) {
+                                    $linesInfo = $coverageMap[$item->id];
+                                    $lineLabels = [];
+                                    $vendorName = null;
+
+                                    foreach ($linesInfo as $li) {
+                                        $priceStr = $li['client_price'] > 0 ? ' (₹' . number_format($li['client_price'], 2) . ')' : '';
+                                        $lineLabels[] = "Line #{$li['line_num']}{$priceStr}";
+
+                                        if (! $vendorName) {
+                                            if ($li['vendor_party_id']) {
+                                                $vendorName = Party::find($li['vendor_party_id'])?->display_name;
+                                            } elseif ($li['vendor_quote_id']) {
+                                                $vendorName = MaintenanceVendorQuote::find($li['vendor_quote_id'])?->vendor?->display_name;
+                                            }
                                         }
                                     }
 
-                                    $vendorCost = (float) $q->quoted_cost;
-                                    $clientPrice = round($vendorCost * (1 + $marginPct / 100), 2);
+                                    $coveredInText = implode(', ', $lineLabels);
+                                    $vendorSubtext = $vendorName ? ' • Vendor: ' . e($vendorName) : '';
 
-                                    $quotes[] = [
-                                        'vendor_quote_id' => $q->id,
-                                        'maintenance_request_item_ids' => $targetItemIds,
-                                        'maintenance_request_item_id' => $targetItemIds[0] ?? null,
-                                        'description' => $q->trade_title ?: 'Trade Work',
-                                        'quantity' => 1,
-                                        'unit' => 'job',
-                                        'vendor_cost' => $vendorCost,
-                                        'unit_price' => $clientPrice,
-                                        'total_price' => $clientPrice,
-                                        'unit_rate' => $clientPrice,
-                                        'total_cost' => $clientPrice,
-                                    ];
+                                    $cardsHtml .= '
+                                        <div style="background-color: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; justify-content: space-between;">
+                                            <div>
+                                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px;">
+                                                    <span style="font-size: 11px; font-weight: 600; color: #166534; text-transform: uppercase; letter-spacing: 0.025em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">'.e($locationName).'</span>
+                                                    <span style="background-color: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 9999px; white-space: nowrap;">✓ Accounted For</span>
+                                                </div>
+                                                <div style="font-weight: 600; font-size: 13px; color: #14532d; line-height: 1.35; margin-bottom: 6px;">'.e($displayIssue).'</div>
+                                            </div>
+                                            <div style="font-size: 11px; color: #15803d; border-top: 1px dashed #bbf7d0; padding-top: 6px; margin-top: 4px;">
+                                                <span>Included in: <strong>'.e($coveredInText).'</strong>'.e($vendorSubtext).'</span>
+                                            </div>
+                                        </div>
+                                    ';
+                                } else {
+                                    $cardsHtml .= '
+                                        <div style="background-color: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; justify-content: space-between;">
+                                            <div>
+                                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px;">
+                                                    <span style="font-size: 11px; font-weight: 600; color: #92400e; text-transform: uppercase; letter-spacing: 0.025em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">'.e($locationName).'</span>
+                                                    <span style="background-color: #fef3c7; color: #b45309; border: 1px solid #fde68a; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 9999px; white-space: nowrap;">⚠️ Unaccounted</span>
+                                                </div>
+                                                <div style="font-weight: 600; font-size: 13px; color: #78350f; line-height: 1.35; margin-bottom: 6px;">'.e($displayIssue).'</div>
+                                            </div>
+                                            <div style="font-size: 11px; color: #b45309; border-top: 1px dashed #fde68a; padding-top: 6px; margin-top: 4px; display: flex; align-items: center; justify-content: space-between;">
+                                                <span>Missing from quote</span>
+                                                <span style="font-style: italic; color: #92400e;">Select in Target Defect Items below</span>
+                                            </div>
+                                        </div>
+                                    ';
                                 }
                             }
 
-                            if (! empty($quotes)) {
-                                $currentItems = $get('items') ?? [];
-                                $filteredCurrentItems = array_filter($currentItems, function ($it) {
-                                    return ! empty($it['description']) || ! empty($it['unit_price']) || ! empty($it['unit_rate']) || ! empty($it['total_price']) || ! empty($it['total_cost']) || ! empty($it['maintenance_request_item_id']) || ! empty($it['maintenance_request_item_ids']);
-                                });
-                                $set('items', array_values(array_merge($filteredCurrentItems, $quotes)));
+                            $headerBadge = $allCovered
+                                ? '<span style="background-color: #dcfce7; color: #15803d; border: 1px solid #86efac; font-weight: 700; padding: 3px 10px; border-radius: 9999px; font-size: 12px; display: inline-flex; align-items: center; gap: 4px;">
+                                    <span>✓</span> All '.$totalItems.' Defect Items Accounted For (100%)
+                                   </span>'
+                                : '<span style="background-color: #fef3c7; color: #b45309; border: 1px solid #fcd34d; font-weight: 700; padding: 3px 10px; border-radius: 9999px; font-size: 12px; display: inline-flex; align-items: center; gap: 4px;">
+                                    <span>⚠️</span> '.$coveredItemsCount.' of '.$totalItems.' Defect Items Accounted For ('.$pct.'%)
+                                   </span>';
 
-                                static::recalculateQuotationTotals($get, $set);
+                            $progressColor = $allCovered ? '#22c55e' : '#f59e0b';
 
-                                if (method_exists($livewire, 'save')) {
-                                    $livewire->save(shouldRedirect: false);
-                                }
+                            return new HtmlString('
+                                <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;">
+                                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
+                                        <div>
+                                            <div style="font-weight: 700; font-size: 13px; color: #1e293b; display: flex; align-items: center; gap: 6px;">
+                                                <span>🛠️ Repair Defect Coverage Status</span>
+                                            </div>
+                                            <div style="font-size: 11px; color: #64748b; margin-top: 1px;">
+                                                Track which ticket repair issues have been included in the quotation line items below.
+                                            </div>
+                                        </div>
+                                        <div>
+                                            '.$headerBadge.'
+                                        </div>
+                                    </div>
 
-                                Notification::make()
-                                    ->title('Line Items Imported & Saved')
-                                    ->body(count($quotes).' vendor trade quote items added, calculated, and saved.')
-                                    ->success()
-                                    ->send();
-                            } else {
-                                Notification::make()
-                                    ->title('No Vendor Quotes Found')
-                                    ->body('Please add contractor estimates in Tab 1 first.')
-                                    ->warning()
-                                    ->send();
-                            }
+                                    <div style="background-color: #e2e8f0; border-radius: 9999px; height: 5px; width: 100%; overflow: hidden; margin-bottom: 12px;">
+                                        <div style="background-color: '.$progressColor.'; width: '.$pct.'%; height: 100%; transition: width 0.3s ease;"></div>
+                                    </div>
+
+                                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px;">
+                                        '.$cardsHtml.'
+                                    </div>
+                                </div>
+                            ');
                         }),
-                ])
-                ->schema([
                     // Vendor Cost Discrepancy Alert Banner
                     Placeholder::make('vendor_cost_discrepancy_alert')
                         ->label('')
@@ -839,9 +940,10 @@ class MaintenanceQuotationForm
                         ->afterStateUpdated(fn (Get $get, Set $set) => static::recalculateQuotationTotals($get, $set))
                         ->addActionLabel('Save and add line item')
                         ->schema([
+                            // Row 1: Target Defect Items (col 6), Contractor Estimate / Bid (col 6)
                             Select::make('maintenance_request_item_ids')
                                 ->label('Target Defect Items')
-                                ->placeholder('Select Defect Items')
+                                ->placeholder('Select Defect Items from Ticket')
                                 ->multiple()
                                 ->options(function (Get $get, $record, $livewire) {
                                     $ticketId = $record?->maintenance_request_id
@@ -867,21 +969,137 @@ class MaintenanceQuotationForm
                                                 $name = '🏢 General Property Area';
                                             }
 
-                                            return [$item->id => "{$name} - ".Str::limit($item->issue_description, 25)];
+                                            return [$item->id => "{$name} - ".Str::limit($item->issue_description, 35)];
                                         });
                                 })
                                 ->searchable()
                                 ->preload()
                                 ->live()
                                 ->nullable()
-                                ->columnSpan(3),
+                                ->columnSpan(6),
 
+                            Select::make('vendor_quote_id')
+                                ->label('Contractor Estimate / Bid (Tab 1)')
+                                ->placeholder('Select Contractor Bid')
+                                ->options(function (Get $get, $record, $livewire) {
+                                    $ticketId = $record?->maintenance_request_id
+                                        ?? $livewire->record?->maintenance_request_id
+                                        ?? $get('../../maintenance_request_id');
+
+                                    if (! $ticketId) {
+                                        return [];
+                                    }
+
+                                    return MaintenanceVendorQuote::where('maintenance_request_id', $ticketId)
+                                        ->with(['vendor'])
+                                        ->get()
+                                        ->mapWithKeys(function ($q) {
+                                            $vName = $q->vendor?->display_name ?? 'Contractor';
+                                            $cost = number_format((float) $q->quoted_cost, 2);
+                                            $trade = $q->trade_title ?: 'Trade Work';
+                                            $coveredCount = count((array) ($q->maintenance_request_item_ids ?: []));
+                                            $pkgTag = $coveredCount > 1 ? " 📦 (Pkg: {$coveredCount})" : '';
+
+                                            return [$q->id => "{$vName} — ₹{$cost} ({$trade}){$pkgTag}"];
+                                        });
+                                })
+                                ->searchable()
+                                ->preload()
+                                ->nullable()
+                                ->live()
+                                ->afterStateUpdated(function ($state, Set $set, Get $get) {
+                                    if ($state) {
+                                        $vq = MaintenanceVendorQuote::with('vendor')->find($state);
+                                        if ($vq) {
+                                            $set('vendor_party_id', $vq->vendor_party_id);
+                                            $set('vendor_cost', (float) $vq->quoted_cost);
+
+                                            if (empty($get('description'))) {
+                                                $set('description', $vq->trade_title ?: 'Trade Work');
+                                            }
+
+                                            if (empty($get('maintenance_request_item_ids')) && ! empty($vq->maintenance_request_item_ids)) {
+                                                $set('maintenance_request_item_ids', (array) $vq->maintenance_request_item_ids);
+                                            }
+
+                                            $marginPct = (float) ($get('../../margin_percentage') ?? SettingService::get('financials.default_margin_percentage', 10.00));
+                                            $suggestedPrice = round((float) $vq->quoted_cost * (1 + $marginPct / 100), 2);
+                                            $qty = (float) ($get('quantity') ?? 1);
+                                            $set('unit_price', $suggestedPrice);
+                                            $set('unit_rate', $suggestedPrice);
+                                            $set('total_price', round($qty * $suggestedPrice, 2));
+                                            $set('total_cost', round($qty * $suggestedPrice, 2));
+                                        }
+                                    }
+                                    static::recalculateQuotationTotals($get, $set);
+                                })
+                                ->columnSpan(6),
+
+                            // Direct Artisan selection (visible only when no Tab 1 bid is linked)
+                            Select::make('vendor_party_id')
+                                ->label('Assigned Direct Artisan / Vendor')
+                                ->placeholder('Select Artisan / Contractor from Directory')
+                                ->visible(fn (Get $get) => empty($get('vendor_quote_id')))
+                                ->options(function ($state) {
+                                    $query = Party::whereHas('vendorProfile', function ($sq) {
+                                        $sq->where('onboarding_status', VendorOnboardingStatus::VERIFIED->value)
+                                            ->orWhere('onboarding_status', VendorOnboardingStatus::VERIFIED);
+                                    });
+
+                                    if ($state) {
+                                        $query->orWhere('id', $state);
+                                    }
+
+                                    return $query->with(['vendorProfile.trade'])
+                                        ->get()
+                                        ->mapWithKeys(function ($party) {
+                                            $tradeName = $party->vendorProfile?->trade?->name ?? 'General';
+                                            return [$party->id => "{$party->display_name} ({$tradeName})"];
+                                        });
+                                })
+                                ->searchable()
+                                ->preload()
+                                ->nullable()
+                                ->dehydrated()
+                                ->createOptionAction(fn ($action) => $action
+                                    ->modalHeading('Quick Create Vendor / Artisan')
+                                    ->modalDescription('Add an artisan or contractor to assign to this quotation line.')
+                                    ->modalWidth('lg')
+                                )
+                                ->createOptionForm([
+                                    TextInput::make('display_name')->label('Vendor / Artisan Name')->required(),
+                                    Select::make('party_type')->label('Vendor Type')->options([
+                                        'individual' => '👤 Individual Artisan',
+                                        'organization' => '🏢 Contractor Company',
+                                    ])->default('individual')->required(),
+                                    Select::make('vendor_trade_id')->label('Primary Trade')->options(fn () => VendorTrade::where('is_active', true)->pluck('name', 'id'))->searchable()->preload()->nullable(),
+                                    TextInput::make('phone')->label('Phone Number')->tel()->nullable(),
+                                ])
+                                ->createOptionUsing(function (array $data) {
+                                    $isOrg = ($data['party_type'] ?? 'individual') === 'organization';
+                                    $party = app(PartyService::class)->createParty([
+                                        'party_type' => $data['party_type'] ?? 'individual',
+                                        'display_name' => $data['display_name'],
+                                        'phone' => $data['phone'] ?? null,
+                                        'individual_data' => ! $isOrg ? ['name' => $data['display_name']] : [],
+                                        'organization_data' => $isOrg ? ['legal_name' => $data['display_name']] : [],
+                                        'vendor_data' => [
+                                            'vendor_trade_id' => $data['vendor_trade_id'] ?? null,
+                                            'onboarding_status' => VendorOnboardingStatus::VERIFIED->value,
+                                            'is_preferred' => true,
+                                        ],
+                                    ], ['vendor']);
+                                    return $party->id;
+                                })
+                                ->columnSpanFull(),
+
+                            // Row 2: Scope Description (col 5), Qty (col 1), Vendor Cost (col 2), Client Unit Price (col 2), Subtotal (col 2)
                             TextInput::make('description')
                                 ->label('Line Description / Scope')
                                 ->placeholder('e.g. Wall Plaster & Primer Coating (Materials + Labor)')
                                 ->required()
                                 ->live(debounce: 500)
-                                ->columnSpan(4),
+                                ->columnSpan(5),
 
                             TextInput::make('quantity')
                                 ->label('Qty')
@@ -900,8 +1118,7 @@ class MaintenanceQuotationForm
                                 ->columnSpan(1),
 
                             TextInput::make('vendor_cost')
-                                ->label('Vendor / Base Cost (₹)')
-                                ->helperText('Contractor rate or internal base cost')
+                                ->label('Vendor Cost (₹)')
                                 ->numeric()
                                 ->prefix('₹')
                                 ->default(0.00)
@@ -924,7 +1141,6 @@ class MaintenanceQuotationForm
 
                             TextInput::make('unit_price')
                                 ->label('Client Unit Price (₹)')
-                                ->helperText('Price quoted to client (excl. tax)')
                                 ->numeric()
                                 ->prefix('₹')
                                 ->required()
@@ -939,13 +1155,29 @@ class MaintenanceQuotationForm
                                 })
                                 ->columnSpan(2),
 
-                            Hidden::make('vendor_quote_id')->dehydrated(),
+                            Placeholder::make('line_subtotal_preview')
+                                ->label('Line Subtotal')
+                                ->content(function (Get $get) {
+                                    $qty = (float) ($get('quantity') ?? 1);
+                                    $unitPrice = (float) ($get('unit_price') ?? 0);
+                                    $subtotal = round($qty * $unitPrice, 2);
+
+                                    return new HtmlString('
+                                        <div style="margin-top: 6px;">
+                                            <span style="font-size: 15px; font-weight: 700; color: #1e3a8a;">₹' . number_format($subtotal, 2) . '</span>
+                                            <span style="font-size: 11px; color: #64748b; margin-left: 2px;">(Excl. Tax)</span>
+                                        </div>
+                                    ');
+                                })
+                                ->columnSpan(2),
+
                             Hidden::make('total_price')->dehydrated(),
                             Hidden::make('total_cost')->dehydrated(),
 
-                            // Line 2: Financial Calculation Breakdown Bar
+                            // Row 3: Modern, borderless calculation pill footer
                             Placeholder::make('financial_breakdown_line')
                                 ->label('')
+                                ->hiddenLabel()
                                 ->columnSpanFull()
                                 ->content(function (Get $get, $record) {
                                     $qty = (float) ($get('quantity') ?? 1);
@@ -969,35 +1201,39 @@ class MaintenanceQuotationForm
                                     $taxAmount = round($clientSubtotal * ($taxPct / 100), 2);
                                     $clientGrandTotal = round($clientSubtotal + $taxAmount, 2);
 
+                                    $vendorName = '—';
+                                    $vPartyId = $get('vendor_party_id');
+                                    $vQuoteId = $get('vendor_quote_id');
+
+                                    if ($vPartyId) {
+                                        $vendorName = Party::find($vPartyId)?->display_name ?? '—';
+                                    } elseif ($vQuoteId) {
+                                        $vendorName = MaintenanceVendorQuote::find($vQuoteId)?->vendor?->display_name ?? '—';
+                                    }
+
+                                    $marginColor = $marginAmount >= 0 ? '#16a34a' : '#dc2626';
+
                                     return new HtmlString('
-                                        <div style="background: rgba(241, 245, 249, 0.7); border: 1px dashed rgba(148, 163, 184, 0.5); border-radius: 6px; padding: 7px 12px; margin-top: 2px; margin-bottom: 4px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; font-size: 12px;">
-                                            <div style="display: flex; align-items: center; gap: 5px;">
-                                                <span style="color: #64748b; font-weight: 500;">🏢 Vendor Rate:</span>
-                                                <strong style="color: #334155;">'.($vendorUnitPrice > 0 ? ('₹'.number_format($vendorUnitPrice, 2)) : '—').'</strong>
-                                                '.($qty > 1 && $vendorTotal > 0 ? '<span style="color: #94a3b8; font-size: 11px;">(Total: ₹'.number_format($vendorTotal, 2).')</span>' : '').'
+                                        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 14px; margin-top: 2px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; font-size: 12px;">
+                                            <div style="display: flex; align-items: center; gap: 6px;">
+                                                <span style="color: #64748b; font-weight: 500;">👤 Contractor:</span>
+                                                <strong style="color: #334155;">'.e($vendorName).'</strong>
+                                                '.($vendorUnitPrice > 0 ? '<span style="color: #94a3b8; font-size: 11px;">(Base: ₹'.number_format($vendorUnitPrice, 2).')</span>' : '').'
                                             </div>
                                             <div style="color: #cbd5e1;">•</div>
-                                            <div style="display: flex; align-items: center; gap: 5px;">
-                                                <span style="color: #64748b; font-weight: 500;">💼 Client Subtotal:</span>
-                                                <strong style="color: #2563eb;">₹'.number_format($clientSubtotal, 2).'</strong>
-                                                <span style="color: #94a3b8; font-size: 11px;">(Excl. Tax)</span>
+                                            <div style="display: flex; align-items: center; gap: 6px;">
+                                                <span style="color: #64748b; font-weight: 500;">📈 Dwelly Margin:</span>
+                                                <strong style="color: '.$marginColor.'; font-weight: 600;">'.($marginAmount >= 0 ? '+' : '').'₹'.number_format($marginAmount, 2).' ('.$marginDisplayPct.'%)</strong>
                                             </div>
                                             <div style="color: #cbd5e1;">•</div>
-                                            <div style="display: flex; align-items: center; gap: 5px;">
-                                                <span style="color: #16a34a; font-weight: 500;">📈 Margin:</span>
-                                                <strong style="color: #16a34a;">+ ₹'.number_format($marginAmount, 2).' ('.$marginDisplayPct.'%)</strong>
-                                            </div>
-                                            <div style="color: #cbd5e1;">•</div>
-                                            <div style="display: flex; align-items: center; gap: 5px;">
+                                            <div style="display: flex; align-items: center; gap: 6px;">
                                                 <span style="color: #64748b; font-weight: 500;">🧾 GST ('.$taxPct.'%):</span>
-                                                <strong style="color: #475569;">+ ₹'.number_format($taxAmount, 2).'</strong>
-                                                '.($taxAmount > 0 ? '<span style="color: #94a3b8; font-size: 10px;">(CGST: ₹'.number_format($taxAmount / 2, 2).' + SGST: ₹'.number_format($taxAmount / 2, 2).')</span>' : '').'
+                                                <strong style="color: #475569;">+₹'.number_format($taxAmount, 2).'</strong>
                                             </div>
                                             <div style="color: #cbd5e1;">•</div>
-                                            <div style="display: flex; align-items: center; gap: 5px; background: rgba(37, 99, 235, 0.08); padding: 2px 8px; border-radius: 4px;">
-                                                <span style="color: #1e40af; font-weight: 600;">💳 Line Total:</span>
+                                            <div style="display: flex; align-items: center; gap: 6px; background-color: rgba(37, 99, 235, 0.08); padding: 3px 10px; border-radius: 4px;">
+                                                <span style="color: #1e40af; font-weight: 600;">Line Total (Incl. Tax):</span>
                                                 <strong style="color: #1e3a8a; font-size: 13px;">₹'.number_format($clientGrandTotal, 2).'</strong>
-                                                <span style="color: #1e40af; font-size: 10px;">(Incl. Tax)</span>
                                             </div>
                                         </div>
                                     ');
@@ -1028,12 +1264,16 @@ class MaintenanceQuotationForm
                                             'quantity' => 1,
                                             'vendor_cost' => 0.00,
                                             'unit_price' => 0.00,
+                                            'vendor_quote_id' => null,
+                                            'vendor_party_id' => null,
                                         ];
                                     } else {
                                         $items[] = [
                                             'quantity' => 1,
                                             'vendor_cost' => 0.00,
                                             'unit_price' => 0.00,
+                                            'vendor_quote_id' => null,
+                                            'vendor_party_id' => null,
                                         ];
                                     }
                                     $repeater->rawState($items);
@@ -1832,17 +2072,26 @@ class MaintenanceQuotationForm
 
         $dbQuotes = MaintenanceVendorQuote::where('maintenance_request_id', $ticketId)->get()->keyBy('id');
         $discrepancies = [];
-        $counter = 1;
+
+        // Sum vendor_cost per vendor_quote_id to accurately support split package line items
+        $quoteCostSums = [];
+        $quoteLineCount = [];
 
         foreach ($items as $item) {
-            $lineNum = $counter++;
             $vQuoteId = $item['vendor_quote_id'] ?? null;
-            if ($vQuoteId && isset($dbQuotes[$vQuoteId])) {
+            if ($vQuoteId) {
+                $quoteCostSums[$vQuoteId] = ($quoteCostSums[$vQuoteId] ?? 0.0) + (float) ($item['vendor_cost'] ?? 0);
+                $quoteLineCount[$vQuoteId] = ($quoteLineCount[$vQuoteId] ?? 0) + 1;
+            }
+        }
+
+        foreach ($quoteCostSums as $vQuoteId => $totalLineVendorCost) {
+            if (isset($dbQuotes[$vQuoteId])) {
                 $currentDbCost = (float) $dbQuotes[$vQuoteId]->quoted_cost;
-                $lineVendorCost = (float) ($item['vendor_cost'] ?? 0);
-                if (abs($currentDbCost - $lineVendorCost) >= 0.01) {
+                if (abs($currentDbCost - $totalLineVendorCost) >= 0.01) {
                     $trade = $dbQuotes[$vQuoteId]->trade_title ?: "Vendor Quote #{$vQuoteId}";
-                    $discrepancies[] = "Line {$lineNum} ({$trade}): Tab 1 estimate is ₹" . number_format($currentDbCost, 2) . " but line item cost base is ₹" . number_format($lineVendorCost, 2);
+                    $lineNote = ($quoteLineCount[$vQuoteId] ?? 1) > 1 ? "across {$quoteLineCount[$vQuoteId]} split lines" : "line item cost base";
+                    $discrepancies[] = "Contractor estimate ({$trade}): Tab 1 estimate is ₹" . number_format($currentDbCost, 2) . " but {$lineNote} totals ₹" . number_format($totalLineVendorCost, 2);
                 }
             }
         }

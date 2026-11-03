@@ -187,7 +187,7 @@ class MaintenanceClientQuote extends DomainModel implements HasMedia
         $subtotal = 0.0;
         $vendorTotal = 0.0;
 
-        foreach ($this->items as $item) {
+        foreach ($this->items()->get() as $item) {
             $qty = (float) ($item->quantity ?? 1);
             $clientRate = (float) ($item->unit_price ?? $item->unit_rate ?? 0);
             $subtotal += (float) ($item->total_price ?? round($qty * $clientRate, 2));
@@ -223,6 +223,12 @@ class MaintenanceClientQuote extends DomainModel implements HasMedia
             $this->dwelly_amount = $vendorTotal;
             $this->owner_amount = 0.00;
             $this->tenant_amount = 0.00;
+            $this->save();
+
+            if ($this->maintenanceRequest) {
+                $this->maintenanceRequest->syncQuotationTotals();
+            }
+
             return $this;
         }
 
@@ -267,6 +273,11 @@ class MaintenanceClientQuote extends DomainModel implements HasMedia
         }
 
         $this->save();
+
+        if ($this->maintenanceRequest) {
+            $this->maintenanceRequest->syncQuotationTotals();
+        }
+
         return $this;
     }
 

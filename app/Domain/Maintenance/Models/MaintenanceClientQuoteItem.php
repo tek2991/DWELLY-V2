@@ -12,6 +12,7 @@ class MaintenanceClientQuoteItem extends DomainModel
     protected $fillable = [
         'maintenance_client_quote_id',
         'vendor_quote_id',
+        'vendor_party_id',
         'maintenance_request_item_id',
         'maintenance_request_item_ids',
         'description',
@@ -51,6 +52,11 @@ class MaintenanceClientQuoteItem extends DomainModel
                 $item->total_price = round($qty * $price, 2);
             }
 
+            // Sync vendor_party_id from vendorQuote if available
+            if (! empty($item->vendor_quote_id) && empty($item->vendor_party_id)) {
+                $item->vendor_party_id = $item->vendorQuote?->vendor_party_id;
+            }
+
             // Sync single ID and multi-IDs array
             if (! empty($item->maintenance_request_item_ids) && is_array($item->maintenance_request_item_ids)) {
                 if (empty($item->maintenance_request_item_id)) {
@@ -59,6 +65,14 @@ class MaintenanceClientQuoteItem extends DomainModel
             } elseif (! empty($item->maintenance_request_item_id)) {
                 $item->maintenance_request_item_ids = [$item->maintenance_request_item_id];
             }
+        });
+
+        static::saved(function ($item) {
+            $item->clientQuote?->recalculateTotals();
+        });
+
+        static::deleted(function ($item) {
+            $item->clientQuote?->recalculateTotals();
         });
     }
 
@@ -70,6 +84,11 @@ class MaintenanceClientQuoteItem extends DomainModel
     public function vendorQuote(): BelongsTo
     {
         return $this->belongsTo(MaintenanceVendorQuote::class, 'vendor_quote_id');
+    }
+
+    public function vendor(): BelongsTo
+    {
+        return $this->belongsTo(\App\Domain\Party\Models\Party::class, 'vendor_party_id');
     }
 
     public function maintenanceRequestItem(): BelongsTo

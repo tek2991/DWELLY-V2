@@ -268,7 +268,9 @@ class MaintenanceRequest extends DomainModel implements HasMedia
 
     public function syncQuotationTotals(): void
     {
-        $clientQuote = $this->currentClientQuote ?? $this->clientQuotes()->latest()->first();
+        $clientQuote = $this->current_client_quote_id
+            ? MaintenanceClientQuote::find($this->current_client_quote_id)
+            : ($this->currentClientQuote ?? $this->clientQuotes()->latest()->first());
 
         if ($clientQuote && $clientQuote->items()->count() > 0) {
             $totalVendor = (float) $clientQuote->items()->get()->sum(function ($it) {

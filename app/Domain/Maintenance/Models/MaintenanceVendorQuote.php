@@ -49,6 +49,27 @@ class MaintenanceVendorQuote extends DomainModel implements HasMedia
         'completed_at' => 'datetime',
     ];
 
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::saved(function ($vendorQuote) {
+            $ticket = $vendorQuote->maintenanceRequest;
+            if ($ticket) {
+                $ticket->currentClientQuote?->recalculateTotals();
+                $ticket->syncQuotationTotals();
+            }
+        });
+
+        static::deleted(function ($vendorQuote) {
+            $ticket = $vendorQuote->maintenanceRequest;
+            if ($ticket) {
+                $ticket->currentClientQuote?->recalculateTotals();
+                $ticket->syncQuotationTotals();
+            }
+        });
+    }
+
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection('vendor_quote_files');
