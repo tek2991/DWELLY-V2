@@ -8,33 +8,16 @@ class DatabaseSeeder extends Seeder
 {
     /**
      * Seed the application's database.
+     * Seeds foundational system data, then seeds the full demo suite.
      */
     public function run(): void
     {
-        $user = \App\Models\User::firstOrCreate(
-            ['email' => 'admin@dwelly.in'],
-            [
-                'name' => 'Dwelly Admin',
-                'password' => bcrypt('password'),
-            ]
-        );
-
         $this->call([
-            RolesAndPermissionsSeeder::class,
-            ReferenceDataSeeder::class,
-            OpportunitySourceSeeder::class,
-            FinancialModelSeeder::class,
-            \Tek2991\Accounting\Database\Seeders\IndianStatesSeeder::class,
-            RegionsSeeder::class,
-            \Tek2991\Accounting\Database\Seeders\DefaultChartOfAccountsSeeder::class,
+            SystemBaseSeeder::class,
             \Tek2991\Accounting\Database\Seeders\DemoDataSeeder::class,
-            EstablishmentSeeder::class,
-            TaskTemplateSeeder::class,
-            KycDocumentTypeSeeder::class,
             TenantSeeder::class,
             PropertySeeder::class,
+            MaintenanceDemoSeeder::class,
         ]);
-
-        $user->assignRole('Business Owner');
     }
 }

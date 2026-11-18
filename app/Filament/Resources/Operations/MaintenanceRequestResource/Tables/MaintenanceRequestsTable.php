@@ -102,6 +102,11 @@ class MaintenanceRequestsTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
+                SelectFilter::make('property')
+                    ->label('Property')
+                    ->relationship('property', 'building_name')
+                    ->searchable()
+                    ->preload(),
                 SelectFilter::make('status')
                     ->options(MaintenanceStatus::class),
                 SelectFilter::make('priority')

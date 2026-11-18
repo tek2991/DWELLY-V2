@@ -726,6 +726,51 @@ class MaintenanceOverhaulWorkflowTest extends TestCase
         $this->assertEquals(MaintenanceStatus::QUOTATION_APPROVED, $request->fresh()->status);
     }
 
+    public function test_quotation_approval_does_not_throw_if_uploaded_temporary_file_already_moved(): void
+    {
+        $request = MaintenanceRequest::create([
+            'property_id' => $this->property->id,
+            'owner_id' => $this->ownerParty->id,
+            'title' => 'Electrical Switchboard Sparking',
+            'status' => MaintenanceStatus::SUBMITTED,
+            'payer_type' => PayerType::OWNER,
+        ]);
+
+        $quote = MaintenanceClientQuote::create([
+            'quote_number' => 'QT-2026-TEMP-FILE-TEST',
+            'maintenance_request_id' => $request->id,
+            'status' => 'draft',
+            'total_amount' => 3500.00,
+        ]);
+
+        $fakeProofFile = tempnam(sys_get_temp_dir(), 'proof_already_moved_') . '.pdf';
+        file_put_contents($fakeProofFile, '%PDF-1.4 sample pdf content');
+
+        // Simulate Spatie component having already saved the file into media
+        $quote->addMedia($fakeProofFile)->toMediaCollection('approval_proof_files');
+
+        // And the temporary file is now unlinked/moved by the system
+        if (file_exists($fakeProofFile)) {
+            unlink($fakeProofFile);
+        }
+
+        // Even with the unlinked temporary path in Livewire state, approval must succeed without FileDoesNotExist
+        \Livewire\Livewire::actingAs($this->inspector)
+            ->test(\App\Filament\Resources\Billing\MaintenanceQuotationResource\Pages\ManageQuotationApproval::class, [
+                'record' => $quote->getRouteKey(),
+            ])
+            ->set('data.approval_notes', 'Tenant approved via email.')
+            ->set('data.approved_at', now()->toDateTimeString())
+            ->set('data.approval_channel', 'email')
+            ->set('data.approval_proof_files', [$fakeProofFile])
+            ->callAction('approveQuoteInTab')
+            ->assertHasNoActionErrors();
+
+        $quote->refresh();
+        $this->assertEquals('approved', $quote->status);
+        $this->assertTrue($quote->hasMedia('approval_proof_files'));
+    }
+
     public function test_maintenance_request_pdf_service_loads_vendor_without_errors(): void
     {
         $vendorParty = Party::create([

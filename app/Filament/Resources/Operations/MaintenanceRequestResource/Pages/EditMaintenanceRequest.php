@@ -88,7 +88,7 @@ class EditMaintenanceRequest extends EditRecord
                 ->action(function () {
                     $quote = MaintenanceClientQuote::create([
                         'maintenance_request_id' => $this->record->id,
-                        'quote_number' => 'QTE-'.date('Y').'-'.strtoupper(Str::random(5)),
+                        'quote_number' => MaintenanceClientQuote::generateQuoteNumber(),
                         'status' => 'draft',
                         'total_amount' => 0.00,
                         'owner_amount' => 0.00,

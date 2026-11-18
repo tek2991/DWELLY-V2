@@ -13,9 +13,12 @@ The onboarding system uses 3 synchronized CSV files and 1 asset folder per prope
 
 ```text
 database/seeders/data/
-├── existing_properties_template.csv      # File 1: Properties, Owners, Commercials, Signing Authority
-├── existing_tenants_template.csv         # File 2: Primary & Secondary Tenants, Agreement Dates
-├── property_specifications_template.csv  # File 3: Rooms, Amenities, Inventory Checklist
+├── existing_properties_data.csv          # File 1: Properties, Owners, Commercials, Signing Authority (Real data)
+├── existing_tenants_data.csv             # File 2: Primary & Secondary Tenants, Agreement Dates (Real data)
+├── property_specifications_data.csv      # File 3: Rooms, Amenities, Inventory Checklist (Real data)
+├── existing_properties_template.csv      # Template File 1
+├── existing_tenants_template.csv         # Template File 2
+├── property_specifications_template.csv  # Template File 3
 └── properties/                           # Photos, Signed MOUs, POA scans, and Tenancy Agreements
 ```
 
@@ -71,6 +74,8 @@ php artisan dwelly:seed-properties-csv \
 
 ### 4. Or run via standard Laravel Seeder:
 ```bash
+php artisan db:seed --class=CsvDataSeeder
+# or:
 php artisan db:seed --class=CsvPropertySeeder
 ```
 

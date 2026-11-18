@@ -1018,7 +1018,72 @@ class TenancyAgreementForm
                         Tabs\Tab::make('Primary Tenant KYC')
                             ->icon('heroicon-m-user-circle')
                             ->schema([
-                                Section::make('Tenant KYC & Verification Documents')
+                                Section::make('👤 Primary Tenant Personal Profile')
+                                    ->description('View and update primary tenant personal information, contact numbers, and permanent address.')
+                                    ->headerActions([
+                                        Action::make('viewPartyProfile')
+                                            ->label('View Full Party Profile')
+                                            ->icon('heroicon-m-arrow-top-right-on-square')
+                                            ->color('gray')
+                                            ->size('sm')
+                                            ->url(function (?TenancyAgreement $record) {
+                                                $party = $record?->primaryTenant?->party ?? $record?->tenants()->first();
+                                                return $party ? PartyResource::getUrl('edit', ['record' => $party]) : null;
+                                            })
+                                            ->openUrlInNewTab()
+                                            ->visible(fn (?TenancyAgreement $record) => (bool) ($record?->primaryTenant?->party ?? $record?->tenants()->first())),
+                                    ])
+                                    ->schema([
+                                        Grid::make(['default' => 1, 'sm' => 2, 'lg' => 3])
+                                            ->schema([
+                                                TextInput::make('new_tenant.display_name')
+                                                    ->label('Tenant Full Name')
+                                                    ->required()
+                                                    ->placeholder('e.g. Rahul Sharma')
+                                                    ->formatStateUsing(fn (?TenancyAgreement $record, $state) => $state ?: ($record?->primaryTenant?->party?->display_name ?? $record?->tenants()->first()?->display_name))
+                                                    ->default(fn (?TenancyAgreement $record) => $record?->primaryTenant?->party?->display_name ?? $record?->tenants()->first()?->display_name),
+
+                                                TextInput::make('new_tenant.phone')
+                                                    ->label('Phone Number')
+                                                    ->tel()
+                                                    ->required()
+                                                    ->placeholder('e.g. 9876543210')
+                                                    ->formatStateUsing(fn (?TenancyAgreement $record, $state) => $state ?: ($record?->primaryTenant?->party?->phone ?? $record?->tenants()->first()?->phone))
+                                                    ->default(fn (?TenancyAgreement $record) => $record?->primaryTenant?->party?->phone ?? $record?->tenants()->first()?->phone),
+
+                                                TextInput::make('new_tenant.email')
+                                                    ->label('Email Address')
+                                                    ->email()
+                                                    ->placeholder('e.g. rahul@example.com')
+                                                    ->formatStateUsing(fn (?TenancyAgreement $record, $state) => $state ?: ($record?->primaryTenant?->party?->email ?? $record?->tenants()->first()?->email))
+                                                    ->default(fn (?TenancyAgreement $record) => $record?->primaryTenant?->party?->email ?? $record?->tenants()->first()?->email),
+
+                                                TextInput::make('new_tenant.parent_name')
+                                                    ->label("Father's / Care-Of Name")
+                                                    ->placeholder('e.g. S/o Late Rajesh Sharma')
+                                                    ->formatStateUsing(fn (?TenancyAgreement $record, $state) => $state ?: ($record?->primaryTenant?->party?->individual?->parent_name ?? $record?->tenants()->first()?->individual?->parent_name))
+                                                    ->default(fn (?TenancyAgreement $record) => $record?->primaryTenant?->party?->individual?->parent_name ?? $record?->tenants()->first()?->individual?->parent_name),
+
+                                                TextInput::make('new_tenant.address_line_1')
+                                                    ->label('Permanent Residence Address')
+                                                    ->placeholder('Permanent residence address')
+                                                    ->formatStateUsing(function (?TenancyAgreement $record, $state) {
+                                                        if ($state) {
+                                                            return $state;
+                                                        }
+                                                        $party = $record?->primaryTenant?->party ?? $record?->tenants()->first();
+                                                        return $party?->addresses()->where('is_primary', true)->first()?->address_line_1 ?? $party?->addresses?->first()?->address_line_1;
+                                                    })
+                                                    ->default(function (?TenancyAgreement $record) {
+                                                        $party = $record?->primaryTenant?->party ?? $record?->tenants()->first();
+                                                        return $party?->addresses()->where('is_primary', true)->first()?->address_line_1 ?? $party?->addresses?->first()?->address_line_1;
+                                                    })
+                                                    ->columnSpan(['default' => 1, 'sm' => 2, 'lg' => 2]),
+                                            ]),
+                                    ])
+                                    ->columnSpanFull(),
+
+                                Section::make('📁 Tenant KYC & Verification Documents')
                                     ->description('Attach official identity, photo, and banking verification documents for the primary tenant.')
                                     ->headerActions([
                                         static::getTenantKycUploadAction(),

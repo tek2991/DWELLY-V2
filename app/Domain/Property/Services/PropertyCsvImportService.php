@@ -70,15 +70,7 @@ class PropertyCsvImportService
         'locality',
         'city',
         'pincode',
-        'bhk_type',
-        'property_type',
-        'furnishing_type',
-        'property_status',
         'owner_name',
-        'owner_phone',
-        'owner_email',
-        'rent_amount',
-        'security_deposit',
     ];
 
     public function __construct()
@@ -116,6 +108,30 @@ class PropertyCsvImportService
                 'total_rows' => 0,
                 'imported_rows' => 0,
                 'errors' => ['No valid data rows found.'],
+                'warnings' => [],
+            ];
+        }
+
+        // Normalize rows and filter out empty/incomplete rows
+        $normalizedRows = [];
+        $skippedCount = 0;
+        foreach ($rows as $r) {
+            $norm = $this->normalizeRow($r);
+            if ($norm !== null) {
+                $normalizedRows[] = $norm;
+            } else {
+                $skippedCount++;
+            }
+        }
+        $rows = $normalizedRows;
+
+        if (empty($rows)) {
+            return [
+                'success' => false,
+                'message' => 'No valid property rows found after filtering empty/incomplete rows.',
+                'total_rows' => 0,
+                'imported_rows' => 0,
+                'errors' => ['All rows in CSV were empty or incomplete.'],
                 'warnings' => [],
             ];
         }
@@ -242,6 +258,58 @@ class PropertyCsvImportService
     }
 
     /**
+     * Normalize a CSV row, applying defaults and generating email if missing.
+     */
+    public function normalizeRow(array $row): ?array
+    {
+        $building = trim($row['building_name'] ?? '');
+        $owner = trim($row['owner_name'] ?? '');
+
+        // If both building and owner are missing, this is an empty/trailing draft row
+        if (empty($building) || empty($owner)) {
+            return null;
+        }
+
+        // Email generation if missing: phonenumber@no-email.com
+        $ownerEmail = trim($row['owner_email'] ?? '');
+        $ownerPhone = trim($row['owner_phone'] ?? '');
+        if (empty($ownerEmail)) {
+            if (!empty($ownerPhone)) {
+                $first = trim(explode(',', $ownerPhone)[0]);
+                $clean = preg_replace('/[^0-9]/', '', $first);
+                $ownerEmail = ($clean ?: $first) . '@no-email.com';
+            } else {
+                $ownerEmail = \Illuminate\Support\Str::slug($owner) . '@no-email.com';
+            }
+            $row['owner_email'] = $ownerEmail;
+        }
+
+        // Safe defaults for numeric amounts
+        if (!isset($row['rent_amount']) || trim((string)$row['rent_amount']) === '') {
+            $row['rent_amount'] = '0';
+        }
+        if (!isset($row['security_deposit']) || trim((string)$row['security_deposit']) === '') {
+            $row['security_deposit'] = '0';
+        }
+
+        // Safe defaults for furnishing, status, bhk, property_type
+        if (empty(trim($row['furnishing_type'] ?? ''))) {
+            $row['furnishing_type'] = 'Un-Furnished';
+        }
+        if (empty(trim($row['property_status'] ?? ''))) {
+            $row['property_status'] = 'Draft';
+        }
+        if (empty(trim($row['bhk_type'] ?? '')) || trim($row['bhk_type']) === 'BHK') {
+            $row['bhk_type'] = '2 BHK';
+        }
+        if (empty(trim($row['property_type'] ?? ''))) {
+            $row['property_type'] = 'Apartment';
+        }
+
+        return $row;
+    }
+
+    /**
      * Validate CSV rows and headers.
      */
     protected function validateRows(array $rows, array $tenantsMap = []): array
@@ -364,7 +432,8 @@ class PropertyCsvImportService
         $ownerParty = $this->resolveOwnerParty($row, $stateId, $stateName);
 
         // 4. Create or Update Property
-        $propCode = !empty($row['property_code']) ? trim($row['property_code']) : NumberingService::generate('property');
+        $rawCode = trim($row['property_code'] ?? '');
+        $propCode = (!empty($rawCode) && !in_array($rawCode, ['GAU-', 'BLR-', 'GAU', 'BLR'])) ? $rawCode : NumberingService::generate('property');
         $propStatus = ucfirst(strtolower($row['property_status'] ?? 'Vacant'));
         if (!in_array($propStatus, ['Occupied', 'Vacant', 'Under Maintenance', 'Under Notice', 'Draft'])) {
             $propStatus = 'Vacant';
@@ -560,9 +629,10 @@ class PropertyCsvImportService
             ]
         );
 
-        // 8. Create Tenancy Agreement if Occupied or Tenant specified
+        // 8. Create Tenancy Agreement if tenants exist
         $propertyTenants = $tenantsMap[strtoupper($propCode)] ?? [];
-        if ($propStatus === 'Occupied' || !empty($propertyTenants) || !empty($row['tenant_name'])) {
+        $hasTenants = !empty($propertyTenants) || !empty(trim($row['tenant_name'] ?? ''));
+        if ($hasTenants) {
             $this->createTenancyAgreementForProperty(
                 $property,
                 $row,
@@ -658,9 +728,19 @@ class PropertyCsvImportService
      */
     protected function createTenancyAgreement(Property $property, array $row, int $branchId, float $rent, float $deposit, ?int $stateId, string $stateName, ?string $propDir = null): TenancyAgreement
     {
-        $tenantEmail = trim($row['tenant_email'] ?? 'tenant@example.com');
-        $tenantPhone = trim($row['tenant_phone'] ?? '9999999999');
+        $tenantPhone = trim($row['tenant_phone'] ?? '');
         $tenantName = trim($row['tenant_name'] ?? 'Primary Tenant');
+        $tenantEmail = trim($row['tenant_email'] ?? '');
+
+        if (empty($tenantEmail)) {
+            if (!empty($tenantPhone)) {
+                $first = trim(explode(',', $tenantPhone)[0]);
+                $clean = preg_replace('/[^0-9]/', '', $first);
+                $tenantEmail = ($clean ?: $tenantPhone) . '@no-email.com';
+            } else {
+                $tenantEmail = \Illuminate\Support\Str::slug($tenantName) . '@no-email.com';
+            }
+        }
 
         $tenant = Party::where('email', $tenantEmail)
             ->orWhere('phone', $tenantPhone)
@@ -799,7 +879,17 @@ class PropertyCsvImportService
         // 1. Primary Tenant Party
         $tName = trim($primaryTenantRow['name'] ?? 'Primary Tenant');
         $tPhone = trim($primaryTenantRow['phone'] ?? '9999999999');
-        $tEmail = trim($primaryTenantRow['email'] ?? 'tenant@example.com');
+        $tEmail = trim($primaryTenantRow['email'] ?? '');
+
+        if (empty($tEmail)) {
+            if (!empty($tPhone)) {
+                $first = trim(explode(',', $tPhone)[0]);
+                $clean = preg_replace('/[^0-9]/', '', $first);
+                $tEmail = ($clean ?: $tPhone) . '@no-email.com';
+            } else {
+                $tEmail = \Illuminate\Support\Str::slug($tName) . '@no-email.com';
+            }
+        }
         $tPan = trim($primaryTenantRow['pan'] ?? ($primaryTenantRow['pad'] ?? ($primaryTenantRow['pan_number'] ?? '')));
         $tAadhaar = trim($primaryTenantRow['aadhaar'] ?? ($primaryTenantRow['aadhaar_number'] ?? ''));
         $tParent = trim($primaryTenantRow['parent_name'] ?? '');
@@ -862,6 +952,16 @@ class PropertyCsvImportService
             $secRel = trim($secRow['relationship'] ?? 'Co-Tenant');
             $secPhone = trim($secRow['phone'] ?? '');
             $secEmail = trim($secRow['email'] ?? '');
+
+            if (empty($secEmail)) {
+                if (!empty($secPhone)) {
+                    $first = trim(explode(',', $secPhone)[0]);
+                    $clean = preg_replace('/[^0-9]/', '', $first);
+                    $secEmail = ($clean ?: $secPhone) . '@no-email.com';
+                } elseif (!empty($secName)) {
+                    $secEmail = \Illuminate\Support\Str::slug($secName) . '@no-email.com';
+                }
+            }
             $secPan = trim($secRow['pan'] ?? ($secRow['pad'] ?? ($secRow['pan_number'] ?? '')));
             $secAadhaar = trim($secRow['aadhaar'] ?? ($secRow['aadhaar_number'] ?? ''));
             $secVoter = trim($secRow['voter_id'] ?? '');
@@ -1044,10 +1144,10 @@ class PropertyCsvImportService
 
         $resolvedPath = null;
 
-        // 1. Check folder auto-discovery: {propDir}/mou.pdf or *mou*.pdf
+        // 1. Check folder auto-discovery: {propDir}/mou.pdf or *mou*.pdf or SLA
         if ($propDir) {
-            $resolvedPath = $this->findFileInDir($propDir, ['mou.pdf', 'mou_signed.pdf', 'signed_mou.pdf', 'mou.PDF'])
-                ?: $this->findFileByPattern($propDir, '/mou.*\.pdf$/i');
+            $resolvedPath = $this->findFileInDir($propDir, ['mou.pdf', 'mou_signed.pdf', 'signed_mou.pdf', 'mou.PDF', 'moui.pdf'])
+                ?: $this->findFileByPattern($propDir, '/(mou|sla|owner).*\.pdf$/i');
         }
 
         // 2. Check explicit path from CSV as override
@@ -1056,9 +1156,17 @@ class PropertyCsvImportService
         }
 
         if ($resolvedPath && file_exists($resolvedPath)) {
-            $mou->addMedia($resolvedPath)
-                ->preservingOriginal()
-                ->toMediaCollection('signed_pdf');
+            try {
+                $mou->addMedia($resolvedPath)
+                    ->preservingOriginal()
+                    ->toMediaCollection('signed_pdf');
+            } catch (\Throwable $e) {
+                Log::warning("Could not attach original MOU PDF [{$resolvedPath}]: " . $e->getMessage() . ". Falling back to generated PDF.");
+                $pdfContent = $this->generateSampleMouPdf($mou);
+                $mou->addMediaFromString($pdfContent)
+                    ->usingFileName("{$mou->number}-signed.pdf")
+                    ->toMediaCollection('signed_pdf');
+            }
         } else {
             // Generate clean base DomPDF
             $pdfContent = $this->generateSampleMouPdf($mou);
@@ -1091,9 +1199,17 @@ class PropertyCsvImportService
         }
 
         if ($resolvedPath && file_exists($resolvedPath)) {
-            $agreement->addMedia($resolvedPath)
-                ->preservingOriginal()
-                ->toMediaCollection('signed_agreement');
+            try {
+                $agreement->addMedia($resolvedPath)
+                    ->preservingOriginal()
+                    ->toMediaCollection('signed_agreement');
+            } catch (\Throwable $e) {
+                Log::warning("Could not attach original Tenancy PDF [{$resolvedPath}]: " . $e->getMessage() . ". Falling back to generated PDF.");
+                $pdfContent = $this->generateSampleAgreementPdf($agreement);
+                $agreement->addMediaFromString($pdfContent)
+                    ->usingFileName("{$agreement->code}-signed.pdf")
+                    ->toMediaCollection('signed_agreement');
+            }
         } else {
             // Generate clean base DomPDF
             $pdfContent = $this->generateSampleAgreementPdf($agreement);
@@ -1150,11 +1266,19 @@ class PropertyCsvImportService
 
         // 3. Copy files and create records
         if (!empty($photoPaths)) {
+            $destDir = Storage::disk('public')->path('property-photos');
+            if (!is_dir($destDir)) {
+                @mkdir($destDir, 0755, true);
+            }
+
             foreach ($photoPaths as $index => $resolved) {
                 $filename = "{$property->code}_" . basename($resolved);
                 $destinationPath = "property-photos/{$filename}";
+                $destinationFull = "{$destDir}/{$filename}";
 
-                Storage::disk('public')->put($destinationPath, file_get_contents($resolved));
+                if (!file_exists($destinationFull)) {
+                    @copy($resolved, $destinationFull);
+                }
 
                 PropertyPhoto::create([
                     'property_id' => $property->id,
@@ -1590,10 +1714,13 @@ SVG;
         $resolved = $specsFilePath;
         if (!$resolved) {
             $candidates = [
-                dirname($realPropertiesCsvPath) . '/property_specifications_template.csv',
+                dirname($realPropertiesCsvPath) . '/' . str_replace(['properties', 'property'], ['specifications', 'specification'], basename($realPropertiesCsvPath)),
+                dirname($realPropertiesCsvPath) . '/property_specifications_data.csv',
                 dirname($realPropertiesCsvPath) . '/property_specifications.csv',
-                base_path('database/seeders/data/property_specifications_template.csv'),
+                dirname($realPropertiesCsvPath) . '/property_specifications_template.csv',
+                base_path('database/seeders/data/property_specifications_data.csv'),
                 base_path('database/seeders/data/property_specifications.csv'),
+                base_path('database/seeders/data/property_specifications_template.csv'),
             ];
             foreach ($candidates as $cand) {
                 if (file_exists($cand) && is_readable($cand)) {
@@ -1884,13 +2011,16 @@ SVG;
         $resolved = $tenantsFilePath;
         if (!$resolved) {
             $candidates = [
-                dirname($realPropertiesCsvPath) . '/existing_tenants_template.csv',
-                dirname($realPropertiesCsvPath) . '/existing_tenants.csv',
-                dirname($realPropertiesCsvPath) . '/tenants_template.csv',
-                dirname($realPropertiesCsvPath) . '/tenants.csv',
                 dirname($realPropertiesCsvPath) . '/' . str_replace(['properties', 'property'], ['tenants', 'tenant'], basename($realPropertiesCsvPath)),
-                base_path('database/seeders/data/existing_tenants_template.csv'),
+                dirname($realPropertiesCsvPath) . '/existing_tenants_data.csv',
+                dirname($realPropertiesCsvPath) . '/existing_tenants.csv',
+                dirname($realPropertiesCsvPath) . '/existing_tenants_template.csv',
+                dirname($realPropertiesCsvPath) . '/tenants_data.csv',
+                dirname($realPropertiesCsvPath) . '/tenants.csv',
+                dirname($realPropertiesCsvPath) . '/tenants_template.csv',
+                base_path('database/seeders/data/existing_tenants_data.csv'),
                 base_path('database/seeders/data/existing_tenants.csv'),
+                base_path('database/seeders/data/existing_tenants_template.csv'),
             ];
             foreach ($candidates as $cand) {
                 if (file_exists($cand) && is_readable($cand)) {
@@ -1921,7 +2051,8 @@ SVG;
         $map = [];
         foreach ($rows as $row) {
             $code = strtoupper(trim($row['property_code'] ?? ''));
-            if (!empty($code)) {
+            $name = trim($row['name'] ?? '');
+            if (!empty($code) && !empty($name)) {
                 $map[$code][] = $row;
             }
         }

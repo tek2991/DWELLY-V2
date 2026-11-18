@@ -917,6 +917,26 @@ class MaintenanceQuotationForm
                         ->columns(12)
                         ->defaultItems(1)
                         ->disabled(fn ($record) => in_array($record?->status, ['approved', 'archived']))
+                        ->loadStateFromRelationshipsUsing(static function (Repeater $component): void {
+                            $component->clearCachedExistingRecords();
+                            $component->fillFromRelationship();
+
+                            if (empty($component->getState())) {
+                                $record = $component->getRecord();
+                                if (! in_array($record?->status, ['approved', 'archived'])) {
+                                    $uuid = $component->generateUuid();
+                                    $items = [$uuid ?? 0 => [
+                                        'quantity' => 1,
+                                        'vendor_cost' => 0.00,
+                                        'unit_price' => 0.00,
+                                        'vendor_quote_id' => null,
+                                        'vendor_party_id' => null,
+                                    ]];
+                                    $component->rawState($items);
+                                    $component->getChildSchema($uuid ?? 0)->fill();
+                                }
+                            }
+                        })
                         ->addable(false)
                         ->deletable(fn ($record) => ! in_array($record?->status, ['approved', 'archived']))
                         ->reorderable(fn ($record) => ! in_array($record?->status, ['approved', 'archived']))
@@ -1402,12 +1422,42 @@ class MaintenanceQuotationForm
     {
         return $schema->components([
             Section::make('✅ Client Approval & Decision (Mandatory for Work Authorization)')
-                ->description('Enter customer authorization remarks and upload approval proof files directly below, then confirm approval.')
+                ->description('Enter customer authorization remarks and upload approval proof files directly below, then confirm client approval.')
                 ->columnSpanFull()
                 ->headerActions([
                     static::getApproveQuotationAction(),
                 ])
                 ->schema([
+                    Placeholder::make('approval_status_banner')
+                        ->label('')
+                        ->hiddenLabel()
+                        ->columnSpanFull()
+                        ->visible(fn ($record) => $record?->status === 'approved')
+                        ->content(function ($record) {
+                            $approvedDate = $record->approved_at ? \Carbon\Carbon::parse($record->approved_at)->format('d-M-Y') : 'Recently';
+                            $channel = ucfirst($record->approval_channel ?? 'direct');
+                            $approver = ucfirst($record->approved_by_type ?? 'client');
+                            $workOrdersUrl = \App\Filament\Resources\Billing\MaintenanceQuotationResource::getUrl('work-orders', ['record' => $record]);
+
+                            return new HtmlString('
+                                <div style="background-color: #f0fdf4; border: 1px solid #86efac; border-left: 4px solid #22c55e; border-radius: 8px; padding: 14px 18px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                                    <div>
+                                        <div style="display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 14px; color: #15803d;">
+                                            <span>✅ Quotation Client Approved</span>
+                                        </div>
+                                        <div style="font-size: 12px; color: #166534; margin-top: 2px;">
+                                            Authorized by <strong>'.e($approver).'</strong> via <strong>'.e($channel).'</strong> on <strong>'.e($approvedDate).'</strong>. This quotation is locked and authorized for work order execution.
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <a href="'.e($workOrdersUrl).'" style="display: inline-flex; align-items: center; gap: 6px; background-color: #16a34a; color: #ffffff; font-weight: 600; font-size: 12px; padding: 6px 14px; border-radius: 6px; text-decoration: none;">
+                                            <span>Go to Work Orders (Tab 4) →</span>
+                                        </a>
+                                    </div>
+                                </div>
+                            ');
+                        }),
+
                     Grid::make(3)
                         ->schema([
                             Select::make('status')
@@ -1480,7 +1530,13 @@ class MaintenanceQuotationForm
                                     'verbal' => '📞 Phone Call / Verbal Confirmation',
                                 ])
                                 ->default('whatsapp')
-                                ->disabled(fn ($record) => in_array($record?->status, ['approved', 'archived']))
+                                ->live()
+                                ->afterStateUpdated(function ($state, $record) {
+                                    if ($record && ! in_array($record->status, ['approved', 'archived', 'settled'])) {
+                                        $record->update(['approval_channel' => $state]);
+                                    }
+                                })
+                                ->disabled(fn ($record) => in_array($record?->status, ['approved', 'archived', 'settled']))
                                 ->columnSpan(1),
                         ]),
 
@@ -1490,7 +1546,14 @@ class MaintenanceQuotationForm
                         ->required()
                         ->placeholder('e.g. Approved via WhatsApp message from Owner Mr. Ramesh on 19-Aug-2026. Authorized full scope.')
                         ->rows(3)
-                        ->disabled(fn ($record) => in_array($record?->status, ['approved', 'archived']))
+                        ->live(debounce: 1000)
+                        ->afterStateUpdated(function ($state, $record) {
+                            if ($record && ! in_array($record->status, ['approved', 'archived', 'settled'])) {
+                                $record->update(['approval_notes' => $state]);
+                            }
+                        })
+                        ->helperText('Auto-saved to quotation draft.')
+                        ->disabled(fn ($record) => in_array($record?->status, ['approved', 'archived', 'settled']))
                         ->columnSpanFull(),
 
                     // Last Line: Approval Date + Client Approval Proof
@@ -1500,7 +1563,13 @@ class MaintenanceQuotationForm
                                 ->label('Approval Date')
                                 ->required()
                                 ->default(now())
-                                ->disabled(fn ($record) => in_array($record?->status, ['approved', 'archived']))
+                                ->live()
+                                ->afterStateUpdated(function ($state, $record) {
+                                    if ($record && ! in_array($record->status, ['approved', 'archived', 'settled'])) {
+                                        $record->update(['approved_at' => $state]);
+                                    }
+                                })
+                                ->disabled(fn ($record) => in_array($record?->status, ['approved', 'archived', 'settled']))
                                 ->columnSpan(1),
 
                             SpatieMediaLibraryFileUpload::make('approval_proof_files')
@@ -1513,7 +1582,7 @@ class MaintenanceQuotationForm
                                 ->previewable()
                                 ->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
                                 ->maxSize(10240)
-                                ->disabled(fn ($record) => in_array($record?->status, ['approved', 'archived']))
+                                ->disabled(fn ($record) => in_array($record?->status, ['approved', 'archived', 'settled']))
                                 ->helperText('Upload screenshot of WhatsApp message, signed quotation scan, or client email approval.')
                                 ->columnSpan(2),
                         ]),
@@ -1523,6 +1592,12 @@ class MaintenanceQuotationForm
                         ->rows(2)
                         ->disabled()
                         ->visible(fn ($record) => $record?->status === 'rejected')
+                        ->columnSpanFull(),
+
+                    Actions::make([
+                        static::getApproveQuotationAction('approveQuoteInTabBottom'),
+                    ])
+                        ->alignment(\Filament\Support\Enums\Alignment::Center)
                         ->columnSpanFull(),
                 ]),
         ]);
@@ -1619,7 +1694,7 @@ class MaintenanceQuotationForm
                             $isDwelly = (bool) $record->maintenanceRequest?->payer_type?->isDwellyAbsorbed();
                             if ($isDwelly && $record->status !== 'approved') {
                                 $vendorQuotes = MaintenanceVendorQuote::whereIn('id', $selectedIds)->get();
-                                $awardedCost = (float) $vendorQuotes->sum('quoted_cost');
+                                $awardedCost = (float) $vendorQuotes->sum(fn ($vq) => $vq->getEffectiveWorkOrderCost($record));
 
                                 $record->update([
                                     'status' => 'approved',
@@ -1687,7 +1762,7 @@ class MaintenanceQuotationForm
                                 return null;
                             }
 
-                            $record->loadMissing(['vendorQuotes', 'items', 'maintenanceRequest.vendorQuotes']);
+                            $record->loadMissing(['vendorQuotes.vendor.vendorProfile.trade', 'vendorQuotes.bill', 'items', 'tax.components', 'maintenanceRequest.vendorQuotes.vendor.vendorProfile.trade', 'maintenanceRequest.vendorQuotes.bill']);
                             $ticket = $record->maintenanceRequest;
                             $ticketNumber = $ticket?->ticket_number ?? 'N/A';
                             $ticketUrl = $ticket ? MaintenanceRequestResource::getUrl('edit', ['record' => $ticket, 'relation' => 2]) : '#';
@@ -1695,20 +1770,97 @@ class MaintenanceQuotationForm
                             $isDirect = (bool) ($ticket?->is_direct_vendor ?? false);
                             $isDwelly = (bool) ($ticket?->payer_type?->isDwellyAbsorbed() ?? false);
 
-                            $allQuotes = $record->vendorQuotes->isNotEmpty() ? $record->vendorQuotes : ($ticket?->vendorQuotes ?? collect());
-                            $awardedQuotes = $allQuotes->filter(fn ($vq) => $vq->work_order_awarded || ! empty($vq->work_order_number) || ! empty($vq->bill_id));
-                            if ($awardedQuotes->isEmpty()) {
-                                $awardedQuotes = $allQuotes;
-                            }
-                            $vendorCost = (float) $awardedQuotes->sum('quoted_cost');
-                            if ($vendorCost === 0.0 && (float) ($record->subtotal_amount ?? 0) > 0) {
-                                $vendorCost = (float) $record->subtotal_amount;
-                            }
+                            $vendorCost = $record->getEffectiveVendorTotal();
 
                             $clientTotalAmount = $isDwelly ? 0.0 : (float) ($record->total_amount ?: 0);
+                            $taxAmount = $isDwelly ? 0.0 : (float) ($record->tax_amount ?? 0);
+                            $gstPct = (float) ($record->gst_percentage ?? 18.00);
+                            $taxBreakdown = $record->getTaxComponentsBreakdown();
+                            $taxBreakdownStr = '';
+                            if (! empty($taxBreakdown)) {
+                                $parts = [];
+                                foreach ($taxBreakdown as $tb) {
+                                    $parts[] = e($tb['name']).' ('.(float)$tb['rate'].'%): ₹'.number_format((float) $tb['amount'], 2);
+                                }
+                                $taxBreakdownStr = implode(' • ', $parts);
+                            }
+                            if (empty($taxBreakdownStr) && $taxAmount > 0) {
+                                $taxBreakdownStr = 'GST ('.(float)$gstPct.'%)';
+                            }
+
+                            $clientPreTax = $isDwelly ? 0.0 : (float) ($record->subtotal_amount ?: ($clientTotalAmount - $taxAmount));
                             $totalClient = number_format($clientTotalAmount, 2);
                             $subtotalVendor = number_format($vendorCost, 2);
-                            $margin = number_format((float) ($record->margin_amount ?? ($clientTotalAmount - $vendorCost)), 2);
+                            $taxFmt = number_format($taxAmount, 2);
+                            $preTaxFmt = number_format($clientPreTax, 2);
+                            $margin = number_format((float) ($record->margin_amount ?? ($clientPreTax - $vendorCost)), 2);
+
+                            // Build breakdown of contributing awarded vendor quotes
+                            $awardedIds = (array) ($record->awarded_vendor_quote_ids ?? []);
+                            $breakdownQuotes = collect();
+                            if (! empty($awardedIds)) {
+                                $breakdownQuotes = MaintenanceVendorQuote::whereIn('id', $awardedIds)->with(['vendor.vendorProfile.trade', 'bill'])->get();
+                            }
+                            if ($breakdownQuotes->isEmpty()) {
+                                $allQuotes = $record->vendorQuotes->isNotEmpty() ? $record->vendorQuotes : ($ticket?->vendorQuotes ?? collect());
+                                $breakdownQuotes = $allQuotes->filter(fn ($vq) => $vq->is_awarded || ! empty($vq->work_order_number) || ! empty($vq->bill_id));
+                            }
+
+                            $breakdownHtml = '';
+                            if ($breakdownQuotes->isNotEmpty()) {
+                                $rowsHtml = '';
+                                foreach ($breakdownQuotes as $vq) {
+                                    $vName = e($vq->vendor?->display_name ?: 'Contractor');
+                                    $vTrade = e($vq->trade_title ?: ($vq->vendor?->vendorProfile?->trade?->name ?? 'General Maintenance'));
+                                    $woNum = e($vq->work_order_number ?: 'Pending Work Order');
+                                    $effective = $vq->getEffectiveWorkOrderCost($record);
+                                    $hasAdj = abs($effective - (float) $vq->quoted_cost) >= 0.01;
+                                    $costFmt = number_format($effective, 2);
+                                    $origFmt = number_format((float) $vq->quoted_cost, 2);
+
+                                    $statusBadge = '<span style="font-size: 0.6875rem; font-weight: 700; color: #2563eb; background: rgba(37, 99, 235, 0.1); padding: 0.125rem 0.5rem; border-radius: 0.25rem;">Work Order Issued</span>';
+                                    if (! empty($vq->bill_id)) {
+                                        $billNum = $vq->bill?->bill_number ?? "#BILL-{$vq->bill_id}";
+                                        $statusBadge = '<span style="font-size: 0.6875rem; font-weight: 700; color: #047857; background: rgba(16, 185, 129, 0.12); padding: 0.125rem 0.5rem; border-radius: 0.25rem;">Billed ('.e($billNum).')</span>';
+                                    }
+
+                                    $priceHtml = '<strong style="color: #b91c1c;">₹'.$costFmt.'</strong>';
+                                    if ($hasAdj) {
+                                        $priceHtml .= ' <span style="font-size: 0.6875rem; color: #64748b; text-decoration: line-through;">₹'.$origFmt.'</span> <span style="font-size: 0.625rem; font-weight: 700; color: #047857; background: rgba(16, 185, 129, 0.1); padding: 1px 4px; border-radius: 2px;">Adjusted</span>';
+                                    }
+
+                                    $rowsHtml .= '
+                                        <tr style="border-bottom: 1px solid rgba(128, 128, 128, 0.12);">
+                                            <td style="padding: 0.5rem 0.625rem; font-weight: 600; color: #0f172a;">'.$vName.'</td>
+                                            <td style="padding: 0.5rem 0.625rem; color: #475569;">'.$vTrade.'</td>
+                                            <td style="padding: 0.5rem 0.625rem; color: #2563eb; font-weight: 600;">'.$woNum.'</td>
+                                            <td style="padding: 0.5rem 0.625rem; text-align: right;">'.$priceHtml.'</td>
+                                            <td style="padding: 0.5rem 0.625rem; text-align: center;">'.$statusBadge.'</td>
+                                        </tr>';
+                                }
+
+                                $breakdownHtml = '
+                                    <div style="background: rgba(128, 128, 128, 0.02); border: 1px solid rgba(128, 128, 128, 0.18); border-radius: 0.5rem; padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                                            <span style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b;">Awarded Contractor Payables Breakdown</span>
+                                            <span style="font-size: 0.75rem; font-weight: 700; color: #b91c1c;">Total Payable: ₹'.$subtotalVendor.'</span>
+                                        </div>
+                                        <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
+                                            <thead>
+                                                <tr style="border-bottom: 1px solid rgba(128, 128, 128, 0.2); background: rgba(128, 128, 128, 0.05); text-align: left; color: #475569; font-weight: 700;">
+                                                    <th style="padding: 0.375rem 0.625rem;">Contractor</th>
+                                                    <th style="padding: 0.375rem 0.625rem;">Trade / Scope</th>
+                                                    <th style="padding: 0.375rem 0.625rem;">Work Order</th>
+                                                    <th style="padding: 0.375rem 0.625rem; text-align: right;">Agreed Bill Amount</th>
+                                                    <th style="padding: 0.375rem 0.625rem; text-align: center;">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                '.$rowsHtml.'
+                                            </tbody>
+                                        </table>
+                                    </div>';
+                            }
 
                             return new HtmlString('
                                 <div style="display: flex; flex-direction: column; gap: 1.25rem; width: 100%;">
@@ -1753,11 +1905,11 @@ class MaintenanceQuotationForm
                                         </div>
                                     </div>
 
-                                    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px;">
+                                    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px;">
                                         <div style="background: rgba(128, 128, 128, 0.03); border: 1px solid rgba(128, 128, 128, 0.18); border-radius: 8px; padding: 14px;">
                                             <span style="color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">Receivable / Client Invoice</span><br>
                                             <strong style="font-size: 18px; color: '.($isDwelly ? '#059669' : '#1e40af').';">'.($isDwelly ? '₹0.00' : '₹'.$totalClient).'</strong><br>
-                                            <span style="font-size: 11px; color: '.($isDwelly ? '#047857' : '#3b82f6').';">'.($isDwelly ? '🏢 Absorbed by Dwelly' : 'Payer: '.e($payer)).'</span>
+                                            <span style="font-size: 11px; color: '.($isDwelly ? '#047857' : '#3b82f6').';">'.($isDwelly ? '🏢 Absorbed by Dwelly' : 'Gross Total (Incl. Tax) • '.e($payer)).'</span>
                                         </div>
                                         <div style="background: rgba(128, 128, 128, 0.03); border: 1px solid rgba(128, 128, 128, 0.18); border-radius: 8px; padding: 14px;">
                                             <span style="color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">Payable / Vendor Bills</span><br>
@@ -1765,11 +1917,36 @@ class MaintenanceQuotationForm
                                             <span style="font-size: 11px; color: #ef4444;">Route: '.($isDirect ? 'Direct Client Payment' : 'Dwelly Coordinated').'</span>
                                         </div>
                                         <div style="background: rgba(128, 128, 128, 0.03); border: 1px solid rgba(128, 128, 128, 0.18); border-radius: 8px; padding: 14px;">
+                                            <span style="color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">Tax Component (GST)</span><br>
+                                            <strong style="font-size: 18px; color: #4f46e5;">'.($isDwelly ? '₹0.00' : '₹'.$taxFmt).'</strong><br>
+                                            <span style="font-size: 11px; color: #6366f1;">'.($isDwelly ? 'No Client Tax' : ($taxBreakdownStr ?: 'GST ('.(float)$gstPct.'%)')).'</span>
+                                        </div>
+                                        <div style="background: rgba(128, 128, 128, 0.03); border: 1px solid rgba(128, 128, 128, 0.18); border-radius: 8px; padding: 14px;">
                                             <span style="color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">'.($isDwelly ? 'Internal Cost Impact' : 'Net Dwelly Margin').'</span><br>
                                             <strong style="font-size: 18px; color: '.($isDwelly ? '#be123c' : '#16a34a').';">'.($isDwelly ? '-₹'.$subtotalVendor : '₹'.$margin).'</strong><br>
-                                            <span style="font-size: 11px; color: '.($isDwelly ? '#9f1239' : '#10b981').';">'.($isDwelly ? 'Company Maintenance Budget' : 'Markup: '.$record->margin_percentage.'%').'</span>
+                                            <span style="font-size: 11px; color: '.($isDwelly ? '#9f1239' : '#10b981').';">'.($isDwelly ? 'Company Maintenance Budget' : 'Markup: '.(float)$record->margin_percentage.'% (Net Earnings)').'</span>
                                         </div>
                                     </div>
+
+                                    '.($isDwelly ? '' : '
+                                    <div style="padding: 0.75rem 1rem; border-radius: 0.5rem; background: rgba(128, 128, 128, 0.04); border: 1px solid rgba(128, 128, 128, 0.15); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; font-size: 0.75rem;">
+                                        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                            <span style="font-weight: 700; color: #1e3a8a;">Financial Equation:</span>
+                                            <span style="padding: 2px 8px; border-radius: 4px; background: rgba(37, 99, 235, 0.1); color: #1d4ed8; font-weight: 700;">Client Invoice: ₹'.$totalClient.'</span>
+                                            <span style="font-weight: 700; color: #64748b;">=</span>
+                                            <span style="padding: 2px 8px; border-radius: 4px; background: rgba(185, 28, 28, 0.1); color: #b91c1c; font-weight: 700;">Vendor Bills: ₹'.$subtotalVendor.'</span>
+                                            <span style="font-weight: 700; color: #64748b;">+</span>
+                                            <span style="padding: 2px 8px; border-radius: 4px; background: rgba(5, 150, 105, 0.1); color: #047857; font-weight: 700;">Dwelly Margin: ₹'.$margin.'</span>
+                                            <span style="font-weight: 700; color: #64748b;">+</span>
+                                            <span style="padding: 2px 8px; border-radius: 4px; background: rgba(79, 70, 229, 0.1); color: #4338ca; font-weight: 700;">GST ('.(float)$gstPct.'%): ₹'.$taxFmt.'</span>
+                                        </div>
+                                        <div style="font-size: 0.6875rem; color: #64748b; font-weight: 600;">
+                                            Base Cost: ₹'.$subtotalVendor.' &bull; Pre-tax Total: ₹'.$preTaxFmt.'
+                                        </div>
+                                    </div>
+                                    ').'
+
+                                    '.$breakdownHtml.'
                                 </div>
                             ');
                         }),
@@ -1792,15 +1969,9 @@ class MaintenanceQuotationForm
         $ticket = $record->maintenanceRequest;
         $isDwelly = (bool) ($ticket?->payer_type?->isDwellyAbsorbed() ?? false);
 
-        $allQuotes = $record->vendorQuotes->isNotEmpty() ? $record->vendorQuotes : ($ticket?->vendorQuotes ?? collect());
-        $awardedQuotes = $allQuotes->filter(fn ($vq) => $vq->work_order_awarded || ! empty($vq->work_order_number) || ! empty($vq->bill_id));
-        if ($awardedQuotes->isEmpty()) {
-            $awardedQuotes = $allQuotes;
-        }
-        $vendorCost = (float) $awardedQuotes->sum('quoted_cost');
-        if ($vendorCost === 0.0 && (float) ($record->subtotal_amount ?? 0) > 0) {
-            $vendorCost = (float) $record->subtotal_amount;
-        }
+        $vendorCost = $record->getEffectiveVendorTotal();
+        $taxAmount = (float) ($record->tax_amount ?? 0);
+        $taxFmt = number_format($taxAmount, 2);
 
         $totalAmount = number_format($isDwelly ? 0.0 : (float) ($record->total_amount ?? 0), 2);
         $subtotalVendor = number_format($vendorCost, 2);
@@ -1924,7 +2095,11 @@ class MaintenanceQuotationForm
             $html .= '<div><span style="color: rgba(128, 128, 128, 0.9);">Client Cost:</span> <strong style="font-size: 0.9375rem; font-weight: 800; color: #059669; margin-left: 0.25rem;">₹0.00</strong></div>';
             $html .= '<div><span style="color: rgba(128, 128, 128, 0.9);">Contractor Estimate:</span> <strong style="font-size: 0.9375rem; font-weight: 800; color: #be123c; margin-left: 0.25rem;">₹'.$subtotalVendor.'</strong></div>';
         } else {
-            $html .= '<div><span style="color: rgba(128, 128, 128, 0.9);">Client Quote:</span> <strong style="font-size: 0.9375rem; font-weight: 800; color: #2563eb; margin-left: 0.25rem;">₹'.$totalAmount.'</strong></div>';
+            $html .= '<div><span style="color: rgba(128, 128, 128, 0.9);">Client Invoice:</span> <strong style="font-size: 0.9375rem; font-weight: 800; color: #2563eb; margin-left: 0.25rem;">₹'.$totalAmount.'</strong></div>';
+            $html .= '<div><span style="color: rgba(128, 128, 128, 0.9);">Contractor:</span> <strong style="font-size: 0.9375rem; font-weight: 800; color: #b91c1c; margin-left: 0.25rem;">₹'.$subtotalVendor.'</strong></div>';
+            if ($taxAmount > 0) {
+                $html .= '<div><span style="color: rgba(128, 128, 128, 0.9);">GST:</span> <strong style="font-size: 0.9375rem; font-weight: 800; color: #4f46e5; margin-left: 0.25rem;">₹'.$taxFmt.'</strong></div>';
+            }
             $html .= '<div><span style="color: rgba(128, 128, 128, 0.9);">Margin:</span> <strong style="font-size: 0.9375rem; font-weight: 800; color: #16a34a; margin-left: 0.25rem;">₹'.$marginAmount.'</strong></div>';
         }
         $html .= '</div>';
@@ -2102,10 +2277,10 @@ class MaintenanceQuotationForm
     /**
      * Action to approve client quotation
      */
-    public static function getApproveQuotationAction(): Action
+    public static function getApproveQuotationAction(string $name = 'approveQuoteInTab'): Action
     {
-        return Action::make('approveQuoteInTab')
-            ->label('Confirm Quotation Approval')
+        return Action::make($name)
+            ->label('Save & Approve Quotation')
             ->icon('heroicon-o-check-circle')
             ->color('success')
             ->button()
@@ -2113,14 +2288,75 @@ class MaintenanceQuotationForm
             ->visible(fn ($record) => $record && in_array($record->status, ['draft', 'pending_approval']))
             ->requiresConfirmation()
             ->modalHeading('Approve Client Quotation')
-            ->modalDescription('Are you sure you want to approve this quotation? Please ensure you have entered the approval remarks and uploaded the proof files in this tab.')
-            ->modalSubmitActionLabel('Confirm Approval')
+            ->modalDescription(function ($record) {
+                $total = number_format((float) ($record->total_amount ?? 0), 2);
+                $ticketTitle = $record->maintenanceRequest?->title ?? 'Maintenance Ticket';
+
+                return new HtmlString(
+                    "<p style='margin-bottom: 6px; font-size: 13px;'>Are you sure you want to approve this quotation for <strong>" . e($ticketTitle) . "</strong>?</p>" .
+                    "<div style='font-size: 13px; color: #1e3a8a; background-color: rgba(37, 99, 235, 0.06); padding: 8px 12px; border-radius: 6px; margin-bottom: 8px;'>" .
+                    "<strong>Quotation Total: ₹{$total}</strong><br>" .
+                    "<span style='font-size: 11px; color: #64748b;'>All remarks and uploaded proof files will be auto-saved, and the quotation will be authorized for Work Order issuance in Tab 4.</span>" .
+                    "</div>"
+                );
+            })
+            ->modalSubmitActionLabel('Confirm Approval & Proceed to Work Orders')
             ->action(function ($record, $livewire) {
                 $notes = $livewire->data['approval_notes'] ?? $record->approval_notes;
                 $approvedAt = $livewire->data['approved_at'] ?? $record->approved_at;
                 $channel = $livewire->data['approval_channel'] ?? $record->approval_channel;
+                $proofFiles = $livewire->data['approval_proof_files'] ?? [];
 
-                $hasProofMedia = $record->hasMedia('approval_proof_files') || ! empty($livewire->data['approval_proof_files']);
+                // 1. Process component uploaded files if present
+                $proofComponent = method_exists($livewire, 'form') ? $livewire->form?->getComponent('approval_proof_files') : null;
+                if (! $proofComponent && method_exists($livewire, 'getSchema')) {
+                    $proofComponent = $livewire->getSchema('form')?->getComponent('approval_proof_files');
+                }
+                if ($proofComponent && method_exists($proofComponent, 'saveUploadedFiles')) {
+                    try {
+                        $proofComponent->saveUploadedFiles();
+                    } catch (\Throwable $e) {
+                        // Handled by custom fallback loop below
+                    }
+                }
+
+                $record->refresh();
+
+                // 2. Process and attach any uploaded proof files or temporary paths (safely skipping already processed files)
+                if (! empty($proofFiles)) {
+                    $flattenedFiles = \Illuminate\Support\Arr::flatten((array) $proofFiles);
+                    foreach ($flattenedFiles as $file) {
+                        try {
+                            if ($file instanceof \Livewire\Features\SupportFileUploads\TemporaryUploadedFile) {
+                                $path = $file->getRealPath();
+                                if ($path && file_exists($path) && (method_exists($file, 'exists') ? $file->exists() : true)) {
+                                    $record->addMedia($path)->toMediaCollection('approval_proof_files');
+                                }
+                            } elseif (is_string($file) && filled($file)) {
+                                if (\Illuminate\Support\Facades\Storage::disk('public')->exists($file)) {
+                                    $record->addMediaFromDisk($file, 'public')->toMediaCollection('approval_proof_files');
+                                } elseif (\Illuminate\Support\Facades\Storage::disk('local')->exists($file)) {
+                                    $record->addMediaFromDisk($file, 'local')->toMediaCollection('approval_proof_files');
+                                } elseif (\Illuminate\Support\Facades\Storage::disk('local')->exists('livewire-tmp/' . $file)) {
+                                    $record->addMediaFromDisk('livewire-tmp/' . $file, 'local')->toMediaCollection('approval_proof_files');
+                                } elseif (file_exists($file)) {
+                                    $record->addMedia($file)->toMediaCollection('approval_proof_files');
+                                }
+                            }
+                        } catch (\Throwable $e) {
+                            // File already moved or imported by Spatie component
+                        }
+                    }
+                }
+
+                $record->refresh();
+
+                // Re-fetch in case refreshed record has values
+                $notes = $record->approval_notes ?: ($livewire->data['approval_notes'] ?? $notes);
+                $approvedAt = $record->approved_at ?: ($livewire->data['approved_at'] ?? $approvedAt);
+                $channel = $record->approval_channel ?: ($livewire->data['approval_channel'] ?? $channel);
+
+                $hasProofMedia = $record->hasMedia('approval_proof_files');
 
                 if (blank($notes) || blank($approvedAt) || blank($channel) || ! $hasProofMedia) {
                     Notification::make()
@@ -2131,24 +2367,6 @@ class MaintenanceQuotationForm
                         ->send();
 
                     return;
-                }
-
-                if (! empty($livewire->data['approval_proof_files'])) {
-                    foreach ((array) $livewire->data['approval_proof_files'] as $file) {
-                        if (is_string($file)) {
-                            if (\Illuminate\Support\Facades\Storage::disk('public')->exists($file)) {
-                                $record->addMediaFromDisk($file, 'public')->toMediaCollection('approval_proof_files');
-                            } elseif (\Illuminate\Support\Facades\Storage::disk('local')->exists($file)) {
-                                $record->addMediaFromDisk($file, 'local')->toMediaCollection('approval_proof_files');
-                            } elseif (\Illuminate\Support\Facades\Storage::disk('local')->exists('livewire-tmp/' . $file)) {
-                                $record->addMediaFromDisk('livewire-tmp/' . $file, 'local')->toMediaCollection('approval_proof_files');
-                            } elseif (file_exists($file)) {
-                                $record->addMedia($file)->toMediaCollection('approval_proof_files');
-                            }
-                        } elseif ($file instanceof \Livewire\Features\SupportFileUploads\TemporaryUploadedFile) {
-                            $record->addMedia($file->getRealPath())->toMediaCollection('approval_proof_files');
-                        }
-                    }
                 }
 
                 $billingService = app(MaintenanceBillingService::class);

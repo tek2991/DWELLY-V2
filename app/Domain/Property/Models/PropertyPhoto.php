@@ -4,6 +4,7 @@ namespace App\Domain\Property\Models;
 
 use App\Domain\Shared\Models\DomainModel;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Storage;
 use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
 
@@ -42,5 +43,14 @@ class PropertyPhoto extends DomainModel
     public function property(): BelongsTo
     {
         return $this->belongsTo(Property::class);
+    }
+
+    public function getUrlAttribute(): ?string
+    {
+        if (blank($this->file_path)) {
+            return null;
+        }
+
+        return Storage::disk('public')->url($this->file_path);
     }
 }

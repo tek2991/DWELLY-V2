@@ -63,6 +63,16 @@ test('maintenance quotation pdf service generates valid pdf and increments versi
     expect($quote->fresh()->tax_amount)->toEqual(270.00);
     expect($quote->fresh()->total_amount)->toEqual(1770.00);
 
+    expect($media2->getCustomProperty('total_amount'))->toEqual(1770.00);
+
+    // Verify quotation document history view displays Total Amount column instead of Size
+    $historyHtml = view('maintenance.quotation-document-history', [
+        'record' => $quote->fresh(),
+    ])->render();
+
+    expect($historyHtml)->toContain('Total Amount');
+    expect($historyHtml)->toContain('₹1,770.00');
+
     // Verify rendered PDF view has tax components and rupee formatting
     $viewHtml = view('pdf.maintenance_quotation', [
         'quote' => $quote->fresh(),

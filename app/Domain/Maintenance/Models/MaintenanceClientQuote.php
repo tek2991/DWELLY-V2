@@ -182,6 +182,54 @@ class MaintenanceClientQuote extends DomainModel implements HasMedia
         return $this->status === 'rejected';
     }
 
+    /**
+     * Get the effective agreed total vendor cost for this quotation.
+     * Takes into account awarded quotes' agreed costs (final_cost),
+     * quotation line item vendor costs, or fallback to quoted_cost.
+     */
+    public function getEffectiveVendorTotal(): float
+    {
+        // 1. If awarded vendor quotes exist, sum their effective work order costs
+        $awardedIds = (array) ($this->awarded_vendor_quote_ids ?? []);
+        if (!empty($awardedIds)) {
+            $awardedQuotes = MaintenanceVendorQuote::whereIn('id', $awardedIds)->get();
+            if ($awardedQuotes->isNotEmpty()) {
+                return (float) $awardedQuotes->sum(fn ($vq) => $vq->getEffectiveWorkOrderCost($this));
+            }
+        }
+
+        // 2. Check if any vendor quotes are marked as awarded or have work orders / bills
+        $awardedQuotes = $this->vendorQuotes()
+            ->where(function ($q) {
+                $q->where('is_awarded', true)
+                  ->orWhereNotNull('work_order_number')
+                  ->orWhereNotNull('bill_id');
+            })->get();
+
+        if ($awardedQuotes->isNotEmpty()) {
+            return (float) $awardedQuotes->sum(fn ($vq) => $vq->getEffectiveWorkOrderCost($this));
+        }
+
+        // 3. If line items exist with vendor costs, sum quantity * vendor_cost
+        if ($this->items()->exists()) {
+            $itemsVendorTotal = (float) $this->items()->get()->sum(function ($it) {
+                return (float) ($it->quantity ?? 1) * (float) ($it->vendor_cost ?? 0);
+            });
+            if ($itemsVendorTotal > 0) {
+                return $itemsVendorTotal;
+            }
+        }
+
+        // 4. Fallback: If subtotal_amount was set (e.g. for Dwelly absorbed quotes)
+        $payer = $this->maintenanceRequest?->payer_type?->value ?? (string) $this->maintenanceRequest?->payer_type;
+        $isDwelly = in_array($payer, ['dwelly', 'dwelly_absorbs', 'dwelly_absorbed']);
+        if ($isDwelly && (float) ($this->subtotal_amount ?? 0) > 0) {
+            return (float) $this->subtotal_amount;
+        }
+
+        return 0.0;
+    }
+
     public function recalculateTotals(): self
     {
         $subtotal = 0.0;
@@ -200,7 +248,7 @@ class MaintenanceClientQuote extends DomainModel implements HasMedia
         if ($vendorTotal === 0.0 && $this->vendorQuotes()->exists()) {
             $awardedQuotes = $this->vendorQuotes()
                 ->where(function ($q) {
-                    $q->where('work_order_awarded', true)
+                    $q->where('is_awarded', true)
                       ->orWhereNotNull('work_order_number')
                       ->orWhereNotNull('bill_id');
                 })->get();
@@ -209,7 +257,7 @@ class MaintenanceClientQuote extends DomainModel implements HasMedia
                 $awardedQuotes = $this->vendorQuotes()->get();
             }
 
-            $vendorTotal = (float) $awardedQuotes->sum('quoted_cost');
+            $vendorTotal = (float) $awardedQuotes->sum(fn ($vq) => $vq->getEffectiveWorkOrderCost($this));
         }
 
         $payer = $this->maintenanceRequest?->payer_type?->value ?? (string) $this->maintenanceRequest?->payer_type;

@@ -36,19 +36,30 @@
 
     // Vendor Quotes & Bills
     $vendorQuotes = $ticket->vendorQuotes;
+    $clientQuote = $ticket->currentClientQuote ?? $ticket->clientQuotes()->latest()->first();
     $awardedOrBilledQuotes = $vendorQuotes->filter(fn ($q) => (bool) $q->is_awarded || ! empty($q->bill_id) || ! empty($q->work_order_number));
+    if ($awardedOrBilledQuotes->isEmpty() && $clientQuote) {
+        $awardedIds = (array) ($clientQuote->awarded_vendor_quote_ids ?? []);
+        if (! empty($awardedIds)) {
+            $awardedOrBilledQuotes = $vendorQuotes->filter(fn ($q) => in_array($q->id, $awardedIds));
+        }
+    }
     if ($awardedOrBilledQuotes->isEmpty() && $vendorQuotes->isNotEmpty()) {
         $awardedOrBilledQuotes = $vendorQuotes;
     }
-    $totalVendorCost = (float) $awardedOrBilledQuotes->sum('quoted_cost');
+    $totalVendorCost = $clientQuote
+        ? $clientQuote->getEffectiveVendorTotal()
+        : (float) $awardedOrBilledQuotes->sum(fn ($q) => $q->getEffectiveWorkOrderCost());
     $billedQuotes = $awardedOrBilledQuotes->filter(fn ($q) => ! empty($q->bill_id));
     $billedCount = $billedQuotes->count();
     $totalQuotesCount = $awardedOrBilledQuotes->count();
     $allBilled = $totalQuotesCount > 0 && $billedCount === $totalQuotesCount;
 
     // Financial Net / Margin
-    $marginAmount = $clientInvoiceTotal - $totalVendorCost;
-    $marginPct = $clientInvoiceTotal > 0 ? round(($marginAmount / $clientInvoiceTotal) * 100, 1) : 0;
+    $taxAmount = (float) ($clientQuote?->tax_amount ?? 0);
+    $baseSubtotal = (float) ($clientQuote?->subtotal_amount ?: ($clientInvoiceTotal - $taxAmount));
+    $marginAmount = (float) ($clientQuote?->margin_amount ?? ($clientInvoiceTotal - $totalVendorCost - $taxAmount));
+    $marginPct = $baseSubtotal > 0 ? round(($marginAmount / $baseSubtotal) * 100, 1) : 0;
 @endphp
 
 <div style="background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(8px); border: 1px solid rgba(128, 128, 128, 0.18); border-radius: 0.875rem; padding: 1.25rem 1.5rem; display: flex; flex-direction: column; gap: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
@@ -183,7 +194,9 @@
                                 @php
                                     $vName = $vq->vendor?->display_name ?: 'Contractor';
                                     $vTrade = $vq->vendor?->vendorProfile?->trade?->name ?? 'General';
-                                    $vCost = number_format((float) $vq->quoted_cost, 2);
+                                    $effectiveCost = $vq->getEffectiveWorkOrderCost($clientQuote);
+                                    $hasAdj = abs($effectiveCost - (float) $vq->quoted_cost) >= 0.01;
+                                    $vCost = number_format($effectiveCost, 2);
                                     $hasBill = ! empty($vq->bill_id);
                                     $billNum = $vq->bill?->bill_number ?? ($hasBill ? "#BILL-{$vq->bill_id}" : null);
                                     $billObj = $vq->bill;
@@ -194,6 +207,9 @@
                                     </div>
                                     <div style="display: flex; align-items: center; gap: 0.375rem; flex-shrink: 0;">
                                         <span style="font-weight: 600;">₹{{ $vCost }}</span>
+                                        @if($hasAdj)
+                                            <span style="font-size: 0.5625rem; font-weight: 700; color: #047857; background: rgba(16, 185, 129, 0.1); padding: 1px 3px; border-radius: 2px;" title="Adjusted from ₹{{ number_format((float)$vq->quoted_cost, 2) }}">Adj</span>
+                                        @endif
                                         @if($hasBill && $billObj)
                                             <a href="{{ route('billing.bill.pdf', $billObj) }}"
                                                target="_blank"
@@ -260,13 +276,19 @@
 
                 <div style="font-size: 0.75rem; color: #4b5563; margin-top: 0.375rem; line-height: 1.4;">
                     <div style="display: flex; justify-content: space-between; font-size: 0.6875rem; margin-bottom: 0.125rem;">
-                        <span style="color: #6b7280;">Total Client Invoiced:</span>
-                        <strong>₹{{ number_format($clientInvoiceTotal, 2) }}</strong>
+                        <span style="color: #6b7280;">Pre-tax Client Base:</span>
+                        <strong>₹{{ number_format($baseSubtotal, 2) }}</strong>
                     </div>
-                    <div style="display: flex; justify-content: space-between; font-size: 0.6875rem;">
-                        <span style="color: #6b7280;">Total Vendor Payable:</span>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.6875rem; margin-bottom: 0.125rem;">
+                        <span style="color: #6b7280;">Vendor Payables:</span>
                         <strong style="color: #b91c1c;">-₹{{ number_format($totalVendorCost, 2) }}</strong>
                     </div>
+                    @if($taxAmount > 0)
+                    <div style="display: flex; justify-content: space-between; font-size: 0.6875rem;">
+                        <span style="color: #6b7280;">Tax / GST ({{ (float)($clientQuote?->gst_percentage ?? 18) }}%):</span>
+                        <strong style="color: #4f46e5;">₹{{ number_format($taxAmount, 2) }}</strong>
+                    </div>
+                    @endif
                 </div>
             </div>
         </div>

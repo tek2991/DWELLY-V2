@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Properties\Tables;
 
 use App\Domain\Property\Enums\PropertyStatus;
 use App\Domain\Property\Models\Property;
+use App\Filament\Resources\Operations\MaintenanceRequestResource;
 use App\Filament\Resources\Properties\Pages\PropertyFinancials;
 use App\Filament\Resources\Properties\PropertyResource;
 use Carbon\CarbonInterface;
@@ -11,6 +12,7 @@ use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -23,7 +25,7 @@ class PropertiesTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query) => $query->with(['openMaintenanceRequests']))
+            ->modifyQueryUsing(fn (Builder $query) => $query->with(['openMaintenanceRequests.assignedInspector', 'openMaintenanceRequests.vendor']))
             ->columns([
                 TextColumn::make('code')
                     ->label('Code')
@@ -134,8 +136,38 @@ class PropertiesTable
                             return null;
                         }
 
-                        return $openTickets->map(fn ($t) => ($t->ticket_number ? "#{$t->ticket_number}: " : '') . "{$t->title} (Created {$t->created_at->diffForHumans()})")->implode("\n");
-                    }),
+                        if ($openTickets->count() === 1) {
+                            $ticket = $openTickets->first();
+                            $prefix = $ticket->ticket_number ? "#{$ticket->ticket_number}: " : '';
+
+                            return "{$prefix}{$ticket->title}\n(Click to open ticket in new tab)";
+                        }
+
+                        return $openTickets->map(fn ($t) => ($t->ticket_number ? "#{$t->ticket_number}: " : '') . "{$t->title} (Created {$t->created_at->diffForHumans()})")->implode("\n") . "\n\n(Click to view all open tickets)";
+                    })
+                    ->url(function (Property $record): ?string {
+                        $openTickets = $record->openMaintenanceRequests;
+                        if ($openTickets->count() === 1) {
+                            return MaintenanceRequestResource::getUrl('edit', ['record' => $openTickets->first()]);
+                        }
+
+                        return null;
+                    })
+                    ->openUrlInNewTab()
+                    ->disabledClick(fn (Property $record): bool => $record->openMaintenanceRequests->isEmpty())
+                    ->action(
+                        Action::make('openMaintenanceTickets')
+                            ->modalHeading(fn (Property $record) => "Maintenance Requests — {$record->building_name}")
+                            ->modalDescription(fn (Property $record) => "Active maintenance tickets linked to {$record->code}")
+                            ->modalWidth(Width::ThreeExtraLarge)
+                            ->modalContent(fn (Property $record) => view('filament.tables.modals.property-maintenance-tickets', [
+                                'property' => $record,
+                                'tickets' => $record->openMaintenanceRequests,
+                            ]))
+                            ->modalSubmitAction(false)
+                            ->modalCancelActionLabel('Close')
+                            ->visible(fn (Property $record): bool => $record->openMaintenanceRequests->count() > 1)
+                    ),
 
                 ToggleColumn::make('is_listed')
                     ->label('Listed')
@@ -158,6 +190,25 @@ class PropertiesTable
                     ]),
             ])
             ->recordActions([
+                Action::make('maintenanceTickets')
+                    ->label('Tickets')
+                    ->icon('heroicon-o-wrench-screwdriver')
+                    ->color('danger')
+                    ->tooltip(fn (Property $record): string => $record->openMaintenanceRequests->count() === 1 ? 'Open Maintenance Ticket' : 'View Maintenance Tickets')
+                    ->visible(fn (Property $record): bool => $record->openMaintenanceRequests->isNotEmpty())
+                    ->url(fn (Property $record): ?string => $record->openMaintenanceRequests->count() === 1 ? MaintenanceRequestResource::getUrl('edit', ['record' => $record->openMaintenanceRequests->first()]) : null)
+                    ->openUrlInNewTab()
+                    ->modalHeading(fn (Property $record) => "Maintenance Requests — {$record->building_name}")
+                    ->modalDescription(fn (Property $record) => "Active maintenance tickets linked to {$record->code}")
+                    ->modalWidth(Width::ThreeExtraLarge)
+                    ->modalContent(fn (Property $record) => view('filament.tables.modals.property-maintenance-tickets', [
+                        'property' => $record,
+                        'tickets' => $record->openMaintenanceRequests,
+                    ]))
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel('Close')
+                    ->modal(fn (Property $record): bool => $record->openMaintenanceRequests->count() > 1),
+
                 Action::make('onboarding')
                     ->label('Onboarding')
                     ->icon('heroicon-o-clipboard-document-check')

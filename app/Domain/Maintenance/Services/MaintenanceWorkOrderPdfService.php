@@ -38,10 +38,31 @@ class MaintenanceWorkOrderPdfService
             ]);
         }
 
+        $linkedItems = $clientQuote ? $clientQuote->items()
+            ->where(function ($q) use ($vendorQuote) {
+                $q->where('vendor_quote_id', $vendorQuote->id)
+                  ->orWhere(function ($sq) use ($vendorQuote) {
+                      $sq->whereNull('vendor_quote_id')
+                         ->where('vendor_party_id', $vendorQuote->vendor_party_id);
+                  });
+            })
+            ->with(['defectItem', 'defectItem.itemable'])
+            ->get() : collect();
+
+        // If final_cost was not yet set, update it from linked items if present
+        if ($vendorQuote->final_cost === null && $linkedItems->isNotEmpty()) {
+            $agreedCost = (float) $linkedItems->sum(function ($item) {
+                return (float) ($item->quantity ?? 1) * (float) ($item->vendor_cost ?? 0);
+            });
+            $vendorQuote->final_cost = $agreedCost;
+            $vendorQuote->saveQuietly();
+        }
+
         $pdf = Pdf::loadView('pdf.maintenance_work_order', [
             'vendorQuote' => $vendorQuote,
             'ticket' => $ticket,
             'clientQuote' => $clientQuote,
+            'linkedItems' => $linkedItems,
         ]);
 
         $tempFileName = ($vendorQuote->work_order_number ?: ('WO-' . substr($vendorQuote->id, -6))) . '.pdf';

@@ -1215,4 +1215,97 @@ class TenancyAgreementOnboardingTest extends TestCase
         $this->assertEquals('tenancy-secondary-kyc/priya_aadhaar.pdf', $agreement->secondary_tenants[0]['aadhaar_file']);
         $this->assertEquals('tenancy-secondary-kyc/marriage_certificate.pdf', $agreement->secondary_tenants[0]['other_kyc_files'][0]);
     }
+
+    public function test_primary_tenant_profile_card_in_tab_3_and_saving()
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        $property = Property::create([
+            'building_name' => 'Profile Test Property',
+            'address_line_1' => 'Zoo Road, Guwahati',
+            'status' => 'vacant',
+        ]);
+
+        $tenantParty = Party::create([
+            'display_name' => 'Original Tenant Name',
+            'phone' => '9876500001',
+            'email' => 'original@example.com',
+            'party_type' => 'individual',
+        ]);
+
+        $tenantParty->individual()->create([
+            'name' => 'Original Tenant Name',
+            'parent_name' => 'S/o Rajesh Kumar',
+            'aadhaar_number' => '1111-2222-3333',
+            'pan_number' => 'ABCDE1111A',
+        ]);
+
+        $tenantParty->addresses()->create([
+            'address_line_1' => 'Old Address Line 1',
+            'is_primary' => true,
+        ]);
+
+        $agreement = TenancyAgreement::create([
+            'property_id' => $property->id,
+            'code' => 'TNC-PROF-01',
+            'status' => 'draft',
+            'start_date' => '2026-11-01',
+            'end_date' => '2027-09-30',
+            'rent_amount' => 15000,
+            'security_deposit' => 30000,
+        ]);
+
+        $agreement->roles()->create([
+            'party_id' => $tenantParty->id,
+            'role_type' => 'Primary Tenant',
+            'is_primary' => true,
+        ]);
+
+        // Test ManageSecondaryTenants (Tab 3: Tenant KYC & Occupants)
+        $testable = Livewire::test(ManageSecondaryTenants::class, ['record' => $agreement->id])
+            ->assertSuccessful();
+
+        $form = $testable->instance()->form;
+
+        // Verify components exist in Tab 3
+        $this->assertNotNull($form->getComponent('new_tenant.display_name'));
+        $this->assertNotNull($form->getComponent('new_tenant.phone'));
+        $this->assertNotNull($form->getComponent('new_tenant.email'));
+        $this->assertNotNull($form->getComponent('new_tenant.parent_name'));
+        $this->assertNotNull($form->getComponent('new_tenant.address_line_1'));
+
+        // Verify initial hydration
+        $testable->assertSchemaStateSet([
+            'new_tenant.display_name' => 'Original Tenant Name',
+            'new_tenant.phone' => '9876500001',
+            'new_tenant.email' => 'original@example.com',
+            'new_tenant.parent_name' => 'S/o Rajesh Kumar',
+            'new_tenant.address_line_1' => 'Old Address Line 1',
+        ]);
+
+        // Update fields and save
+        $testable->fillForm([
+            'new_tenant.display_name' => 'Updated Tenant Name',
+            'new_tenant.phone' => '9876599999',
+            'new_tenant.email' => 'updated@example.com',
+            'new_tenant.parent_name' => 'S/o Late Suresh Kumar',
+            'new_tenant.address_line_1' => 'New Permanent Flat 101, Guwahati',
+        ]);
+
+        $testable->call('save')->assertHasNoErrors();
+
+        // Verify underlying database models were updated
+        $tenantParty->refresh();
+        $this->assertEquals('Updated Tenant Name', $tenantParty->display_name);
+        $this->assertEquals('9876599999', $tenantParty->phone);
+        $this->assertEquals('updated@example.com', $tenantParty->email);
+
+        $individual = $tenantParty->individual;
+        $this->assertEquals('Updated Tenant Name', $individual->name);
+        $this->assertEquals('S/o Late Suresh Kumar', $individual->parent_name);
+
+        $primaryAddress = $tenantParty->addresses()->where('is_primary', true)->first();
+        $this->assertEquals('New Permanent Flat 101, Guwahati', $primaryAddress->address_line_1);
+    }
 }

@@ -5,6 +5,7 @@ namespace App\Domain\Geographic\Models;
 use App\Domain\Shared\Models\DomainModel;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 
 class Locality extends DomainModel
 {
@@ -21,6 +22,21 @@ class Locality extends DomainModel
     protected $casts = [
         'is_active' => 'boolean',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (Locality $locality) {
+            if (empty($locality->slug)) {
+                $baseSlug = Str::slug($locality->name);
+                $slug = $baseSlug;
+                $counter = 1;
+                while (static::where('slug', $slug)->exists()) {
+                    $slug = $baseSlug . '-' . (++$counter);
+                }
+                $locality->slug = $slug;
+            }
+        });
+    }
 
     public function city(): BelongsTo
     {

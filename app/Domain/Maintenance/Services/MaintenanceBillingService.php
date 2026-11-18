@@ -288,17 +288,7 @@ class MaintenanceBillingService
         }
 
         $bills = [];
-        $quote = $request->currentClientQuote ?? $request->clientQuotes()->latest()->first();
-        $awardedIds = (array) ($quote?->awarded_vendor_quote_ids ?? []);
-
-        $quotesQuery = $request->vendorQuotes()->whereNull('bill_id');
-        if (!empty($awardedIds)) {
-            $quotes = $quotesQuery->whereIn('id', $awardedIds)->get();
-        } elseif ($request->vendorQuotes()->where('is_awarded', true)->exists()) {
-            $quotes = $quotesQuery->where('is_awarded', true)->get();
-        } else {
-            $quotes = $quotesQuery->get();
-        }
+        $quotes = $request->getUnbilledPayableQuotes();
 
         foreach ($quotes as $q) {
             $bills[] = $this->createVendorBillForQuote($q, $options);
@@ -426,7 +416,7 @@ class MaintenanceBillingService
 
             if ($isDwelly) {
                 $vendorQuotes = MaintenanceVendorQuote::whereIn('id', $selectedIds)->get();
-                $awardedVendorTotal = (float) $vendorQuotes->sum('quoted_cost');
+                $awardedVendorTotal = (float) $vendorQuotes->sum(fn ($vq) => $vq->getEffectiveWorkOrderCost($quote));
 
                 $updateData['subtotal_amount'] = $awardedVendorTotal;
                 $updateData['total_amount'] = $awardedVendorTotal;
@@ -456,6 +446,26 @@ class MaintenanceBillingService
                 if (blank($vq->work_order_number)) {
                     $seq = str_pad((string) ($idx + 1), 2, '0', STR_PAD_LEFT);
                     $vq->work_order_number = "WO-{$year}-{$quoteSuffix}-{$seq}";
+                }
+
+                // Derive agreed contractor cost from approved quotation line items
+                $linkedItems = $quote->items()
+                    ->where(function ($q) use ($vq) {
+                        $q->where('vendor_quote_id', $vq->id)
+                          ->orWhere(function ($sq) use ($vq) {
+                              $sq->whereNull('vendor_quote_id')
+                                 ->where('vendor_party_id', $vq->vendor_party_id);
+                          });
+                    })
+                    ->get();
+
+                if ($linkedItems->isNotEmpty()) {
+                    $agreedCost = (float) $linkedItems->sum(function ($item) {
+                        return (float) ($item->quantity ?? 1) * (float) ($item->vendor_cost ?? 0);
+                    });
+                    $vq->final_cost = $agreedCost;
+                } else {
+                    $vq->final_cost = (float) ($vq->final_cost ?? $vq->quoted_cost);
                 }
 
                 $vq->work_order_issued_at = $vq->work_order_issued_at ?: now();

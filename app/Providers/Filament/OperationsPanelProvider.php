@@ -81,6 +81,28 @@ class OperationsPanelProvider extends PanelProvider
                 fn (): string => \Illuminate\Support\Facades\Blade::render('
                     @vite([\'resources/js/annotation-editor.js\'])
                     <script src="' . asset('js/fslightbox.js') . '"></script>
+                    <script>
+                        document.addEventListener("DOMContentLoaded", () => {
+                            if (typeof Livewire !== "undefined") {
+                                Livewire.hook("commit", ({ succeed }) => {
+                                    succeed(() => {
+                                        setTimeout(() => {
+                                            if (typeof refreshFsLightbox === "function") {
+                                                refreshFsLightbox();
+                                            }
+                                        }, 50);
+                                    });
+                                });
+                            }
+                        });
+                        document.addEventListener("livewire:navigated", () => {
+                            setTimeout(() => {
+                                if (typeof refreshFsLightbox === "function") {
+                                    refreshFsLightbox();
+                                }
+                            }, 50);
+                        });
+                    </script>
                 ')
             );
     }

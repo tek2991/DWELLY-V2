@@ -106,7 +106,7 @@ class VerificationAuditRelationManager extends RelationManager
                     ->label('Open Audit')
                     ->icon('heroicon-o-arrow-top-right-on-square')
                     ->color('primary')
-                    ->url(fn (Audit $record): string => AuditResource::getUrl('edit', ['record' => $record])),
+                    ->url(fn(Audit $record): string => AuditResource::getUrl('edit', ['record' => $record])),
             ])
             ->emptyStateHeading('No Quality Verification Audit Initiated')
             ->emptyStateDescription('On-site quality audits are optional. Upload paying party acceptance proof to mark work completed directly, or trigger a quality audit if inspection is required.')
@@ -122,11 +122,11 @@ class VerificationAuditRelationManager extends RelationManager
             ->label('Maintenance PDF')
             ->icon('heroicon-o-document-text')
             ->color('gray')
-            ->modalHeading(fn (RelationManager $livewire) => 'Maintenance Dossier: Ticket #'.$livewire->getOwnerRecord()?->ticket_number)
+            ->modalHeading(fn(RelationManager $livewire) => 'Maintenance Dossier: Ticket #' . $livewire->getOwnerRecord()?->ticket_number)
             ->modalWidth('7xl')
             ->modalSubmitAction(false)
             ->modalCancelActionLabel('Close')
-            ->modalContent(fn (RelationManager $livewire) => view('filament.forms.components.maintenance-report-modal', [
+            ->modalContent(fn(RelationManager $livewire) => view('filament.forms.components.maintenance-report-modal', [
                 'ticket' => $livewire->getOwnerRecord(),
             ]));
     }
@@ -146,7 +146,7 @@ class VerificationAuditRelationManager extends RelationManager
             ->color('success')
             ->button()
             ->size('sm')
-            ->record(fn (RelationManager $livewire) => $livewire->getOwnerRecord())
+            ->record(fn(RelationManager $livewire) => $livewire->getOwnerRecord())
             ->visible(function (RelationManager $livewire) {
                 $ticket = $livewire->getOwnerRecord();
                 if (! $ticket) {
@@ -169,13 +169,15 @@ class VerificationAuditRelationManager extends RelationManager
                     'audit_approved',
                 ]);
             })
-            ->modalHeading(fn (RelationManager $livewire) => $livewire->getOwnerRecord()?->payer_type?->isDwellyAbsorbed()
-                ? 'Internal Maintenance Sign-Off & Work Completion'
-                : 'Paying Party Acceptance & Work Completion Sign-Off'
+            ->modalHeading(
+                fn(RelationManager $livewire) => $livewire->getOwnerRecord()?->payer_type?->isDwellyAbsorbed()
+                    ? 'Internal Maintenance Sign-Off & Work Completion'
+                    : 'Paying Party Acceptance & Work Completion Sign-Off'
             )
-            ->modalDescription(fn (RelationManager $livewire) => $livewire->getOwnerRecord()?->payer_type?->isDwellyAbsorbed()
-                ? 'Confirm operational completion of repair work. Cost is absorbed 100% by Dwelly.'
-                : 'Upload documentary proof (signed handover sheet, client email, or WhatsApp confirmation) showing the paying party has accepted the completed repair.'
+            ->modalDescription(
+                fn(RelationManager $livewire) => $livewire->getOwnerRecord()?->payer_type?->isDwellyAbsorbed()
+                    ? 'Confirm operational completion of repair work. Cost is absorbed 100% by Dwelly.'
+                    : 'Upload documentary proof (signed handover sheet, client email, or WhatsApp confirmation) showing the paying party has accepted the completed repair.'
             )
             ->modalSubmitActionLabel('Confirm & Mark Completed')
             ->modalWidth('2xl')
@@ -262,7 +264,7 @@ class VerificationAuditRelationManager extends RelationManager
                                     </span>
                                 </div>
                                 <div>
-                                    This maintenance ticket is billed to the <strong>{$payerRole}</strong> (<span style='color: #0f172a; font-weight: 700;'>".e($payerName).'</span>). Please confirm client inspection and upload mandatory documentary proof (signed handover sheet, WhatsApp approval screenshot, or email confirmation).
+                                    This maintenance ticket is billed to the <strong>{$payerRole}</strong> (<span style='color: #0f172a; font-weight: 700;'>" . e($payerName) . '</span>). Please confirm client inspection and upload mandatory documentary proof (signed handover sheet, WhatsApp approval screenshot, or email confirmation).
                                 </div>
                             </div>
                         ');
@@ -346,7 +348,7 @@ class VerificationAuditRelationManager extends RelationManager
                             ? 'Optional: Upload confirmation photos, signed notes, or internal documentation if available.'
                             : 'Upload clear photos or PDFs of the signed confirmation, WhatsApp screenshot, or email. (Mandatory for client-billed repairs)';
                     })
-                    ->required(fn (RelationManager $livewire): bool => ! (bool) ($livewire->getOwnerRecord()?->is_direct_vendor || $livewire->getOwnerRecord()?->payer_type?->isDwellyAbsorbed()))
+                    ->required(fn(RelationManager $livewire): bool => ! (bool) ($livewire->getOwnerRecord()?->is_direct_vendor || $livewire->getOwnerRecord()?->payer_type?->isDwellyAbsorbed()))
                     ->multiple()
                     ->panelLayout('grid')
                     ->imagePreviewHeight('140')
@@ -378,7 +380,7 @@ class VerificationAuditRelationManager extends RelationManager
                     $hasAction = filled($item->repair_action);
 
                     if (! $hasPhotos || ! $hasAction) {
-                        $targetName = 'Item #'.$itemNum;
+                        $targetName = 'Item #' . $itemNum;
                         if ($item->itemable instanceof PropertyRoom) {
                             $targetName = $item->itemable->custom_name ?: ($item->itemable->roomDefinition?->name ?? "Room #{$itemNum}");
                         } elseif ($item->itemable instanceof PropertyInventory) {
@@ -391,7 +393,7 @@ class VerificationAuditRelationManager extends RelationManager
                         if (! $hasPhotos) {
                             $missing[] = 'after-repair photos';
                         }
-                        $incompleteItems[] = "<strong>{$targetName}</strong> (missing ".implode(' & ', $missing).')';
+                        $incompleteItems[] = "<strong>{$targetName}</strong> (missing " . implode(' & ', $missing) . ')';
                     }
                 }
 
@@ -424,8 +426,8 @@ class VerificationAuditRelationManager extends RelationManager
                                 $ticket->addMediaFromDisk($file, 'public')->toMediaCollection('client_acceptance_proofs');
                             } elseif (Storage::disk('local')->exists($file)) {
                                 $ticket->addMediaFromDisk($file, 'local')->toMediaCollection('client_acceptance_proofs');
-                            } elseif (Storage::disk('local')->exists('livewire-tmp/'.$file)) {
-                                $ticket->addMediaFromDisk('livewire-tmp/'.$file, 'local')->toMediaCollection('client_acceptance_proofs');
+                            } elseif (Storage::disk('local')->exists('livewire-tmp/' . $file)) {
+                                $ticket->addMediaFromDisk('livewire-tmp/' . $file, 'local')->toMediaCollection('client_acceptance_proofs');
                             } elseif (file_exists($file)) {
                                 $ticket->addMedia($file)->toMediaCollection('client_acceptance_proofs');
                             }
@@ -456,7 +458,7 @@ class VerificationAuditRelationManager extends RelationManager
             ->color('success')
             ->button()
             ->size('sm')
-            ->record(fn (RelationManager $livewire) => $livewire->getOwnerRecord())
+            ->record(fn(RelationManager $livewire) => $livewire->getOwnerRecord())
             ->visible(function (RelationManager $livewire) {
                 $ticket = $livewire->getOwnerRecord();
                 if (! $ticket || $ticket->is_direct_vendor || (bool) $ticket->payer_type?->isDwellyAbsorbed()) {
@@ -466,7 +468,7 @@ class VerificationAuditRelationManager extends RelationManager
 
                 return ! $hasInvoice && ($ticket->isWorkCompleted() || $ticket->hasClientAcceptance());
             })
-            ->modalHeading(fn (RelationManager $livewire) => 'Generate Client Invoice – Ticket #'.$livewire->getOwnerRecord()?->ticket_number)
+            ->modalHeading(fn(RelationManager $livewire) => 'Generate Client Invoice – Ticket #' . $livewire->getOwnerRecord()?->ticket_number)
             ->modalDescription('Review the receivable invoice summary below and confirm generation for accounting.')
             ->modalSubmitActionLabel('Confirm & Generate Invoice')
             ->modalWidth('3xl')
@@ -482,7 +484,7 @@ class VerificationAuditRelationManager extends RelationManager
             ->form([
                 Placeholder::make('invoice_summary_preview')
                     ->hiddenLabel()
-                    ->content(fn (RelationManager $livewire) => $this->getInvoiceSummaryHtml($livewire->getOwnerRecord())),
+                    ->content(fn(RelationManager $livewire) => $this->getInvoiceSummaryHtml($livewire->getOwnerRecord())),
 
                 DatePicker::make('issue_date')
                     ->label('Invoice Issue Date')
@@ -520,7 +522,7 @@ class VerificationAuditRelationManager extends RelationManager
                     $ticket->update(['status' => MaintenanceStatus::INVOICED]);
                     Notification::make()
                         ->title('Client Invoice Created (Draft)')
-                        ->body("Draft Invoice #{$invoice->invoice_number} (₹".number_format((float) $invoice->grand_total, 2).') created and sent to Accounting for review & posting.')
+                        ->body("Draft Invoice #{$invoice->invoice_number} (₹" . number_format((float) $invoice->grand_total, 2) . ') created and sent to Accounting for review & posting.')
                         ->success()
                         ->send();
                 } catch (\Throwable $e) {
@@ -532,6 +534,8 @@ class VerificationAuditRelationManager extends RelationManager
                         ->send();
                 }
 
+                $ticket->refresh();
+                $ticket->unsetRelation('vendorQuotes');
                 $livewire->dispatch('$refresh');
             });
     }
@@ -544,7 +548,7 @@ class VerificationAuditRelationManager extends RelationManager
             ->color('warning')
             ->button()
             ->size('sm')
-            ->record(fn (RelationManager $livewire) => $livewire->getOwnerRecord())
+            ->record(fn(RelationManager $livewire) => $livewire->getOwnerRecord())
             ->visible(function (RelationManager $livewire) {
                 $ticket = $livewire->getOwnerRecord();
                 if (! $ticket || $ticket->is_direct_vendor) {
@@ -556,11 +560,9 @@ class VerificationAuditRelationManager extends RelationManager
                     return false;
                 }
 
-                $unbilledQuotes = $ticket->vendorQuotes()->whereNull('bill_id')->count();
-
-                return $unbilledQuotes > 0 || (empty($ticket->bill_id) && $ticket->vendor_party_id);
+                return $ticket->hasUnbilledVendorPayables();
             })
-            ->modalHeading(fn (RelationManager $livewire) => 'Generate Vendor Payable Bills – Ticket #'.$livewire->getOwnerRecord()?->ticket_number)
+            ->modalHeading(fn(RelationManager $livewire) => 'Generate Vendor Payable Bills – Ticket #' . $livewire->getOwnerRecord()?->ticket_number)
             ->modalDescription('Review the payable trade contractor bills summary below and confirm generation for accounting.')
             ->modalSubmitActionLabel('Confirm & Generate Bills')
             ->modalWidth('3xl')
@@ -576,7 +578,7 @@ class VerificationAuditRelationManager extends RelationManager
             ->form([
                 Placeholder::make('vendor_bills_summary_preview')
                     ->hiddenLabel()
-                    ->content(fn (RelationManager $livewire) => $this->getVendorBillsSummaryHtml($livewire->getOwnerRecord())),
+                    ->content(fn(RelationManager $livewire) => $this->getVendorBillsSummaryHtml($livewire->getOwnerRecord())),
 
                 DatePicker::make('issue_date')
                     ->label('Bill Issue Date')
@@ -604,10 +606,10 @@ class VerificationAuditRelationManager extends RelationManager
                         'notes' => $data['notes'] ?? null,
                     ]);
                     $count = count($bills);
-                    $total = array_sum(array_map(fn ($b) => (float) $b->grand_total, $bills));
+                    $total = array_sum(array_map(fn($b) => (float) $b->grand_total, $bills));
                     Notification::make()
                         ->title('Vendor Bills Created (Draft)')
-                        ->body("{$count} Draft Vendor Bill(s) totaling ₹".number_format($total, 2).' created and queued for Accounting review & posting.')
+                        ->body("{$count} Draft Vendor Bill(s) totaling ₹" . number_format($total, 2) . ' created and queued for Accounting review & posting.')
                         ->success()
                         ->send();
                 } catch (\Throwable $e) {
@@ -619,6 +621,8 @@ class VerificationAuditRelationManager extends RelationManager
                         ->send();
                 }
 
+                $ticket->refresh();
+                $ticket->unsetRelation('vendorQuotes');
                 $livewire->dispatch('$refresh');
             });
     }
@@ -648,7 +652,7 @@ class VerificationAuditRelationManager extends RelationManager
 
         if ($quote && $quote->items->isNotEmpty()) {
             $isFullAmount = ($payerVal === 'owner' && (float) $quote->owner_amount == (float) $quote->total_amount) ||
-                            ($payerVal === 'tenant' && (float) $quote->tenant_amount == (float) $quote->total_amount);
+                ($payerVal === 'tenant' && (float) $quote->tenant_amount == (float) $quote->total_amount);
 
             if ($isFullAmount) {
                 foreach ($quote->items as $item) {
@@ -658,7 +662,7 @@ class VerificationAuditRelationManager extends RelationManager
                     $totalAmount += (float) $item->total_price;
                     $itemsHtml .= "
                         <tr style='border-bottom: 1px solid rgba(0,0,0,0.06);'>
-                            <td style='padding: 6px 8px; font-size: 12px; color: #111827;'>".e($item->description)."</td>
+                            <td style='padding: 6px 8px; font-size: 12px; color: #111827;'>" . e($item->description) . "</td>
                             <td style='padding: 6px 8px; font-size: 12px; text-align: center; color: #4b5563;'>{$qty}</td>
                             <td style='padding: 6px 8px; font-size: 12px; text-align: right; color: #4b5563;'>₹{$rate}</td>
                             <td style='padding: 6px 8px; font-size: 12px; text-align: right; font-weight: 600; color: #111827;'>₹{$total}</td>
@@ -674,7 +678,7 @@ class VerificationAuditRelationManager extends RelationManager
                 $costFmt = number_format($cost, 2);
                 $itemsHtml .= "
                     <tr style='border-bottom: 1px solid rgba(0,0,0,0.06);'>
-                        <td style='padding: 6px 8px; font-size: 12px; color: #111827;'>Maintenance Service Share: ".e($ticket->title)."</td>
+                        <td style='padding: 6px 8px; font-size: 12px; color: #111827;'>Maintenance Service Share: " . e($ticket->title) . "</td>
                         <td style='padding: 6px 8px; font-size: 12px; text-align: center; color: #4b5563;'>1</td>
                         <td style='padding: 6px 8px; font-size: 12px; text-align: right; color: #4b5563;'>₹{$costFmt}</td>
                         <td style='padding: 6px 8px; font-size: 12px; text-align: right; font-weight: 600; color: #111827;'>₹{$costFmt}</td>
@@ -690,7 +694,7 @@ class VerificationAuditRelationManager extends RelationManager
             $costFmt = number_format($cost, 2);
             $itemsHtml .= "
                 <tr style='border-bottom: 1px solid rgba(0,0,0,0.06);'>
-                    <td style='padding: 6px 8px; font-size: 12px; color: #111827;'>Maintenance Service: ".e($ticket->title)."</td>
+                    <td style='padding: 6px 8px; font-size: 12px; color: #111827;'>Maintenance Service: " . e($ticket->title) . "</td>
                     <td style='padding: 6px 8px; font-size: 12px; text-align: center; color: #4b5563;'>1</td>
                     <td style='padding: 6px 8px; font-size: 12px; text-align: right; color: #4b5563;'>₹{$costFmt}</td>
                     <td style='padding: 6px 8px; font-size: 12px; text-align: right; font-weight: 600; color: #111827;'>₹{$costFmt}</td>
@@ -704,7 +708,7 @@ class VerificationAuditRelationManager extends RelationManager
                 <div style='display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;'>
                     <div>
                         <span style='font-size: 11px; text-transform: uppercase; color: #2563eb; font-weight: 700; letter-spacing: 0.05em;'>Client Invoice Summary</span>
-                        <h4 style='font-size: 14px; font-weight: 700; color: #0f172a; margin: 2px 0 0 0;'>Ticket #{$ticket->ticket_number} - ".e($ticket->title)."</h4>
+                        <h4 style='font-size: 14px; font-weight: 700; color: #0f172a; margin: 2px 0 0 0;'>Ticket #{$ticket->ticket_number} - " . e($ticket->title) . "</h4>
                     </div>
                     <div style='text-align: right;'>
                         <span style='font-size: 11px; color: #64748b;'>Receivable Amount</span>
@@ -715,15 +719,15 @@ class VerificationAuditRelationManager extends RelationManager
                 <div style='display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; font-size: 12px; margin-bottom: 12px; background: #ffffff; padding: 8px 12px; border-radius: 6px; border: 1px solid #e2e8f0;'>
                     <div>
                         <span style='color: #64748b; font-size: 11px;'>Billed Party:</span><br>
-                        <strong style='color: #0f172a;'>".e($partyName)."</strong>
+                        <strong style='color: #0f172a;'>" . e($partyName) . "</strong>
                     </div>
                     <div>
                         <span style='color: #64748b; font-size: 11px;'>Payer Type:</span><br>
-                        <strong style='color: #0f172a;'>".e($payer)."</strong>
+                        <strong style='color: #0f172a;'>" . e($payer) . "</strong>
                     </div>
                     <div>
                         <span style='color: #64748b; font-size: 11px;'>Quotation Ref:</span><br>
-                        <strong style='color: #0f172a;'>".e($quoteNumber)."</strong>
+                        <strong style='color: #0f172a;'>" . e($quoteNumber) . "</strong>
                     </div>
                 </div>
 
@@ -757,17 +761,7 @@ class VerificationAuditRelationManager extends RelationManager
         }
 
         $ticket->loadMissing(['vendorQuotes.vendor', 'vendor']);
-        $quote = $ticket->currentClientQuote ?? $ticket->clientQuotes()->latest()->first();
-        $awardedIds = (array) ($quote?->awarded_vendor_quote_ids ?? []);
-
-        $quotesQuery = $ticket->vendorQuotes()->whereNull('bill_id');
-        if (! empty($awardedIds)) {
-            $quotes = $quotesQuery->whereIn('id', $awardedIds)->get();
-        } elseif ($ticket->vendorQuotes()->where('is_awarded', true)->exists()) {
-            $quotes = $quotesQuery->where('is_awarded', true)->get();
-        } else {
-            $quotes = $quotesQuery->get();
-        }
+        $quotes = $ticket->getUnbilledPayableQuotes();
 
         $rowsHtml = '';
         $totalPayable = 0;
@@ -782,9 +776,9 @@ class VerificationAuditRelationManager extends RelationManager
 
             $rowsHtml .= "
                 <tr style='border-bottom: 1px solid rgba(0,0,0,0.06);'>
-                    <td style='padding: 6px 8px; font-size: 12px; font-weight: 600; color: #111827;'>".e($vendorName)."</td>
-                    <td style='padding: 6px 8px; font-size: 12px; color: #4b5563;'>".e($tradeTitle)."</td>
-                    <td style='padding: 6px 8px; font-size: 12px; text-align: center; color: #2563eb; font-weight: 600;'>".e($woNumber)."</td>
+                    <td style='padding: 6px 8px; font-size: 12px; font-weight: 600; color: #111827;'>" . e($vendorName) . "</td>
+                    <td style='padding: 6px 8px; font-size: 12px; color: #4b5563;'>" . e($tradeTitle) . "</td>
+                    <td style='padding: 6px 8px; font-size: 12px; text-align: center; color: #2563eb; font-weight: 600;'>" . e($woNumber) . "</td>
                     <td style='padding: 6px 8px; font-size: 12px; text-align: right; font-weight: 600; color: #b91c1c;'>₹{$costFmt}</td>
                 </tr>";
         }
@@ -798,8 +792,8 @@ class VerificationAuditRelationManager extends RelationManager
 
             $rowsHtml .= "
                 <tr style='border-bottom: 1px solid rgba(0,0,0,0.06);'>
-                    <td style='padding: 6px 8px; font-size: 12px; font-weight: 600; color: #111827;'>".e($vendorName)."</td>
-                    <td style='padding: 6px 8px; font-size: 12px; color: #4b5563;'>".e($ticket->title)."</td>
+                    <td style='padding: 6px 8px; font-size: 12px; font-weight: 600; color: #111827;'>" . e($vendorName) . "</td>
+                    <td style='padding: 6px 8px; font-size: 12px; color: #4b5563;'>" . e($ticket->title) . "</td>
                     <td style='padding: 6px 8px; font-size: 12px; text-align: center; color: #6b7280;'>N/A</td>
                     <td style='padding: 6px 8px; font-size: 12px; text-align: right; font-weight: 600; color: #b91c1c;'>₹{$costFmt}</td>
                 </tr>";
@@ -813,7 +807,7 @@ class VerificationAuditRelationManager extends RelationManager
                 <div style='display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; border-bottom: 1px solid #fecdd3; padding-bottom: 8px;'>
                     <div>
                         <span style='font-size: 11px; text-transform: uppercase; color: #e11d48; font-weight: 700; letter-spacing: 0.05em;'>Vendor Bills Summary ({$billCount} Bill(s))</span>
-                        <h4 style='font-size: 14px; font-weight: 700; color: #0f172a; margin: 2px 0 0 0;'>Ticket #{$ticket->ticket_number} - ".e($ticket->title)."</h4>
+                        <h4 style='font-size: 14px; font-weight: 700; color: #0f172a; margin: 2px 0 0 0;'>Ticket #{$ticket->ticket_number} - " . e($ticket->title) . "</h4>
                     </div>
                     <div style='text-align: right;'>
                         <span style='font-size: 11px; color: #64748b;'>Total Payable</span>
@@ -852,8 +846,8 @@ class VerificationAuditRelationManager extends RelationManager
             ->color('primary')
             ->button()
             ->size('sm')
-            ->record(fn (RelationManager $livewire) => $livewire->getOwnerRecord())
-            ->visible(fn (RelationManager $livewire) => (bool) ($livewire->getOwnerRecord()?->isWorkCompleted() || $livewire->getOwnerRecord()?->hasClientAcceptance()))
+            ->record(fn(RelationManager $livewire) => $livewire->getOwnerRecord())
+            ->visible(fn(RelationManager $livewire) => (bool) ($livewire->getOwnerRecord()?->isWorkCompleted() || $livewire->getOwnerRecord()?->hasClientAcceptance()))
             ->modalHeading('Paying Party Acceptance Proof & Remarks')
             ->modalDescription('View, upload, or update client acceptance proof documents (signed sheets, WhatsApp confirmations, emails) and sign-off notes.')
             ->modalSubmitActionLabel('Save Acceptance Proof')
@@ -924,7 +918,7 @@ class VerificationAuditRelationManager extends RelationManager
                             ? 'Optional for direct repairs: Upload confirmation photos, signed notes, or chat approval if available.'
                             : 'Upload clear photos or PDFs of the signed confirmation, WhatsApp screenshot, or email. (Mandatory for Dwelly-coordinated)';
                     })
-                    ->required(fn (RelationManager $livewire): bool => ! (bool) $livewire->getOwnerRecord()?->is_direct_vendor)
+                    ->required(fn(RelationManager $livewire): bool => ! (bool) $livewire->getOwnerRecord()?->is_direct_vendor)
                     ->multiple()
                     ->panelLayout('grid')
                     ->imagePreviewHeight('140')
@@ -950,8 +944,8 @@ class VerificationAuditRelationManager extends RelationManager
                                 $ticket->addMediaFromDisk($file, 'public')->toMediaCollection('client_acceptance_proofs');
                             } elseif (Storage::disk('local')->exists($file)) {
                                 $ticket->addMediaFromDisk($file, 'local')->toMediaCollection('client_acceptance_proofs');
-                            } elseif (Storage::disk('local')->exists('livewire-tmp/'.$file)) {
-                                $ticket->addMediaFromDisk('livewire-tmp/'.$file, 'local')->toMediaCollection('client_acceptance_proofs');
+                            } elseif (Storage::disk('local')->exists('livewire-tmp/' . $file)) {
+                                $ticket->addMediaFromDisk('livewire-tmp/' . $file, 'local')->toMediaCollection('client_acceptance_proofs');
                             } elseif (file_exists($file)) {
                                 $ticket->addMedia($file)->toMediaCollection('client_acceptance_proofs');
                             }

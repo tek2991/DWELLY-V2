@@ -55,6 +55,8 @@ class PropertyDocumentsRelationManager extends RelationManager
                     ->columnSpanFull(),
                 Forms\Components\FileUpload::make('file_path')
                     ->label('Document File')
+                    ->disk('public')
+                    ->visibility('public')
                     ->directory('property-documents')
                     ->required()
                     ->columnSpanFull(),

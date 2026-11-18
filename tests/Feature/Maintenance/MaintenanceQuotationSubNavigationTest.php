@@ -1221,21 +1221,73 @@ class MaintenanceQuotationSubNavigationTest extends TestCase
             'approval_notes' => 'Approved by owner',
         ]);
 
-        // When in draft, save form action exists
+        // When in draft, the top Save & Approve Quotation action is visible, bottom Save is removed
         $testDraft = Livewire::actingAs($user)
             ->test(ManageQuotationApproval::class, [
                 'record' => $draftQuote->getRouteKey(),
             ])
             ->assertSuccessful()
-            ->assertSee('Save changes');
+            ->assertSee('Save &amp; Approve Quotation', false)
+            ->assertDontSee('Save changes');
 
-        // When approved, save form action is removed
+        // When approved, approval action is hidden and approval status banner is displayed
         $testApproved = Livewire::actingAs($user)
             ->test(ManageQuotationApproval::class, [
                 'record' => $approvedQuote->getRouteKey(),
             ])
             ->assertSuccessful()
+            ->assertSee('Quotation Client Approved')
             ->assertDontSee('Save changes');
+    }
+
+    public function test_manage_quotation_approval_has_cohesive_section_and_bottom_actions_without_page_header_actions(): void
+    {
+        $user = User::factory()->create();
+
+        $property = Property::create([
+            'building_name' => 'Oakwood Heights 203',
+            'status' => 'active',
+        ]);
+
+        $request = MaintenanceRequest::create([
+            'property_id' => $property->id,
+            'title' => 'Electrical Overhaul Cohesion Test',
+            'status' => MaintenanceStatus::SUBMITTED,
+            'payer_type' => PayerType::OWNER,
+        ]);
+
+        $draftQuote = MaintenanceClientQuote::create([
+            'quote_number' => 'QT-2026-COHESION-DRAFT',
+            'maintenance_request_id' => $request->id,
+            'status' => 'draft',
+        ]);
+
+        $testDraft = Livewire::actingAs($user)
+            ->test(ManageQuotationApproval::class, [
+                'record' => $draftQuote->getRouteKey(),
+            ])
+            ->assertSuccessful();
+
+        $page = $testDraft->instance();
+        // Page header actions must be empty for cohesion with all other tabs
+        $this->assertEmpty($page->getCachedHeaderActions());
+
+        $schema = $page->getSchema('form');
+        $section = collect($schema->getComponents())->first(fn ($c) => $c instanceof \Filament\Schemas\Components\Section && str_contains($c->getHeading(), 'Client Approval & Decision'));
+        $this->assertNotNull($section);
+
+        // Section card header action is present
+        $headerAction = collect($section->getHeaderActions())->first(fn ($a) => $a->getName() === 'approveQuoteInTab');
+        $this->assertNotNull($headerAction);
+        $this->assertEquals('Save & Approve Quotation', $headerAction->getLabel());
+
+        // Section bottom actions container has the bottom approve action
+        $bottomActionsComponent = collect($section->getChildComponents())->first(fn ($c) => $c instanceof \Filament\Schemas\Components\Actions);
+        $this->assertNotNull($bottomActionsComponent);
+
+        $bottomAction = collect($bottomActionsComponent->getChildComponents())->first(fn ($a) => $a->getName() === 'approveQuoteInTabBottom');
+        $this->assertNotNull($bottomAction);
+        $this->assertEquals('Save & Approve Quotation', $bottomAction->getLabel());
     }
 
     public function test_view_work_order_pdf_modal_action_mounts_successfully(): void
@@ -1615,6 +1667,95 @@ class MaintenanceQuotationSubNavigationTest extends TestCase
             'trade_title' => 'Plumbing Repair',
             'quoted_cost' => 2500.00,
         ]);
+    }
+
+    public function test_line_items_repeater_defaults_to_one_empty_item_when_none_in_db(): void
+    {
+        $user = User::factory()->create();
+
+        $property = Property::create([
+            'building_name' => 'Rosewood Villa 104',
+            'status' => 'active',
+        ]);
+
+        $request = MaintenanceRequest::create([
+            'property_id' => $property->id,
+            'title' => 'Default Line Item Test',
+            'status' => MaintenanceStatus::SUBMITTED,
+        ]);
+
+        $quote = MaintenanceClientQuote::create([
+            'quote_number' => 'QT-2026-TEST-LINE-DEF1',
+            'maintenance_request_id' => $request->id,
+            'status' => 'draft',
+        ]);
+
+        $testPricing = Livewire::actingAs($user)
+            ->test(ManageClientQuotation::class, [
+                'record' => $quote->getRouteKey(),
+            ])
+            ->assertSuccessful();
+
+        $schema = $testPricing->instance()->getSchema('form');
+        $section = collect($schema->getComponents())->first(fn ($c) => $c instanceof \Filament\Schemas\Components\Section && str_contains($c->getHeading(), 'Itemized Line Items'));
+        $repeater = collect($section->getChildComponents())->first(fn ($c) => $c instanceof \Filament\Forms\Components\Repeater && $c->getName() === 'items');
+
+        $this->assertNotNull($repeater);
+
+        $itemsState = data_get($testPricing->get('data'), 'items');
+        $this->assertIsArray($itemsState);
+        $this->assertCount(1, $itemsState);
+
+        $firstItem = reset($itemsState);
+        $this->assertEquals(1, $firstItem['quantity']);
+        $this->assertEquals(0.00, (float) $firstItem['vendor_cost']);
+        $this->assertEquals(0.00, (float) $firstItem['unit_price']);
+    }
+
+    public function test_line_items_repeater_preserves_existing_items_without_extra_item(): void
+    {
+        $user = User::factory()->create();
+
+        $property = Property::create([
+            'building_name' => 'Rosewood Villa 105',
+            'status' => 'active',
+        ]);
+
+        $request = MaintenanceRequest::create([
+            'property_id' => $property->id,
+            'title' => 'Existing Line Items Test',
+            'status' => MaintenanceStatus::SUBMITTED,
+        ]);
+
+        $quote = MaintenanceClientQuote::create([
+            'quote_number' => 'QT-2026-TEST-LINE-EXISTING',
+            'maintenance_request_id' => $request->id,
+            'status' => 'draft',
+        ]);
+
+        \App\Domain\Maintenance\Models\MaintenanceClientQuoteItem::create([
+            'maintenance_client_quote_id' => $quote->id,
+            'description' => 'Existing Item 1',
+            'quantity' => 2,
+            'unit_price' => 500.00,
+        ]);
+
+        \App\Domain\Maintenance\Models\MaintenanceClientQuoteItem::create([
+            'maintenance_client_quote_id' => $quote->id,
+            'description' => 'Existing Item 2',
+            'quantity' => 1,
+            'unit_price' => 1200.00,
+        ]);
+
+        $testPricing = Livewire::actingAs($user)
+            ->test(ManageClientQuotation::class, [
+                'record' => $quote->getRouteKey(),
+            ])
+            ->assertSuccessful();
+
+        $itemsState = data_get($testPricing->get('data'), 'items');
+        $this->assertIsArray($itemsState);
+        $this->assertCount(2, $itemsState);
     }
 }
 

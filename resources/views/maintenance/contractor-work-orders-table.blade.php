@@ -56,7 +56,7 @@
                     <div style="text-align: center;">Award</div>
                     <div>Trade Scope / Work Title</div>
                     <div>Contractor / Artisan</div>
-                    <div style="text-align: right;">Quoted Cost</div>
+                    <div style="text-align: right;">Cost (Bid / Awarded)</div>
                     <div style="text-align: center;">Client Quote Basis</div>
                     <div style="text-align: right;">Work Order Status</div>
                 </div>
@@ -72,6 +72,18 @@
                             $tradeName = $q->vendor?->vendorProfile?->trade?->name ?? 'General';
                             $phone = $q->vendor?->phone;
                             $cost = number_format((float) $q->quoted_cost, 2);
+
+                            $linkedItems = $record ? $record->items->filter(function ($item) use ($q) {
+                                return $item->vendor_quote_id == $q->id || (empty($item->vendor_quote_id) && $item->vendor_party_id == $q->vendor_party_id);
+                            }) : collect();
+
+                            $agreedLineCost = $linkedItems->isNotEmpty()
+                                ? (float) $linkedItems->sum(fn ($it) => (float) ($it->quantity ?? 1) * (float) ($it->vendor_cost ?? 0))
+                                : null;
+
+                            $effectiveCost = (float) ($q->final_cost ?? $agreedLineCost ?? $q->quoted_cost);
+                            $hasCostDifference = $linkedItems->isNotEmpty() && abs($effectiveCost - (float) $q->quoted_cost) >= 0.01;
+
                             $quoteSuffix = strtoupper(substr(str_replace(['QT-', 'QTE-'], '', $record?->quote_number ?: (string) $record?->id), -5));
                             $woNumber = $q->work_order_number ?? ($isAwarded ? ("WO-" . now()->year . "-{$quoteSuffix}-01") : null);
 
@@ -115,6 +127,12 @@
                                     @endif
                                     <span>{{ $q->trade_title }}</span>
                                 </div>
+                                @if($hasCostDifference && $linkedItems->isNotEmpty())
+                                    <div style="margin-top: 0.25rem; font-size: 0.75rem; color: #166534;">
+                                        <span style="font-weight: 600;">Awarded scope:</span>
+                                        {{ \Illuminate\Support\Str::limit($linkedItems->pluck('description')->implode(', '), 42) }}
+                                    </div>
+                                @endif
                                 @if($q->vendor_quote_number)
                                     <div style="margin-top: 0.25rem; display: flex; align-items: center; gap: 0.375rem; font-size: 0.75rem; color: #6b7280;">
                                         <span>Ref:</span>
@@ -138,14 +156,26 @@
                                 </div>
                             </div>
 
-                            {{-- Quoted Cost --}}
+                            {{-- Quoted / Awarded Cost --}}
                             <div style="text-align: right;">
-                                <div style="font-weight: 800; font-size: 1rem; letter-spacing: -0.02em;">
-                                    ₹{{ $cost }}
-                                </div>
-                                <div style="font-size: 0.6875rem; color: #9ca3af; margin-top: 0.125rem; text-transform: uppercase; letter-spacing: 0.05em;">
-                                    Contractor Bid
-                                </div>
+                                @if($hasCostDifference)
+                                    <div style="font-weight: 800; font-size: 1rem; letter-spacing: -0.02em; color: #16a34a;">
+                                        ₹{{ number_format($effectiveCost, 2) }}
+                                    </div>
+                                    <div style="font-size: 0.6875rem; color: #64748b; margin-top: 0.125rem;">
+                                        <span style="text-decoration: line-through; color: #94a3b8;">₹{{ $cost }}</span>
+                                        <span style="background-color: #fef3c7; color: #92400e; padding: 1px 5px; border-radius: 4px; font-weight: 600; margin-left: 2px;">
+                                            Adjusted ({{ $linkedItems->count() }} line{{ $linkedItems->count() > 1 ? 's' : '' }})
+                                        </span>
+                                    </div>
+                                @else
+                                    <div style="font-weight: 800; font-size: 1rem; letter-spacing: -0.02em;">
+                                        ₹{{ $cost }}
+                                    </div>
+                                    <div style="font-size: 0.6875rem; color: #9ca3af; margin-top: 0.125rem; text-transform: uppercase; letter-spacing: 0.05em;">
+                                        {{ $isAwarded ? 'Awarded Cost' : 'Contractor Bid' }}
+                                    </div>
+                                @endif
                             </div>
 
                             {{-- Client Quote Basis --}}

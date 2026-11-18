@@ -266,6 +266,44 @@ class MaintenanceRequest extends DomainModel implements HasMedia
         ]);
     }
 
+    /**
+     * Get unbilled payable vendor quotes for this maintenance request.
+     * Only considers vendor quotes that were officially awarded (or all quotes if none specifically awarded).
+     */
+    public function getUnbilledPayableQuotes(): \Illuminate\Database\Eloquent\Collection
+    {
+        $quote = $this->currentClientQuote ?? $this->clientQuotes()->where('status', '!=', 'archived')->latest()->first();
+        $awardedIds = (array) ($quote?->awarded_vendor_quote_ids ?? []);
+
+        $quotesQuery = $this->vendorQuotes()->whereNull('bill_id');
+
+        if (! empty($awardedIds)) {
+            return $quotesQuery->whereIn('id', $awardedIds)->get();
+        }
+
+        if ($this->vendorQuotes()->where('is_awarded', true)->exists()) {
+            return $quotesQuery->where('is_awarded', true)->get();
+        }
+
+        return $quotesQuery->get();
+    }
+
+    /**
+     * Check if there are any unbilled vendor payables (quotes or legacy direct vendor).
+     */
+    public function hasUnbilledVendorPayables(): bool
+    {
+        if ($this->is_direct_vendor) {
+            return false;
+        }
+
+        if ($this->vendorQuotes()->exists()) {
+            return $this->getUnbilledPayableQuotes()->isNotEmpty();
+        }
+
+        return empty($this->bill_id) && filled($this->vendor_party_id);
+    }
+
     public function syncQuotationTotals(): void
     {
         $clientQuote = $this->current_client_quote_id

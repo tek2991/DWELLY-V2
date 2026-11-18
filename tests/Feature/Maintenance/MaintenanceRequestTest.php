@@ -12,6 +12,7 @@ use App\Domain\Maintenance\Enums\MaintenanceStatus;
 use App\Domain\Maintenance\Enums\PayerType;
 use App\Domain\Maintenance\Models\MaintenanceRequest;
 use App\Domain\Maintenance\Models\MaintenanceRequestItem;
+use App\Domain\Maintenance\Models\MaintenanceVendorQuote;
 use App\Domain\Maintenance\Services\MaintenanceAuditTriggerService;
 use App\Domain\Maintenance\Services\MaintenanceSettlementService;
 use App\Domain\Party\Enums\VendorOnboardingStatus;
@@ -766,8 +767,22 @@ class MaintenanceRequestTest extends TestCase
         // Bill should NOT be automatically generated on work order issuance
         $this->assertNull($vendorQuote->bill_id);
 
+        // Also add an unawarded competitor vendor quote that should NOT be billed and should NOT keep the action visible
+        $unawardedVendor = Party::create([
+            'party_type' => 'individual',
+            'display_name' => 'Unawarded Competitor',
+        ]);
+        $unawardedQuote = MaintenanceVendorQuote::create([
+            'maintenance_request_id' => $request->id,
+            'vendor_party_id' => $unawardedVendor->id,
+            'trade_title' => 'Plumbing Alternative',
+            'quoted_cost' => 9000.00,
+            'is_awarded' => false,
+        ]);
+
         // Mark ticket work completed
         $request->update(['status' => MaintenanceStatus::WORK_COMPLETED]);
+        $this->assertTrue($request->hasUnbilledVendorPayables());
 
         // Manually generate vendor bills via table action
         \Livewire\Livewire::actingAs($user)
@@ -776,15 +791,19 @@ class MaintenanceRequestTest extends TestCase
                 'pageClass' => \App\Filament\Resources\Operations\MaintenanceRequestResource\Pages\EditMaintenanceRequest::class,
             ])
             ->assertSuccessful()
+            ->assertTableActionVisible('generateVendorBills')
             ->callTableAction('generateVendorBills', null, [
                 'issue_date' => now()->toDateString(),
                 'due_date' => now()->addDays(14)->toDateString(),
                 'notes' => 'Test vendor bill notes',
             ])
-            ->assertHasNoTableActionErrors();
+            ->assertHasNoTableActionErrors()
+            ->assertTableActionHidden('generateVendorBills');
 
         $vendorQuote->refresh();
         $this->assertNotNull($vendorQuote->bill_id);
+        $this->assertNull($unawardedQuote->refresh()->bill_id);
+        $this->assertFalse($request->refresh()->hasUnbilledVendorPayables());
 
         $bill = \Tek2991\Accounting\Models\Bill::find($vendorQuote->bill_id);
         $this->assertNotNull($bill);
@@ -1009,7 +1028,3 @@ class MaintenanceRequestTest extends TestCase
         $this->assertEquals(MaintenanceStatus::CLOSED, $request->status);
     }
 }
-
-
-
-

@@ -36,23 +36,28 @@ class ManageQuotationApproval extends EditRecord
         }
     }
 
+    public function approveQuoteInTabAction(): \Filament\Actions\Action
+    {
+        return MaintenanceQuotationForm::getApproveQuotationAction('approveQuoteInTab');
+    }
+
+    public function approveQuoteInTabBottomAction(): \Filament\Actions\Action
+    {
+        return MaintenanceQuotationForm::getApproveQuotationAction('approveQuoteInTabBottom');
+    }
+
     protected function getHeaderActions(): array
     {
-        return [
-            MaintenanceQuotationForm::getApproveQuotationAction(),
-            ...parent::getHeaderActions(),
-        ];
+        return [];
     }
 
     protected function getFormActions(): array
     {
-        $record = $this->getRecord();
-        if ($record && in_array($record->status, ['approved', 'archived', 'settled'])) {
-            return [];
-        }
+        return [];
+    }
 
-        return [
-            $this->getSaveFormAction(),
-        ];
+    protected function getSavedNotification(): ?\Filament\Notifications\Notification
+    {
+        return null;
     }
 }

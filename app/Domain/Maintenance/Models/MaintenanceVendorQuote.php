@@ -102,4 +102,38 @@ class MaintenanceVendorQuote extends DomainModel implements HasMedia
     {
         return $this->belongsTo(Bill::class, 'bill_id');
     }
+
+    public function clientQuoteItems(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(MaintenanceClientQuoteItem::class, 'vendor_quote_id');
+    }
+
+    /**
+     * Get the effective agreed work order cost (final_cost if set, otherwise from linked line items or quoted_cost).
+     */
+    public function getEffectiveWorkOrderCost(?MaintenanceClientQuote $clientQuote = null): float
+    {
+        if ($this->final_cost !== null && (float) $this->final_cost > 0) {
+            return (float) $this->final_cost;
+        }
+
+        $quote = $clientQuote ?? $this->maintenanceRequest?->currentClientQuote;
+        if ($quote) {
+            $items = $quote->items()
+                ->where(function ($q) {
+                    $q->where('vendor_quote_id', $this->id)
+                      ->orWhere(function ($sq) {
+                          $sq->whereNull('vendor_quote_id')
+                             ->where('vendor_party_id', $this->vendor_party_id);
+                      });
+                })
+                ->get();
+
+            if ($items->isNotEmpty()) {
+                return (float) $items->sum(fn ($it) => (float) ($it->quantity ?? 1) * (float) ($it->vendor_cost ?? 0));
+            }
+        }
+
+        return (float) ($this->quoted_cost ?? 0.0);
+    }
 }

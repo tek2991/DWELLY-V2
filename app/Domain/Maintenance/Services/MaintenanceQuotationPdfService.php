@@ -42,6 +42,7 @@ class MaintenanceQuotationPdfService
                 'generated_at' => now()->toDateTimeString(),
                 'generated_by' => auth()->id(),
                 'generated_by_name' => auth()->user()?->name ?? 'System',
+                'total_amount' => (float) $quote->total_amount,
             ])
             ->toMediaCollection('generated_quote_pdf');
 
