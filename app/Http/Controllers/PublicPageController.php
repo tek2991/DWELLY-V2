@@ -136,6 +136,19 @@ class PublicPageController extends Controller
 
         $properties = $propertiesQuery->paginate(10)->withQueryString();
 
+        if ($request->ajax() || $request->header('X-Infinite-Scroll')) {
+            return response()->json([
+                'html' => view('public.partials.property-card-list', [
+                    'properties' => $properties,
+                    'isAjax' => true,
+                ])->render(),
+                'hasMore' => $properties->hasMorePages(),
+                'nextPage' => $properties->currentPage() + 1,
+                'nextPageUrl' => $properties->nextPageUrl(),
+                'total' => $properties->total(),
+            ]);
+        }
+
         return view('public.allProperties', compact(
             'properties',
             'bhks',

@@ -234,4 +234,75 @@ class PublicPagesTest extends TestCase
             'estimated_bhk' => '3 BHK',
         ]);
     }
+
+    public function test_all_properties_supports_infinite_scroll_json_request()
+    {
+        $response = $this->getJson(route('allProperties'), [
+            'X-Infinite-Scroll' => '1',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonStructure([
+            'html',
+            'hasMore',
+            'nextPage',
+            'nextPageUrl',
+            'total',
+        ]);
+        $response->assertJson([
+            'hasMore' => false,
+            'total' => 1,
+        ]);
+        $this->assertStringContainsString('Greenwood Heights', $response->json('html'));
+    }
+
+    public function test_all_properties_infinite_scroll_pagination_multiple_pages()
+    {
+        $existing = Property::first();
+
+        // Create 11 additional listed properties so total is 12 (> 10 per page)
+        for ($i = 2; $i <= 12; $i++) {
+            $prop = Property::create([
+                'code' => sprintf('GAU-%04d', $i),
+                'building_name' => "Complex Unit {$i}",
+                'address_line_1' => "Address {$i}",
+                'locality_id' => $existing->locality_id,
+                'locality' => $existing->locality,
+                'city' => $existing->city,
+                'bhk_type_id' => $existing->bhk_type_id,
+                'property_type_id' => $existing->property_type_id,
+                'status' => 'Vacant',
+                'is_listed' => true,
+            ]);
+
+            PropertyPricingVersion::create([
+                'property_id' => $prop->id,
+                'effective_from' => now()->toDateString(),
+                'rent' => 20000 + ($i * 1000),
+                'security_deposit' => 40000,
+            ]);
+        }
+
+        // Page 1
+        $responsePage1 = $this->getJson(route('allProperties', ['page' => 1]), [
+            'X-Infinite-Scroll' => '1',
+        ]);
+        $responsePage1->assertStatus(200);
+        $responsePage1->assertJson([
+            'hasMore' => true,
+            'total' => 12,
+            'nextPage' => 2,
+        ]);
+
+        // Page 2
+        $responsePage2 = $this->getJson(route('allProperties', ['page' => 2]), [
+            'X-Infinite-Scroll' => '1',
+        ]);
+        $responsePage2->assertStatus(200);
+        $responsePage2->assertJson([
+            'hasMore' => false,
+            'total' => 12,
+            'nextPage' => 3,
+        ]);
+    }
 }
