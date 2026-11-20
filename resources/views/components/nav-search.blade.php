@@ -1,6 +1,6 @@
 @props(['filters' => null, 'total' => null])
-<div x-data="{ drawerOpen: false, bhkOpen: false }" class="fixed inset-x-0 top-0 w-full z-20 Gradient-Top-Banner pt-2 sm:pt-3">
-    <div class="flex justify-between mx-auto w-full Site-Max-Width px-3 sm:px-4 py-2 items-center">
+<div x-data="{ drawerOpen: false, bhkOpen: false }" class="fixed inset-x-0 top-0 w-full z-20 bg-white/95 backdrop-blur-md border-b border-gray-200/80 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] pt-2 sm:pt-2.5 transition-all">
+    <div class="flex justify-between mx-auto w-full Site-Max-Width px-3 sm:px-4 py-2 sm:pb-2.5 items-center">
         <!-- Logo -->
         <div class="shrink-0 flex items-center">
             <a href="{{ route('home') }}">
@@ -86,23 +86,21 @@
     </div>
 
     @if (Route::is('allProperties'))
-        <div class="rounded-b-2xl shadow-md border-b border-darker-3 pb-2.5 pt-1.5 bg-inherit">
-            <div class="flex justify-between items-center Site-Max-Width mx-auto px-3 sm:px-4">
-                {{-- Showing properties count --}}
-                <div class="text-xs sm:text-sm text-darker-2 flex items-center gap-1.5">
-                    Showing <span class="font-GraphikMedium text-darker-3">{{ $total ?? 0 }}</span> properties
-                    @if (request('query'))
-                        <span class="hidden sm:inline">for "<span class="font-GraphikMedium text-darker-3">{{ request('query') }}</span>"</span>
-                    @endif
+        {{-- Mobile-only sub-bar for Sort & Filter toggle --}}
+        <div class="sm:hidden border-t border-gray-100/90 px-3 py-2 bg-white/50">
+            <div class="flex justify-between items-center">
+                {{-- Showing properties count on mobile --}}
+                <div class="text-xs text-darker-2">
+                    Showing <span class="font-GraphikMedium text-darker-3">{{ $total ?? 0 }}</span>
                 </div>
 
                 {{-- Sort by & Mobile Filter Button --}}
-                <div class="flex items-center gap-2 sm:gap-3">
+                <div class="flex items-center gap-2">
                     <div class="flex items-center">
-                        <h3 class="text-xs text-darker-2 mr-2 sm:mr-2.5 font-GraphikMedium shrink-0">Sort by:</h3>
+                        <span class="text-xs text-darker-2 mr-1.5 font-GraphikMedium shrink-0">Sort:</span>
                         <div class="relative shrink-0" x-data="{ sortOpen: false }">
                             <button id="sort_button" type="button" @click="sortOpen = !sortOpen"
-                                class="flex items-center justify-between min-w-[125px] sm:min-w-[135px] bg-secondary hover:bg-darker/40 rounded-xl px-3 py-1.5 cursor-pointer text-xs font-GraphikMedium text-darker-3 transition duration-150 border border-secondary shadow-xs focus:outline-none">
+                                class="flex items-center justify-between min-w-[115px] bg-secondary hover:bg-darker/40 rounded-xl px-2.5 py-1 cursor-pointer text-xs font-GraphikMedium text-darker-3 transition duration-150 border border-secondary shadow-xs focus:outline-none">
                                 <span id="current_sort_name">
                                     @php
                                         $sortMap = [
@@ -114,7 +112,7 @@
                                         echo $sortMap[$curSort] ?? 'Featured';
                                     @endphp
                                 </span>
-                                <svg class="ml-2 w-3.5 h-3.5 text-darker-3 transition-transform duration-200" :class="{ 'rotate-180': sortOpen }" fill="currentColor" viewBox="0 0 20 20">
+                                <svg class="ml-1.5 w-3.5 h-3.5 text-darker-3 transition-transform duration-200" :class="{ 'rotate-180': sortOpen }" fill="currentColor" viewBox="0 0 20 20">
                                     <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"></path>
                                 </svg>
                             </button>
@@ -154,7 +152,7 @@
                         </div>
                     </div>
 
-                    <button class="sm:hidden flex items-center justify-center p-1.5 rounded-xl bg-secondary/80 hover:bg-secondary text-darker-3 transition cursor-pointer shrink-0 border border-secondary shadow-xs"
+                    <button class="flex items-center justify-center p-1.5 rounded-xl bg-secondary/80 hover:bg-secondary text-darker-3 transition cursor-pointer shrink-0 border border-secondary shadow-xs"
                         id="mobile-filter-button" type="button" title="Filters"
                         @click.stop="window.dispatchEvent(new CustomEvent('open-filters'))">
                         <img src="{{ url('resources/icons/filter.svg') }}" alt="filters" class="w-4 h-4">

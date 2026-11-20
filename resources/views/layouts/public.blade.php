@@ -26,7 +26,7 @@
         @endif
     </div>
 
-    <div class="font-sans text-gray-900 antialiased min-h-screen {{ Route::is('allProperties') ? 'pt-28 sm:pt-32' : 'pt-24' }}">
+    <div class="font-sans text-gray-900 antialiased min-h-screen {{ Route::is('allProperties') ? 'pt-28 sm:pt-24' : 'pt-24' }}">
         {{ $slot }}
     </div>
 
