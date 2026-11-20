@@ -320,37 +320,55 @@
                     @include('public.partials.property-card-list', ['properties' => $properties])
                 </div>
 
-                {{-- Loading Skeleton Card (Smooth pulse loader while fetching next page) --}}
-                <div x-show="loading" x-cloak class="mt-6 space-y-6">
-                    <div class="bg-white rounded-2xl border border-secondary/80 p-0 overflow-hidden flex flex-col md:flex-row md:h-[13.5rem] animate-pulse">
-                        <div class="bg-gray-200 md:w-72 lg:w-80 shrink-0 aspect-16/10 md:aspect-auto md:h-full"></div>
+                {{-- Loading Skeleton Card (Smooth shimmer & transition while fetching next page) --}}
+                <div x-show="loading"
+                    x-transition:enter="transition ease-out duration-300"
+                    x-transition:enter-start="opacity-0 translate-y-3"
+                    x-transition:enter-end="opacity-100 translate-y-0"
+                    x-transition:leave="transition ease-in duration-200"
+                    x-transition:leave-start="opacity-100 translate-y-0"
+                    x-transition:leave-end="opacity-0 translate-y-2"
+                    x-cloak class="mt-6 space-y-6">
+                    <div class="bg-white rounded-2xl border border-secondary/80 p-0 overflow-hidden flex flex-col md:flex-row md:h-[13.5rem] shadow-xs">
+                        <div class="shimmer-placeholder md:w-72 lg:w-80 shrink-0 aspect-16/10 md:aspect-auto md:h-full"></div>
                         <div class="p-4 md:py-3.5 md:px-5 flex-1 flex flex-col justify-between">
                             <div>
                                 <div class="flex justify-between items-start gap-3">
                                     <div class="flex-1 space-y-2">
-                                        <div class="h-3 bg-gray-200 rounded w-24"></div>
-                                        <div class="h-5 bg-gray-200 rounded w-3/4"></div>
-                                        <div class="h-3 bg-gray-200 rounded w-1/2"></div>
+                                        <div class="h-3 shimmer-placeholder rounded w-24"></div>
+                                        <div class="h-5 shimmer-placeholder rounded w-3/4"></div>
+                                        <div class="h-3 shimmer-placeholder rounded w-1/2"></div>
                                     </div>
                                     <div class="hidden sm:block space-y-1">
-                                        <div class="h-3 bg-gray-200 rounded w-16 ml-auto"></div>
-                                        <div class="h-6 bg-gray-200 rounded w-24"></div>
+                                        <div class="h-3 shimmer-placeholder rounded w-16 ml-auto"></div>
+                                        <div class="h-6 shimmer-placeholder rounded w-24"></div>
                                     </div>
                                 </div>
                                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 pt-2 border-t border-gray-100">
-                                    <div class="h-10 bg-gray-100 rounded-lg"></div>
-                                    <div class="h-10 bg-gray-100 rounded-lg"></div>
-                                    <div class="h-10 bg-gray-100 rounded-lg"></div>
-                                    <div class="h-10 bg-gray-100 rounded-lg"></div>
+                                    <div class="h-10 shimmer-placeholder rounded-lg"></div>
+                                    <div class="h-10 shimmer-placeholder rounded-lg"></div>
+                                    <div class="h-10 shimmer-placeholder rounded-lg"></div>
+                                    <div class="h-10 shimmer-placeholder rounded-lg"></div>
                                 </div>
                             </div>
                             <div class="mt-4 pt-2 border-t border-gray-100 flex items-center justify-between">
-                                <div class="h-4 bg-gray-200 rounded w-24"></div>
+                                <div class="h-4 shimmer-placeholder rounded w-24"></div>
                                 <div class="flex gap-2">
-                                    <div class="h-8 bg-gray-200 rounded-lg w-24"></div>
-                                    <div class="h-8 bg-gray-200 rounded-lg w-24"></div>
+                                    <div class="h-8 shimmer-placeholder rounded-lg w-24"></div>
+                                    <div class="h-8 shimmer-placeholder rounded-lg w-24"></div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    {{-- Sleek Floating Loading Badge --}}
+                    <div class="flex justify-center py-2">
+                        <div class="inline-flex items-center gap-2.5 px-4 py-1.5 bg-white/90 backdrop-blur-xs rounded-full border border-gray-200 shadow-xs">
+                            <span class="relative flex h-2 w-2">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-piss-yellow opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-2 w-2 bg-piss-yellow"></span>
+                            </span>
+                            <span class="text-xs font-GraphikMedium text-darker-3">Loading more properties...</span>
                         </div>
                     </div>
                 </div>
@@ -359,7 +377,11 @@
                 <div x-ref="sentinel" class="h-4 w-full my-4 pointer-events-none"></div>
 
                 {{-- End of Results Indicator --}}
-                <div x-show="!hasMore && total > 0" class="text-center py-10">
+                <div x-show="!hasMore && total > 0"
+                    x-transition:enter="transition ease-out duration-400 delay-150"
+                    x-transition:enter-start="opacity-0 translate-y-3"
+                    x-transition:enter-end="opacity-100 translate-y-0"
+                    class="text-center py-10">
                     <p class="text-xs font-GraphikMedium text-darker-2 inline-flex items-center justify-center gap-2 px-4 py-2 bg-gray-50 border border-gray-200/60 rounded-full">
                         <span class="w-1.5 h-1.5 rounded-full bg-piss-yellow"></span>
                         You've viewed all <span class="font-GraphikBold text-darker-3" x-text="total"></span> properties

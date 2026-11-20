@@ -2,8 +2,10 @@
     @php
         $cPhoto = $property->coverPhoto ?: $property->photos->first();
         $photoUrl = $cPhoto ? Storage::disk('public')->url($cPhoto->file_path) : url('resources/images/sample_prop.jpeg');
+        $isAjaxRequest = isset($isAjax) && $isAjax;
     @endphp
-    <div class="bg-white rounded-2xl border border-secondary/80 shadow-xs hover:shadow-lg transition-all duration-300 overflow-hidden flex flex-col md:flex-row md:h-[13.5rem] group">
+    <div class="bg-white rounded-2xl border border-secondary/80 shadow-xs hover:shadow-lg transition-all duration-300 overflow-hidden flex flex-col md:flex-row md:h-[13.5rem] group {{ $isAjaxRequest ? 'animate-card-enter' : '' }}"
+        @if($isAjaxRequest) style="animation-delay: {{ min($loop->index * 60, 480) }}ms;" @endif>
         {{-- Photo & Overlay Badges --}}
         <a href="{{ route('viewProperty', $property) }}" class="block relative md:w-72 lg:w-80 shrink-0 aspect-16/10 md:aspect-auto md:h-full overflow-hidden bg-gray-100">
             <img src="{{ $photoUrl }}" alt="{{ $property->building_name }}"
