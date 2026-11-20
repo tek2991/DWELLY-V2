@@ -152,7 +152,7 @@
 
         <div class="mx-auto mt-4 sm:mt-6 flex flex-col sm:flex-row Site-Max-Width px-4" id="filters-container">
         {{-- Filters Sidebar --}}
-        <div class="hidden sm:block overflow-y-auto h-screen p-4 sticky top-20 sm:top-24 sm:w-80 sm:mr-8 border-r border-gray-100" id="filters">
+        <div class="hidden sm:block overflow-y-auto h-screen p-4 sticky top-28 sm:top-32 sm:w-80 sm:mr-8 border-r border-gray-100" id="filters">
             <form action="{{ route('allProperties') }}" method="GET" class="text-darker-3 text-sm" id="allPropertiesForm">
                 <input type="hidden" name="query" id="hidden-search" value="{{ request('query') }}">
                 <input type="hidden" name="sortBy" id="hidden-sort-by" value="{{ request('sortBy', 'recomended') }}">
@@ -243,70 +243,6 @@
 
         {{-- Property Listing Results --}}
         <div class="w-full">
-            {{-- Desktop Header: Count & Sort (Option 1: Column-aligned with property cards) --}}
-            <div class="hidden sm:flex justify-between items-center pb-4 mb-4 border-b border-gray-100">
-                <div class="text-sm text-darker-2">
-                    Showing <span class="font-GraphikMedium text-darker-3">{{ $properties->total() }}</span> properties
-                    @if (request('query'))
-                        <span>for "<span class="font-GraphikMedium text-darker-3">{{ request('query') }}</span>"</span>
-                    @endif
-                </div>
-
-                <div class="flex items-center space-x-2 text-sm">
-                    <span class="text-darker-2 font-GraphikMedium text-xs">Sort by:</span>
-                    <div class="relative" x-data="{ desktopSortOpen: false }">
-                        <button id="desktop_sort_button" type="button" @click="desktopSortOpen = !desktopSortOpen"
-                            class="flex items-center justify-between min-w-[130px] bg-secondary hover:bg-darker/40 rounded-xl px-3 py-1.5 cursor-pointer text-xs font-GraphikMedium text-darker-3 transition duration-150 border border-secondary shadow-xs focus:outline-none">
-                            <span id="desktop_current_sort_name">
-                                @php
-                                    $sortMap = [
-                                        'recomended' => 'Featured',
-                                        'price_asc' => 'Price: Low to High',
-                                        'price_desc' => 'Price: High to Low',
-                                    ];
-                                    $curSort = request('sortBy', 'recomended');
-                                    echo $sortMap[$curSort] ?? 'Featured';
-                                @endphp
-                            </span>
-                            <svg class="ml-2 w-3.5 h-3.5 text-darker-3 transition-transform duration-200" :class="{ 'rotate-180': desktopSortOpen }" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"></path>
-                            </svg>
-                        </button>
-
-                        <div x-show="desktopSortOpen" @click.outside="desktopSortOpen = false" x-cloak
-                            x-transition:enter="transition ease-out duration-150"
-                            x-transition:enter-start="transform opacity-0 scale-95"
-                            x-transition:enter-end="transform opacity-100 scale-100"
-                            x-transition:leave="transition ease-in duration-100"
-                            x-transition:leave-start="transform opacity-100 scale-100"
-                            x-transition:leave-end="transform opacity-0 scale-95"
-                            class="absolute right-0 mt-1.5 z-30 w-44 bg-white rounded-xl shadow-lg border border-secondary divide-y divide-gray-100 py-1 text-xs overflow-hidden">
-                            <button type="button" @click="desktopSortOpen = false; updateSortBy({ value: 'recomended' })"
-                                class="flex items-center justify-between w-full text-left px-3.5 py-2.5 text-darker-3 hover:bg-gray-50 hover:text-piss-yellow font-Graphik transition cursor-pointer {{ request('sortBy', 'recomended') == 'recomended' ? 'bg-secondary/40 font-GraphikMedium text-piss-yellow' : '' }}">
-                                <span>Featured</span>
-                                @if(request('sortBy', 'recomended') == 'recomended')
-                                    <svg class="w-3.5 h-3.5 text-piss-yellow shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
-                                @endif
-                            </button>
-                            <button type="button" @click="desktopSortOpen = false; updateSortBy({ value: 'price_asc' })"
-                                class="flex items-center justify-between w-full text-left px-3.5 py-2.5 text-darker-3 hover:bg-gray-50 hover:text-piss-yellow font-Graphik transition cursor-pointer {{ request('sortBy') == 'price_asc' ? 'bg-secondary/40 font-GraphikMedium text-piss-yellow' : '' }}">
-                                <span>Price: Low to High</span>
-                                @if(request('sortBy') == 'price_asc')
-                                    <svg class="w-3.5 h-3.5 text-piss-yellow shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
-                                @endif
-                            </button>
-                            <button type="button" @click="desktopSortOpen = false; updateSortBy({ value: 'price_desc' })"
-                                class="flex items-center justify-between w-full text-left px-3.5 py-2.5 text-darker-3 hover:bg-gray-50 hover:text-piss-yellow font-Graphik transition cursor-pointer {{ request('sortBy') == 'price_desc' ? 'bg-secondary/40 font-GraphikMedium text-piss-yellow' : '' }}">
-                                <span>Price: High to Low</span>
-                                @if(request('sortBy') == 'price_desc')
-                                    <svg class="w-3.5 h-3.5 text-piss-yellow shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
-                                @endif
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             {{-- Properties List & Infinite Scroll --}}
             <div x-data="infiniteScroll({
                     nextUrl: '{{ $properties->nextPageUrl() }}',

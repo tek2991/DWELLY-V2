@@ -1,5 +1,11 @@
 @props(['filters' => null, 'total' => null])
-<div x-data="{ drawerOpen: false, bhkOpen: false }" class="fixed inset-x-0 top-0 w-full z-20 bg-white/95 backdrop-blur-md border-b border-gray-200/80 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] pt-2 sm:pt-2.5 transition-all">
+<div x-data="{ drawerOpen: false, bhkOpen: false, scrolled: false }"
+     @scroll.window="scrolled = (window.pageYOffset > 10)"
+     x-init="scrolled = (window.pageYOffset > 10)">
+
+    <!-- Sticky Nav Header with Scroll-Reactive Shadow (Idea B) -->
+    <header class="fixed inset-x-0 top-0 w-full z-30 bg-white/95 backdrop-blur-md pt-2 sm:pt-2.5 transition-all duration-300 border-b"
+        :class="scrolled ? 'border-gray-200/80 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.06)]' : 'border-gray-100/90 shadow-none'">
     <div class="flex justify-between mx-auto w-full Site-Max-Width px-3 sm:px-4 py-2 sm:pb-2.5 items-center">
         <!-- Logo -->
         <div class="shrink-0 flex items-center">
@@ -86,21 +92,24 @@
     </div>
 
     @if (Route::is('allProperties'))
-        {{-- Mobile-only sub-bar for Sort & Filter toggle --}}
-        <div class="sm:hidden border-t border-gray-100/90 px-3 py-2 bg-white/50">
-            <div class="flex justify-between items-center">
-                {{-- Showing properties count on mobile --}}
-                <div class="text-xs text-darker-2">
-                    Showing <span class="font-GraphikMedium text-darker-3">{{ $total ?? 0 }}</span>
+        {{-- Sub-bar for Count, Sort & Mobile Filters (Sticky on both Mobile & Desktop) --}}
+        <div class="border-t border-gray-100/90 px-3 sm:px-4 py-2 sm:py-2.5 bg-white/40">
+            <div class="flex justify-between items-center Site-Max-Width mx-auto">
+                {{-- Showing properties count --}}
+                <div class="text-xs sm:text-sm text-darker-2 flex items-center gap-1.5">
+                    Showing <span class="font-GraphikMedium text-darker-3">{{ $total ?? 0 }}</span> properties
+                    @if (request('query'))
+                        <span class="hidden sm:inline">for "<span class="font-GraphikMedium text-darker-3">{{ request('query') }}</span>"</span>
+                    @endif
                 </div>
 
                 {{-- Sort by & Mobile Filter Button --}}
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 sm:gap-3">
                     <div class="flex items-center">
-                        <span class="text-xs text-darker-2 mr-1.5 font-GraphikMedium shrink-0">Sort:</span>
+                        <span class="text-xs text-darker-2 mr-1.5 sm:mr-2 font-GraphikMedium shrink-0">Sort by:</span>
                         <div class="relative shrink-0" x-data="{ sortOpen: false }">
                             <button id="sort_button" type="button" @click="sortOpen = !sortOpen"
-                                class="flex items-center justify-between min-w-[115px] bg-secondary hover:bg-darker/40 rounded-xl px-2.5 py-1 cursor-pointer text-xs font-GraphikMedium text-darker-3 transition duration-150 border border-secondary shadow-xs focus:outline-none">
+                                class="flex items-center justify-between min-w-[120px] sm:min-w-[135px] bg-secondary hover:bg-darker/40 rounded-xl px-2.5 sm:px-3 py-1 sm:py-1.5 cursor-pointer text-xs font-GraphikMedium text-darker-3 transition duration-150 border border-secondary shadow-xs focus:outline-none">
                                 <span id="current_sort_name">
                                     @php
                                         $sortMap = [
@@ -112,7 +121,7 @@
                                         echo $sortMap[$curSort] ?? 'Featured';
                                     @endphp
                                 </span>
-                                <svg class="ml-1.5 w-3.5 h-3.5 text-darker-3 transition-transform duration-200" :class="{ 'rotate-180': sortOpen }" fill="currentColor" viewBox="0 0 20 20">
+                                <svg class="ml-1.5 sm:ml-2 w-3.5 h-3.5 text-darker-3 transition-transform duration-200" :class="{ 'rotate-180': sortOpen }" fill="currentColor" viewBox="0 0 20 20">
                                     <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"></path>
                                 </svg>
                             </button>
@@ -152,7 +161,7 @@
                         </div>
                     </div>
 
-                    <button class="flex items-center justify-center p-1.5 rounded-xl bg-secondary/80 hover:bg-secondary text-darker-3 transition cursor-pointer shrink-0 border border-secondary shadow-xs"
+                    <button class="sm:hidden flex items-center justify-center p-1.5 rounded-xl bg-secondary/80 hover:bg-secondary text-darker-3 transition cursor-pointer shrink-0 border border-secondary shadow-xs"
                         id="mobile-filter-button" type="button" title="Filters"
                         @click.stop="window.dispatchEvent(new CustomEvent('open-filters'))">
                         <img src="{{ url('resources/icons/filter.svg') }}" alt="filters" class="w-4 h-4">
@@ -161,46 +170,49 @@
             </div>
         </div>
     @endif
+    </header>
 
-    <!-- Drawer Backdrop & Panel -->
-    <div x-show="drawerOpen" x-cloak class="fixed inset-0 z-40 flex justify-end overflow-hidden" @keydown.escape.window="drawerOpen = false">
-        <!-- Backdrop -->
-        <div x-show="drawerOpen"
-            x-transition:enter="transition-opacity ease-linear duration-300"
-            x-transition:enter-start="opacity-0"
-            x-transition:enter-end="opacity-100"
-            x-transition:leave="transition-opacity ease-linear duration-300"
-            x-transition:leave-start="opacity-100"
-            x-transition:leave-end="opacity-0"
-            class="fixed inset-0 bg-black/50"
-            @click="drawerOpen = false"></div>
+    <!-- Drawer Backdrop & Panel (Teleported to body so it displays over entire screen) -->
+    <template x-teleport="body">
+        <div x-show="drawerOpen" x-cloak class="fixed inset-0 z-50 flex justify-end overflow-hidden" @keydown.escape.window="drawerOpen = false">
+            <!-- Backdrop -->
+            <div x-show="drawerOpen"
+                x-transition:enter="transition-opacity ease-linear duration-300"
+                x-transition:enter-start="opacity-0"
+                x-transition:enter-end="opacity-100"
+                x-transition:leave="transition-opacity ease-linear duration-300"
+                x-transition:leave-start="opacity-100"
+                x-transition:leave-end="opacity-0"
+                class="fixed inset-0 bg-black/50"
+                @click="drawerOpen = false"></div>
 
-        <!-- Slide-out Drawer Panel -->
-        <div x-show="drawerOpen"
-            x-transition:enter="transform transition ease-in-out duration-300"
-            x-transition:enter-start="translate-x-full"
-            x-transition:enter-end="translate-x-0"
-            x-transition:leave="transform transition ease-in-out duration-300"
-            x-transition:leave-start="translate-x-0"
-            x-transition:leave-end="translate-x-full"
-            class="relative z-50 h-screen py-4 overflow-y-auto bg-darker-2 w-80 sm:w-96 shadow-xl flex flex-col">
-            <div class="flex justify-between items-center px-6 pt-2 pb-4 border-b border-darker-3">
-                <h5 class="text-base font-semibold text-secondary uppercase">Menu</h5>
-                <button type="button" @click="drawerOpen = false"
-                    class="text-gray-400 bg-transparent hover:text-piss-yellow hover:bg-darker-3 rounded-lg text-sm p-1.5 inline-flex items-center cursor-pointer transition">
-                    <svg aria-hidden="true" class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"
-                        xmlns="http://www.w3.org/2000/svg">
-                        <path fill-rule="evenodd"
-                            d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                            clip-rule="evenodd"></path>
-                    </svg>
-                </button>
-            </div>
-            <div class="py-4 overflow-y-auto flex-1">
-                <x-responsive-nav-link-list />
+            <!-- Slide-out Drawer Panel -->
+            <div x-show="drawerOpen"
+                x-transition:enter="transform transition ease-in-out duration-300"
+                x-transition:enter-start="translate-x-full"
+                x-transition:enter-end="translate-x-0"
+                x-transition:leave="transform transition ease-in-out duration-300"
+                x-transition:leave-start="translate-x-0"
+                x-transition:leave-end="translate-x-full"
+                class="relative z-50 h-screen py-4 overflow-y-auto bg-darker-2 w-80 sm:w-96 shadow-xl flex flex-col">
+                <div class="flex justify-between items-center px-6 pt-2 pb-4 border-b border-darker-3">
+                    <h5 class="text-base font-semibold text-secondary uppercase">Menu</h5>
+                    <button type="button" @click="drawerOpen = false"
+                        class="text-gray-400 bg-transparent hover:text-piss-yellow hover:bg-darker-3 rounded-lg text-sm p-1.5 inline-flex items-center cursor-pointer transition">
+                        <svg aria-hidden="true" class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"
+                            xmlns="http://www.w3.org/2000/svg">
+                            <path fill-rule="evenodd"
+                                d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                                clip-rule="evenodd"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="py-4 overflow-y-auto flex-1">
+                    <x-responsive-nav-link-list />
+                </div>
             </div>
         </div>
-    </div>
+    </template>
 </div>
 
 <script>
