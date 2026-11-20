@@ -1,4 +1,4 @@
-@props(['filters' => null])
+@props(['filters' => null, 'total' => null])
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 
@@ -20,13 +20,13 @@
         @if (Route::is('owners'))
             <x-nav-owners />
         @elseif (Route::is('allProperties') || Route::is('viewProperty'))
-            <x-nav-search :filters="$filters ?? null"/>
+            <x-nav-search :filters="$filters ?? null" :total="$total ?? null"/>
         @else
             <x-nav-main />
         @endif
     </div>
 
-    <div class="font-sans text-gray-900 antialiased min-h-screen pt-24">
+    <div class="font-sans text-gray-900 antialiased min-h-screen {{ Route::is('allProperties') ? 'pt-28 sm:pt-32' : 'pt-24' }}">
         {{ $slot }}
     </div>
 
