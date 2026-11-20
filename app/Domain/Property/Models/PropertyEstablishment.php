@@ -44,4 +44,24 @@ class PropertyEstablishment extends DomainModel
     {
         return $this->belongsTo(Establishment::class);
     }
+
+    public function getDistanceInKmsAttribute(): float
+    {
+        return (float) ($this->distance_km ?? 0);
+    }
+
+    public function getDescriptionAttribute(): ?string
+    {
+        return $this->remarks ?: ($this->establishment?->name ?? '');
+    }
+
+    public function getEstablishmentTypeAttribute()
+    {
+        return $this->establishment?->establishmentType;
+    }
+
+    public function getEstablishmentTypeIdAttribute()
+    {
+        return $this->establishment?->establishment_type_id;
+    }
 }

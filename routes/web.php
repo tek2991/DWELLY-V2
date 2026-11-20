@@ -3,10 +3,16 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\BillingDocumentController;
 use App\Http\Controllers\AuditReportController;
+use App\Http\Controllers\PublicPageController;
 
-Route::get('/', function () {
-    return view('welcome');
-});
+// Public Facing Front Pages
+Route::get('/', [PublicPageController::class, 'index'])->name('home');
+Route::get('/all-properties', [PublicPageController::class, 'allProperties'])->name('allProperties');
+Route::get('/viewProperty/{property}', [PublicPageController::class, 'viewProperty'])->name('viewProperty');
+Route::get('/property-brocure/{property}', [PublicPageController::class, 'propertyBrocure'])->name('propertyBrocure');
+Route::get('/contact', [PublicPageController::class, 'contact'])->name('contact');
+Route::get('/about', [PublicPageController::class, 'about'])->name('about');
+Route::get('/owners', [PublicPageController::class, 'owners'])->name('owners');
 
 Route::get('/login', function () {
     return redirect('/admin/login');

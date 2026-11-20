@@ -1,4 +1,7 @@
 import './annotation-editor';
+import Splide from '@splidejs/splide';
+
+window.Splide = Splide;
 
 function registerEvidenceEditor() {
     Alpine.data('evidenceAnnotationEditor', (config) => ({

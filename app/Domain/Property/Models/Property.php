@@ -35,6 +35,119 @@ class Property extends DomainModel
         return $this->belongsTo(Locality::class, 'locality_id');
     }
 
+    public function locality(): BelongsTo
+    {
+        return $this->localityRef();
+    }
+
+    public function bhkType(): BelongsTo
+    {
+        return $this->belongsTo(BhkType::class, 'bhk_type_id');
+    }
+
+    public function bhk(): BelongsTo
+    {
+        return $this->bhkType();
+    }
+
+    public function propertyType(): BelongsTo
+    {
+        return $this->belongsTo(PropertyType::class, 'property_type_id');
+    }
+
+    public function flooringType(): BelongsTo
+    {
+        return $this->belongsTo(FlooringType::class, 'flooring_type_id');
+    }
+
+    public function flooring(): BelongsTo
+    {
+        return $this->flooringType();
+    }
+
+    public function furnishing(): BelongsTo
+    {
+        return $this->furnishingType();
+    }
+
+    public function coverPhoto(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(PropertyPhoto::class)->where('is_featured', true);
+    }
+
+    public function coverImage(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->coverPhoto();
+    }
+
+    public function currentPricing(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(PropertyPricingVersion::class)->latestOfMany();
+    }
+
+    public function getRentAttribute(): float
+    {
+        return (float) ($this->currentPricing?->rent ?? 0);
+    }
+
+    public function getSecurityDepositAttribute(): float
+    {
+        return (float) ($this->currentPricing?->security_deposit ?? 0);
+    }
+
+    public function getSocietyFeeAttribute(): float
+    {
+        return (float) ($this->currentPricing?->society_fee ?? 0);
+    }
+
+    public function getBookingAmountAttribute(): float
+    {
+        return (float) ($this->currentPricing?->booking_amount ?? 0);
+    }
+
+    public function getFloorSpaceAttribute(): ?int
+    {
+        return $this->floor_space_sqft;
+    }
+
+    public function getFloorsAttribute(): ?int
+    {
+        return $this->floor;
+    }
+
+    public function getAddressAttribute(): string
+    {
+        return trim($this->address_line_1 . ' ' . $this->address_line_2);
+    }
+
+    public function isAvailable(): bool
+    {
+        return (bool) $this->is_listed && (!$this->available_from || $this->available_from <= now());
+    }
+
+    public function getNoOfRooms(string $name): int
+    {
+        return $this->rooms->filter(function ($room) use ($name) {
+            $defName = $room->roomDefinition?->name ?? '';
+            $custName = $room->custom_name ?? '';
+            return stripos($defName, $name) !== false || stripos($custName, $name) !== false;
+        })->count();
+    }
+
+    public function getNoOfFurnitures(string $name): int
+    {
+        return (int) $this->inventories->filter(function ($inv) use ($name) {
+            return stripos($inv->inventoryType?->name ?? '', $name) !== false;
+        })->sum('count');
+    }
+
+    public function checkPropertyAmenity(string $name): bool
+    {
+        return $this->amenities->contains(function ($amenity) use ($name) {
+            return stripos($amenity->amenityType?->name ?? '', $name) !== false;
+        });
+    }
+
     public function getCityIdAttribute(): ?string
     {
         if ($this->locality_id) {
@@ -76,6 +189,11 @@ class Property extends DomainModel
         return $this->hasMany(PropertyInventory::class);
     }
 
+    public function furnitures(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->inventories();
+    }
+
     public function amenities(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(PropertyAmenity::class);
@@ -84,6 +202,11 @@ class Property extends DomainModel
     public function establishments(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(PropertyEstablishment::class);
+    }
+
+    public function nearbyEstablishments(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->establishments();
     }
 
     public function pricingVersions(): \Illuminate\Database\Eloquent\Relations\HasMany
@@ -99,6 +222,11 @@ class Property extends DomainModel
     public function photos(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(PropertyPhoto::class);
+    }
+
+    public function propertyImages(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->photos();
     }
 
     public function documents(): \Illuminate\Database\Eloquent\Relations\HasMany

@@ -42,4 +42,9 @@ class Locality extends DomainModel
     {
         return $this->belongsTo(City::class);
     }
+
+    public function properties(): HasMany
+    {
+        return $this->hasMany(\App\Domain\Property\Models\Property::class, 'locality_id');
+    }
 }

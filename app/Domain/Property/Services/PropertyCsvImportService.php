@@ -112,6 +112,25 @@ class PropertyCsvImportService
             ];
         }
 
+        // Check required column headers before normalizing/filtering
+        $headerErrors = [];
+        $firstRow = $rows[0];
+        foreach ($this->requiredHeaders as $header) {
+            if (!array_key_exists($header, $firstRow)) {
+                $headerErrors[] = "Missing required column header: '{$header}'";
+            }
+        }
+        if (!empty($headerErrors)) {
+            return [
+                'success' => false,
+                'message' => 'CSV validation failed due to missing required column headers.',
+                'total_rows' => count($rows),
+                'imported_rows' => 0,
+                'errors' => $headerErrors,
+                'warnings' => [],
+            ];
+        }
+
         // Normalize rows and filter out empty/incomplete rows
         $normalizedRows = [];
         $skippedCount = 0;

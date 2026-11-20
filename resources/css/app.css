@@ -1,9 +1,395 @@
 @import 'tailwindcss';
+@import '@splidejs/splide/dist/css/splide.min.css';
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
+@source '../views/**/*.blade.php';
 
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+    --font-sans: 'Graphik', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
+
+    --font-Graphik: Graphik, sans-serif;
+    --font-GraphikLight: GraphikLight, Graphik, sans-serif;
+    --font-GraphikMedium: GraphikMedium, Graphik, sans-serif;
+    --font-GraphikSemibold: GraphikSemibold, Graphik, sans-serif;
+    --font-GraphikBold: GraphikBold, Graphik, sans-serif;
+    --font-Adelia: Adelia, sans-serif;
+    --font-SecularOne: SecularOneRegular, SecuralOneRegular, sans-serif;
+    --font-GloriaHallelujah: GloriaHallelujahRegular, cursive;
+
+    --color-piss-yellow: #e8c811;
+    --color-primary: #979797;
+    --color-secondary: #e6e6e6;
+    --color-darker: #CCCED0;
+    --color-darker-2: #686868;
+    --color-dark-2: #686868;
+    --color-darker-3: #4c4d47;
+
+    --breakpoint-3xl: 1920px;
+}
+
+/* Graphik Family Fonts (Unified + Dedicated for 100% compatibility) */
+@font-face {
+    font-family: "Graphik";
+    font-style: normal;
+    font-weight: 300;
+    src: url("../../public/resources/fonts/GraphikLight.otf") format("opentype");
+}
+@font-face {
+    font-family: "Graphik";
+    font-style: normal;
+    font-weight: 400;
+    src: url("../../public/resources/fonts/GraphikRegular.otf") format("opentype");
+}
+@font-face {
+    font-family: "Graphik";
+    font-style: normal;
+    font-weight: 500;
+    src: url("../../public/resources/fonts/GraphikMedium.otf") format("opentype");
+}
+@font-face {
+    font-family: "Graphik";
+    font-style: normal;
+    font-weight: 600;
+    src: url("../../public/resources/fonts/GraphikSemibold.otf") format("opentype");
+}
+@font-face {
+    font-family: "Graphik";
+    font-style: normal;
+    font-weight: 700;
+    src: url("../../public/resources/fonts/GraphikBold.otf") format("opentype");
+}
+
+@font-face {
+    font-family: "GraphikLight";
+    font-style: normal;
+    font-weight: 100 900;
+    src: url("../../public/resources/fonts/GraphikLight.otf") format("opentype");
+}
+@font-face {
+    font-family: "GraphikMedium";
+    font-style: normal;
+    font-weight: 100 900;
+    src: url("../../public/resources/fonts/GraphikMedium.otf") format("opentype");
+}
+@font-face {
+    font-family: "GraphikSemibold";
+    font-style: normal;
+    font-weight: 100 900;
+    src: url("../../public/resources/fonts/GraphikSemibold.otf") format("opentype");
+}
+@font-face {
+    font-family: "GraphikBold";
+    font-style: normal;
+    font-weight: 100 900;
+    src: url("../../public/resources/fonts/GraphikBold.otf") format("opentype");
+}
+
+@font-face {
+    font-family: "Adelia";
+    font-style: normal;
+    src: url("../../public/resources/fonts/ADELIA.otf") format("opentype");
+}
+@font-face {
+    font-family: "SecularOneRegular";
+    src: url("../../public/resources/fonts/SecularOneRegular.ttf") format("truetype");
+}
+@font-face {
+    font-family: "SecuralOneRegular";
+    src: url("../../public/resources/fonts/SecularOneRegular.ttf") format("truetype");
+}
+@font-face {
+    font-family: "GloriaHallelujahRegular";
+    src: url("../../public/resources/fonts/GloriaHallelujahRegular.ttf") format("truetype");
+}
+
+@layer base {
+    html {
+        font-family: "Graphik", system-ui, sans-serif;
+        scroll-behavior: smooth;
+        overflow-x: clip;
+    }
+    body {
+        font-family: "Graphik", system-ui, sans-serif;
+        overflow-x: clip;
+    }
+}
+
+.font-sans {
+    font-family: "Graphik", system-ui, sans-serif !important;
+}
+
+/* Explicit Font Family & Weight Utility Classes */
+.font-Graphik { font-family: "Graphik", sans-serif !important; font-weight: 400 !important; }
+.font-GraphikLight { font-family: "GraphikLight", "Graphik", sans-serif !important; font-weight: 300 !important; }
+.font-GraphikMedium { font-family: "GraphikMedium", "Graphik", sans-serif !important; font-weight: 500 !important; }
+.font-GraphikSemibold { font-family: "GraphikSemibold", "Graphik", sans-serif !important; font-weight: 600 !important; }
+.font-GraphikBold { font-family: "GraphikBold", "Graphik", sans-serif !important; font-weight: 700 !important; }
+.font-Adelia { font-family: "Adelia", sans-serif !important; }
+.font-SecularOne { font-family: "SecularOneRegular", "SecuralOneRegular", sans-serif !important; }
+.font-GloriaHallelujah { font-family: "GloriaHallelujahRegular", cursive !important; }
+.font-system { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Ubuntu", sans-serif !important; }
+
+/* Explicit Color Utilities */
+.bg-piss-yellow { background-color: #e8c811 !important; }
+.text-piss-yellow { color: #e8c811 !important; }
+.hover\:text-piss-yellow:hover { color: #e8c811 !important; }
+.border-piss-yellow { border-color: #e8c811 !important; }
+.border-t-piss-yellow { border-top-color: #e8c811 !important; }
+.border-b-piss-yellow { border-bottom-color: #e8c811 !important; }
+.border-l-piss-yellow { border-left-color: #e8c811 !important; }
+.border-r-piss-yellow { border-right-color: #e8c811 !important; }
+
+.bg-darker-3 { background-color: #4c4d47 !important; }
+.text-darker-3 { color: #4c4d47 !important; }
+.border-darker-3 { border-color: #4c4d47 !important; }
+.border-t-darker-3 { border-top-color: #4c4d47 !important; }
+.border-b-darker-3 { border-bottom-color: #4c4d47 !important; }
+
+.bg-darker-2 { background-color: #686868 !important; }
+.text-darker-2 { color: #686868 !important; }
+.text-dark-2 { color: #686868 !important; }
+.border-darker-2 { border-color: #686868 !important; }
+.border-l-darker-2 { border-left-color: #686868 !important; }
+
+.bg-darker { background-color: #CCCED0 !important; }
+.text-darker { color: #CCCED0 !important; }
+
+.bg-secondary { background-color: #e6e6e6 !important; }
+.text-secondary { color: #e6e6e6 !important; }
+.border-secondary { border-color: #e6e6e6 !important; }
+.border-t-secondary { border-top-color: #e6e6e6 !important; }
+.border-b-secondary { border-bottom-color: #e6e6e6 !important; }
+.border-l-secondary { border-left-color: #e6e6e6 !important; }
+.border-r-secondary { border-right-color: #e8c811 !important; }
+
+.bg-primary { background-color: #979797 !important; }
+.text-primary { color: #979797 !important; }
+
+/* Search Input Boundary & Focus State */
+.search-input-field {
+    border-top: 1px solid #e6e6e6 !important;
+    border-bottom: 1px solid #e6e6e6 !important;
+    border-left: none !important;
+    border-right: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    -webkit-appearance: none;
+    transition: border-bottom-color 0.2s ease-in-out;
+}
+
+@media (max-width: 639px) {
+    .search-input-field {
+        border-right: 1px solid #e6e6e6 !important;
+    }
+}
+
+.search-input-field:focus,
+.search-input-field:focus-visible {
+    border-top: 1px solid #e6e6e6 !important;
+    border-bottom: 2px solid #e8c811 !important;
+    border-left: none !important;
+    border-right: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+@media (max-width: 639px) {
+    .search-input-field:focus,
+    .search-input-field:focus-visible {
+        border-right: 1px solid #e6e6e6 !important;
+    }
+}
+
+/* Custom Legacy Layout Utilities */
+.Site-Max-Width {
+    max-width: 80rem; /* 1280px */
+}
+.Min-Height-8 {
+    min-height: 8rem;
+}
+.Gradient-Top-Banner {
+    background: linear-gradient(
+        180deg,
+        rgba(230, 230, 230, 1) 0%,
+        rgba(255, 255, 255, 1) 100%
+    );
+}
+.H-30pvw {
+    height: calc(100vw - 70vw);
+}
+.H-40pvw {
+    height: calc(100vw - 60vw);
+}
+.MaxH-18 {
+    max-height: 18rem;
+}
+.MaxH-23 {
+    max-height: 23rem;
+}
+.W-30pvw {
+    width: calc(100vw - 70vw);
+}
+.W-40pvw {
+    width: calc(100vw - 60vw);
+}
+.MaxW-18 {
+    max-width: 18rem;
+}
+.MaxW-23 {
+    max-width: 23rem;
+}
+.NegM-T {
+    margin-top: -10%;
+}
+.Rounded-BOX-1 {
+    border-top-left-radius: 20%;
+    border-top-right-radius: 20%;
+    border-bottom-left-radius: 20%;
+}
+.Rounded-BOX-2 {
+    border-top-left-radius: 20%;
+    border-top-right-radius: 20%;
+    border-bottom-right-radius: 20%;
+}
+.Rounded-BOX-1-35 {
+    border-top-left-radius: 4.5rem;
+    border-top-right-radius: 4.5rem;
+    border-bottom-left-radius: 4.5rem;
+}
+.Rounded-BOX-2-35 {
+    border-top-left-radius: 4.5rem;
+    border-top-right-radius: 4.5rem;
+    border-bottom-right-radius: 4.5rem;
+}
+
+/* Hover variants for Rounded-BOX-1 and Rounded-BOX-2 */
+.hover\:Rounded-BOX-1:hover,
+.group:hover .group-hover\:Rounded-BOX-1 {
+    border-top-left-radius: 20% !important;
+    border-top-right-radius: 20% !important;
+    border-bottom-left-radius: 20% !important;
+}
+.hover\:Rounded-BOX-2:hover,
+.group:hover .group-hover\:Rounded-BOX-2 {
+    border-top-left-radius: 20% !important;
+    border-top-right-radius: 20% !important;
+    border-bottom-right-radius: 20% !important;
+}
+.hover\:border-piss-yellow:hover,
+.group:hover .group-hover\:border-piss-yellow {
+    border-color: #e8c811 !important;
+}
+
+/* Left-Space & Right-Space utilities with responsive variant support */
+@utility left-space {
+    margin-left: calc((100vw - 80rem) / 2);
+    @media (max-width: 80rem) {
+        margin-left: 1.5rem;
+    }
+}
+@utility right-space {
+    margin-right: calc((100vw - 80rem) / 2);
+    @media (max-width: 80rem) {
+        margin-right: 1.5rem;
+    }
+}
+
+.Left-Space {
+    margin-left: calc((100vw - 80rem) / 2);
+}
+.Right-Space {
+    margin-right: calc((100vw - 80rem) / 2);
+}
+
+@media (max-width: 80rem) {
+    .Left-Space {
+        margin-left: 1.5rem;
+    }
+    .Right-Space {
+        margin-right: 1.5rem;
+    }
+}
+
+/* Explicit responsive classes for lg:Left-Space and lg:left-space */
+@media (min-width: 1024px) {
+    .lg\:Left-Space,
+    .lg\:left-space {
+        margin-left: calc((100vw - 80rem) / 2) !important;
+    }
+    @media (max-width: 80rem) {
+        .lg\:Left-Space,
+        .lg\:left-space {
+            margin-left: 1.5rem !important;
+        }
+    }
+}
+@media (max-width: 1023px) {
+    .lg\:Left-Space,
+    .lg\:left-space {
+        margin-left: 0 !important;
+    }
+}
+
+.Zoom-5 img {
+    width: 101%;
+    height: 101%;
+}
+.Border-L-18 {
+    border-left: 18px solid;
+}
+.Border-R-18 {
+    border-right: 18px solid;
+}
+
+@media (max-width: 106.25rem) {
+    .NegM-T {
+        margin-top: -13%;
+    }
+}
+@media (max-width: 61.25rem) {
+    .NegM-T {
+        margin-top: -25%;
+    }
+}
+
+/* 3D Flip Card */
+.flip-card {
+    background-color: transparent;
+    perspective: 1000px;
+}
+.flip-card-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    text-align: center;
+    transition: transform 0.6s;
+    transform-style: preserve-3d;
+}
+.flip-card:hover .flip-card-inner {
+    transform: rotateY(180deg);
+}
+.flip-card-front,
+.flip-card-back {
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+}
+.flip-card-front {}
+.flip-card-back {
+    transform: rotateY(180deg);
+}
+
+/* Splide Carousel Custom Styles */
+.splide__pagination__page {
+    background-color: #e6e6e6;
+}
+.splide__pagination__page.is-active {
+    background-color: #e8c811;
+}
+.splide__arrow {
+    background-color: #fff;
+}
+.splide__arrow svg {
+    fill: #e8c811;
 }

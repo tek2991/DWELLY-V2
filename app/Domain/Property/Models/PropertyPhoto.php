@@ -53,4 +53,14 @@ class PropertyPhoto extends DomainModel
 
         return Storage::disk('public')->url($this->file_path);
     }
+
+    public function getImagePathAttribute(): ?string
+    {
+        return $this->file_path;
+    }
+
+    public function getIsCoverAttribute(): bool
+    {
+        return (bool) $this->is_featured;
+    }
 }
