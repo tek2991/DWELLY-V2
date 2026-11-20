@@ -1,20 +1,47 @@
 <div>
-    <div x-data="{ open: @entangle('isOpen') }" x-show="open" x-cloak
-        class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-        <div class="relative bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
-            @click.outside="$wire.closeModal()">
-            {{-- Modal Header --}}
-            <div class="bg-darker-3 text-secondary flex justify-between items-center px-6 py-3 sticky top-0 z-10">
-                <h3 class="font-GraphikMedium text-lg text-white">Rent Out With Dwelly</h3>
-                <button type="button" wire:click="closeModal"
-                    class="text-secondary hover:text-piss-yellow text-sm p-1 inline-flex items-center cursor-pointer">
-                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                        <path fill-rule="evenodd"
-                            d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                            clip-rule="evenodd"></path>
-                    </svg>
-                </button>
-            </div>
+    <div x-data="{ open: @entangle('isOpen') }"
+        x-show="open"
+        x-cloak
+        class="fixed inset-0 z-50 overflow-y-auto"
+        role="dialog"
+        aria-modal="true"
+        @keydown.escape.window="$wire.closeModal()">
+
+        {{-- Backdrop with smooth fade --}}
+        <div x-show="open"
+            x-transition:enter="transition-opacity ease-out duration-300"
+            x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100"
+            x-transition:leave="transition-opacity ease-in duration-200"
+            x-transition:leave-start="opacity-100"
+            x-transition:leave-end="opacity-0"
+            class="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+            @click="$wire.closeModal()"></div>
+
+        {{-- Centering Container --}}
+        <div class="min-h-full flex items-center justify-center p-4 text-center sm:p-0">
+            {{-- Modal Dialog Panel with soft scale & vertical slide --}}
+            <div x-show="open"
+                x-transition:enter="transition ease-out duration-300"
+                x-transition:enter-start="opacity-0 scale-95 translate-y-4 sm:translate-y-0"
+                x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+                x-transition:leave="transition ease-in duration-200"
+                x-transition:leave-start="opacity-100 scale-100 translate-y-0"
+                x-transition:leave-end="opacity-0 scale-95 translate-y-4 sm:translate-y-0"
+                class="relative bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto text-left my-8 transform z-10 border border-gray-100"
+                @click.stop>
+                {{-- Modal Header --}}
+                <div class="bg-darker-3 text-secondary flex justify-between items-center px-6 py-3.5 sticky top-0 z-10">
+                    <h3 class="font-GraphikMedium text-lg text-white">Rent Out With Dwelly</h3>
+                    <button type="button" wire:click="closeModal"
+                        class="text-secondary hover:text-piss-yellow rounded-lg text-sm p-1 inline-flex items-center cursor-pointer transition">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                            <path fill-rule="evenodd"
+                                d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                                clip-rule="evenodd"></path>
+                        </svg>
+                    </button>
+                </div>
 
             @if ($success === false)
                 <form wire:submit="submit" class="p-6 space-y-4">
@@ -146,4 +173,5 @@
             @endif
         </div>
     </div>
+</div>
 </div>
