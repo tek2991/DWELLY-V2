@@ -12,10 +12,10 @@
             }
         </script>
         <input type="hidden" name="bhks[]" value="" id="bhk_id" disabled>
-        <div class="flex justify-center">
-            <div class="relative flex">
+        <div class="flex justify-center items-stretch h-11 md:h-14">
+            <div class="relative flex shrink-0">
                 <button id="bhk_button" @click="bhkOpen = !bhkOpen"
-                    class="flex w-full bg-secondary rounded-bl-3xl pl-4 pr-2 py-2 md:rounded-bl-3xl md:pl-3 md:pr-2 md:py-3 lg:pl-8 lg:gap-6 cursor-pointer border-t border-b border-l border-secondary"
+                    class="flex items-center w-full bg-secondary rounded-bl-3xl pl-4 pr-2 md:rounded-bl-3xl md:pl-3 md:pr-2 lg:pl-8 lg:gap-6 cursor-pointer border-t border-b border-l border-secondary h-full"
                     type="button">
                     <span id="bhk_name" class="text-sm md:text-base font-Graphik">
                         BHK
@@ -58,10 +58,10 @@
                 </div>
             </div>
             <input type="text" name="query" id=""
-                class="search-input-field w-1/2 md:w-3/4 border-l-0 border-r-0 text-sm sm:text-base border-t border-b border-t-secondary border-b-secondary focus:border-t-secondary focus:border-b-piss-yellow focus:border-b-2 focus:ring-0 focus:outline-none outline-none px-4 text-darker-3 bg-white"
+                class="search-input-field w-1/2 md:w-3/4 border-l-0 border-r-0 text-sm sm:text-base border-t border-b border-t-secondary border-b-secondary focus:border-t-secondary focus:border-b-piss-yellow focus:border-b-2 focus:ring-0 focus:outline-none outline-none px-4 text-darker-3 bg-white h-full"
                 placeholder="Location, Amenities...">
             <button type="submit"
-                class="bg-piss-yellow rounded-tr-3xl rounded-bl-3xl -ml-5 px-8 py-2 text-sm sm:text-base md:py-3 hover:bg-darker ease-in-out duration-300 cursor-pointer font-Graphik border border-piss-yellow">Search</button>
+                class="bg-piss-yellow rounded-tr-3xl rounded-bl-3xl -ml-5 px-8 text-sm sm:text-base hover:bg-darker ease-in-out duration-300 cursor-pointer font-Graphik border border-piss-yellow h-full flex items-center justify-center shrink-0">Search</button>
         </div>
     </form>
     <div id="hero">

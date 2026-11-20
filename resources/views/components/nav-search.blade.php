@@ -19,10 +19,10 @@
         <div class="flex-1 min-w-0 mx-2 sm:mx-4 max-w-3xl">
             <form action="{{ route('allProperties') }}" method="GET" id="search-form" class="w-full">
                 <input type="hidden" name="bhks[]" value="{{ is_array(request('bhks')) ? request('bhks')[0] : (request('bhk_id') ?: '') }}" id="bhk_id">
-                <div class="flex w-full items-center">
-                    <div class="relative shrink-0">
+                <div class="flex w-full items-stretch h-10 sm:h-11 md:h-12">
+                    <div class="relative shrink-0 flex">
                         <button id="bhk_button" type="button" @click="bhkOpen = !bhkOpen"
-                            class="flex items-center min-w-max bg-secondary rounded-bl-2xl pl-2.5 pr-2 py-2 sm:pl-4 sm:pr-3 md:py-3 lg:gap-4 cursor-pointer">
+                            class="flex items-center min-w-max bg-secondary rounded-bl-2xl pl-2.5 pr-2 sm:pl-4 sm:pr-3 lg:gap-4 cursor-pointer h-full">
                             <span id="bhk_name" class="text-xs sm:text-sm md:text-base font-GraphikMedium">
                                 @php
                                     $selectedBhk = '';
@@ -38,7 +38,7 @@
                                     echo $selectedBhk;
                                 @endphp
                             </span>
-                            <svg aria-hidden="true" class="ml-1 w-3.5 h-3.5 sm:w-4 sm:h-4" fill="currentColor" viewBox="0 0 20 20"
+                            <svg aria-hidden="true" class="ml-1 w-3.5 h-3.5 sm:w-4 sm:h-4 text-darker-3" fill="currentColor" viewBox="0 0 20 20"
                                 xmlns="http://www.w3.org/2000/svg">
                                 <path fill-rule="evenodd"
                                     d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
@@ -47,7 +47,7 @@
                         </button>
 
                         <div x-show="bhkOpen" @click.outside="bhkOpen = false" x-cloak
-                            class="absolute left-0 mt-2 z-30 w-44 bg-white rounded divide-y divide-gray-100 shadow">
+                            class="absolute left-0 top-full mt-1.5 z-30 w-44 bg-white rounded divide-y divide-gray-100 shadow">
                             <ul class="py-1 text-sm text-gray-700">
                                 @php
                                     $allBhks = \Illuminate\Support\Facades\DB::table('bhk_types')->orderBy('name')->get();
@@ -71,10 +71,10 @@
                     </div>
 
                     <input type="text" name="query" id="search" value="{{ request('query') }}"
-                        class="search-input-field flex-1 min-w-0 border-l-0 text-xs sm:text-base rounded-tr-2xl rounded-br-2xl sm:rounded-br-none sm:border-r-0 border-t border-b border-t-secondary border-b-secondary focus:border-t-secondary focus:border-b-piss-yellow focus:border-b-2 focus:ring-0 focus:outline-none outline-none px-2.5 sm:px-3 bg-white text-darker-3"
+                        class="search-input-field flex-1 min-w-0 border-l-0 text-xs sm:text-base rounded-tr-2xl rounded-br-2xl sm:rounded-br-none sm:border-r-0 border-t border-b border-t-secondary border-b-secondary focus:border-t-secondary focus:border-b-piss-yellow focus:border-b-2 focus:ring-0 focus:outline-none outline-none px-2.5 sm:px-3 bg-white text-darker-3 h-full"
                         placeholder="Location, Amenities...">
                     <button type="submit"
-                        class="bg-piss-yellow rounded-tr-3xl rounded-bl-2xl -ml-5 px-8 py-2 text-sm sm:text-base md:py-3 hover:bg-darker ease-in-out duration-300 hidden sm:block cursor-pointer font-GraphikMedium shrink-0">Search</button>
+                        class="bg-piss-yellow rounded-tr-3xl rounded-bl-2xl -ml-5 px-8 text-sm sm:text-base hover:bg-darker ease-in-out duration-300 hidden sm:flex items-center justify-center cursor-pointer font-GraphikMedium shrink-0 h-full">Search</button>
                 </div>
             </form>
         </div>
