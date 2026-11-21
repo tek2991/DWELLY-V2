@@ -182,6 +182,7 @@ class PublicPageController extends Controller
 
         $furnitures = $property->inventories;
         $amenities = $property->amenities;
+        $allAmenities = DB::table('amenity_types')->where('is_active', true)->get();
 
         $nearbyEstablishments = $property->establishments()
             ->with(['establishment.establishmentType'])
@@ -202,6 +203,7 @@ class PublicPageController extends Controller
             'primaryRooms',
             'furnitures',
             'amenities',
+            'allAmenities',
             'nearbyEstablishments',
             'propertyImages'
         ));
