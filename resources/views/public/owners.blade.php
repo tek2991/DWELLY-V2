@@ -202,9 +202,6 @@
                     <div>
                         <img src="{{ url('resources/images/antarikh.png') }}" alt="Antarikh" class="p-3 bg-cover">
                     </div>
-                    <div>
-                        <img src="{{ url('resources/images/atif.png') }}" alt="Atif" class="p-3 bg-cover">
-                    </div>
                 </div>
             </div>
         </div>
