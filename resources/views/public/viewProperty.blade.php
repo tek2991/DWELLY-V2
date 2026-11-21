@@ -1,5 +1,5 @@
 <x-public-layout :filters="null">
-    <div class="Site-Max-Width mx-auto px-4 sm:px-6 lg:px-8 mt-4 sm:mt-6 pb-24 lg:pb-16">
+    <div class="Site-Max-Width mx-auto px-4 mt-4 sm:mt-6 pb-24 lg:pb-16">
         {{-- Breadcrumbs & Quick Back --}}
         <nav class="flex items-center text-xs sm:text-sm text-darker-2 mb-3 space-x-1.5 flex-wrap">
             <a href="{{ route('home') }}" class="hover:text-darker-3 transition">Home</a>
