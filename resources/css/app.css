@@ -133,6 +133,7 @@
 
 /* Explicit Color Utilities */
 .bg-piss-yellow { background-color: #e8c811 !important; }
+.hover\:bg-piss-yellow:hover { background-color: #e8c811 !important; }
 .text-piss-yellow { color: #e8c811 !important; }
 .hover\:text-piss-yellow:hover { color: #e8c811 !important; }
 .border-piss-yellow { border-color: #e8c811 !important; }
@@ -145,7 +146,9 @@
 .border-r-piss-yellow { border-right-color: #e8c811 !important; }
 
 .bg-darker-3 { background-color: #4c4d47 !important; }
+.hover\:bg-darker-3:hover { background-color: #4c4d47 !important; }
 .text-darker-3 { color: #4c4d47 !important; }
+.hover\:text-darker-3:hover { color: #4c4d47 !important; }
 .border-darker-3 { border-color: #4c4d47 !important; }
 .border-t-darker-3 { border-top-color: #4c4d47 !important; }
 .border-b-darker-3 { border-bottom-color: #4c4d47 !important; }

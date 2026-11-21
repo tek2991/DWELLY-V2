@@ -40,7 +40,7 @@
                 </div>
                 <div class="my-4">
                     <button type="submit"
-                        class="w-full bg-piss-yellow text-darker-3 rounded-sm text-center p-4 text-lg hover:bg-darker-3 hover:text-piss-yellow ease-in-out duration-300 font-GraphikMedium cursor-pointer">
+                        class="w-full bg-piss-yellow text-darker-3 rounded-sm text-center p-4 text-lg hover:bg-darker-3 hover:text-piss-yellow transition-colors duration-200 ease-in-out font-GraphikMedium cursor-pointer shadow-xs">
                         SUBMIT
                     </button>
                 </div>
