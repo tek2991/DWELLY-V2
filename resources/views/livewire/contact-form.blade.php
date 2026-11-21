@@ -12,7 +12,7 @@
                         <span class="text-xs text-red-600 block">{{ $message }}</span>
                     @enderror
                     <input type="text" id="contact_name" wire:model="name"
-                        class="w-full border-2 border-secondary rounded-sm p-2 focus:ring-0 focus:border-piss-yellow">
+                        class="w-full border-2 border-secondary rounded-sm p-2 outline-none focus:outline-none focus:ring-0 focus:border-piss-yellow transition duration-150">
                 </div>
                 <div class="my-4">
                     <label for="contact_phone" class="font-GraphikMedium text-darker-3">Phone*</label>
@@ -20,7 +20,7 @@
                         <span class="text-xs text-red-600 block">{{ $message }}</span>
                     @enderror
                     <input type="tel" id="contact_phone" wire:model="phone"
-                        class="w-full border-2 border-secondary rounded-sm p-2 focus:ring-0 focus:border-piss-yellow">
+                        class="w-full border-2 border-secondary rounded-sm p-2 outline-none focus:outline-none focus:ring-0 focus:border-piss-yellow transition duration-150">
                 </div>
                 <div class="my-4">
                     <label for="contact_email" class="font-GraphikMedium text-darker-3">Email</label>
@@ -28,7 +28,7 @@
                         <span class="text-xs text-red-600 block">{{ $message }}</span>
                     @enderror
                     <input type="email" id="contact_email" wire:model="email"
-                        class="w-full border-2 border-secondary rounded-sm p-2 focus:ring-0 focus:border-piss-yellow">
+                        class="w-full border-2 border-secondary rounded-sm p-2 outline-none focus:outline-none focus:ring-0 focus:border-piss-yellow transition duration-150">
                 </div>
                 <div class="my-4">
                     <label for="contact_message" class="font-GraphikMedium text-darker-3">Message</label>
@@ -36,7 +36,7 @@
                         <span class="text-xs text-red-600 block">{{ $message }}</span>
                     @enderror
                     <textarea name="message" id="contact_message" cols="30" rows="5" wire:model="message"
-                        class="w-full border-2 border-secondary rounded-sm p-2 focus:ring-0 focus:border-piss-yellow"></textarea>
+                        class="w-full border-2 border-secondary rounded-sm p-2 outline-none focus:outline-none focus:ring-0 focus:border-piss-yellow transition duration-150"></textarea>
                 </div>
                 <div class="my-4">
                     <button type="submit"

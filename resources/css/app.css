@@ -136,6 +136,9 @@
 .text-piss-yellow { color: #e8c811 !important; }
 .hover\:text-piss-yellow:hover { color: #e8c811 !important; }
 .border-piss-yellow { border-color: #e8c811 !important; }
+.focus\:border-piss-yellow:focus,
+.focus\:border-piss-yellow:focus-within,
+.focus\:border-piss-yellow:focus-visible { border-color: #e8c811 !important; }
 .border-t-piss-yellow { border-top-color: #e8c811 !important; }
 .border-b-piss-yellow { border-bottom-color: #e8c811 !important; }
 .border-l-piss-yellow { border-left-color: #e8c811 !important; }
@@ -158,7 +161,7 @@
 
 .bg-secondary { background-color: #e6e6e6 !important; }
 .text-secondary { color: #e6e6e6 !important; }
-.border-secondary { border-color: #e6e6e6 !important; }
+.border-secondary { border-color: #e6e6e6; }
 .border-t-secondary { border-top-color: #e6e6e6 !important; }
 .border-b-secondary { border-bottom-color: #e6e6e6 !important; }
 .border-l-secondary { border-left-color: #e6e6e6 !important; }

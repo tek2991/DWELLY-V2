@@ -63,7 +63,7 @@
                                     <span class="text-xs text-red-600 block">{{ $message }}</span>
                                 @enderror
                                 <input type="text" id="book_name" wire:model="name"
-                                    class="w-full mt-1 border border-secondary rounded-lg p-2.5 text-sm focus:ring-0 focus:border-piss-yellow">
+                                    class="w-full mt-1 border border-secondary rounded-lg p-2.5 text-sm outline-none focus:outline-none focus:ring-0 focus:border-piss-yellow transition duration-150">
                             </div>
 
                             <div>
@@ -72,7 +72,7 @@
                                     <span class="text-xs text-red-600 block">{{ $message }}</span>
                                 @enderror
                                 <input type="tel" id="book_phone" wire:model="phone"
-                                    class="w-full mt-1 border border-secondary rounded-lg p-2.5 text-sm focus:ring-0 focus:border-piss-yellow">
+                                    class="w-full mt-1 border border-secondary rounded-lg p-2.5 text-sm outline-none focus:outline-none focus:ring-0 focus:border-piss-yellow transition duration-150">
                             </div>
 
                             <div>
@@ -81,7 +81,7 @@
                                     <span class="text-xs text-red-600 block">{{ $message }}</span>
                                 @enderror
                                 <input type="email" id="book_email" wire:model="email"
-                                    class="w-full mt-1 border border-secondary rounded-lg p-2.5 text-sm focus:ring-0 focus:border-piss-yellow">
+                                    class="w-full mt-1 border border-secondary rounded-lg p-2.5 text-sm outline-none focus:outline-none focus:ring-0 focus:border-piss-yellow transition duration-150">
                             </div>
 
                             <div>
@@ -90,7 +90,7 @@
                                     <span class="text-xs text-red-600 block">{{ $message }}</span>
                                 @enderror
                                 <textarea id="book_message" rows="3" wire:model="message"
-                                    class="w-full mt-1 border border-secondary rounded-lg p-2.5 text-sm focus:ring-0 focus:border-piss-yellow"></textarea>
+                                    class="w-full mt-1 border border-secondary rounded-lg p-2.5 text-sm outline-none focus:outline-none focus:ring-0 focus:border-piss-yellow transition duration-150"></textarea>
                             </div>
 
                             <div class="pt-2">
