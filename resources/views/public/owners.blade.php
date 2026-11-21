@@ -1,5 +1,5 @@
 <x-public-layout>
-    <div id="hero" style="background: linear-gradient(to right, #e6e6e6 60%, #4c4d47 40%);" class="pt-6">
+    <div id="hero" style="background: linear-gradient(to right, #e6e6e6 60%, #4c4d47 40%);" class="pt-16 sm:pt-20">
         <div class="w-full"
             style="background-image: url('{{ url('resources/images/city_bg_30.png') }}');
                 background-size: cover;
