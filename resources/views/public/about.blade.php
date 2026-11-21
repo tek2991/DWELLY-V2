@@ -49,12 +49,9 @@
                 </div>
                 <div class="flex pl-4 pb-4">
                     <div id="p1" onclick="changeProfile('p1')" class="rounded-sm border-b-8 p-2 mx-2 cursor-pointer transition">
-                        <img src="{{ url('resources/images/atif.png') }}" alt="Atif" class="h-16 grayscale hover:grayscale-0 ease-in-out duration-300">
-                    </div>
-                    <div id="p2" onclick="changeProfile('p2')" class="rounded-sm border-b-8 p-2 mx-2 cursor-pointer transition">
                         <img src="{{ url('resources/images/kaushal.png') }}" alt="Kaushal" class="h-16 grayscale hover:grayscale-0 ease-in-out duration-300">
                     </div>
-                    <div id="p3" onclick="changeProfile('p3')" class="rounded-sm border-b-8 p-2 mx-2 cursor-pointer transition">
+                    <div id="p2" onclick="changeProfile('p2')" class="rounded-sm border-b-8 p-2 mx-2 cursor-pointer transition">
                         <img src="{{ url('resources/images/antarikh.png') }}" alt="Antarikh" class="h-16 grayscale hover:grayscale-0 ease-in-out duration-300">
                     </div>
                 </div>
@@ -66,18 +63,12 @@
         <script>
             const profiles = {
                 p1: {
-                    name: 'Atif Ayub',
-                    title: 'Founding Member',
-                    link: 'https://www.linkedin.com/',
-                    desc: 'Atif is a Sales professional. He has worked with unicorn start-ups of India like OYO and Zomato. He is an IIT Guwahati graduate with 4 years of work experience.'
-                },
-                p2: {
                     name: 'Kaushal Choudhury',
                     title: 'Founder',
                     link: 'https://www.linkedin.com/in/kaushal-choudhury/',
                     desc: 'Kaushal is the founder of Dwelly. He is an operations professional and was previously working as the North East India Operations Head for OYO Rooms. He is a 2012 engineering graduate has worked with companies like FLSmidth.'
                 },
-                p3: {
+                p2: {
                     name: 'Antarikh Baruah',
                     title: 'Founding Member, Operations',
                     link: 'https://www.linkedin.com/',
@@ -102,7 +93,7 @@
                 });
             }
 
-            changeProfile('p2');
+            changeProfile('p1');
         </script>
     @endsection
 </x-public-layout>
