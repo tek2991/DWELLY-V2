@@ -25,13 +25,9 @@
                 <img src="{{ url('resources/icons/whatsapp.svg') }}" alt="" class="w-5 mr-3">
                 <span class="text-gray-600">Whatsapp</span>
             </a>
-            <a href="mailto:?subject={{ urlencode('Property on Dwelly') }}&body={{ urlencode('Check out this property: ' . $propUrl) }}" title="Share on Email" class="flex px-4 py-2 text-sm text-gray-800 border-b hover:bg-darker">
+            <a href="mailto:?subject={{ urlencode('Property on Dwelly') }}&body={{ urlencode('Check out this property: ' . $propUrl) }}" title="Share on Email" class="flex px-4 py-2 text-sm text-gray-800 hover:bg-darker">
                 <img src="{{ url('resources/icons/email.svg') }}" alt="" class="w-5 mr-3">
                 <span class="text-gray-600">Email</span>
-            </a>
-            <a href="{{ route('propertyBrocure', $property) }}" title="Download PDF" class="flex px-4 py-2 text-sm text-gray-800 border-b hover:bg-darker">
-                <img src="{{ url('resources/icons/pdf.svg') }}" alt="" class="w-5 mr-3">
-                <span class="text-gray-600">Brochure</span>
             </a>
         </div>
     </div>

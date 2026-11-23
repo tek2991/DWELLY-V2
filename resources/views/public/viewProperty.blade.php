@@ -52,12 +52,6 @@
 
             {{-- Quick Action Buttons on Desktop --}}
             <div class="shrink-0 flex items-center gap-2.5 self-start pt-1">
-                <a href="{{ route('propertyBrocure', $property) }}" target="_blank" rel="noopener noreferrer"
-                   title="Download PDF Brochure"
-                   class="inline-flex items-center gap-1.5 text-xs sm:text-sm font-GraphikMedium text-darker-3 bg-gray-100 hover:bg-gray-200 px-3.5 py-2 rounded-sm transition cursor-pointer">
-                    <img src="{{ url('resources/icons/pdf.svg') }}" alt="PDF" class="w-4 h-4">
-                    <span>Brochure</span>
-                </a>
                 <x-property-share-button :property="$property" />
             </div>
         </div>
@@ -418,12 +412,6 @@
                                 </svg>
                                 <span>BOOK A VISIT</span>
                             </button>
-
-                            <a href="{{ route('propertyBrocure', $property) }}" target="_blank" rel="noopener noreferrer"
-                               class="w-full border border-gray-300 hover:border-darker-3 text-darker-3 hover:bg-gray-50 transition font-GraphikMedium py-2.5 px-4 rounded-sm text-center text-xs sm:text-sm cursor-pointer flex items-center justify-center gap-2">
-                                <img src="{{ url('resources/icons/pdf.svg') }}" alt="PDF" class="w-4 h-4">
-                                <span>Download PDF Brochure</span>
-                            </a>
                         </div>
 
                         {{-- Dwelly Guarantee Badges --}}

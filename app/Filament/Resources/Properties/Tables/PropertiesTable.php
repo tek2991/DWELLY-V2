@@ -225,6 +225,14 @@ class PropertiesTable
                     ->visible(fn (Property $record): bool => PropertyFinancials::canAccess(['record' => $record->id]))
                     ->url(fn (Property $record): string => PropertyResource::getUrl('financials', ['record' => $record])),
 
+                Action::make('brochure')
+                    ->label('Brochure')
+                    ->icon('heroicon-o-document-arrow-down')
+                    ->color('info')
+                    ->tooltip('Download Property Brochure (PDF)')
+                    ->url(fn (Property $record): string => route('propertyBrocure', $record))
+                    ->openUrlInNewTab(),
+
                 EditAction::make(),
             ])
             ->toolbarActions([

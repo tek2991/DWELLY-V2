@@ -35,6 +35,14 @@ class EditProperty extends EditRecord
                 ->hidden(fn (Property $record): bool => $record->onboardingProject?->status === 'Activated')
                 ->url(fn (Property $record): string => PropertyResource::getUrl('onboarding', ['record' => $record])),
 
+            Action::make('brochure')
+                ->label('Brochure PDF')
+                ->icon('heroicon-o-document-arrow-down')
+                ->color('info')
+                ->tooltip('Download printable property brochure (PDF)')
+                ->url(fn (Property $record): string => route('propertyBrocure', $record))
+                ->openUrlInNewTab(),
+
             DeleteAction::make(),
         ];
     }
