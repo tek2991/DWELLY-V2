@@ -115,7 +115,7 @@
         }
         .card-value {
             font-size: 9.5px;
-            font-weight: 600;
+            font-weight: bold;
             color: #0f172a;
         }
 
@@ -368,7 +368,7 @@
                         </td>
                         <td class="text-center">{{ (int) ($item->quantity ?? 1) }}</td>
                         <td class="text-right">₹{{ number_format($item->unit_price, 2) }}</td>
-                        <td class="text-right" style="font-weight: 600;">₹{{ number_format($item->line_total, 2) }}</td>
+                        <td class="text-right" style="font-weight: bold;">₹{{ number_format($item->line_total, 2) }}</td>
                     </tr>
                 @empty
                     <tr>
@@ -387,7 +387,7 @@
             <!-- Payment Instructions -->
             <td class="instructions-cell">
                 <div class="instructions-box">
-                    <div class="instructions-title">🏦 Payment & Escrow Instructions</div>
+                    <div class="instructions-title">Payment & Escrow Instructions</div>
                     <div class="inst-row">
                         <span class="inst-label">Beneficiary:</span>
                         <strong>Dwelly Client / Escrow Account</strong>
@@ -419,23 +419,23 @@
                 <table class="totals-table">
                     <tr>
                         <td style="color: #64748b;">Current Demand Charges:</td>
-                        <td class="text-right" style="font-weight: 600;">₹{{ number_format($currentDemand, 2) }}</td>
+                        <td class="text-right" style="font-weight: bold;">₹{{ number_format($currentDemand, 2) }}</td>
                     </tr>
                     @if($previousBalance > 0)
                         <tr>
                             <td style="color: #d97706;">Previous Ledger Dues:</td>
-                            <td class="text-right" style="font-weight: 600; color: #d97706;">+ ₹{{ number_format($previousBalance, 2) }}</td>
+                            <td class="text-right" style="font-weight: bold; color: #d97706;">+ ₹{{ number_format($previousBalance, 2) }}</td>
                         </tr>
                     @elseif($previousBalance < 0)
                         <tr>
                             <td style="color: #16a34a;">Advance / Credit Balance:</td>
-                            <td class="text-right" style="font-weight: 600; color: #16a34a;">- ₹{{ number_format(abs($previousBalance), 2) }}</td>
+                            <td class="text-right" style="font-weight: bold; color: #16a34a;">- ₹{{ number_format(abs($previousBalance), 2) }}</td>
                         </tr>
                     @endif
                     @if($amountPaid > 0)
                         <tr>
                             <td style="color: #16a34a;">Payments Received:</td>
-                            <td class="text-right" style="font-weight: 600; color: #16a34a;">- ₹{{ number_format($amountPaid, 2) }}</td>
+                            <td class="text-right" style="font-weight: bold; color: #16a34a;">- ₹{{ number_format($amountPaid, 2) }}</td>
                         </tr>
                     @endif
                     <tr class="grand-total-row">

@@ -5,7 +5,7 @@
     <title>Invoice - {{ $invoice->invoice_number }}</title>
     <style>
         @page {
-            margin: 30px 35px;
+            margin: 28px 32px;
         }
         * {
             font-family: 'DejaVu Sans', Arial, sans-serif;
@@ -13,449 +13,497 @@
         }
         body {
             font-family: 'DejaVu Sans', Arial, sans-serif;
-            font-size: 11px;
+            font-size: 10.5px;
             color: #1e293b;
             margin: 0;
             padding: 0;
             line-height: 1.45;
         }
-        .logo-title {
+        .header-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 18px;
+            border-bottom: 2px solid #0284c7;
+            padding-bottom: 12px;
+        }
+        .brand-title {
             font-size: 24px;
             font-weight: bold;
-            color: #1e3a8a;
+            color: #0369a1;
             letter-spacing: 0.5px;
+            margin: 0;
         }
-        .company-subtitle {
-            font-size: 9.5px;
+        .brand-subtitle {
+            font-size: 9px;
             color: #64748b;
             margin-top: 2px;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.8px;
+        }
+        .agency-notice {
+            font-size: 8.5px;
+            color: #0369a1;
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+            border-radius: 4px;
+            padding: 4px 8px;
+            display: inline-block;
+            margin-top: 6px;
         }
         .doc-title {
-            font-size: 20px;
+            font-size: 16px;
             font-weight: bold;
-            color: #2563eb;
+            color: #0f172a;
             text-align: right;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 0.75px;
+            margin: 0;
+        }
+        .doc-sub {
+            font-size: 9px;
+            color: #64748b;
+            text-align: right;
+            margin-top: 2px;
         }
         .badge {
             display: inline-block;
-            padding: 2px 7px;
+            padding: 3px 8px;
             border-radius: 4px;
-            font-size: 9px;
+            font-size: 8.5px;
             font-weight: bold;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
+        .badge-pending { background: #fef3c7; color: #92400e; }
         .badge-paid { background: #dcfce7; color: #166534; }
-        .badge-sent { background: #e0f2fe; color: #0369a1; }
-        .badge-draft { background: #f1f5f9; color: #475569; }
-        .badge-overdue { background: #fee2e2; color: #991b1b; }
-        
-        .info-grid {
+        .badge-partial { background: #ffedd5; color: #9a3412; }
+        .badge-cancelled { background: #f1f5f9; color: #475569; }
+
+        .info-table {
             width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
+            border-collapse: separate;
+            border-spacing: 10px 0;
+            margin-left: -10px;
+            margin-right: -10px;
+            margin-bottom: 16px;
         }
-        .info-box {
+        .info-card {
             background: #f8fafc;
             border: 1px solid #e2e8f0;
             border-radius: 6px;
             padding: 10px 12px;
             vertical-align: top;
-            width: 48%;
         }
-        .box-title {
-            font-size: 10.5px;
+        .card-header {
+            font-size: 9px;
             font-weight: bold;
-            color: #1e3a8a;
-            border-bottom: 1px solid #cbd5e1;
-            padding-bottom: 4px;
-            margin-bottom: 6px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            color: #0284c7;
+            margin-bottom: 6px;
+            border-bottom: 1px dashed #cbd5e1;
+            padding-bottom: 4px;
         }
-        .info-row {
+        .card-row {
             margin-bottom: 3px;
-            font-size: 10px;
-            color: #334155;
         }
-        .info-label {
+        .card-label {
+            font-size: 8.5px;
             color: #64748b;
             display: inline-block;
-            width: 75px;
-            font-weight: bold;
+            width: 80px;
         }
-        .info-value {
+        .card-value {
+            font-size: 9.5px;
+            font-weight: bold;
             color: #0f172a;
         }
 
-        .items-table {
+        .table-container {
+            margin-bottom: 16px;
+        }
+        .data-table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 20px;
+            margin-top: 4px;
         }
-        .items-table th {
-            background-color: #f1f5f9;
-            color: #334155;
+        .data-table th {
+            background: #0284c7;
+            color: #ffffff;
+            font-size: 8.5px;
             font-weight: bold;
-            text-align: left;
-            padding: 8px 10px;
-            border-bottom: 2px solid #cbd5e1;
-            border-top: 1px solid #cbd5e1;
-            font-size: 10px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            padding: 7px 10px;
+            text-align: left;
         }
-        .items-table td {
+        .data-table td {
             padding: 8px 10px;
             border-bottom: 1px solid #e2e8f0;
-            vertical-align: top;
-            font-size: 10.5px;
+            font-size: 9.5px;
         }
-        .text-right {
-            text-align: right !important;
+        .data-table tr:nth-child(even) td {
+            background: #fafafa;
         }
-        .text-center {
-            text-align: center !important;
-        }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
 
         .summary-wrapper {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 20px;
+            margin-bottom: 16px;
         }
-        .summary-table {
-            width: 270px;
-            float: right;
-            border-collapse: collapse;
+        .instructions-cell {
+            width: 58%;
+            vertical-align: top;
+            padding-right: 14px;
         }
-        .summary-table td {
-            padding: 4px 8px;
-            font-size: 10.5px;
-        }
-        .summary-label {
-            color: #64748b;
-            text-align: right;
-        }
-        .summary-val {
-            text-align: right;
-            font-weight: bold;
-            color: #0f172a;
-        }
-        .grand-total-row td {
-            font-weight: bold;
-            font-size: 13px;
-            border-top: 2px solid #cbd5e1;
-            border-bottom: 2px solid #cbd5e1;
-            color: #1e3a8a;
-            background-color: #eff6ff;
-            padding: 6px 8px;
-        }
-        .balance-due-row td {
-            font-weight: bold;
-            font-size: 12px;
-            color: #b91c1c;
-            padding: 6px 8px;
+        .totals-cell {
+            width: 42%;
+            vertical-align: top;
         }
 
-        .notes-section {
+        .instructions-box {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: 6px;
+            padding: 10px 12px;
+        }
+        .instructions-title {
+            font-size: 9px;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: #166534;
+            margin-bottom: 6px;
+            border-bottom: 1px dashed #86efac;
+            padding-bottom: 3px;
+        }
+        .inst-row {
+            font-size: 8.5px;
+            margin-bottom: 3px;
+            color: #14532d;
+        }
+        .inst-label {
+            display: inline-block;
+            width: 90px;
+            color: #166534;
+            font-weight: bold;
+        }
+
+        .totals-table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 15px;
-            clear: both;
-        }
-        .notes-box {
             background: #f8fafc;
             border: 1px solid #e2e8f0;
-            border-left: 4px solid #2563eb;
-            border-radius: 4px;
-            padding: 10px 12px;
-            font-size: 10px;
-            color: #334155;
+            border-radius: 6px;
         }
-        .notes-title {
+        .totals-table td {
+            padding: 6px 10px;
+            font-size: 9px;
+        }
+        .totals-table .grand-total-row td {
+            background: #0284c7;
+            color: #ffffff;
             font-weight: bold;
-            margin-bottom: 3px;
-            color: #1e3a8a;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+            font-size: 11px;
+            padding: 8px 10px;
         }
 
-        .signatory-box {
-            text-align: right;
-            font-size: 10.5px;
-            color: #334155;
-            padding-top: 20px;
-        }
-
-        .footer-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 25px;
-            padding-top: 12px;
-            border-top: 1px solid #e2e8f0;
-            font-size: 9.5px;
+        .legal-notice {
+            margin-top: 14px;
+            padding: 8px 10px;
+            background: #f8fafc;
+            border-left: 3px solid #0284c7;
+            border-radius: 0 4px 4px 0;
+            font-size: 8px;
             color: #64748b;
+            line-height: 1.4;
+        }
+
+        .footer {
+            margin-top: 14px;
+            text-align: center;
+            font-size: 8px;
+            color: #94a3b8;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 8px;
         }
     </style>
 </head>
 <body>
     @php
-        $statusStr = $invoice->status instanceof \BackedEnum ? $invoice->status->value : (string) ($invoice->status ?? 'sent');
-        $statusClass = match(strtolower($statusStr)) {
-            'paid' => 'badge-paid',
-            'sent' => 'badge-sent',
-            'overdue' => 'badge-overdue',
-            default => 'badge-draft'
+        $category = \App\Domain\Finance\Services\BillingPropertyResolver::categorizeInvoice($invoice);
+        $property = \App\Domain\Finance\Services\BillingPropertyResolver::resolveProperty($invoice);
+
+        $maintenance = null;
+        if ($invoice->reference_type === \App\Domain\Maintenance\Models\MaintenanceRequest::class && $invoice->reference_id) {
+            $maintenance = \App\Domain\Maintenance\Models\MaintenanceRequest::with(['property.owner', 'owner', 'tenant', 'currentClientQuote'])->find($invoice->reference_id);
+            if (!$property && $maintenance?->property) {
+                $property = $maintenance->property;
+            }
+        }
+
+        $owner = $property?->owner ?? $maintenance?->owner;
+        if (!$owner && $property?->id) {
+            $mouPartyId = \App\Domain\Mou\Models\Mou::where('property_id', $property->id)->whereNotNull('party_id')->latest()->value('party_id');
+            if ($mouPartyId) {
+                $owner = \App\Domain\Party\Models\Party::find($mouPartyId);
+            }
+        }
+
+        $docTitle = match($category['key']) {
+            'maintenance' => 'Maintenance Invoice',
+            'fee' => 'Documentation Fee',
+            'damage' => 'Move-Out Deduction',
+            default => 'Tax Invoice',
         };
 
-        $branch = $invoice->branch;
-        $organization = $branch ? $branch->organization : \Tek2991\Accounting\Models\Organization::current();
-        $companyName = $organization->name ?? 'Dwelly Property Management';
-        $branchName = $branch ? $branch->name : null;
-        $branchAddress = $branch ? implode(', ', array_filter([$branch->address, $branch->city, $branch->state?->name, $branch->postal_code])) : '';
-        $branchPhone = $branch->phone ?? ($organization->phone ?? '');
-        $branchEmail = $branch->email ?? ($organization->email ?? '');
-        $branchGstin = $branch?->gstRegistration?->gstin ?? ($organization->gstin ?? '');
+        $docSub = match($category['key']) {
+            'maintenance' => 'Property Repairs & Operations Statement',
+            'fee' => 'Agreement & Processing Charge',
+            'damage' => 'Tenant Move-Out Settlement',
+            default => 'Statement of Account',
+        };
+
+        $statusStr = is_object($invoice->status) ? $invoice->status->value : (string) ($invoice->status ?? 'draft');
+        $badgeClass = match (strtolower($statusStr)) {
+            'paid' => 'badge-paid',
+            'partially_paid' => 'badge-partial',
+            'cancelled' => 'badge-cancelled',
+            default => 'badge-pending',
+        };
+        $statusLabel = match (strtolower($statusStr)) {
+            'paid' => 'Settled / Paid',
+            'partially_paid' => 'Partially Paid',
+            'cancelled' => 'Cancelled',
+            default => 'Payment Due',
+        };
+
+        $clientRole = 'Client';
+        if ($maintenance) {
+            $clientRole = ($maintenance->payer_type?->value ?? (string)$maintenance->payer_type) === 'tenant' ? 'Tenant' : 'Property Owner';
+        }
+
+        $amountPaid = (float) $invoice->amount_paid;
+        $balanceDue = (float) $invoice->balance_due;
+        $totalPayable = $balanceDue > 0 ? $balanceDue : (float) $invoice->grand_total;
     @endphp
 
-    {{-- Header --}}
-    <table style="width: 100%; border-collapse: collapse; margin-bottom: 12px;">
+    <!-- Header Section -->
+    <table class="header-table">
         <tr>
-            <td style="vertical-align: top; width: 50%;">
-                <div class="logo-title">{{ $companyName }}</div>
-                <div class="company-subtitle">Property Management &bull; Tax Invoice</div>
-                @if($branchName)
-                    <div style="font-size: 10px; color: #475569; margin-top: 4px; font-weight: bold;">Branch: {{ $branchName }}</div>
-                @endif
-                @if($branchAddress)
-                    <div style="font-size: 9.5px; color: #64748b; margin-top: 2px;">{{ $branchAddress }}</div>
-                @endif
-                @if($branchGstin)
-                    <div style="font-size: 9.5px; color: #64748b; margin-top: 2px;">GSTIN: {{ $branchGstin }}</div>
-                @endif
-                @if($organization && $organization->pan)
-                    <div style="font-size: 9.5px; color: #64748b; margin-top: 2px;">PAN: {{ $organization->pan }}</div>
+            <td style="width: 55%; vertical-align: top;">
+                <h1 class="brand-title">DWELLY</h1>
+                <div class="brand-subtitle">Property Management & Residential Operations</div>
+                @if($owner)
+                    <div class="agency-notice">
+                        <strong>Managing Agent</strong> for Property Owner: <strong>{{ $owner->display_name ?? $owner->name }}</strong>
+                    </div>
                 @endif
             </td>
-            <td style="vertical-align: top; width: 50%; text-align: right;">
-                <div class="doc-title" style="margin-bottom: 6px;">Tax Invoice</div>
-                <table style="width: 100%; border-collapse: collapse;">
+            <td style="width: 45%; vertical-align: top; text-align: right;">
+                <div class="doc-title">{{ $docTitle }}</div>
+                <div class="doc-sub">{{ $docSub }}</div>
+                <div style="margin-top: 6px;">
+                    <span class="badge {{ $badgeClass }}">{{ $statusLabel }}</span>
+                </div>
+            </td>
+        </tr>
+    </table>
+
+    <!-- Notice Metadata & Tenant/Property Info -->
+    <table class="info-table">
+        <tr>
+            <!-- Reference Details -->
+            <td style="width: 33.3%;" class="info-card">
+                <div class="card-header">Invoice Reference</div>
+                <div class="card-row">
+                    <span class="card-label">Invoice Ref:</span>
+                    <span class="card-value">#{{ $invoice->invoice_number }}</span>
+                </div>
+                <div class="card-row">
+                    <span class="card-label">Issue Date:</span>
+                    <span class="card-value">{{ $invoice->issue_date ? $invoice->issue_date->format('d M Y') : now()->format('d M Y') }}</span>
+                </div>
+                <div class="card-row">
+                    <span class="card-label">Due Date:</span>
+                    <span class="card-value" style="color: #dc2626;">{{ $invoice->due_date ? $invoice->due_date->format('d M Y') : 'Due upon receipt' }}</span>
+                </div>
+                @if($maintenance)
+                    <div class="card-row">
+                        <span class="card-label">Ticket Ref:</span>
+                        <span class="card-value">#{{ $maintenance->ticket_number }}</span>
+                    </div>
+                @else
+                    <div class="card-row">
+                        <span class="card-label">Status:</span>
+                        <span class="card-value">{{ ucfirst($statusStr) }}</span>
+                    </div>
+                @endif
+            </td>
+
+            <!-- Client / Billed To Details -->
+            <td style="width: 33.3%;" class="info-card">
+                <div class="card-header">Billed To ({{ $clientRole }})</div>
+                <div class="card-row">
+                    <span class="card-label">Name:</span>
+                    <span class="card-value">{{ $invoice->contact?->name ?? 'Valued Client' }}</span>
+                </div>
+                <div class="card-row">
+                    <span class="card-label">Phone:</span>
+                    <span class="card-value">{{ $invoice->contact?->phone ?? '—' }}</span>
+                </div>
+                <div class="card-row">
+                    <span class="card-label">Email:</span>
+                    <span class="card-value">{{ $invoice->contact?->email ?? '—' }}</span>
+                </div>
+                @if($invoice->contact?->gstin)
+                    <div class="card-row">
+                        <span class="card-label">GSTIN:</span>
+                        <span class="card-value">{{ $invoice->contact->gstin }}</span>
+                    </div>
+                @else
+                    <div class="card-row">
+                        <span class="card-label">Account:</span>
+                        <span class="card-value">Client A/C</span>
+                    </div>
+                @endif
+            </td>
+
+            <!-- Property Details -->
+            <td style="width: 33.3%;" class="info-card">
+                <div class="card-header">Property Details</div>
+                <div class="card-row">
+                    <span class="card-label">Property:</span>
+                    <span class="card-value">{{ $property?->building_name ?? $property?->name ?? 'Residential Property' }}</span>
+                </div>
+                <div class="card-row">
+                    <span class="card-label">Unit/Door:</span>
+                    <span class="card-value">{{ $property?->unit_number ?? $property?->door_number ?? 'Main Unit' }}</span>
+                </div>
+                <div class="card-row">
+                    <span class="card-label">Address:</span>
+                    <span class="card-value">{{ Str::limit($property ? implode(', ', array_filter([$property->address_line_1, $property->localityRef?->name ?? $property->locality, $property->city])) : 'On File', 30) }}</span>
+                </div>
+                <div class="card-row">
+                    <span class="card-label">Property Code:</span>
+                    <span class="card-value">{{ $property?->code ?? '—' }}</span>
+                </div>
+            </td>
+        </tr>
+    </table>
+
+    <!-- Line Items Table -->
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th style="width: 8%;" class="text-center">#</th>
+                    <th style="width: 52%;">Charge Description / Scope of Work</th>
+                    <th style="width: 12%;" class="text-center">Period/Qty</th>
+                    <th style="width: 14%;" class="text-right">Rate (₹)</th>
+                    <th style="width: 14%;" class="text-right">Amount (₹)</th>
+                </tr>
+            </thead>
+            <tbody>
+                @forelse($invoice->items as $idx => $item)
                     <tr>
-                        <td style="text-align: right; color: #64748b; font-size: 10px; padding: 2px 0;">Invoice Number:</td>
-                        <td style="text-align: right; font-weight: bold; font-size: 10.5px; padding: 2px 0 2px 8px; width: 140px;">{{ $invoice->invoice_number }}</td>
-                    </tr>
-                    <tr>
-                        <td style="text-align: right; color: #64748b; font-size: 10px; padding: 2px 0;">Issue Date:</td>
-                        <td style="text-align: right; font-weight: bold; font-size: 10.5px; padding: 2px 0 2px 8px;">{{ $invoice->issue_date ? $invoice->issue_date->format('d M Y') : 'N/A' }}</td>
-                    </tr>
-                    <tr>
-                        <td style="text-align: right; color: #64748b; font-size: 10px; padding: 2px 0;">Due Date:</td>
-                        <td style="text-align: right; font-weight: bold; font-size: 10.5px; padding: 2px 0 2px 8px;">{{ $invoice->due_date ? $invoice->due_date->format('d M Y') : 'N/A' }}</td>
-                    </tr>
-                    <tr>
-                        <td style="text-align: right; color: #64748b; font-size: 10px; padding: 2px 0;">Status:</td>
-                        <td style="text-align: right; padding: 2px 0 2px 8px;">
-                            <span class="badge {{ $statusClass }}">{{ strtoupper(str_replace('_', ' ', $statusStr)) }}</span>
+                        <td class="text-center" style="color: #64748b;">{{ $idx + 1 }}</td>
+                        <td>
+                            <strong>{{ $item->description }}</strong>
+                            @if($item->hsn_sac_code)
+                                <span style="color: #64748b; font-size: 8.5px;"> (HSN/SAC: {{ $item->hsn_sac_code }})</span>
+                            @endif
                         </td>
+                        <td class="text-center">{{ (int) ($item->quantity ?? 1) }}</td>
+                        <td class="text-right">₹{{ number_format($item->unit_price, 2) }}</td>
+                        <td class="text-right" style="font-weight: bold;">₹{{ number_format($item->line_total, 2) }}</td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="5" class="text-center" style="color: #64748b; padding: 14px;">
+                            Charges: ₹{{ number_format($invoice->grand_total, 2) }}
+                        </td>
+                    </tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Summary & Payment Instructions Grid -->
+    <table class="summary-wrapper">
+        <tr>
+            <!-- Payment Instructions -->
+            <td class="instructions-cell">
+                <div class="instructions-box">
+                    <div class="instructions-title">Payment & Escrow Instructions</div>
+                    <div class="inst-row">
+                        <span class="inst-label">Beneficiary:</span>
+                        <strong>Dwelly Client / Escrow Account</strong>
+                    </div>
+                    <div class="inst-row">
+                        <span class="inst-label">Bank Name:</span>
+                        <span>ICICI Bank</span>
+                    </div>
+                    <div class="inst-row">
+                        <span class="inst-label">Account No:</span>
+                        <strong>123405009876</strong>
+                    </div>
+                    <div class="inst-row">
+                        <span class="inst-label">IFSC Code:</span>
+                        <span>ICIC0001234</span>
+                    </div>
+                    <div class="inst-row">
+                        <span class="inst-label">UPI VPA:</span>
+                        <strong>dwelly.rent@icici</strong>
+                    </div>
+                    <div style="font-size: 8px; color: #166534; margin-top: 6px; border-top: 1px dashed #bbf7d0; padding-top: 4px;">
+                        * Please mention your Invoice Ref <strong>#{{ $invoice->invoice_number }}</strong> in payment remarks.
+                    </div>
+                </div>
+            </td>
+
+            <!-- Totals & Statement Balance Card -->
+            <td class="totals-cell">
+                <table class="totals-table">
+                    <tr>
+                        <td style="color: #64748b;">Current Invoice Charges:</td>
+                        <td class="text-right" style="font-weight: bold;">₹{{ number_format((float) $invoice->grand_total, 2) }}</td>
+                    </tr>
+                    @if((float) $invoice->tax_total > 0)
+                        <tr>
+                            <td style="color: #64748b;">Tax Total:</td>
+                            <td class="text-right" style="font-weight: bold;">₹{{ number_format((float) $invoice->tax_total, 2) }}</td>
+                        </tr>
+                    @endif
+                    @if((float) $invoice->discount_amount > 0)
+                        <tr>
+                            <td style="color: #16a34a;">Discount Applied:</td>
+                            <td class="text-right" style="font-weight: bold; color: #16a34a;">- ₹{{ number_format((float) $invoice->discount_amount, 2) }}</td>
+                        </tr>
+                    @endif
+                    @if($amountPaid > 0)
+                        <tr>
+                            <td style="color: #16a34a;">Payments Received:</td>
+                            <td class="text-right" style="font-weight: bold; color: #16a34a;">- ₹{{ number_format($amountPaid, 2) }}</td>
+                        </tr>
+                    @endif
+                    <tr class="grand-total-row">
+                        <td>TOTAL DUE:</td>
+                        <td class="text-right">₹{{ number_format($totalPayable, 2) }}</td>
                     </tr>
                 </table>
             </td>
         </tr>
     </table>
 
-    {{-- Clean Divider Line --}}
-    <div style="width: 100%; height: 2px; background: #2563eb; margin-bottom: 18px;"></div>
-
-    {{-- Party info grid --}}
-    <table class="info-grid">
-        <tr>
-            <td class="info-box">
-                <div class="box-title">Bill To (Client / Customer)</div>
-                <div style="font-weight: bold; font-size: 11px; color: #0f172a; margin-bottom: 4px;">
-                    {{ $invoice->contact?->name ?: 'Client' }}
-                </div>
-                @if($invoice->contact?->billing_address)
-                    <div class="info-row">
-                        <span class="info-label">Address:</span>
-                        <span class="info-value">
-                            @if(is_array($invoice->contact->billing_address))
-                                {{ implode(', ', $invoice->contact->billing_address) }}
-                            @else
-                                {{ $invoice->contact->billing_address }}
-                            @endif
-                        </span>
-                    </div>
-                @endif
-                @if($invoice->contact?->phone)
-                    <div class="info-row">
-                        <span class="info-label">Phone:</span>
-                        <span class="info-value">{{ $invoice->contact->phone }}</span>
-                    </div>
-                @endif
-                @if($invoice->contact?->email)
-                    <div class="info-row">
-                        <span class="info-label">Email:</span>
-                        <span class="info-value">{{ $invoice->contact->email }}</span>
-                    </div>
-                @endif
-                @if($invoice->contact?->gstin)
-                    <div class="info-row">
-                        <span class="info-label">GSTIN:</span>
-                        <span class="info-value" style="font-weight: bold;">{{ $invoice->contact->gstin }}</span>
-                    </div>
-                @endif
-            </td>
-            <td style="width: 4%;"></td>
-            <td class="info-box">
-                <div class="box-title">Service Location / Issuer</div>
-                <div style="font-weight: bold; font-size: 11px; color: #0f172a; margin-bottom: 4px;">
-                    {{ $companyName }}
-                </div>
-                @if($branchName)
-                    <div class="info-row">
-                        <span class="info-label">Branch:</span>
-                        <span class="info-value">{{ $branchName }}</span>
-                    </div>
-                @endif
-                @if($branchAddress)
-                    <div class="info-row">
-                        <span class="info-label">Address:</span>
-                        <span class="info-value">{{ $branchAddress }}</span>
-                    </div>
-                @endif
-                @if($branchEmail || $branchPhone)
-                    <div class="info-row">
-                        <span class="info-label">Contact:</span>
-                        <span class="info-value">{{ $branchPhone }} {{ $branchEmail ? "({$branchEmail})" : '' }}</span>
-                    </div>
-                @endif
-            </td>
-        </tr>
-    </table>
-
-    {{-- Line items table --}}
-    <table class="items-table">
-        <thead>
-            <tr>
-                <th style="width: 45%;">Description / Service Scope</th>
-                <th class="text-right" style="width: 15%;">Unit Rate</th>
-                <th class="text-center" style="width: 10%;">Qty</th>
-                <th class="text-right" style="width: 15%;">Tax</th>
-                <th class="text-right" style="width: 15%;">Total Amount</th>
-            </tr>
-        </thead>
-        <tbody>
-            @forelse($invoice->items as $item)
-                @php
-                    $unitPrice = (float) $item->unit_price;
-                    $qty = (float) ($item->quantity ?: 1);
-                    $net = (float) ($item->gross_amount ?: $unitPrice * $qty);
-                    $taxAmt = (float) ($item->tax_amount ?? 0);
-                    $total = (float) ($item->total_price ?: ($item->line_total ?: $net + $taxAmt));
-                    $itemDesc = str_replace(["\xc2\xa0", "\xe2\x80\x91", "\xe2\x80\x93", "\xe2\x80\x94"], '-', $item->description ?: ($item->item?->name ?? 'Maintenance Service'));
-                @endphp
-                <tr>
-                    <td>
-                        <strong>{{ $itemDesc }}</strong>
-                        @if($item->hsn_sac_code)
-                            <span style="color: #64748b; font-size: 9.5px;"> (HSN/SAC: {{ $item->hsn_sac_code }})</span>
-                        @endif
-                    </td>
-                    <td class="text-right">&#8377; {{ number_format($unitPrice, 2) }}</td>
-                    <td class="text-center">{{ number_format($qty, 2) }}</td>
-                    <td class="text-right">
-                        @if($taxAmt > 0)
-                            &#8377; {{ number_format($taxAmt, 2) }}
-                        @else
-                            -
-                        @endif
-                    </td>
-                    <td class="text-right" style="font-weight: bold;">&#8377; {{ number_format($total, 2) }}</td>
-                </tr>
-            @empty
-                <tr>
-                    <td><strong>{{ str_replace(["\xc2\xa0", "\xe2\x80\x91", "\xe2\x80\x93", "\xe2\x80\x94"], '-', $invoice->notes ?: 'Maintenance Services') }}</strong></td>
-                    <td class="text-right">&#8377; {{ number_format((float) $invoice->grand_total, 2) }}</td>
-                    <td class="text-center">1.00</td>
-                    <td class="text-right">-</td>
-                    <td class="text-right" style="font-weight: bold;">&#8377; {{ number_format((float) $invoice->grand_total, 2) }}</td>
-                </tr>
-            @endforelse
-        </tbody>
-    </table>
-
-    {{-- Summary table --}}
-    <div class="summary-wrapper">
-        <table class="summary-table" align="right">
-            <tr>
-                <td class="summary-label">Subtotal:</td>
-                <td class="summary-val">&#8377; {{ number_format((float) ($invoice->subtotal ?: $invoice->grand_total), 2) }}</td>
-            </tr>
-            @if((float) $invoice->tax_total > 0)
-                <tr>
-                    <td class="summary-label">Tax Total:</td>
-                    <td class="summary-val">&#8377; {{ number_format((float) $invoice->tax_total, 2) }}</td>
-                </tr>
-            @endif
-            @if((float) $invoice->discount_amount > 0)
-                <tr>
-                    <td class="summary-label">Discount:</td>
-                    <td class="summary-val">-&#8377; {{ number_format((float) $invoice->discount_amount, 2) }}</td>
-                </tr>
-            @endif
-            <tr class="grand-total-row">
-                <td style="text-align: right;">Grand Total:</td>
-                <td style="text-align: right;">&#8377; {{ number_format((float) $invoice->grand_total, 2) }}</td>
-            </tr>
-            @if((float) $invoice->amount_paid > 0)
-                <tr>
-                    <td class="summary-label">Amount Paid:</td>
-                    <td class="summary-val">&#8377; {{ number_format((float) $invoice->amount_paid, 2) }}</td>
-                </tr>
-            @endif
-            <tr class="balance-due-row">
-                <td style="text-align: right;">Balance Due:</td>
-                <td style="text-align: right;">&#8377; {{ number_format((float) ($invoice->balance_due ?? $invoice->grand_total), 2) }}</td>
-            </tr>
-        </table>
+    <!-- Notice & Disclosure -->
+    <div class="legal-notice">
+        <strong>Notice & Statement Disclosure:</strong> This document is an operational invoice and statement of account issued by Dwelly as the authorized Managing Agent on behalf of the Property Owner for authorized property operations, maintenance, repairs and turnover services. Official payment receipts are generated and dispatched immediately upon receipt and clearance of funds.
     </div>
 
-    {{-- Notes & Signatory Section --}}
-    <table class="notes-section">
-        <tr>
-            <td style="width: 60%; vertical-align: top; padding-right: 20px;">
-                @if($invoice->notes)
-                    <div class="notes-box">
-                        <div class="notes-title">Notes &amp; Remarks:</div>
-                        <div>{{ str_replace(["\xc2\xa0", "\xe2\x80\x91", "\xe2\x80\x93", "\xe2\x80\x94"], '-', $invoice->notes) }}</div>
-                    </div>
-                @endif
-            </td>
-            <td style="width: 40%; vertical-align: bottom; text-align: right;">
-                <div class="signatory-box">
-                    <div style="font-weight: bold; margin-bottom: 40px;">For {{ $companyName }}</div>
-                    <div style="border-top: 1px solid #cbd5e1; display: inline-block; width: 160px; padding-top: 4px;">
-                        Authorized Signatory
-                    </div>
-                </div>
-            </td>
-        </tr>
-    </table>
-
-    {{-- Footer --}}
-    <table class="footer-table">
-        <tr>
-            <td style="width: 60%; vertical-align: top;">
-                Thank you for your business. For billing queries, please contact {{ $branchEmail ?: ($organization->email ?? 'support@dwelly.in') }}.
-            </td>
-            <td style="width: 40%; text-align: right; vertical-align: top;">
-                Generated: {{ now()->format('d M Y, h:i A') }}
-            </td>
-        </tr>
-    </table>
+    <div class="footer">
+        Dwelly Property Management • Questions or support? Contact us at finance@dwelly.in • Document Ref: #{{ $invoice->invoice_number }}
+    </div>
 </body>
 </html>

@@ -765,6 +765,10 @@ class RentBillingService
         }
 
         $property = $agreement?->property;
+        if (!$property) {
+            $property = \App\Domain\Finance\Services\BillingPropertyResolver::resolveProperty($invoice);
+        }
+
         $owner = $property?->owner;
         if (!$owner && $property?->id) {
             $mouPartyId = \App\Domain\Mou\Models\Mou::where('property_id', $property->id)
@@ -775,12 +779,13 @@ class RentBillingService
                 $owner = \App\Domain\Party\Models\Party::find($mouPartyId);
             }
         }
-        if (!$owner) {
-            $owner = \App\Domain\Party\Models\Party::whereHas('ownerProfile')->first();
-        }
 
         $primaryRole = $agreement?->roles?->where('is_primary', true)->first() ?? $agreement?->roles?->first();
         $tenant = $primaryRole?->party ?? $agreement?->primaryTenant?->party ?? $agreement?->tenantParty ?? $agreement?->party;
+        if (!$tenant && $property) {
+            $latestAgr = $property->agreements()->latest()->first();
+            $tenant = $latestAgr?->primaryTenant?->party ?? $latestAgr?->tenantParty ?? $latestAgr?->party;
+        }
 
         // Calculate previous ledger dues before this demand's issue date
         $previousBalance = 0.0;

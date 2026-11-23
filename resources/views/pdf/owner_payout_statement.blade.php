@@ -593,11 +593,11 @@
                 <table class="totals-table">
                     <tr>
                         <td style="color: #64748b;">Gross Rent Inflow:</td>
-                        <td class="text-right" style="font-weight: 600;">₹{{ number_format($grossRent, 2) }}</td>
+                        <td class="text-right" style="font-weight: bold;">₹{{ number_format($grossRent, 2) }}</td>
                     </tr>
                     <tr>
                         <td style="color: #dc2626;">Total Chargeables Invoiced:</td>
-                        <td class="text-right" style="font-weight: 600; color: #dc2626;">- ₹{{ number_format($totalCharges, 2) }}</td>
+                        <td class="text-right" style="font-weight: bold; color: #dc2626;">- ₹{{ number_format($totalCharges, 2) }}</td>
                     </tr>
                     <tr class="grand-total-row">
                         <td>NET DISBURSED TO OWNER:</td>

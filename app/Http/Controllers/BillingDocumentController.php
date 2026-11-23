@@ -15,6 +15,11 @@ class BillingDocumentController extends Controller
 {
     public function streamDemandNotice(Invoice $invoice, RentBillingService $rentBillingService)
     {
+        $category = \App\Domain\Finance\Services\BillingPropertyResolver::categorizeInvoice($invoice);
+        if ($category['key'] !== 'rent' && $invoice->reference_type !== TenancyAgreement::class) {
+            return $this->downloadInvoice($invoice, app(InvoiceService::class), $rentBillingService);
+        }
+
         $filePath = $rentBillingService->generateAndStoreDemandPdf($invoice);
 
         return response()->file($filePath, [
@@ -41,14 +46,21 @@ class BillingDocumentController extends Controller
 
     public function downloadInvoice(Invoice $invoice, InvoiceService $invoiceService, RentBillingService $rentBillingService)
     {
-        if ($invoice->reference_type === TenancyAgreement::class || str_contains((string) $invoice->notes, 'Rent')) {
+        $category = \App\Domain\Finance\Services\BillingPropertyResolver::categorizeInvoice($invoice);
+        if ($category['key'] === 'rent' || $invoice->reference_type === TenancyAgreement::class) {
             return $this->streamDemandNotice($invoice, $rentBillingService);
         }
 
-        $invoice->loadMissing(['items.tax', 'items.item', 'contact']);
-        $view = view()->exists('accounting::pdf.invoice') ? 'accounting::pdf.invoice' : 'pdf.invoice';
+        $invoice->loadMissing(['items.tax', 'items.item', 'contact', 'branch']);
+        $view = view()->exists('pdf.invoice') ? 'pdf.invoice' : (view()->exists('accounting::pdf.invoice') ? 'accounting::pdf.invoice' : 'pdf.invoice');
         $pdf = Pdf::loadView($view, ['invoice' => $invoice]);
-        return $pdf->stream("Invoice-{$invoice->invoice_number}.pdf");
+        return response($pdf->output(), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="Invoice-' . $invoice->invoice_number . '.pdf"',
+            'Cache-Control' => 'no-cache, no-store, must-revalidate',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
+        ]);
     }
 
     public function downloadReceipt(Invoice $invoice, Payment $payment)
