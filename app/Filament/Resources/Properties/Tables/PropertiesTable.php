@@ -11,7 +11,6 @@ use Carbon\CarbonInterface;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
 use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ToggleColumn;
@@ -26,15 +25,15 @@ class PropertiesTable
     {
         return $table
             ->modifyQueryUsing(fn (Builder $query) => $query->with(['openMaintenanceRequests.assignedInspector', 'openMaintenanceRequests.vendor']))
+            ->recordUrl(fn (Property $record): ?string => PropertyResource::canEdit($record) ? PropertyResource::getUrl('edit', ['record' => $record]) : null)
             ->columns([
                 TextColumn::make('code')
                     ->label('Code')
                     ->searchable()
                     ->sortable()
                     ->weight('bold')
-                    ->copyable()
-                    ->copyMessage('Property code copied')
-                    ->tooltip('Click to copy Property Code')
+                    ->url(fn (Property $record): ?string => PropertyResource::canEdit($record) ? PropertyResource::getUrl('edit', ['record' => $record]) : null)
+                    ->tooltip('Edit Property')
                     ->placeholder('Unassigned'),
 
                 TextColumn::make('building_name')
@@ -190,25 +189,6 @@ class PropertiesTable
                     ]),
             ])
             ->recordActions([
-                Action::make('maintenanceTickets')
-                    ->label('Tickets')
-                    ->icon('heroicon-o-wrench-screwdriver')
-                    ->color('danger')
-                    ->tooltip(fn (Property $record): string => $record->openMaintenanceRequests->count() === 1 ? 'Open Maintenance Ticket' : 'View Maintenance Tickets')
-                    ->visible(fn (Property $record): bool => $record->openMaintenanceRequests->isNotEmpty())
-                    ->url(fn (Property $record): ?string => $record->openMaintenanceRequests->count() === 1 ? MaintenanceRequestResource::getUrl('edit', ['record' => $record->openMaintenanceRequests->first()]) : null)
-                    ->openUrlInNewTab()
-                    ->modalHeading(fn (Property $record) => "Maintenance Requests — {$record->building_name}")
-                    ->modalDescription(fn (Property $record) => "Active maintenance tickets linked to {$record->code}")
-                    ->modalWidth(Width::ThreeExtraLarge)
-                    ->modalContent(fn (Property $record) => view('filament.tables.modals.property-maintenance-tickets', [
-                        'property' => $record,
-                        'tickets' => $record->openMaintenanceRequests,
-                    ]))
-                    ->modalSubmitAction(false)
-                    ->modalCancelActionLabel('Close')
-                    ->modal(fn (Property $record): bool => $record->openMaintenanceRequests->count() > 1),
-
                 Action::make('onboarding')
                     ->label('Onboarding')
                     ->icon('heroicon-o-clipboard-document-check')
@@ -232,8 +212,6 @@ class PropertiesTable
                     ->tooltip('Download Property Brochure (PDF)')
                     ->url(fn (Property $record): string => route('propertyBrocure', $record))
                     ->openUrlInNewTab(),
-
-                EditAction::make(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

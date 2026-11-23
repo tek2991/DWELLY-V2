@@ -146,6 +146,27 @@ class PropertyMaintenanceTableLinkTest extends TestCase
         Livewire::test(ListProperties::class)
             ->assertSuccessful()
             ->assertSee('Brigade Millennium 303')
-            ->assertTableActionHidden('maintenanceTickets', $property->id);
+            ->assertTableActionDoesNotExist('maintenanceTickets')
+            ->assertTableActionDoesNotExist('edit');
+    }
+
+    public function test_property_code_links_to_property_edit_page(): void
+    {
+        $property = Property::create([
+            'branch_id' => $this->branch->id,
+            'code' => 'PROP-EDIT-LINK-01',
+            'building_name' => 'Greenwood Regency 404',
+            'status' => 'Vacant',
+        ]);
+
+        $this->actingAs($this->admin);
+
+        $expectedEditUrl = \App\Filament\Resources\Properties\PropertyResource::getUrl('edit', ['record' => $property]);
+
+        Livewire::test(ListProperties::class)
+            ->assertSuccessful()
+            ->assertSee('PROP-EDIT-LINK-01')
+            ->assertSee($expectedEditUrl)
+            ->assertTableActionDoesNotExist('edit');
     }
 }
