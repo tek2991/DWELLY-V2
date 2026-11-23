@@ -1,5 +1,72 @@
 <x-public-layout :filters="null">
-    <div class="Site-Max-Width mx-auto px-4 mt-4 sm:mt-6 pb-24 lg:pb-16">
+    @php
+        $galleryImages = $propertyImages->map(function ($img) use ($property) {
+            return [
+                'url' => !empty($img->file_path) ? Storage::disk('public')->url($img->file_path) : url('resources/images/sample_prop.jpeg'),
+                'title' => $img->title ?: ($property->building_name ?: 'Property Photo'),
+            ];
+        })->values();
+
+        if ($galleryImages->isEmpty()) {
+            $galleryImages = collect([
+                [
+                    'url' => url('resources/images/sample_prop.jpeg'),
+                    'title' => $property->building_name ?: 'Property Photo',
+                ]
+            ]);
+        }
+    @endphp
+
+    <div x-data="{
+        galleryOpen: false,
+        currentIndex: 0,
+        touchStartX: 0,
+        touchEndX: 0,
+        images: {{ Js::from($galleryImages) }},
+        openGallery(index = 0) {
+            this.currentIndex = index;
+            this.galleryOpen = true;
+            document.body.classList.add('overflow-hidden');
+            this.scrollToActiveThumb();
+        },
+        closeGallery() {
+            this.galleryOpen = false;
+            document.body.classList.remove('overflow-hidden');
+        },
+        next() {
+            if (this.images.length === 0) return;
+            this.currentIndex = (this.currentIndex + 1) % this.images.length;
+            this.scrollToActiveThumb();
+        },
+        prev() {
+            if (this.images.length === 0) return;
+            this.currentIndex = (this.currentIndex - 1 + this.images.length) % this.images.length;
+            this.scrollToActiveThumb();
+        },
+        select(index) {
+            this.currentIndex = index;
+            this.scrollToActiveThumb();
+        },
+        handleSwipe() {
+            const diff = this.touchStartX - this.touchEndX;
+            if (Math.abs(diff) > 40) {
+                if (diff > 0) this.next();
+                else this.prev();
+            }
+        },
+        scrollToActiveThumb() {
+            this.$nextTick(() => {
+                const el = document.getElementById('gallery-thumb-' + this.currentIndex);
+                if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+                }
+            });
+        }
+    }"
+    @keydown.window.escape="if (galleryOpen) closeGallery()"
+    @keydown.window.arrow-left="if (galleryOpen) prev()"
+    @keydown.window.arrow-right="if (galleryOpen) next()"
+    class="Site-Max-Width mx-auto px-4 mt-4 sm:mt-6 pb-24 lg:pb-16">
         {{-- Breadcrumbs & Quick Back --}}
         <nav class="flex items-center text-xs sm:text-sm text-darker-2 mb-3 space-x-1.5 flex-wrap">
             <a href="{{ route('home') }}" class="hover:text-darker-3 transition">Home</a>
@@ -57,7 +124,7 @@
         </div>
 
         {{-- Photos Gallery Slider --}}
-        <div class="mt-6">
+        <div class="mt-6 relative group">
             <section id="property-gallery-slide" class="splide" aria-label="Property Images">
                 <div class="splide__track rounded-xl overflow-hidden border border-gray-200 bg-gray-900 shadow-xs">
                     <ul class="splide__list">
@@ -71,16 +138,31 @@
                             @php
                                 $imgUrl = !empty($image->file_path) ? Storage::disk('public')->url($image->file_path) : url('resources/images/sample_prop.jpeg');
                             @endphp
-                            <li class="splide__slide">
-                                <div class="aspect-16/9 md:aspect-21/9 bg-gray-950 flex items-center justify-center overflow-hidden">
+                            <li class="splide__slide cursor-pointer" @click="openGallery({{ $loop->index }})">
+                                <div class="aspect-16/9 md:aspect-21/9 bg-gray-950 flex items-center justify-center overflow-hidden relative">
                                     <img src="{{ $imgUrl }}" alt="{{ $image->title ?? $property->building_name }}"
-                                        class="w-full h-full object-cover">
+                                        class="w-full h-full object-cover group-hover:scale-[1.01] transition duration-300">
+                                    <div class="absolute inset-0 bg-black/15 opacity-0 hover:opacity-100 transition flex items-center justify-center">
+                                        <span class="bg-black/70 text-white text-xs px-3.5 py-1.5 rounded-full flex items-center gap-1.5 backdrop-blur-xs font-GraphikMedium">
+                                            <svg class="w-4 h-4 text-piss-yellow" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7"></path></svg>
+                                            Click to view full photo
+                                        </span>
+                                    </div>
                                 </div>
                             </li>
                         @endforeach
                     </ul>
                 </div>
             </section>
+
+            {{-- "View all X photos" floating pill --}}
+            <button type="button" @click="openGallery(0)"
+                class="absolute bottom-3 right-3 sm:bottom-4 sm:right-4 z-10 bg-black/75 hover:bg-black/90 text-white text-xs sm:text-sm font-GraphikMedium px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-lg backdrop-blur-md flex items-center gap-2 transition shadow-md cursor-pointer">
+                <svg class="w-4 h-4 text-piss-yellow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                </svg>
+                <span>View all {{ $slides->count() }} photos</span>
+            </button>
         </div>
 
         {{-- Split-Pane Grid: Main Details (Left 8 cols) vs Sticky Pricing Card (Right 4 cols) --}}
@@ -446,6 +528,112 @@
                             </a>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        {{-- Full-Page Modal Gallery --}}
+        <div x-show="galleryOpen" x-cloak
+            x-transition:enter="transition ease-out duration-300"
+            x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100"
+            x-transition:leave="transition ease-in duration-200"
+            x-transition:leave-start="opacity-100"
+            x-transition:leave-end="opacity-0"
+            class="fixed inset-0 z-50 bg-black/95 flex flex-col justify-between"
+            role="dialog"
+            aria-modal="true">
+
+            {{-- Top Header Bar --}}
+            <div class="flex items-center justify-between px-4 sm:px-8 py-3.5 text-white z-20 bg-gradient-to-b from-black/80 to-transparent">
+                {{-- Property Details on Left --}}
+                <div class="flex items-center gap-3 min-w-0">
+                    @if ($property->code)
+                        <span class="text-xs uppercase tracking-wider font-mono text-piss-yellow hidden sm:inline bg-white/10 px-2 py-0.5 rounded">
+                            {{ $property->code }}
+                        </span>
+                    @endif
+                    <div class="truncate">
+                        <h3 class="text-sm sm:text-base font-GraphikMedium truncate text-white">
+                            {{ $property->building_name }}
+                        </h3>
+                        <p class="text-xs text-gray-400 truncate">
+                            {{ $property->bhkType?->name }} • {{ $property->localityRef?->name ?? ($property->locality ?: 'Guwahati') }}
+                        </p>
+                    </div>
+                </div>
+
+                {{-- Photo Counter in Center --}}
+                <div class="px-3.5 py-1 rounded-full bg-white/15 backdrop-blur-md text-xs sm:text-sm font-GraphikMedium">
+                    <span x-text="(currentIndex + 1) + ' / ' + images.length"></span>
+                </div>
+
+                {{-- Close Button on Right --}}
+                <div class="flex items-center gap-2">
+                    <button type="button" @click="closeGallery()"
+                        class="text-gray-300 hover:text-white bg-white/10 hover:bg-white/20 p-2 sm:p-2.5 rounded-full transition cursor-pointer"
+                        title="Close Gallery (Esc)">
+                        <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            {{-- Main Image Area with Previous & Next Chevrons --}}
+            <div class="relative flex-1 flex items-center justify-center p-2 sm:p-6 min-h-0 overflow-hidden"
+                 @touchstart="touchStartX = $event.touches[0].clientX"
+                 @touchend="touchEndX = $event.changedTouches[0].clientX; handleSwipe()">
+
+                {{-- Previous Button --}}
+                <button type="button" @click="prev()"
+                    class="absolute left-2 sm:left-6 z-20 text-white bg-black/60 hover:bg-black/90 p-2.5 sm:p-3.5 rounded-full backdrop-blur-md transition cursor-pointer hover:scale-110 active:scale-95"
+                    title="Previous Photo (Left Arrow)">
+                    <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"></path>
+                    </svg>
+                </button>
+
+                {{-- Active Image Stage --}}
+                <div class="flex flex-col items-center justify-center w-full h-full max-h-[75vh]">
+                    <template x-for="(img, idx) in images" :key="idx">
+                        <img x-show="currentIndex === idx"
+                             x-transition:enter="transition ease-out duration-200"
+                             x-transition:enter-start="opacity-0 scale-95"
+                             x-transition:enter-end="opacity-100 scale-100"
+                             :src="img.url"
+                             :alt="img.title"
+                             class="max-w-full max-h-[66vh] sm:max-h-[72vh] object-contain rounded-lg shadow-2xl">
+                    </template>
+
+                    {{-- Photo Caption / Room Name --}}
+                    <div class="mt-3 text-center" x-show="images[currentIndex]?.title">
+                        <span class="text-xs sm:text-sm font-GraphikMedium text-gray-300 bg-black/70 px-4 py-1.5 rounded-full backdrop-blur-xs"
+                              x-text="images[currentIndex]?.title"></span>
+                    </div>
+                </div>
+
+                {{-- Next Button --}}
+                <button type="button" @click="next()"
+                    class="absolute right-2 sm:right-6 z-20 text-white bg-black/60 hover:bg-black/90 p-2.5 sm:p-3.5 rounded-full backdrop-blur-md transition cursor-pointer hover:scale-110 active:scale-95"
+                    title="Next Photo (Right Arrow)">
+                    <svg class="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </button>
+            </div>
+
+            {{-- Bottom Thumbnail Strip --}}
+            <div class="bg-black/85 backdrop-blur-md border-t border-white/10 px-4 py-3 z-20">
+                <div class="flex items-center gap-2.5 overflow-x-auto py-1 max-w-5xl mx-auto scrollbar-none" id="gallery-thumbs-container">
+                    <template x-for="(img, idx) in images" :key="idx">
+                        <button type="button" @click="select(idx)"
+                            :id="'gallery-thumb-' + idx"
+                            class="relative shrink-0 w-16 h-12 sm:w-20 sm:h-14 rounded-md overflow-hidden transition-all duration-200 cursor-pointer border-2"
+                            :class="currentIndex === idx ? 'border-piss-yellow scale-105 opacity-100 shadow-md ring-2 ring-piss-yellow/40' : 'border-transparent opacity-50 hover:opacity-90'">
+                            <img :src="img.url" :alt="img.title" class="w-full h-full object-cover">
+                        </button>
+                    </template>
                 </div>
             </div>
         </div>
