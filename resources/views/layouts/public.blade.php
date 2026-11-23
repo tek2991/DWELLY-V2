@@ -71,7 +71,7 @@
             </div>
 
             <a title="Call: +91 96786 44832" href="tel:+919678644832"
-                class="fixed z-40 bottom-20 sm:bottom-10 right-4 sm:right-8 bg-piss-yellow h-12 w-12 sm:h-14 sm:w-14 p-2 rounded-full drop-shadow-lg flex justify-center items-center text-white hover:bg-yellow-400 hover:drop-shadow-2xl transition duration-300">
+                class="{{ Route::is('viewProperty') ? 'hidden lg:flex fixed' : 'fixed flex' }} z-40 bottom-20 sm:bottom-10 right-4 sm:right-8 bg-piss-yellow h-12 w-12 sm:h-14 sm:w-14 p-2 rounded-full drop-shadow-lg justify-center items-center text-white hover:bg-yellow-400 hover:drop-shadow-2xl transition duration-300">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
                     class="w-6 h-6 sm:w-7 sm:h-7" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round"
