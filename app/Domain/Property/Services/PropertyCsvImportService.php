@@ -478,7 +478,7 @@ class PropertyCsvImportService
             'total_floors' => !empty($row['total_floors']) ? (int) $row['total_floors'] : 4,
             'floor_space_sqft' => !empty($row['floor_space_sqft']) ? (int) $row['floor_space_sqft'] : 1000,
             'status' => $propStatus,
-            'is_listed' => filter_var($row['is_listed'] ?? true, FILTER_VALIDATE_BOOLEAN),
+            'is_listed' => in_array($propStatus, ['Draft', 'Archived']) ? false : filter_var($row['is_listed'] ?? true, FILTER_VALIDATE_BOOLEAN),
             'is_promoted' => false,
             'available_from' => !empty($row['available_from']) ? $row['available_from'] : now()->toDateString(),
             'assigned_executive_id' => $this->executiveUser?->id,

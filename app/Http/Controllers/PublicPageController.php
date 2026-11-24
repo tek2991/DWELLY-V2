@@ -24,6 +24,7 @@ class PublicPageController extends Controller
                 'currentPricing',
             ])
             ->where('is_listed', true)
+            ->whereNotIn('status', ['Draft', 'Archived'])
             ->latest()
             ->take(6)
             ->get();
@@ -36,6 +37,7 @@ class PublicPageController extends Controller
                     'localityRef',
                     'currentPricing',
                 ])
+                ->whereNotIn('status', ['Draft', 'Archived'])
                 ->latest()
                 ->take(6)
                 ->get();
@@ -87,6 +89,7 @@ class PublicPageController extends Controller
             'amenities.amenityType',
         ])
         ->where('is_listed', true)
+        ->whereNotIn('status', ['Draft', 'Archived'])
         ->when($searchQuery, function ($q, $search) {
             $q->where(function ($sub) use ($search) {
                 $sub->where('building_name', 'like', "%{$search}%")

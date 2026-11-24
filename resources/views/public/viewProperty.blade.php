@@ -495,8 +495,12 @@
                         <div class="mb-5">
                             <span class="text-xs uppercase tracking-wider font-GraphikMedium text-darker-2 block">Monthly Rent</span>
                             <div class="flex items-baseline gap-1 mt-1">
-                                <span class="text-3xl sm:text-4xl font-GraphikBold text-darker-3">₹{{ number_format($property->rent) }}</span>
-                                <span class="text-sm font-Graphik text-darker-2">/ month</span>
+                                @if ($property->rent > 0)
+                                    <span class="text-3xl sm:text-4xl font-GraphikBold text-darker-3">₹{{ number_format($property->rent) }}</span>
+                                    <span class="text-sm font-Graphik text-darker-2">/ month</span>
+                                @else
+                                    <span class="text-2xl sm:text-3xl font-GraphikBold text-darker-3">Price on Request</span>
+                                @endif
                             </div>
                             <div class="mt-1 text-xs text-darker-2">
                                 @if ($property->society_fee > 0)
@@ -511,18 +515,18 @@
                         <div class="border-t border-b border-gray-100 py-4 my-4 space-y-2.5 text-xs sm:text-sm font-Graphik">
                             <div class="flex justify-between items-center">
                                 <span class="text-darker-2">Monthly Rent</span>
-                                <span class="font-GraphikSemibold text-darker-3">₹{{ number_format($property->rent) }}</span>
+                                <span class="font-GraphikSemibold text-darker-3">{{ $property->rent > 0 ? '₹' . number_format($property->rent) : 'On Request' }}</span>
                             </div>
                             <div class="flex justify-between items-center">
                                 <div class="flex items-center gap-1.5">
                                     <span class="text-darker-2">Security Deposit</span>
                                     <span class="text-[10px] bg-green-50 text-green-700 border border-green-200 px-1.5 py-0.2 rounded font-medium">Refundable</span>
                                 </div>
-                                <span class="font-GraphikSemibold text-darker-3">₹{{ number_format($property->security_deposit) }}</span>
+                                <span class="font-GraphikSemibold text-darker-3">{{ $property->security_deposit > 0 ? '₹' . number_format($property->security_deposit) : 'On Request' }}</span>
                             </div>
                             <div class="flex justify-between items-center">
                                 <span class="text-darker-2">Society Maintenance</span>
-                                <span class="font-GraphikSemibold text-darker-3">₹{{ number_format($property->society_fee) }}</span>
+                                <span class="font-GraphikSemibold text-darker-3">{{ $property->society_fee > 0 ? '₹' . number_format($property->society_fee) : 'Included' }}</span>
                             </div>
                             <div class="flex justify-between items-center">
                                 <div class="flex items-center gap-1.5">
@@ -537,7 +541,7 @@
                             @endphp
                             <div class="pt-2 border-t border-dashed border-gray-200 flex justify-between items-center text-xs">
                                 <span class="font-GraphikMedium text-darker-3">Estimated Move-in Total</span>
-                                <span class="font-GraphikBold text-darker-3">₹{{ number_format($totalMoveIn) }}</span>
+                                <span class="font-GraphikBold text-darker-3">{{ $property->rent > 0 ? '₹' . number_format($totalMoveIn) : 'On Request' }}</span>
                             </div>
                         </div>
 
@@ -701,8 +705,12 @@
         <div>
             <div class="text-[10px] text-gray-500 uppercase tracking-wider font-GraphikMedium">Monthly Rent</div>
             <div class="text-lg font-GraphikBold text-darker-3 leading-tight">
-                ₹{{ number_format($property->rent) }}
-                <span class="text-xs font-normal text-gray-500">/ mo</span>
+                @if ($property->rent > 0)
+                    ₹{{ number_format($property->rent) }}
+                    <span class="text-xs font-normal text-gray-500">/ mo</span>
+                @else
+                    <span class="text-sm">Price on Request</span>
+                @endif
             </div>
         </div>
 
