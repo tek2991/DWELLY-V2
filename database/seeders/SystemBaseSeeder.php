@@ -16,6 +16,7 @@ class SystemBaseSeeder extends Seeder
             \Tek2991\Accounting\Database\Seeders\IndianStatesSeeder::class,
             RegionsSeeder::class,
             \Tek2991\Accounting\Database\Seeders\DefaultChartOfAccountsSeeder::class,
+            \Tek2991\Accounting\Database\Seeders\DemoTaxesSeeder::class,
             UserSeeder::class,
             ReferenceDataSeeder::class,
             OpportunitySourceSeeder::class,

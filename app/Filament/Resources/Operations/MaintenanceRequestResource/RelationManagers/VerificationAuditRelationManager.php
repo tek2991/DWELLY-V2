@@ -701,7 +701,38 @@ class VerificationAuditRelationManager extends RelationManager
                 </tr>";
         }
 
-        $totalFmt = number_format($totalAmount, 2);
+        $taxAmount = 0.0;
+        $gstPct = (float) ($quote?->gst_percentage ?: 18.0);
+        if ($quote && (float) $quote->tax_amount > 0) {
+            $taxAmount = (float) $quote->tax_amount;
+        } elseif ($totalAmount > 0) {
+            $taxAmount = round($totalAmount * ($gstPct / 100), 2);
+        }
+
+        $grandTotal = $totalAmount + $taxAmount;
+        $subtotalFmt = number_format($totalAmount, 2);
+        $taxFmt = number_format($taxAmount, 2);
+        $halfTax = round($taxAmount / 2, 2);
+        $halfTaxFmt = number_format($halfTax, 2);
+        $halfRate = round($gstPct / 2, 1);
+        $totalFmt = number_format($grandTotal, 2);
+
+        $taxRowsHtml = '';
+        if ($taxAmount > 0) {
+            $taxRowsHtml = "
+                <tr style='background: #ffffff; border-top: 1px solid #e2e8f0;'>
+                    <td colspan='3' style='padding: 6px 8px; font-size: 11px; color: #64748b; text-align: right;'>Subtotal (Taxable Amount):</td>
+                    <td style='padding: 6px 8px; font-size: 11px; font-weight: 600; text-align: right; color: #334155;'>₹{$subtotalFmt}</td>
+                </tr>
+                <tr style='background: #ffffff;'>
+                    <td colspan='3' style='padding: 4px 8px; font-size: 11px; color: #64748b; text-align: right;'>CGST ({$halfRate}%):</td>
+                    <td style='padding: 4px 8px; font-size: 11px; font-weight: 600; text-align: right; color: #475569;'>+ ₹{$halfTaxFmt}</td>
+                </tr>
+                <tr style='background: #ffffff;'>
+                    <td colspan='3' style='padding: 4px 8px; font-size: 11px; color: #64748b; text-align: right;'>SGST ({$halfRate}%):</td>
+                    <td style='padding: 4px 8px; font-size: 11px; font-weight: 600; text-align: right; color: #475569;'>+ ₹{$halfTaxFmt}</td>
+                </tr>";
+        }
 
         return new HtmlString("
             <div style='background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin-bottom: 12px;'>
@@ -711,7 +742,7 @@ class VerificationAuditRelationManager extends RelationManager
                         <h4 style='font-size: 14px; font-weight: 700; color: #0f172a; margin: 2px 0 0 0;'>Ticket #{$ticket->ticket_number} - " . e($ticket->title) . "</h4>
                     </div>
                     <div style='text-align: right;'>
-                        <span style='font-size: 11px; color: #64748b;'>Receivable Amount</span>
+                        <span style='font-size: 11px; color: #64748b;'>Receivable Amount (Incl. Tax)</span>
                         <div style='font-size: 16px; font-weight: 800; color: #1e40af;'>₹{$totalFmt}</div>
                     </div>
                 </div>
@@ -744,8 +775,9 @@ class VerificationAuditRelationManager extends RelationManager
                         {$itemsHtml}
                     </tbody>
                     <tfoot>
+                        {$taxRowsHtml}
                         <tr style='background: #f8fafc; border-top: 2px solid #e2e8f0;'>
-                            <td colspan='3' style='padding: 8px; font-size: 12px; font-weight: 700; text-align: right; color: #0f172a;'>Grand Total (INR):</td>
+                            <td colspan='3' style='padding: 8px; font-size: 12px; font-weight: 700; text-align: right; color: #0f172a;'>Total Payable (Incl. Tax):</td>
                             <td style='padding: 8px; font-size: 13px; font-weight: 800; text-align: right; color: #1e40af;'>₹{$totalFmt}</td>
                         </tr>
                     </tfoot>

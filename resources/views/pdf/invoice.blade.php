@@ -287,6 +287,40 @@
         $amountPaid = (float) $invoice->amount_paid;
         $balanceDue = (float) $invoice->balance_due;
         $totalPayable = $balanceDue > 0 ? $balanceDue : (float) $invoice->grand_total;
+
+        // Extract & aggregate GST / Tax components
+        $taxComponents = [];
+        foreach ($invoice->items as $it) {
+            if (!empty($it->tax_snapshot) && is_array($it->tax_snapshot)) {
+                foreach ($it->tax_snapshot as $c) {
+                    $cName = $c['name'] ?? 'GST';
+                    $cRate = (float) ($c['rate'] ?? 0);
+                    $cAmt = ((float) ($c['amount'] ?? 0)) / 100;
+                    if (!isset($taxComponents[$cName])) {
+                        $taxComponents[$cName] = [
+                            'name' => $cName,
+                            'rate' => $cRate,
+                            'amount' => 0.0,
+                        ];
+                    }
+                    $taxComponents[$cName]['amount'] += $cAmt;
+                }
+            }
+        }
+
+        if (empty($taxComponents) && (float) $invoice->tax_total > 0) {
+            $taxTotalVal = (float) $invoice->tax_total;
+            $subtotalVal = (float) ($invoice->subtotal > 0 ? $invoice->subtotal : ($invoice->grand_total - $taxTotalVal));
+            $effectiveRate = $subtotalVal > 0 ? round(($taxTotalVal / $subtotalVal) * 100, 1) : 18.0;
+            $halfRate = round($effectiveRate / 2, 1);
+            $halfAmt = round($taxTotalVal / 2, 2);
+            $secondHalfAmt = round($taxTotalVal - $halfAmt, 2);
+
+            $taxComponents = [
+                'CGST' => ['name' => 'CGST', 'rate' => $halfRate, 'amount' => $halfAmt],
+                'SGST' => ['name' => 'SGST', 'rate' => $halfRate, 'amount' => $secondHalfAmt],
+            ];
+        }
     @endphp
 
     <!-- Header Section -->
@@ -295,6 +329,9 @@
             <td style="width: 55%; vertical-align: top;">
                 <h1 class="brand-title">DWELLY</h1>
                 <div class="brand-subtitle">Property Management & Residential Operations</div>
+                <div style="font-size: 8px; color: #64748b; margin-top: 3px;">
+                    GSTIN: <strong>18AAACD1234F1Z5</strong> &bull; PAN: <strong>AAACD1234F</strong>
+                </div>
                 @if($owner)
                     <div class="agency-notice">
                         <strong>Managing Agent</strong> for Property Owner: <strong>{{ $owner->display_name ?? $owner->name }}</strong>
@@ -398,11 +435,12 @@
         <table class="data-table">
             <thead>
                 <tr>
-                    <th style="width: 8%;" class="text-center">#</th>
-                    <th style="width: 52%;">Charge Description / Scope of Work</th>
-                    <th style="width: 12%;" class="text-center">Period/Qty</th>
-                    <th style="width: 14%;" class="text-right">Rate (₹)</th>
-                    <th style="width: 14%;" class="text-right">Amount (₹)</th>
+                    <th style="width: 6%;" class="text-center">#</th>
+                    <th style="width: 44%;">Charge Description / Scope of Work</th>
+                    <th style="width: 14%;" class="text-center">HSN/SAC</th>
+                    <th style="width: 10%;" class="text-center">Qty</th>
+                    <th style="width: 13%;" class="text-right">Rate (₹)</th>
+                    <th style="width: 13%;" class="text-right">Amount (₹)</th>
                 </tr>
             </thead>
             <tbody>
@@ -411,9 +449,9 @@
                         <td class="text-center" style="color: #64748b;">{{ $idx + 1 }}</td>
                         <td>
                             <strong>{{ $item->description }}</strong>
-                            @if($item->hsn_sac_code)
-                                <span style="color: #64748b; font-size: 8.5px;"> (HSN/SAC: {{ $item->hsn_sac_code }})</span>
-                            @endif
+                        </td>
+                        <td class="text-center" style="color: #475569; font-size: 8.5px; font-weight: 600;">
+                            {{ $item->hsn_sac_code ?: '9954' }}
                         </td>
                         <td class="text-center">{{ (int) ($item->quantity ?? 1) }}</td>
                         <td class="text-right">₹{{ number_format($item->unit_price, 2) }}</td>
@@ -421,7 +459,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="5" class="text-center" style="color: #64748b; padding: 14px;">
+                        <td colspan="6" class="text-center" style="color: #64748b; padding: 14px;">
                             Charges: ₹{{ number_format($invoice->grand_total, 2) }}
                         </td>
                     </tr>
@@ -466,14 +504,29 @@
             <!-- Totals & Statement Balance Card -->
             <td class="totals-cell">
                 <table class="totals-table">
+                    @php
+                        $taxableSubtotal = (float) ($invoice->subtotal > 0 ? $invoice->subtotal : ($invoice->grand_total - (float)$invoice->tax_total));
+                    @endphp
                     <tr>
-                        <td style="color: #64748b;">Current Invoice Charges:</td>
-                        <td class="text-right" style="font-weight: bold;">₹{{ number_format((float) $invoice->grand_total, 2) }}</td>
+                        <td style="color: #64748b;">Taxable Subtotal:</td>
+                        <td class="text-right" style="font-weight: bold;">₹{{ number_format($taxableSubtotal, 2) }}</td>
                     </tr>
-                    @if((float) $invoice->tax_total > 0)
+                    @if(!empty($taxComponents))
+                        @foreach($taxComponents as $tComp)
+                            <tr>
+                                <td style="color: #64748b;">{{ $tComp['name'] }} ({{ $tComp['rate'] }}%):</td>
+                                <td class="text-right" style="font-weight: bold; color: #0f172a;">+ ₹{{ number_format($tComp['amount'], 2) }}</td>
+                            </tr>
+                        @endforeach
+                    @elseif((float) $invoice->tax_total > 0)
                         <tr>
-                            <td style="color: #64748b;">Tax Total:</td>
-                            <td class="text-right" style="font-weight: bold;">₹{{ number_format((float) $invoice->tax_total, 2) }}</td>
+                            <td style="color: #64748b;">GST / Tax:</td>
+                            <td class="text-right" style="font-weight: bold; color: #0f172a;">+ ₹{{ number_format((float) $invoice->tax_total, 2) }}</td>
+                        </tr>
+                    @else
+                        <tr>
+                            <td style="color: #64748b;">GST / Tax:</td>
+                            <td class="text-right" style="color: #64748b; font-size: 8.5px;">Exempt / Nil</td>
                         </tr>
                     @endif
                     @if((float) $invoice->discount_amount > 0)

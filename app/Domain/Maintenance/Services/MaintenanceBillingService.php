@@ -124,6 +124,19 @@ class MaintenanceBillingService
 
             $quote = $request->currentClientQuote ?? $request->clientQuotes()->latest()->first();
 
+            // Resolve Tax ID from quote or default 18% GST
+            $taxId = $quote?->tax_id;
+            if (!$taxId) {
+                $taxId = \Tek2991\Accounting\Models\Tax::where('is_active', true)
+                    ->whereHas('components')
+                    ->where(function ($q) use ($quote) {
+                        $rate = (float) ($quote?->gst_percentage ?: 18.00);
+                        $q->where('name', 'like', "%{$rate}%")
+                          ->orWhere('name', 'like', '%GST%');
+                    })
+                    ->value('id') ?? \Tek2991\Accounting\Models\Tax::where('is_active', true)->whereHas('components')->value('id');
+            }
+
             if (empty($lineItems) && $quote && $quote->items()->count() > 0) {
                 $isFullAmount = ($billType === 'owner_invoice' && (float)$quote->owner_amount == (float)$quote->total_amount) ||
                                 ($billType === 'tenant_invoice' && (float)$quote->tenant_amount == (float)$quote->total_amount);
@@ -135,20 +148,27 @@ class MaintenanceBillingService
                             'quantity' => (float) ($qItem->quantity ?: 1),
                             'unit_price' => (float) $qItem->unit_price,
                             'total' => (float) $qItem->total_price,
+                            'tax_id' => $taxId,
+                            'hsn_sac_code' => '9954',
                         ];
                     }
                 } else {
-                    $cost = match ($billType) {
+                    $billedTotal = match ($billType) {
                         'tenant_invoice' => (float)$quote->tenant_amount > 0 ? (float)$quote->tenant_amount : (float)$quote->total_amount,
                         'owner_invoice' => (float)$quote->owner_amount > 0 ? (float)$quote->owner_amount : (float)$quote->total_amount,
                         default => (float)$quote->total_amount,
                     };
 
+                    $gstRate = (float) ($quote->gst_percentage ?: 18.00);
+                    $preTaxBase = ($taxId && $gstRate > 0) ? round($billedTotal / (1 + ($gstRate / 100)), 2) : $billedTotal;
+
                     $lineItems[] = [
                         'description' => "Maintenance Service Share: {$request->title} (Quote #{$quote->quote_number}, Ticket #{$request->ticket_number})",
                         'quantity' => 1,
-                        'unit_price' => $cost,
-                        'total' => $cost,
+                        'unit_price' => $preTaxBase,
+                        'total' => $preTaxBase,
+                        'tax_id' => $taxId,
+                        'hsn_sac_code' => '9954',
                     ];
                 }
             } elseif (empty($lineItems)) {
@@ -158,12 +178,17 @@ class MaintenanceBillingService
                     default => $request->total_cost,
                 };
 
+                $gstRate = 18.00;
+                $preTaxBase = ($taxId && $gstRate > 0) ? round($cost / (1 + ($gstRate / 100)), 2) : $cost;
+
                 $lineItems = [
                     [
                         'description' => "Maintenance Service: {$request->title} ({$request->ticket_number})",
                         'quantity' => 1,
-                        'unit_price' => (float) $cost,
-                        'total' => (float) $cost,
+                        'unit_price' => (float) $preTaxBase,
+                        'total' => (float) $preTaxBase,
+                        'tax_id' => $taxId,
+                        'hsn_sac_code' => '9954',
                     ]
                 ];
             }
@@ -178,8 +203,10 @@ class MaintenanceBillingService
                     'line_type' => DocumentLineType::Account,
                     'sort_order' => $idx + 1,
                     'description' => $item['description'] ?? 'Maintenance Charge',
+                    'hsn_sac_code' => $item['hsn_sac_code'] ?? '9954',
                     'quantity' => $qty,
                     'unit_price' => $price,
+                    'tax_id' => $item['tax_id'] ?? $taxId,
                     'line_total' => $total,
                     'gross_amount' => $total,
                     'net_amount' => $total,
