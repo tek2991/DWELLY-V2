@@ -33,3 +33,7 @@ Thumbs.db
 /public/css/tek2991
 
 /server-docker-setup
+
+# Seeder raw data & property media assets
+/database/seeders/data/properties/
+/database/seeders/data/*_data.csv
