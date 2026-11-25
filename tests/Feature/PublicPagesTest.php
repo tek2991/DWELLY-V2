@@ -305,4 +305,102 @@ class PublicPagesTest extends TestCase
             'nextPage' => 3,
         ]);
     }
+
+    public function test_property_code_is_shown_on_all_properties_and_view_property_in_development()
+    {
+        $property = Property::first();
+        config(['app.show_property_code' => null]);
+        $this->app->detectEnvironment(fn () => 'local');
+
+        $allResponse = $this->get(route('allProperties'));
+        $allResponse->assertStatus(200);
+        $allResponse->assertSee($property->code);
+
+        $ajaxResponse = $this->getJson(route('allProperties'), [
+            'X-Infinite-Scroll' => '1',
+        ]);
+        $ajaxResponse->assertStatus(200);
+        $this->assertStringContainsString($property->code, $ajaxResponse->json('html'));
+
+        $viewResponse = $this->get(route('viewProperty', $property));
+        $viewResponse->assertStatus(200);
+        $viewResponse->assertSee('ID: ' . $property->code);
+    }
+
+    public function test_property_code_is_hidden_on_all_properties_and_view_property_in_production()
+    {
+        $property = Property::first();
+        config(['app.show_property_code' => null]);
+        $this->app->detectEnvironment(fn () => 'production');
+
+        $allResponse = $this->get(route('allProperties'));
+        $allResponse->assertStatus(200);
+        $allResponse->assertDontSee($property->code);
+
+        $ajaxResponse = $this->getJson(route('allProperties'), [
+            'X-Infinite-Scroll' => '1',
+        ]);
+        $ajaxResponse->assertStatus(200);
+        $this->assertStringNotContainsString($property->code, $ajaxResponse->json('html'));
+
+        $viewResponse = $this->get(route('viewProperty', $property));
+        $viewResponse->assertStatus(200);
+        $viewResponse->assertDontSee($property->code);
+    }
+
+    public function test_property_code_visibility_can_be_overridden_via_config_setting()
+    {
+        $property = Property::first();
+        $this->app->detectEnvironment(fn () => 'production');
+        config(['app.show_property_code' => true]);
+
+        $this->get(route('allProperties'))->assertSee($property->code);
+        $this->get(route('viewProperty', $property))->assertSee('ID: ' . $property->code);
+
+        $this->app->detectEnvironment(fn () => 'local');
+        config(['app.show_property_code' => false]);
+
+        $this->get(route('allProperties'))->assertDontSee($property->code);
+        $this->get(route('viewProperty', $property))->assertDontSee($property->code);
+    }
+
+    public function test_all_properties_can_be_sorted_by_property_code()
+    {
+        $existing = Property::first();
+
+        $propZ = Property::create([
+            'code' => 'GAU-0999',
+            'building_name' => 'Zeta Residency',
+            'address_line_1' => 'Zoo Road',
+            'locality_id' => $existing->locality_id,
+            'locality' => $existing->locality,
+            'city' => $existing->city,
+            'bhk_type_id' => $existing->bhk_type_id,
+            'property_type_id' => $existing->property_type_id,
+            'status' => 'Vacant',
+            'is_listed' => true,
+        ]);
+
+        $propA = Property::create([
+            'code' => 'BLR-0001',
+            'building_name' => 'Alpha Enclave',
+            'address_line_1' => 'Indiranagar',
+            'locality_id' => $existing->locality_id,
+            'locality' => $existing->locality,
+            'city' => $existing->city,
+            'bhk_type_id' => $existing->bhk_type_id,
+            'property_type_id' => $existing->property_type_id,
+            'status' => 'Vacant',
+            'is_listed' => true,
+        ]);
+
+        $response = $this->get(route('allProperties', ['sortBy' => 'code_asc']));
+        $response->assertStatus(200);
+        $response->assertSee('Property Code');
+        $response->assertSeeInOrder([
+            $propA->building_name,
+            $existing->building_name,
+            $propZ->building_name,
+        ]);
+    }
 }

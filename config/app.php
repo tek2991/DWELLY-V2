@@ -43,6 +43,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Show Property Code on Public Pages
+    |--------------------------------------------------------------------------
+    |
+    | Controls whether internal property codes are displayed on public-facing
+    | property pages. When null, property codes are shown automatically in
+    | local/development environments and hidden in production.
+    |
+    */
+
+    'show_property_code' => env('SHOW_PROPERTY_CODE'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application URL
     |--------------------------------------------------------------------------
     |

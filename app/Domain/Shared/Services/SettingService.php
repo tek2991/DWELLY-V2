@@ -65,6 +65,23 @@ class SettingService
     }
 
     /**
+     * Determine whether property codes should be displayed on public pages.
+     *
+     * Uses `app.show_property_code` when explicitly configured, otherwise
+     * defaults to true in local/development environments.
+     */
+    public static function shouldShowPropertyCode(): bool
+    {
+        $configured = config('app.show_property_code');
+
+        if ($configured !== null && $configured !== '') {
+            return filter_var($configured, FILTER_VALIDATE_BOOLEAN);
+        }
+
+        return app()->environment(['local', 'development', 'dev']);
+    }
+
+    /**
      * Clear all cached settings
      */
     public static function clearCache(): void

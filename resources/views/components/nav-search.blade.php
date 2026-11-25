@@ -116,8 +116,12 @@
                                             'recomended' => 'Featured',
                                             'price_asc' => 'Price: Low to High',
                                             'price_desc' => 'Price: High to Low',
+                                            'code_asc' => 'Property Code',
                                         ];
                                         $curSort = request('sortBy', 'recomended');
+                                        if ($curSort === 'property_code') {
+                                            $curSort = 'code_asc';
+                                        }
                                         echo $sortMap[$curSort] ?? 'Featured';
                                     @endphp
                                 </span>
@@ -126,7 +130,7 @@
                                 </svg>
                             </button>
 
-                            <input type="hidden" name="sort_by" id="mobile_sort_by" value="{{ request('sortBy', 'recomended') }}">
+                            <input type="hidden" name="sort_by" id="mobile_sort_by" value="{{ $curSort }}">
 
                             <div x-show="sortOpen" @click.outside="sortOpen = false" x-cloak
                                 x-transition:enter="transition ease-out duration-150"
@@ -136,27 +140,15 @@
                                 x-transition:leave-start="transform opacity-100 scale-100"
                                 x-transition:leave-end="transform opacity-0 scale-95"
                                 class="absolute right-0 mt-1.5 z-30 w-44 bg-white rounded-xl shadow-lg border border-secondary divide-y divide-gray-100 py-1 text-xs overflow-hidden">
-                                <button type="button" @click="sortOpen = false; selectSort('recomended', 'Featured')"
-                                    class="flex items-center justify-between w-full text-left px-3.5 py-2.5 text-darker-3 hover:bg-gray-50 hover:text-piss-yellow font-Graphik transition cursor-pointer {{ request('sortBy', 'recomended') == 'recomended' ? 'bg-secondary/40 font-GraphikMedium text-piss-yellow' : '' }}">
-                                    <span>Featured</span>
-                                    @if(request('sortBy', 'recomended') == 'recomended')
-                                        <svg class="w-3.5 h-3.5 text-piss-yellow shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
-                                    @endif
-                                </button>
-                                <button type="button" @click="sortOpen = false; selectSort('price_asc', 'Price: Low to High')"
-                                    class="flex items-center justify-between w-full text-left px-3.5 py-2.5 text-darker-3 hover:bg-gray-50 hover:text-piss-yellow font-Graphik transition cursor-pointer {{ request('sortBy') == 'price_asc' ? 'bg-secondary/40 font-GraphikMedium text-piss-yellow' : '' }}">
-                                    <span>Price: Low to High</span>
-                                    @if(request('sortBy') == 'price_asc')
-                                        <svg class="w-3.5 h-3.5 text-piss-yellow shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
-                                    @endif
-                                </button>
-                                <button type="button" @click="sortOpen = false; selectSort('price_desc', 'Price: High to Low')"
-                                    class="flex items-center justify-between w-full text-left px-3.5 py-2.5 text-darker-3 hover:bg-gray-50 hover:text-piss-yellow font-Graphik transition cursor-pointer {{ request('sortBy') == 'price_desc' ? 'bg-secondary/40 font-GraphikMedium text-piss-yellow' : '' }}">
-                                    <span>Price: High to Low</span>
-                                    @if(request('sortBy') == 'price_desc')
-                                        <svg class="w-3.5 h-3.5 text-piss-yellow shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
-                                    @endif
-                                </button>
+                                @foreach ($sortMap as $sortValue => $sortLabel)
+                                    <button type="button" @click="sortOpen = false; selectSort('{{ $sortValue }}', '{{ $sortLabel }}')"
+                                        class="flex items-center justify-between w-full text-left px-3.5 py-2.5 text-darker-3 hover:bg-gray-50 hover:text-piss-yellow font-Graphik transition cursor-pointer {{ $curSort === $sortValue ? 'bg-secondary/40 font-GraphikMedium text-piss-yellow' : '' }}">
+                                        <span>{{ $sortLabel }}</span>
+                                        @if ($curSort === $sortValue)
+                                            <svg class="w-3.5 h-3.5 text-piss-yellow shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
+                                        @endif
+                                    </button>
+                                @endforeach
                             </div>
                         </div>
                     </div>

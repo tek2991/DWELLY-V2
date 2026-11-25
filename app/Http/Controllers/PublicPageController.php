@@ -6,6 +6,7 @@ use App\Domain\Geographic\Models\Locality;
 use App\Domain\Property\Models\BhkType;
 use App\Domain\Property\Models\Property;
 use App\Domain\Property\Models\PropertyType;
+use App\Domain\Shared\Services\SettingService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -133,17 +134,25 @@ class PublicPageController extends Controller
             })
             ->select('properties.*')
             ->orderBy('ppv.rent', 'desc');
+        } elseif (in_array($sortBy, ['code_asc', 'property_code'], true)) {
+            $propertiesQuery->orderByRaw('CASE WHEN properties.code IS NULL THEN 1 ELSE 0 END, properties.code ASC')
+                ->orderBy('properties.id', 'asc');
+        } elseif ($sortBy === 'code_desc') {
+            $propertiesQuery->orderByRaw('CASE WHEN properties.code IS NULL THEN 1 ELSE 0 END, properties.code DESC')
+                ->orderBy('properties.id', 'desc');
         } else {
             $propertiesQuery->orderBy('properties.id', 'desc');
         }
 
         $properties = $propertiesQuery->paginate(10)->withQueryString();
+        $showPropertyCode = SettingService::shouldShowPropertyCode();
 
         if ($request->ajax() || $request->header('X-Infinite-Scroll')) {
             return response()->json([
                 'html' => view('public.partials.property-card-list', [
                     'properties' => $properties,
                     'isAjax' => true,
+                    'showPropertyCode' => $showPropertyCode,
                 ])->render(),
                 'hasMore' => $properties->hasMorePages(),
                 'nextPage' => $properties->currentPage() + 1,
@@ -161,7 +170,8 @@ class PublicPageController extends Controller
             'amenities2',
             'localities',
             'filters',
-            'request'
+            'request',
+            'showPropertyCode'
         ));
     }
 
@@ -201,6 +211,8 @@ class PublicPageController extends Controller
             $propertyImages = $property->photos;
         }
 
+        $showPropertyCode = SettingService::shouldShowPropertyCode();
+
         return view('public.viewProperty', compact(
             'property',
             'primaryRooms',
@@ -208,7 +220,8 @@ class PublicPageController extends Controller
             'amenities',
             'allAmenities',
             'nearbyEstablishments',
-            'propertyImages'
+            'propertyImages',
+            'showPropertyCode'
         ));
     }
 

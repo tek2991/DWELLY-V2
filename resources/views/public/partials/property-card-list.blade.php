@@ -1,3 +1,6 @@
+@php
+    $showCode = $showPropertyCode ?? \App\Domain\Shared\Services\SettingService::shouldShowPropertyCode();
+@endphp
 @forelse ($properties as $property)
     @php
         $cPhoto = $property->coverPhoto ?: $property->photos->first();
@@ -41,6 +44,11 @@
                                 <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"></path>
                             </svg>
                             <span class="truncate">{{ $property->localityRef?->name ?? ($property->locality ?: 'Guwahati') }}</span>
+                            @if ($showCode && $property->code)
+                                <span class="ml-auto sm:ml-1.5 text-[11px] font-mono normal-case tracking-normal text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded shrink-0">
+                                    {{ $property->code }}
+                                </span>
+                            @endif
                         </div>
                         <a href="{{ route('viewProperty', $property) }}" class="block">
                             <h3 class="font-GraphikBold text-base sm:text-lg text-darker-3 hover:text-piss-yellow transition leading-snug line-clamp-1">

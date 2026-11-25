@@ -253,7 +253,10 @@
                 
                 {{-- Cards Container --}}
                 <div id="properties-container" class="space-y-6">
-                    @include('public.partials.property-card-list', ['properties' => $properties])
+                    @include('public.partials.property-card-list', [
+                        'properties' => $properties,
+                        'showPropertyCode' => $showPropertyCode ?? \App\Domain\Shared\Services\SettingService::shouldShowPropertyCode(),
+                    ])
                 </div>
 
                 {{-- Loading Skeleton Card (Smooth shimmer & transition while fetching next page) --}}

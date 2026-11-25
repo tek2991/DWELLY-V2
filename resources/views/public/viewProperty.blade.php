@@ -1,5 +1,6 @@
 <x-public-layout :filters="null">
     @php
+        $showCode = $showPropertyCode ?? \App\Domain\Shared\Services\SettingService::shouldShowPropertyCode();
         $galleryImages = $propertyImages->map(function ($img) use ($property) {
             return [
                 'url' => !empty($img->file_path) ? Storage::disk('public')->url($img->file_path) : url('resources/images/sample_prop.jpeg'),
@@ -96,7 +97,7 @@
                         </span>
                     @endif
 
-                    @if ($property->code)
+                    @if ($showCode && $property->code)
                         <span class="text-xs text-gray-500 font-mono bg-gray-100 px-2 py-0.5 rounded">
                             ID: {{ $property->code }}
                         </span>
@@ -583,7 +584,7 @@
                                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>
                                 <span>+91 96786 44832</span>
                             </a>
-                            <a href="https://api.whatsapp.com/send?text={{ urlencode('Hello Dwelly, I would like to inquire about property ' . ($property->code ?: $property->building_name) . ' (' . route('viewProperty', $property) . ')') }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-xs font-GraphikMedium text-green-800 bg-green-50 px-3 py-2 rounded border border-green-200 hover:bg-green-100 transition">
+                            <a href="https://api.whatsapp.com/send?text={{ urlencode('Hello Dwelly, I would like to inquire about property ' . (($showCode && $property->code) ? $property->code : $property->building_name) . ' (' . route('viewProperty', $property) . ')') }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-xs font-GraphikMedium text-green-800 bg-green-50 px-3 py-2 rounded border border-green-200 hover:bg-green-100 transition">
                                 <img src="{{ url('resources/icons/whatsapp.svg') }}" alt="WhatsApp" class="w-3.5 h-3.5">
                                 <span>WhatsApp</span>
                             </a>
@@ -609,7 +610,7 @@
             <div class="flex items-center justify-between px-4 sm:px-8 py-3.5 text-white z-20 bg-gradient-to-b from-black/80 to-transparent">
                 {{-- Property Details on Left --}}
                 <div class="flex items-center gap-3 min-w-0">
-                    @if ($property->code)
+                    @if ($showCode && $property->code)
                         <span class="text-xs uppercase tracking-wider font-mono text-piss-yellow hidden sm:inline bg-white/10 px-2 py-0.5 rounded">
                             {{ $property->code }}
                         </span>
@@ -722,7 +723,7 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path>
                 </svg>
             </a>
-            <a href="https://api.whatsapp.com/send?text={{ urlencode('Hello Dwelly, I would like to inquire about property ' . ($property->code ?: $property->building_name) . ' (' . route('viewProperty', $property) . ')') }}"
+            <a href="https://api.whatsapp.com/send?text={{ urlencode('Hello Dwelly, I would like to inquire about property ' . (($showCode && $property->code) ? $property->code : $property->building_name) . ' (' . route('viewProperty', $property) . ')') }}"
                target="_blank" rel="noopener noreferrer"
                class="p-2.5 rounded-sm border border-green-200 bg-green-50 text-green-700 hover:bg-green-100 transition"
                title="Chat on WhatsApp">
