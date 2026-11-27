@@ -593,4 +593,38 @@ class SeedPropertiesFromCsvTest extends TestCase
         $secondaryRoles = $agreement->roles()->where('is_primary', false)->get();
         $this->assertCount(2, $secondaryRoles);
     }
+
+    public function test_normalizes_furnishing_variants_and_keeps_missing_floor_space_null(): void
+    {
+        $propCsv = implode(',', [
+            'property_code', 'building_name', 'address_line_1', 'address_line_2', 'locality', 'city', 'state', 'pincode',
+            'bhk_type', 'property_type', 'furnishing_type', 'floor', 'total_floors', 'floor_space_sqft', 'property_status',
+            'is_listed', 'available_from', 'owner_name', 'owner_phone', 'owner_email', 'is_signatory_different',
+            'is_rent_sharing', 'rent_amount', 'security_deposit', 'society_fee'
+        ]) . "\n";
+
+        $propCsv .= 'TEST-VAR-01,Unfurnished Flat,"Flat 1, Zoo Road",,Zoo Road,Guwahati,Assam,781024,2 BHK,Apartment,Un-Furnished,1,4,,Vacant,true,2026-01-01,Owner One,9876540401,owner.var1@test.com,false,true,15000,30000,1000' . "\n";
+        $propCsv .= 'TEST-VAR-02,Fully Furnished Flat,"Flat 2, Zoo Road",,Zoo Road,Guwahati,Assam,781024,3 BHK,Apartment,Fully-Furnished,2,4,,Vacant,true,2026-01-01,Owner Two,9876540402,owner.var2@test.com,false,true,25000,50000,2000' . "\n";
+        $propCsv .= 'TEST-VAR-03,Semi Furnished Flat,"Flat 3, Zoo Road",,Zoo Road,Guwahati,Assam,781024,1 BHK,Apartment,Semi-Furnished,3,4,850,Vacant,true,2026-01-01,Owner Three,9876540403,owner.var3@test.com,false,true,12000,24000,500' . "\n";
+
+        File::put($this->tempCsvPath, $propCsv);
+
+        $this->artisan('dwelly:seed-properties-csv', [
+            '--file' => $this->tempCsvPath,
+        ])->expectsOutputToContain('Successfully imported 3 of 3 properties.')
+          ->assertExitCode(0);
+
+        $prop1 = Property::with('furnishingType')->where('code', 'TEST-VAR-01')->firstOrFail();
+        $prop2 = Property::with('furnishingType')->where('code', 'TEST-VAR-02')->firstOrFail();
+        $prop3 = Property::with('furnishingType')->where('code', 'TEST-VAR-03')->firstOrFail();
+
+        $this->assertEquals('Unfurnished', $prop1->furnishingType?->name);
+        $this->assertNull($prop1->floor_space_sqft);
+
+        $this->assertEquals('Fully Furnished', $prop2->furnishingType?->name);
+        $this->assertNull($prop2->floor_space_sqft);
+
+        $this->assertEquals('Semi-Furnished', $prop3->furnishingType?->name);
+        $this->assertEquals(850, $prop3->floor_space_sqft);
+    }
 }

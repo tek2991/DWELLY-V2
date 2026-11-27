@@ -313,7 +313,7 @@ class PropertyCsvImportService
 
         // Safe defaults for furnishing, status, bhk, property_type
         if (empty(trim($row['furnishing_type'] ?? ''))) {
-            $row['furnishing_type'] = 'Un-Furnished';
+            $row['furnishing_type'] = 'Unfurnished';
         }
         if (empty(trim($row['property_status'] ?? ''))) {
             $row['property_status'] = 'Draft';
@@ -440,8 +440,9 @@ class PropertyCsvImportService
         $propTypeName = trim($row['property_type']);
         $propTypeId = $this->propertyTypes[$propTypeName] ?? ($this->propertyTypes['Apartment'] ?? array_values($this->propertyTypes)[0] ?? null);
 
-        $furnishName = trim($row['furnishing_type']);
-        $furnishTypeId = $this->furnishingTypes[$furnishName] ?? ($this->furnishingTypes['Semi-Furnished'] ?? array_values($this->furnishingTypes)[0] ?? null);
+        $resolvedFurnishing = $this->resolveFurnishingType((string) ($row['furnishing_type'] ?? ''));
+        $furnishName = $resolvedFurnishing['name'];
+        $furnishTypeId = $resolvedFurnishing['id'];
 
         $flooringTypeId = !empty($row['flooring_type']) && isset($this->flooringTypes[$row['flooring_type']])
             ? $this->flooringTypes[$row['flooring_type']]
@@ -476,7 +477,7 @@ class PropertyCsvImportService
             'flooring_type_id' => $flooringTypeId,
             'floor' => !empty($row['floor']) ? (int) $row['floor'] : 1,
             'total_floors' => !empty($row['total_floors']) ? (int) $row['total_floors'] : 4,
-            'floor_space_sqft' => !empty($row['floor_space_sqft']) ? (int) $row['floor_space_sqft'] : 1000,
+            'floor_space_sqft' => (!empty($row['floor_space_sqft']) && (int) $row['floor_space_sqft'] > 0) ? (int) $row['floor_space_sqft'] : null,
             'status' => $propStatus,
             'is_listed' => in_array($propStatus, ['Draft', 'Archived']) ? false : filter_var($row['is_listed'] ?? true, FILTER_VALIDATE_BOOLEAN),
             'is_promoted' => false,
@@ -1439,8 +1440,42 @@ class PropertyCsvImportService
         $this->reviewerUser = User::where('email', 'ananya.reviewer@dwelly.in')->first() ?? $this->adminUser;
     }
 
+    /**
+     * Resolve CSV furnishing_type (including hyphen/case variants such as "Un-Furnished" or "Fully-Furnished")
+     * to the canonical FurnishingType id and name.
+     */
+    protected function resolveFurnishingType(string $rawFurnishing): array
+    {
+        $trimmed = trim($rawFurnishing);
+        if ($trimmed !== '' && isset($this->furnishingTypes[$trimmed])) {
+            return ['id' => $this->furnishingTypes[$trimmed], 'name' => $trimmed];
+        }
+
+        $normalizedInput = strtolower(preg_replace('/[\s_-]+/', '', $trimmed));
+        foreach ($this->furnishingTypes as $name => $id) {
+            $normalizedKey = strtolower(preg_replace('/[\s_-]+/', '', $name));
+            if ($normalizedKey === $normalizedInput) {
+                return ['id' => $id, 'name' => $name];
+            }
+        }
+
+        foreach (['Unfurnished', 'Semi-Furnished'] as $fallbackName) {
+            if (isset($this->furnishingTypes[$fallbackName])) {
+                return ['id' => $this->furnishingTypes[$fallbackName], 'name' => $fallbackName];
+            }
+        }
+
+        $firstName = array_key_first($this->furnishingTypes);
+
+        return [
+            'id' => $firstName !== null ? $this->furnishingTypes[$firstName] : null,
+            'name' => $firstName ?? 'Unfurnished',
+        ];
+    }
+
     protected function seedRoomsForProperty(Property $property, string $bhkName, int $totalSqft): void
     {
+        $totalSqft = $totalSqft > 0 ? $totalSqft : 1000;
         $livingDefId = $this->roomDefinitions['Living Room'] ?? array_values($this->roomDefinitions)[0] ?? null;
         $kitchenDefId = $this->roomDefinitions['Modular Kitchen'] ?? ($this->roomDefinitions['Kitchen'] ?? array_values($this->roomDefinitions)[0] ?? null);
         $bathDefId = $this->roomDefinitions['Attached Bathroom'] ?? array_values($this->roomDefinitions)[0] ?? null;
